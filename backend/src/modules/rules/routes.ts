@@ -61,6 +61,7 @@ export function registerRuleRoutes(app: FastifyInstance, ctx: AppContext): void 
 
   app.post('/v1/legal-rules', async (req, reply) => {
     const user = requireUser(req);
+    authorize(user, 'rule.create');
     const body = parse(ruleSchema, req.body) as RuleInput;
     return reply.code(201).send(ctx.rules.create(user, body));
   });

@@ -14,6 +14,8 @@ import { isDraftLanguage, type UIKey } from '../lib/i18n';
 import type { CommunicationsOverview, Delivery } from '../lib/types';
 import { normalizeComms, normalizeDeliveries } from '../lib/normalize';
 import { DEMO_COMMS, localPreviewHtml } from '../demo/communications';
+import { useInsight } from '../hooks/useInsight';
+import { AIInsightPanel } from '../components/AIInsightPanel';
 
 export const ENTITIES = ['DGIPK', 'DGTK', 'MPF', 'TRESOR'] as const;
 
@@ -66,6 +68,7 @@ export default function Communications() {
     catch { return EVENTS; }
   }, [user?.id]);
   const events = evq.data ?? EVENTS;
+  const ai = useInsight('communications', [user?.id]);
 
   const [measure, setMeasure] = useState<'events' | 'sent'>('events');
   const [eventCode, setEventCode] = useState<string>(EVENTS.find((e) => e.code === 'payment.confirmed')?.code ?? EVENTS[0]!.code);
@@ -218,6 +221,8 @@ export default function Communications() {
             </div>
           </div>
         </section>
+
+        <div className="span-12"><AIInsightPanel rec={ai.rec} loading={ai.loading} error={ai.error} onRefresh={ai.reload} compact /></div>
 
         <section className="panel span-12" aria-labelledby="cat-title">
           <header className="panel-head">

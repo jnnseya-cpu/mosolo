@@ -54,6 +54,20 @@ function Vault() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const save = (l: VaultChangeRequest[]) => { setList(l); safeSet(VAULT_KEY, JSON.stringify(l)); };
+  // Liste serveur (GET /v1/beneficiary-accounts → changeRequests) fusionnée avec les demandes de la session
+  useEffect(() => {
+    api<{ changeRequests?: VaultChangeRequest[] }>('/v1/beneficiary-accounts')
+      .then((v) => {
+        const server = v?.changeRequests ?? [];
+        if (!server.length) return;
+        setList((prev) => {
+          const merged = [...server, ...prev.filter((p) => !server.some((x) => x.id === p.id))];
+          safeSet(VAULT_KEY, JSON.stringify(merged));
+          return merged;
+        });
+      })
+      .catch(() => { /* hors ligne ou non habilité : liste locale */ });
+  }, []);
   const upsert = (r: VaultChangeRequest) => save([r, ...list.filter((x) => x.id !== r.id)]);
 
   async function propose(e: FormEvent) {

@@ -34,6 +34,7 @@ export function registerAppealRoutes(app: FastifyInstance, ctx: AppContext): voi
 
   app.post<{ Params: { id: string } }>('/v1/appeals/:id/decide', async (req) => {
     const user = requireUser(req);
+    authorize(user, 'appeal.decide');
     return ctx.appeals.decide(user, req.params.id, parse(decideSchema, req.body));
   });
 }

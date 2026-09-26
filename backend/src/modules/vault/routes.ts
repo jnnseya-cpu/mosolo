@@ -23,12 +23,14 @@ export function registerVaultRoutes(app: FastifyInstance, ctx: AppContext): void
 
   app.post('/v1/beneficiary-accounts/change-requests', async (req, reply) => {
     const user = requireUser(req);
+    authorize(user, 'beneficiary.propose');
     const body = parse(proposeSchema, req.body);
     return reply.code(201).send(ctx.vault.maskedRequest(ctx.vault.propose(user, body)));
   });
 
   app.post<{ Params: { id: string } }>('/v1/beneficiary-accounts/change-requests/:id/approve', async (req) => {
     const user = requireUser(req);
+    authorize(user, 'beneficiary.approve');
     const { outOfBandVerified } = parse(approveSchema, req.body);
     return ctx.vault.maskedRequest(ctx.vault.approve(user, req.params.id, outOfBandVerified));
   });

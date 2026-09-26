@@ -71,7 +71,7 @@ export async function payDemoObligation(env: TestEnv) {
 }
 
 /** Règle certifiée (instrument fictif en vigueur) créée puis approuvée par quatre personnes distinctes. */
-export async function publishCertifiedRule(env: TestEnv, overrides: Record<string, unknown> = {}) {
+export async function publishCertifiedRule(env: TestEnv, overrides: Record<string, unknown> = {}, stepsToRun = 4) {
   const create = await env.req('POST', '/v1/legal-rules', 'u-juriste-redacteur', {
     code: 'TEST-IF-PM', revenueCategory: 'IMPOT_PROVINCIAL', label: 'Test — impôt foncier personnes morales',
     legalInstrumentIds: ['demo-instrument-001'], articles: ['Art. 1 (fictif)'], competentAuthority: 'Ministère provincial des Finances',
@@ -87,7 +87,7 @@ export async function publishCertifiedRule(env: TestEnv, overrides: Record<strin
     ['u-validateur-financier', 'VALIDATEUR_FINANCIER'], ['u-autorite-publication', 'AUTORITE_PUBLICATION'],
   ];
   const responses = [];
-  for (const [user, role] of steps) responses.push(await env.req('POST', `/v1/legal-rules/${id}/approve`, user, { role }));
+  for (const [user, role] of steps.slice(0, stepsToRun)) responses.push(await env.req('POST', `/v1/legal-rules/${id}/approve`, user, { role }));
   return { create, id, responses };
 }
 

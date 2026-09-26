@@ -17,7 +17,8 @@ describe('Évaluateur de formules (sans eval)', () => {
   });
   it('refuse toute construction hors grammaire', () => {
     expect(() => parseFormula('process.exit(1)')).toThrow();
-    expect(() => parseFormula('constructor("x")')).toThrow(/non autorisée/);
+    expect(() => parseFormula('constructor(1)')).toThrow(/non autorisée/);
+    expect(() => parseFormula('"x"')).toThrow(/inattendu/);
     expect(() => parseFormula('1 +')).toThrow();
     expect(() => parseFormula('a; b')).toThrow();
     expect(() => run('1 / 0')).toThrow(/zéro/);
@@ -53,33 +54,23 @@ describe('Registre juridique', () => {
 
   it('AC-LEG-02 : la même personne ne peut pas rédiger et publier', async () => {
     const env = await setup();
-    const { id, responses } = await publishCertifiedRule(env);
-    expect(responses.every((r) => r.statusCode === 200)).toBe(true);
-    // Nouvelle fiche : le rédacteur tente de publier lui-même.
-    const again = await publishCertifiedRule(env, { code: 'TEST-SOD' });
-    expect(again.id).not.toBe(id);
-    const env2 = await setup();
-    const c = await env2.req('POST', '/v1/legal-rules', 'u-juriste-redacteur', { ...env2.app.ctx.rules.get(id), id: undefined });
-    expect(c.statusCode).toBe(400); // champs non admis (strict)
-    const r = await publishCertifiedRule(env2, { code: 'TEST-SOD-2' });
-    const ruleId = r.id;
-    // Remise à zéro partielle : fiche neuve, 3 visas puis le rédacteur tente la publication.
-    const f = await env2.req('POST', '/v1/legal-rules', 'u-juriste-redacteur', {
-      ...pick(env2.app.ctx.rules.get(ruleId)), code: 'TEST-SOD-3',
-    });
-    const fid = f.json().id;
-    await env2.req('POST', `/v1/legal-rules/${fid}/approve`, 'u-juriste-redacteur', { role: 'REDACTEUR' });
-    await env2.req('POST', `/v1/legal-rules/${fid}/approve`, 'u-juriste-verificateur', { role: 'VERIFICATEUR_JURIDIQUE' });
-    await env2.req('POST', `/v1/legal-rules/${fid}/approve`, 'u-validateur-financier', { role: 'VALIDATEUR_FINANCIER' });
-    const publish = await env2.req('POST', `/v1/legal-rules/${fid}/approve`, 'u-juriste-redacteur', { role: 'AUTORITE_PUBLICATION' });
-    expect(publish.statusCode).toBe(403);
-    expect(publish.json().code).toBe('SEPARATION_OF_DUTIES');
-    expect(env2.app.ctx.rules.get(fid).status).toBe('APPROUVEE');
-    // Le vérificateur ne peut pas non plus publier (personne déjà intervenue).
-    const byVerifier = await env2.req('POST', `/v1/legal-rules/${fid}/approve`, 'u-juriste-verificateur', { role: 'AUTORITE_PUBLICATION' });
+    const { id } = await publishCertifiedRule(env, { code: 'TEST-SOD' }, 3);
+    expect(env.app.ctx.rules.get(id).status).toBe('APPROUVEE');
+    const byDrafter = await env.req('POST', `/v1/legal-rules/${id}/approve`, 'u-juriste-redacteur', { role: 'AUTORITE_PUBLICATION' });
+    expect(byDrafter.statusCode).toBe(403);
+    expect(byDrafter.json().code).toBe('SEPARATION_OF_DUTIES');
+    // Toute personne déjà intervenue est également écartée.
+    const byVerifier = await env.req('POST', `/v1/legal-rules/${id}/approve`, 'u-juriste-verificateur', { role: 'AUTORITE_PUBLICATION' });
     expect(byVerifier.json().code).toBe('SEPARATION_OF_DUTIES');
-    // Et le cumul des rôles R13 + R16 est impossible par construction.
-    expect(() => env2.app.ctx.users.add({ id: 'u-cumul', name: 'Cumul', roles: ['R13', 'R16'], entity: 'MINFIN' })).toThrow(/Cumul interdit/);
+    expect(env.app.ctx.rules.get(id).status).toBe('APPROUVEE');
+    expect(env.app.ctx.audit.list({ action: 'rule.approval.refused' }).total).toBe(2);
+    // Le cumul des rôles R13 + R16 est impossible par construction (§ 12.5).
+    expect(() => env.app.ctx.users.add({ id: 'u-cumul', name: 'Cumul', roles: ['R13', 'R16'], entity: 'MINFIN' })).toThrow(/Cumul interdit/);
+    // Une autorité distincte publie.
+    const ok = await env.req('POST', `/v1/legal-rules/${id}/approve`, 'u-autorite-publication', { role: 'AUTORITE_PUBLICATION' });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().status).toBe('ACTIVE');
+    expect(new Set(ok.json().approvals.map((a: { userId: string }) => a.userId)).size).toBe(4);
   });
 
   it('AC-LEG-03 : une règle citant un instrument abrogé ne peut pas être publiée', async () => {
@@ -113,10 +104,3 @@ describe('Registre juridique', () => {
     expect(r.json().code).toBe('RULE_REQUIRES_VERIFICATION');
   });
 });
-
-function pick(rule: Record<string, unknown>) {
-  const keys = ['revenueCategory', 'label', 'legalInstrumentIds', 'articles', 'competentAuthority', 'administeringEntity', 'taxableEvent', 'liableParty',
-    'baseDefinition', 'formula', 'rateTable', 'currency', 'rounding', 'periodicity', 'dueRule', 'exemptions', 'penalties', 'effectiveFrom',
-    'beneficiaryAccountAlias', 'appealPath', 'sourceVerification'];
-  return Object.fromEntries(keys.map((k) => [k, rule[k]]));
-}

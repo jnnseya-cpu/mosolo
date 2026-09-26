@@ -66,12 +66,12 @@ export function normalizeGovernor(raw: unknown): GovView {
     id: str(a.id) ?? `al-${i}`, severity: severityTone(a.severity), title: str(pick(a, 'title', 'type')) ?? '—',
     detail: str(pick(a, 'detail', 'description')), age: str(a.age),
   }));
-  const communes = arr(r.communes).map((c) => ({
+  const communes = arr(pick(r, 'communes', 'byCommune')).map((c) => ({
     name: str(pick(c, 'commune', 'name')) ?? '—',
     amount: asMoney(pick(c, 'amount', 'collected', 'confirmed')) ?? { amount: '0', currency: 'CDF' as const },
     compliance: num(pick(c, 'compliance', 'complianceRate')),
   }));
-  const categories = arr(r.categories).map((c) => ({
+  const categories = arr(pick(r, 'categories', 'byCategory')).map((c) => ({
     name: str(pick(c, 'category', 'label', 'name')) ?? '—',
     amount: asMoney(pick(c, 'amount', 'collected')) ?? { amount: '0', currency: 'CDF' as const },
   }));

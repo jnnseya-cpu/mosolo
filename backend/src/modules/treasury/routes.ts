@@ -21,6 +21,7 @@ const reversalSchema = z.object({ reason: z.string().trim().min(5).max(500) }).s
 export function registerTreasuryRoutes(app: FastifyInstance, ctx: AppContext): void {
   app.post('/v1/settlements/statements', async (req, reply) => {
     const user = requireUser(req);
+    authorize(user, 'settlement.import');
     const body = parse(statementSchema, req.body);
     const { replayed, result } = ctx.treasury.importStatement(user, body);
     return reply.code(replayed ? 200 : 201).send(result);
