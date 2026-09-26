@@ -122,8 +122,8 @@ save(fig,"fig-matrice-gisements.png")
 
 # 8 Echelle de la recette
 fig, ax = plt.subplots(figsize=(9,5))
-lv=["1 Potentiel estimé","2 Assiette vérifiée","3 Liquidé","4 Exigible","5 En retard","6 Contesté","7 Paiement initié","8 Paiement confirmé","9 Réglé compte public","10 Rapproché","11 Disponible budget"]
-vv=[100,62,55,50,21,4,30,28,27.5,27,26]; cols=[CAT[0]]*2+[CAT[1]]*4+[CAT[2]]*2+[CAT[5]]*2+[CAT[6]]
+lv=["1 Potentiel estimé","2 Assiette vérifiée","3 Liquidé","4 Exigible","5 En retard","6 Paiement initié","7 Paiement confirmé","8 Réglé compte public","9 Rapproché","10 Comptabilisé","11 Disponible budget"]
+vv=[100,62,55,50,21,30,28,27.5,27,26.6,26]; cols=[CAT[0]]*2+[CAT[1]]*3+[CAT[2]]*2+[CAT[5]]*3+[CAT[6]]
 b=ax.barh(lv[::-1],vv[::-1],color=cols[::-1]); bar_labels(ax,b,"{:g}",True); ax.set_xlim(0,112); ax.set_xlabel("Indice (potentiel estimé = 100)")
 title(ax,"Échelle unifiée de la recette","Chaque niveau est mesuré séparément ; jamais additionnés entre eux"); exemple(fig); save(fig,"fig-echelle-recette.png")
 

@@ -322,12 +322,14 @@ Tous les tableaux de bord emploient la même échelle, sans jamais additionner d
 | 3 | **Liquidé (assessed)** | Obligations émises |
 | 4 | **Exigible** | Obligations échues non contestées avec effet suspensif |
 | 5 | **En retard (overdue)** | Exigible non payé après échéance |
-| 6 | **Contesté** | Sous réclamation |
-| 7 | **Paiement initié** | Références en cours |
-| 8 | **Paiement confirmé** | Confirmé par le prestataire |
-| 9 | **Réglé sur le compte public** | Crédit constaté |
-| 10 | **Rapproché** | Appariement complet et écritures |
+| 6 | **Paiement initié** | Références en cours |
+| 7 | **Paiement confirmé** | Confirmé par le prestataire |
+| 8 | **Réglé sur le compte public** | Crédit constaté |
+| 9 | **Rapproché** | Appariement obligation–paiement–règlement réalisé |
+| 10 | **Comptabilisé** | Écriture imputée selon la nomenclature publique |
 | 11 | **Disponible pour appropriation budgétaire** | Selon les règles du Trésor et du budget |
+
+Les onze états sont ceux du Cahier des exigences v2 (échelle unifiée). Le montant **contesté** (sous réclamation avec ou sans effet suspensif) est suivi comme un **indicateur séparé**, hors échelle, car il ne constitue pas une étape du parcours d'un franc public.
 
 ## 26.2 Tableau de bord du Gouverneur
 
