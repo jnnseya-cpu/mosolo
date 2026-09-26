@@ -37,7 +37,7 @@
 | Passerelle API | Kong ou APISIX | Envoy |
 | Secrets et clés | HashiCorp Vault / OpenBao + HSM | — |
 | Application terrain et citoyenne | Kotlin natif Android (Jetpack Compose), base locale chiffrée SQLCipher | Flutter |
-| Web | TypeScript, React + Vite, conception accessible (WCAG 2.1 AA), charte teal Groupe Nseya | — |
+| Web | TypeScript, React + Vite, conception accessible (WCAG 2.1 AA), charte de la Ville de Kinshasa (marine, liseré tricolore) | — |
 | Cartographie | MapLibre, tuiles vectorielles, GeoServer | — |
 | IA | Modèles ouverts hébergés sous contrôle (inférence locale) + passerelle | Fournisseur contractualisé sans conservation |
 | Observabilité | OpenTelemetry, Prometheus, Grafana, Loki | — |

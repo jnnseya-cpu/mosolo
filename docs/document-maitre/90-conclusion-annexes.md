@@ -191,4 +191,5 @@ Le socle logiciel (Annexe E) contient ces fiches sous forme exécutable, avec de
 | Communications | Module 39 générique | Architecture événementielle, 239 événements, avis obligatoires (§ 11.4) | Demande du promoteur |
 | Devises et langues | Multidevise, multilingue | CDF principale ; drapeaux par devise ; langues par nom natif (§ 11.5–11.6) | Demande du promoteur |
 | Couche d'intelligence | Agents IA | Système d'exploitation IA encadré, autosave, mémoire, format de sortie (§ 23.5) | Demande du promoteur |
-| Charte graphique | Teal Groupe Nseya | Logo inchangé ; teal `#1BA996` et teal foncé `#0E5E55` dans les graphiques, documents et interfaces | Demande du promoteur |
+| Charte graphique | Teal Groupe Nseya | **Logo officiel de la Ville de Kinshasa, sans modification**, et couleurs de sa charte (marine `#232C6B`, bleu `#1E9BD7`, jaune `#F7D618`, rouge `#D7141A`, or `#E0A526`, vert `#1E8C3A`) dans les graphiques, documents et interfaces ; logo Groupe Nseya en mention « réalisé par » | Demande du promoteur |
+| Direction artistique | — | Interface sobre et éditoriale de console financière publique ; page d'accueil cinématographique ; aucun artifice « généré par IA » | Demande du promoteur |
