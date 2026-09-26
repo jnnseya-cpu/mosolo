@@ -12,7 +12,7 @@ export type Action =
   | 'rule.read' | 'rule.create' | 'rule.approve'
   | 'assessment.simulate' | 'assessment.liquidate'
   | 'obligation.read' | 'obligation.modify'
-  | 'payment.create' | 'payment.modify'
+  | 'payment.create' | 'payment.modify' | 'payment.evidence'
   | 'settlement.import' | 'reconciliation.read' | 'ledger.read' | 'ledger.reverse'
   | 'beneficiary.read' | 'beneficiary.propose' | 'beneficiary.approve'
   | 'audit.read' | 'audit.modify'
@@ -81,6 +81,8 @@ const MATRIX: Record<Action, Partial<Record<RoleCode, Grant>>> = {
   'payment.create': { R30: ownTaxpayer, R31: mandant, R12: always },
   // Un paiement n'est modifié que par un événement prestataire vérifié : aucun rôle humain.
   'payment.modify': {},
+  // Relais de vérification capture/SMS chez le prestataire : pièce de dossier (litige, exception), jamais une quittance.
+  'payment.evidence': { R17: always, R18: always, R20: always },
   'settlement.import': { R17: always },
   'reconciliation.read': { R17: always, R18: always, R22: always },
   'ledger.read': { R17: always, R22: always, R23: always },

@@ -35,7 +35,12 @@ declare module 'fastify' {
 export function buildApp(opts: AppOptions & { logger?: boolean } = {}): FastifyInstance {
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 1_048_576 });
   const ctx = createContext(opts);
-  if (opts.seed !== false) seed(ctx);
+  if (opts.seed !== false) {
+    seed(ctx);
+    // Doctrine (§ 18.1) : l'alias de règlement de chaque connecteur doit exister dans le coffre — sinon, pas de démarrage.
+    // (Sans données semées, le contrôle est refait à chaque création d'intention par la résolution d'alias.)
+    ctx.connectors.validate((alias) => ctx.vault.aliasExists(alias));
+  }
   app.decorate('ctx', ctx);
 
   void app.register(cors, {

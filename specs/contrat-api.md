@@ -27,8 +27,10 @@ Contrat partagé entre `backend/` et `frontend/`. Le frontend n'appelle le backe
 | POST | `/v1/assessments/calculate` | moteur, contrôleur | `{ruleId, taxpayerId, objectId, inputs, simulate}` → trace ; si `simulate=false` et règle non exécutable → 422 `RULE_NOT_EXECUTABLE` |
 | GET | `/v1/obligations?taxpayerId=` | selon droits | Obligations |
 | GET | `/v1/obligations/:id` | selon droits | Obligation + explication (règle, version, base légale, formule, entrées, montant, échéance, voie de recours) |
-| POST | `/v1/obligations/:id/payment-orders` | contribuable, mandataire, guichet | `Idempotency-Key` ; `{channel, displayCurrency?}` → `{paymentReference, amount, indicativeAmount, beneficiaryAlias, expiresAt, status, ussdInstructions}` |
+| POST | `/v1/obligations/:id/payment-orders` | contribuable, mandataire, guichet | `Idempotency-Key` ; `{channel, displayCurrency?, provider?}` → `{paymentReference, amount, indicativeAmount, beneficiaryAlias, expiresAt, status, ussdInstructions}` ; avec `provider: 'bitripay'\|'koda'` (canaux `MOBILE_MONEY`, `QR` seulement), en plus `{provider, providerIntentId, checkoutUrl, qrPayload, sandbox}` ; prestataire injoignable → 502 `PROVIDER_UNAVAILABLE` (aucun ordre créé) |
 | POST | `/v1/providers/:provider/callbacks` | prestataire | Signature `x-signature` (HMAC-SHA256 du corps brut), `x-nonce`, `x-timestamp` ; `{providerTxnId, paymentReference, amount, status, completedAt}` → quittance provisoire |
+| POST | `/v1/providers/koda/webhooks` | prestataire KODA | Corps brut signé : `x-koda-signature` = HMAC-SHA256 hex ; `payment.verified`, `payment.verified.late` → `CONFIRME` + quittance provisoire ; rejeu d'événement → 200 sans effet ; signature invalide → 401 + alerte → `{received, results[]}` |
+| POST | `/v1/providers/bitripay/webhooks` | prestataire BitriPay | `BitriPay-Signature: t=…,v1=…` (±5 min) [+ `BitriPay-Signature-Ed25519`] ; `payment_intent.succeeded` → `CONFIRME` ; `payment_intent.settled` → annonce de règlement seulement (jamais `REGLE`/`RAPPROCHE`) → `{received, results[]}` |
 | POST | `/v1/settlements/statements` | R17 | `{statementId, lines:[{accountAlias, amount, valueDate, paymentReference}]}` → rapprochement |
 | GET | `/v1/reconciliation/exceptions` | R17, R18 | Exceptions |
 | GET | `/v1/ledger/entries` · `/v1/ledger/balance` | R17, R22 | Écritures ; équilibre |

@@ -13,6 +13,8 @@ interface StoredResponse {
 
 export class IdempotencyStore {
   private readonly store = new Map<string, StoredResponse>();
+  /** Exécutions asynchrones en cours (appel sortant à un prestataire) : une seule par (portée, clé). */
+  private readonly inflight = new Map<string, { fingerprint: string; promise: Promise<{ statusCode: number; body: unknown }> }>();
 
   static requireKey(header: string | string[] | undefined): string {
     const key = Array.isArray(header) ? header[0] : header;
@@ -38,5 +40,43 @@ export class IdempotencyStore {
     const res = fn();
     this.store.set(id, { fingerprint, statusCode: res.statusCode, body: structuredClone(res.body) });
     return { ...res, replayed: false };
+  }
+
+  /**
+   * Variante asynchrone : une requête concurrente avec la même clé et le même contenu attend le résultat de la
+   * première (aucun second appel sortant) ; un échec n'est pas mémorisé (le client peut réessayer).
+   */
+  async executeAsync<T>(
+    scope: string,
+    key: string,
+    payload: unknown,
+    fn: () => Promise<{ statusCode: number; body: T }>,
+  ): Promise<{ statusCode: number; body: T; replayed: boolean }> {
+    const id = `${scope}::${key}`;
+    const fingerprint = sha256Hex(canonicalJson(payload));
+    const existing = this.store.get(id);
+    if (existing) {
+      if (existing.fingerprint !== fingerprint) {
+        throw conflict('IDEMPOTENCY_KEY_REUSED', 'Cette clé d’idempotence a déjà été utilisée avec un contenu différent.');
+      }
+      return { statusCode: existing.statusCode, body: structuredClone(existing.body) as T, replayed: true };
+    }
+    const running = this.inflight.get(id);
+    if (running) {
+      if (running.fingerprint !== fingerprint) {
+        throw conflict('IDEMPOTENCY_KEY_REUSED', 'Cette clé d’idempotence a déjà été utilisée avec un contenu différent.');
+      }
+      const res = await running.promise;
+      return { statusCode: res.statusCode, body: structuredClone(res.body) as T, replayed: true };
+    }
+    const promise = fn();
+    this.inflight.set(id, { fingerprint, promise });
+    try {
+      const res = await promise;
+      this.store.set(id, { fingerprint, statusCode: res.statusCode, body: structuredClone(res.body) });
+      return { ...res, replayed: false };
+    } finally {
+      this.inflight.delete(id);
+    }
   }
 }

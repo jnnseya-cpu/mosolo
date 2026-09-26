@@ -7,10 +7,10 @@ import { z } from 'zod';
 import type { AuditLog } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { HOUR_MS, type Clock } from '../../core/clock.js';
-import { checkChar, hmacSha256Hex, randomCode, safeEqualHex } from '../../core/crypto.js';
+import { checkChar, hmacSha256Hex, randomCode, safeEqualHex, sha256Hex } from '../../core/crypto.js';
 import { ApiError, badRequest, conflict, notFound, unprocessable } from '../../core/errors.js';
 import { authorize } from '../../core/policy.js';
-import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
+import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import type { AlertService } from '../alerts/service.js';
 import { PAYABLE_STATUSES, type AssessmentService } from '../assessment/service.js';
 import type { CommunicationService } from '../communications/service.js';
@@ -20,6 +20,12 @@ import type { TaxpayerService } from '../identity/service.js';
 import type { ReceiptService } from '../receipts/service.js';
 import type { LedgerService } from '../treasury/ledger.js';
 import type { VaultService } from '../vault/service.js';
+import { ProviderHttpError } from './connectors/http-client.js';
+import type { ConnectorRegistry } from './connectors/registry.js';
+import {
+  WebhookPayloadError, WebhookVerificationError, type ConfirmationMethod, type ConnectorId, type HeaderBag, type NormalizedProviderEvent,
+  type PaymentEvent, type SettlementEvent, type WebhookChecks,
+} from './connectors/types.js';
 
 export const PAYMENT_CHANNELS = ['MOBILE_MONEY', 'BANK', 'CARD', 'AGENT_POINT', 'USSD', 'QR', 'TRANSFER'] as const;
 export type PaymentChannel = (typeof PAYMENT_CHANNELS)[number];
@@ -41,7 +47,13 @@ export interface PaymentOrder {
   createdBy: string;
   createdAt: string;
   provider?: string;
+  /** Intention créée chez un prestataire connecté (BitriPay, KODA) : l'ordre lui est alors lié. */
+  providerIntentId?: string;
+  providerCheckoutUrl?: string | null;
+  providerQrPayload?: string | null;
+  providerSandbox?: boolean;
   providerTxnId?: string;
+  confirmationMethod?: ConfirmationMethod;
   payerAmount?: MoneyJSON;
   confirmedAt?: string;
   settledAt?: string;
@@ -68,6 +80,77 @@ export interface CallbackResponse {
   replayed?: boolean;
 }
 
+/** Confirmation normalisée (après vérification de signature propre au canal), commune à tous les prestataires. */
+export interface NormalizedConfirmation {
+  providerTxnId: string;
+  paymentReference: string;
+  amount: { amount: string; currency: string };
+  status: 'SUCCESS' | 'FAILED';
+  completedAt: string;
+  payerAmount?: { amount: string; currency: string };
+  confirmationMethod: ConfirmationMethod;
+  /** Intention annoncée par le prestataire : doit correspondre à celle liée à l'ordre. */
+  providerIntentId?: string;
+}
+
+/** Contrôles du rappel générique : signature HMAC, nonce unique, horodatage ±5 min. */
+const CALLBACK_CHECKS: WebhookChecks = { signatureVerified: true, replayGuard: 'NONCE', timestampInWindow: true };
+
+/** Annonce de règlement d'un prestataire : INDICE de rapprochement, sans effet sur l'état du paiement. */
+export interface SettlementAnnouncement {
+  id: string;
+  provider: string;
+  eventId: string;
+  providerIntentId?: string;
+  paymentReference?: string;
+  paymentOrderId?: string;
+  settlementId?: string;
+  amount?: MoneyJSON;
+  amountMatchesOrder?: boolean;
+  settledAt?: string;
+  receivedAt: string;
+}
+
+export interface WebhookEventResult {
+  eventId: string;
+  eventType: string;
+  outcome: 'PROCESSED' | 'SETTLEMENT_ANNOUNCED' | 'IGNORED';
+  status?: CallbackResponse['status'];
+  paymentReference?: string;
+  receiptNumber?: string;
+  receiptCode?: string;
+  receiptStatus?: string;
+  reason?: string;
+  replayed?: boolean;
+}
+
+interface WebhookEventRecord {
+  id: string;
+  provider: string;
+  eventId: string;
+  receivedAt: string;
+  result: WebhookEventResult;
+}
+
+/** Résultat de vérification capture/SMS obtenu du prestataire : PIÈCE DE DOSSIER, sans aucun effet. */
+export interface VerificationEvidenceRecord {
+  id: string;
+  kind: 'PROVIDER_VERIFICATION_EVIDENCE';
+  legalEffect: 'AUCUN';
+  notice: string;
+  caseRef: string;
+  provider: string;
+  paymentReference: string;
+  paymentOrderId: string;
+  orderStatusAtRequest: PaymentStatus;
+  smsCodeSha256?: string;
+  screenshotSha256?: string;
+  providerResult: unknown;
+  sandbox: boolean;
+  requestedBy: string;
+  requestedAt: string;
+}
+
 export const callbackBodySchema = z.object({
   providerTxnId: z.string().min(1).max(128),
   paymentReference: z.string().min(1).max(64),
@@ -90,13 +173,27 @@ export function orderView(o: PaymentOrder) {
     status: o.status,
     channel: o.channel,
     ussdInstructions: `Composez le code USSD officiel de MOSOLO [code court À CONFIGURER] puis saisissez la référence ${o.paymentReference.replace(/-/g, '')}. Aucun agent ne vous demandera d’espèces.`,
+    ...(o.providerIntentId
+      ? {
+          provider: o.provider,
+          providerIntentId: o.providerIntentId,
+          checkoutUrl: o.providerCheckoutUrl ?? null,
+          qrPayload: o.providerQrPayload ?? null,
+          sandbox: o.providerSandbox ?? true,
+        }
+      : {}),
   };
 }
 
 export class PaymentService {
   readonly orders = new InMemoryRepository<PaymentOrder>();
   readonly confirmations = new InMemoryRepository<ProviderConfirmation>();
+  readonly webhookEvents = new InMemoryRepository<WebhookEventRecord>();
+  readonly settlementAnnouncements = new InMemoryAppendOnlyRepository<SettlementAnnouncement>();
+  readonly verificationEvidence = new InMemoryAppendOnlyRepository<VerificationEvidenceRecord>();
   private readonly nonces = new Set<string>();
+  /** Obligations dont une intention prestataire est en cours de création (verrou anti-concurrence). */
+  private readonly pendingIntents = new Set<string>();
   private readonly ids = new IdGenerator();
 
   constructor(
@@ -111,6 +208,7 @@ export class PaymentService {
     private readonly receipts: ReceiptService,
     private readonly ledger: LedgerService,
     private readonly providerSecrets: Record<string, string>,
+    readonly connectors: ConnectorRegistry,
   ) {}
 
   private newReference(): string {
@@ -132,8 +230,8 @@ export class PaymentService {
     }
   }
 
-  /** Création d'un ordre de paiement (l'idempotence est appliquée par la route). */
-  createOrder(user: User, obligationId: string, input: { channel: PaymentChannel; displayCurrency?: CurrencyCode }): PaymentOrder {
+  /** Contrôles et préparation d'un ordre (sans l'enregistrer). */
+  private prepareOrder(user: User, obligationId: string, input: { channel: PaymentChannel; displayCurrency?: CurrencyCode }) {
     const obligation = this.assessment.get(obligationId);
     authorize(user, 'payment.create', { taxpayerId: obligation.taxpayerId });
     if (!PAYABLE_STATUSES.includes(obligation.status)) {
@@ -149,8 +247,8 @@ export class PaymentService {
       }
     }
     const beneficiaryAlias = this.vault.resolveAlias(obligation.beneficiaryAccountAlias);
-    const order = this.orders.insert({
-      id: this.ids.next('PO'),
+    const draft: PaymentOrder = {
+      id: '',
       paymentReference: this.newReference(),
       obligationId,
       taxpayerId: obligation.taxpayerId,
@@ -164,13 +262,82 @@ export class PaymentService {
       createdBy: user.id,
       createdAt: now.toISOString(),
       ledgerEntryIds: [],
-    });
+    };
+    return { obligation, draft };
+  }
+
+  private commitOrder(user: User, draft: PaymentOrder, entity: string): PaymentOrder {
+    const order = this.orders.insert({ ...draft, id: draft.id || this.ids.next('PO') });
     this.audit.append({
       actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'payment.reference.issued', resourceType: 'payment_order', resourceId: order.id,
-      details: { paymentReference: order.paymentReference, obligationId, channel: order.channel, amount: order.amount },
+      details: {
+        paymentReference: order.paymentReference, obligationId: order.obligationId, channel: order.channel, amount: order.amount,
+        ...(order.providerIntentId ? { provider: order.provider, providerIntentId: order.providerIntentId, providerSandbox: order.providerSandbox } : {}),
+      },
     });
-    this.comms.publish('payment.reference.issued', [taxpayerRecipient(this.taxpayers.get(order.taxpayerId))], { reference: order.paymentReference }, { entity: obligation.entity });
+    this.comms.publish('payment.reference.issued', [taxpayerRecipient(this.taxpayers.get(order.taxpayerId))], { reference: order.paymentReference }, { entity });
     return order;
+  }
+
+  /** Création d'un ordre de paiement (l'idempotence est appliquée par la route). */
+  createOrder(user: User, obligationId: string, input: { channel: PaymentChannel; displayCurrency?: CurrencyCode }): PaymentOrder {
+    const { obligation, draft } = this.prepareOrder(user, obligationId, input);
+    return this.commitOrder(user, draft, obligation.entity);
+  }
+
+  /**
+   * Création d'un ordre lié à un prestataire connecté (BitriPay, KODA) : l'intention est créée chez le prestataire
+   * AVANT l'enregistrement de l'ordre. En cas d'échec sortant : 502 PROVIDER_UNAVAILABLE et AUCUN ordre enregistré
+   * (le contribuable peut réessayer ; une intention éventuellement créée côté prestataire porte une référence
+   * inconnue de MOSOLO et ne pourra jamais produire de quittance).
+   */
+  async createOrderWithProvider(
+    user: User,
+    obligationId: string,
+    input: { channel: PaymentChannel; displayCurrency?: CurrencyCode; provider?: ConnectorId },
+  ): Promise<PaymentOrder> {
+    if (!input.provider) return this.createOrder(user, obligationId, input);
+    const connector = this.connectors.get(input.provider);
+    if (!connector) throw unprocessable('UNKNOWN_PROVIDER', `Prestataire non connecté : ${input.provider}`);
+    if (input.channel !== 'MOBILE_MONEY' && input.channel !== 'QR') {
+      throw unprocessable('PROVIDER_CHANNEL_UNSUPPORTED', `Le prestataire ${connector.label} n'est proposé que pour les canaux MOBILE_MONEY et QR.`);
+    }
+    const { obligation, draft } = this.prepareOrder(user, obligationId, input);
+    // Doctrine : le règlement du prestataire va au compte public du coffre qui est aussi le bénéficiaire de l'ordre.
+    this.vault.resolveAlias(connector.settlementAccountAlias);
+    if (connector.settlementAccountAlias !== draft.beneficiaryAlias) {
+      throw unprocessable(
+        'SETTLEMENT_ACCOUNT_MISMATCH',
+        `Le compte de règlement de ${connector.label} (${connector.settlementAccountAlias}) n'est pas le compte bénéficiaire de l'obligation (${draft.beneficiaryAlias}).`,
+      );
+    }
+    if (this.pendingIntents.has(obligationId)) {
+      throw conflict('PAYMENT_INITIATION_IN_PROGRESS', 'Une initiation de paiement est déjà en cours pour cette obligation.');
+    }
+    this.pendingIntents.add(obligationId);
+    const id = this.ids.next('PO');
+    try {
+      let intent;
+      try {
+        intent = await connector.createIntent({
+          paymentOrderId: id, paymentReference: draft.paymentReference, obligationId, amount: draft.amount, channel: draft.channel,
+        });
+      } catch (e) {
+        const code = e instanceof ApiError ? e.code : 'PROVIDER_UNAVAILABLE';
+        this.audit.append({
+          actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'payment.provider_intent.failed', resourceType: 'obligation', resourceId: obligationId,
+          outcome: 'FAILURE', details: { provider: connector.id, paymentReference: draft.paymentReference, code },
+        });
+        if (e instanceof ApiError) throw e;
+        throw new ProviderHttpError(connector.id, e instanceof Error ? e.name : 'erreur');
+      }
+      return this.commitOrder(user, {
+        ...draft, id, provider: connector.id, providerIntentId: intent.providerIntentId,
+        providerCheckoutUrl: intent.checkoutUrl, providerQrPayload: intent.qrPayload, providerSandbox: intent.sandbox,
+      }, obligation.entity);
+    } finally {
+      this.pendingIntents.delete(obligationId);
+    }
   }
 
   private transition(o: PaymentOrder, to: PaymentStatus, extra: Partial<PaymentOrder> = {}): PaymentOrder {
@@ -222,33 +389,48 @@ export class PaymentService {
     const parsed = callbackBodySchema.safeParse(json);
     if (!parsed.success) throw badRequest('VALIDATION_ERROR', parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
     const body = parsed.data;
+    return this.confirmFromProvider(provider, { ...body, confirmationMethod: 'HMAC_CALLBACK' }, CALLBACK_CHECKS);
+  }
 
+  /**
+   * Confirmation d'un paiement par un prestataire, APRÈS vérification de signature propre au canal (rappel générique
+   * ou connecteur). Contrôles communs : unicité de la transaction (rejeu ⇒ réponse mémorisée, aucun double effet),
+   * référence connue, liaison ordre ↔ intention prestataire, montant exact (Money), doublon, écritures, quittance
+   * provisoire, communications, audit.
+   */
+  confirmFromProvider(provider: string, n: NormalizedConfirmation, checks: WebhookChecks = CALLBACK_CHECKS): CallbackResponse {
     // Rejeu d'une transaction déjà traitée : 200 idempotent, aucun double effet.
-    const already = this.confirmations.findOne((c) => c.provider === provider && c.providerTxnId === body.providerTxnId);
+    const already = this.confirmations.findOne((c) => c.provider === provider && c.providerTxnId === n.providerTxnId);
     if (already) {
-      this.audit.append({ actor: { kind: 'provider', id: provider }, action: 'payment.callback.replayed', resourceType: 'provider_txn', resourceId: body.providerTxnId, details: { paymentReference: body.paymentReference } });
+      this.audit.append({ actor: { kind: 'provider', id: provider }, action: 'payment.callback.replayed', resourceType: 'provider_txn', resourceId: n.providerTxnId, details: { paymentReference: n.paymentReference } });
       return { ...already.response, replayed: true };
     }
 
-    const order = this.orders.findOne((o) => o.paymentReference === body.paymentReference);
-    if (!order) this.reject(provider, 422, 'UNKNOWN_PAYMENT_REFERENCE', `Référence inconnue : ${body.paymentReference}`, { providerTxnId: body.providerTxnId });
+    const order = this.orders.findOne((o) => o.paymentReference === n.paymentReference);
+    if (!order) this.reject(provider, 422, 'UNKNOWN_PAYMENT_REFERENCE', `Référence inconnue : ${n.paymentReference}`, { providerTxnId: n.providerTxnId });
+    // Un ordre lié à une intention prestataire ne peut être confirmé que par CE prestataire, pour CETTE intention.
+    if (order.providerIntentId && (order.provider !== provider || (n.providerIntentId !== undefined && n.providerIntentId !== order.providerIntentId))) {
+      this.reject(provider, 422, 'PROVIDER_ORDER_MISMATCH', `La confirmation ne correspond pas au prestataire ou à l'intention liés à ${order.paymentReference}.`, {
+        paymentReference: order.paymentReference, providerTxnId: n.providerTxnId, providerIntentId: n.providerIntentId,
+      });
+    }
     const paid = (() => {
       try {
-        return Money.fromJSON(body.amount as MoneyJSON);
+        return Money.fromJSON(n.amount as MoneyJSON);
       } catch {
         return undefined;
       }
     })();
     if (!paid || !paid.equals(Money.fromJSON(order.amount))) {
-      this.reject(provider, 422, 'AMOUNT_MISMATCH', `Montant confirmé ${body.amount.amount} ${body.amount.currency} ≠ montant dû ${order.amount.amount} ${order.amount.currency}.`, {
-        paymentReference: order.paymentReference, providerTxnId: body.providerTxnId,
+      this.reject(provider, 422, 'AMOUNT_MISMATCH', `Montant confirmé ${n.amount.amount} ${n.amount.currency} ≠ montant dû ${order.amount.amount} ${order.amount.currency}.`, {
+        paymentReference: order.paymentReference, providerTxnId: n.providerTxnId,
       });
     }
 
     const actor = { kind: 'provider' as const, id: provider };
     const record = (outcome: ProviderConfirmation['outcome'], response: CallbackResponse): CallbackResponse => {
       this.confirmations.insert({
-        id: this.ids.next('CONF'), provider, providerTxnId: body.providerTxnId, paymentReference: order.paymentReference, outcome,
+        id: this.ids.next('CONF'), provider, providerTxnId: n.providerTxnId, paymentReference: order.paymentReference, outcome,
         receivedAt: this.clock.now().toISOString(), response,
       });
       return response;
@@ -256,27 +438,27 @@ export class PaymentService {
     const tp = this.taxpayers.get(order.taxpayerId);
     const obligation = this.assessment.get(order.obligationId);
 
-    if (body.status === 'FAILED') {
+    if (n.status === 'FAILED') {
       if (order.status === 'INITIE') this.transition(order, 'ECHOUE');
-      this.audit.append({ actor, action: 'payment.failed', resourceType: 'payment_order', resourceId: order.id, details: { providerTxnId: body.providerTxnId } });
+      this.audit.append({ actor, action: 'payment.failed', resourceType: 'payment_order', resourceId: order.id, details: { providerTxnId: n.providerTxnId } });
       this.comms.publish('payment.failed', [taxpayerRecipient(tp)], { reference: order.paymentReference }, { entity: obligation.entity });
       return record('ECHOUE', { status: 'ECHOUE', paymentReference: order.paymentReference });
     }
 
     if (order.status !== 'INITIE') {
       // Deuxième paiement pour une même référence : DOUBLON, traité par règle (remboursement), jamais de 2e quittance.
-      this.audit.append({ actor, action: 'payment.duplicate_detected', resourceType: 'payment_order', resourceId: order.id, outcome: 'FAILURE', details: { providerTxnId: body.providerTxnId, currentStatus: order.status } });
+      this.audit.append({ actor, action: 'payment.duplicate_detected', resourceType: 'payment_order', resourceId: order.id, outcome: 'FAILURE', details: { providerTxnId: n.providerTxnId, currentStatus: order.status } });
       this.comms.publish('payment.duplicate_detected', [taxpayerRecipient(tp)], { reference: order.paymentReference }, { entity: obligation.entity });
       return record('DOUBLON', { status: 'DOUBLON', paymentReference: order.paymentReference });
     }
 
-    const payerAmount = body.payerAmount && body.payerAmount.currency !== order.amount.currency ? Money.fromJSON(body.payerAmount as MoneyJSON).toJSON() : undefined;
+    const payerAmount = n.payerAmount && n.payerAmount.currency !== order.amount.currency ? Money.fromJSON(n.payerAmount as MoneyJSON).toJSON() : undefined;
     const entry = this.ledger.postPair({
-      eventType: 'PAYMENT_CONFIRMED', description: `Confirmation ${provider} ${body.providerTxnId} pour ${order.paymentReference}`,
+      eventType: 'PAYMENT_CONFIRMED', description: `Confirmation ${provider} ${n.providerTxnId} pour ${order.paymentReference}`,
       sourceType: 'payment_order', sourceId: order.id, debit: 'FONDS_A_RECEVOIR_PRESTATAIRES', credit: 'CREANCES_CONTRIBUABLES', amount: order.amount,
     });
     const confirmed = this.transition(order, 'CONFIRME', {
-      provider, providerTxnId: body.providerTxnId, confirmedAt: this.clock.now().toISOString(),
+      provider, providerTxnId: n.providerTxnId, confirmedAt: this.clock.now().toISOString(), confirmationMethod: n.confirmationMethod,
       ...(payerAmount ? { payerAmount } : {}), ledgerEntryIds: [...order.ledgerEntryIds, entry.id],
     });
     // Contre-valeur indicative en CDF (AC-CUR-01) : taux et source figurent sur la quittance.
@@ -296,13 +478,16 @@ export class PaymentService {
       ...(indicativeAmount ? { indicativeAmount } : {}),
       channel: confirmed.channel,
       provider,
-      providerTxnId: body.providerTxnId,
-      paidAt: body.completedAt,
-      signatureVerified: true,
+      providerTxnId: n.providerTxnId,
+      paidAt: n.completedAt,
+      confirmationMethod: n.confirmationMethod,
+      signatureVerified: checks.signatureVerified,
+      // Nonce unique (rappel générique) ou identifiant d'événement unique (webhook prestataire).
       nonceUnique: true,
-      timestampInWindow: true,
+      replayGuard: checks.replayGuard,
+      timestampInWindow: checks.timestampInWindow,
     });
-    this.audit.append({ actor, action: 'payment.confirmed', resourceType: 'payment_order', resourceId: order.id, details: { providerTxnId: body.providerTxnId, receipt: receipt.number } });
+    this.audit.append({ actor, action: 'payment.confirmed', resourceType: 'payment_order', resourceId: order.id, details: { providerTxnId: n.providerTxnId, receipt: receipt.number, confirmationMethod: n.confirmationMethod } });
     const vars = { reference: order.paymentReference };
     this.comms.publish('payment.confirmed', [taxpayerRecipient(tp)], vars, { entity: obligation.entity });
     this.comms.publish('receipt.issued_provisional', [taxpayerRecipient(tp)], { reference: receipt.number }, { entity: obligation.entity });
@@ -310,6 +495,162 @@ export class PaymentService {
     return record('CONFIRME', {
       status: 'CONFIRME', paymentReference: order.paymentReference, receiptNumber: receipt.number, receiptCode: receipt.code, receiptStatus: receipt.status,
     });
+  }
+
+  /**
+   * Webhook signé d'un prestataire connecté (BitriPay, KODA). Signature vérifiée à temps constant par le connecteur
+   * (invalide ⇒ 401 + alerte), unicité de l'identifiant d'événement (rejeu ⇒ 200, aucun double effet), puis :
+   * paiement ⇒ `confirmFromProvider` ; annonce de règlement ⇒ indice de rapprochement SEULEMENT ; autre ⇒ ignoré + audit.
+   */
+  handleConnectorWebhook(providerId: string, headers: HeaderBag, rawBody: string): { received: true; results: WebhookEventResult[] } {
+    const connector = this.connectors.get(providerId);
+    if (!connector) throw notFound('UNKNOWN_PROVIDER', `Prestataire non connecté : ${providerId}`);
+    let verified;
+    try {
+      verified = connector.verifyWebhook(headers, rawBody, this.clock.now());
+    } catch (e) {
+      if (e instanceof WebhookVerificationError) this.reject(providerId, 401, e.code, e.message, { channel: 'webhook' });
+      if (e instanceof WebhookPayloadError) {
+        if (e.code === 'INVALID_JSON') throw badRequest('INVALID_JSON', e.message);
+        this.reject(providerId, 422, e.code, e.message, { channel: 'webhook' });
+      }
+      throw e;
+    }
+    const results: WebhookEventResult[] = [];
+    for (const ev of verified.events) {
+      const key = `${providerId}:${ev.eventId}`;
+      const done = this.webhookEvents.get(key);
+      if (done) {
+        this.audit.append({ actor: { kind: 'provider', id: providerId }, action: 'payment.webhook.replayed', resourceType: 'provider_event', resourceId: ev.eventId, details: { eventType: ev.eventType } });
+        results.push({ ...done.result, replayed: true });
+        continue;
+      }
+      let result: WebhookEventResult;
+      if (ev.kind === 'PAYMENT') result = this.applyPaymentEvent(providerId, ev, verified.checks);
+      else if (ev.kind === 'SETTLEMENT') result = this.announceSettlement(providerId, ev);
+      else {
+        this.audit.append({
+          actor: { kind: 'provider', id: providerId },
+          action: ev.reason === 'NON_TERMINAL_ATTEMPT_FAILURE' ? 'payment.attempt_failed' : 'payment.webhook.ignored',
+          resourceType: 'provider_event', resourceId: ev.eventId,
+          details: { eventType: ev.eventType, reason: ev.reason, ...(ev.paymentReference ? { paymentReference: ev.paymentReference } : {}) },
+        });
+        result = { eventId: ev.eventId, eventType: ev.eventType, outcome: 'IGNORED', reason: ev.reason };
+      }
+      // Enregistré seulement après succès : un événement refusé (422) peut être re-présenté et sera re-contrôlé.
+      this.webhookEvents.insert({ id: key, provider: providerId, eventId: ev.eventId, receivedAt: this.clock.now().toISOString(), result });
+      results.push(result);
+    }
+    return { received: true, results };
+  }
+
+  /** Référence MOSOLO d'un événement : métadonnées (référence, ordre) et intention stockée doivent concorder. */
+  private resolveEventOrder(providerId: string, ev: PaymentEvent | SettlementEvent): PaymentOrder | undefined {
+    const byIntent = ev.providerIntentId ? this.orders.findOne((o) => o.provider === providerId && o.providerIntentId === ev.providerIntentId) : undefined;
+    const byOrderId = ev.paymentOrderId ? this.orders.get(ev.paymentOrderId) : undefined;
+    const byRef = ev.paymentReference ? this.byReference(ev.paymentReference) : undefined;
+    const refs = new Set([ev.paymentReference, byOrderId?.paymentReference, byIntent?.paymentReference].filter((r): r is string => !!r));
+    if (refs.size > 1) {
+      this.reject(providerId, 422, 'REFERENCE_CONFLICT', 'Référence, ordre et intention de l’événement ne concordent pas.', {
+        eventId: ev.eventId, providerIntentId: ev.providerIntentId, references: [...refs],
+      });
+    }
+    return byIntent ?? byOrderId ?? byRef;
+  }
+
+  private applyPaymentEvent(providerId: string, ev: PaymentEvent, checks: WebhookChecks): WebhookEventResult {
+    const order = this.resolveEventOrder(providerId, ev);
+    const paymentReference = order?.paymentReference ?? ev.paymentReference;
+    if (!paymentReference) {
+      this.reject(providerId, 422, 'UNKNOWN_PAYMENT_REFERENCE', 'Événement sans référence MOSOLO résoluble (métadonnées ou intention).', {
+        eventId: ev.eventId, providerIntentId: ev.providerIntentId,
+      });
+    }
+    // Un échec sans montant porte sur l'ordre lui-même ; un succès exige TOUJOURS le montant du prestataire.
+    const amount = ev.amount ?? (ev.status === 'FAILED' && order ? order.amount : undefined);
+    if (!amount) this.reject(providerId, 422, 'PROVIDER_AMOUNT_MISSING', 'Événement de paiement sans montant.', { eventId: ev.eventId });
+    const r = this.confirmFromProvider(providerId, {
+      providerTxnId: ev.providerTxnId, paymentReference, amount, status: ev.status, completedAt: ev.completedAt,
+      confirmationMethod: ev.confirmationMethod, ...(ev.providerIntentId ? { providerIntentId: ev.providerIntentId } : {}),
+    }, checks);
+    return { eventId: ev.eventId, eventType: ev.eventType, outcome: 'PROCESSED', ...r };
+  }
+
+  /** Annonce de règlement : journalisée et conservée comme indice ; ne fait JAMAIS passer à REGLE / RAPPROCHE. */
+  private announceSettlement(providerId: string, ev: SettlementEvent): WebhookEventResult {
+    const order = this.resolveEventOrder(providerId, ev);
+    let amountMatchesOrder: boolean | undefined;
+    if (ev.amount && order) {
+      try {
+        amountMatchesOrder = Money.fromJSON(ev.amount).equals(Money.fromJSON(order.amount));
+      } catch {
+        amountMatchesOrder = false;
+      }
+    }
+    const hint = this.settlementAnnouncements.append({
+      id: this.ids.next('SETANN'), provider: providerId, eventId: ev.eventId,
+      ...(ev.providerIntentId ? { providerIntentId: ev.providerIntentId } : {}),
+      ...(order ? { paymentReference: order.paymentReference, paymentOrderId: order.id } : ev.paymentReference ? { paymentReference: ev.paymentReference } : {}),
+      ...(ev.settlementId ? { settlementId: ev.settlementId } : {}),
+      ...(ev.amount ? { amount: ev.amount } : {}),
+      ...(amountMatchesOrder !== undefined ? { amountMatchesOrder } : {}),
+      ...(ev.settledAt ? { settledAt: ev.settledAt } : {}),
+      receivedAt: this.clock.now().toISOString(),
+    });
+    this.audit.append({
+      actor: { kind: 'provider', id: providerId }, action: 'payment.settlement_announced', resourceType: 'payment_order', resourceId: order?.id ?? ev.providerIntentId ?? ev.eventId,
+      outcome: order && amountMatchesOrder !== false ? 'SUCCESS' : 'FAILURE',
+      details: {
+        announcementId: hint.id, eventId: ev.eventId, settlementId: ev.settlementId, paymentReference: hint.paymentReference, orderStatus: order?.status,
+        amountMatchesOrder, note: 'Indice de rapprochement uniquement : REGLE/RAPPROCHE exigent le relevé du compte public.',
+      },
+    });
+    return { eventId: ev.eventId, eventType: ev.eventType, outcome: 'SETTLEMENT_ANNOUNCED', ...(hint.paymentReference ? { paymentReference: hint.paymentReference } : {}) };
+  }
+
+  /**
+   * Relais vers l'API de vérification capture d'écran / code SMS du prestataire, réservé à R17, R18 et R20
+   * pour documenter un dossier de litige ou d'exception. Le résultat est une PIÈCE DE DOSSIER : il ne modifie
+   * jamais l'état du paiement et n'émet jamais de quittance (§ 18.5 : aucune quittance sur preuve visuelle).
+   */
+  async requestVerificationEvidence(
+    user: User,
+    input: { paymentReference: string; caseRef: string; smsCode?: string; screenshotSha256?: string },
+  ): Promise<VerificationEvidenceRecord> {
+    authorize(user, 'payment.evidence');
+    const order = this.byReference(input.paymentReference);
+    if (!order) throw notFound('PAYMENT_REFERENCE_NOT_FOUND', `Référence inconnue : ${input.paymentReference}`);
+    if (!order.provider || !order.providerIntentId) {
+      throw unprocessable('NO_PROVIDER_INTENT', 'Cet ordre n’est lié à aucune intention d’un prestataire connecté.');
+    }
+    const connector = this.connectors.get(order.provider);
+    if (!connector) throw unprocessable('UNKNOWN_PROVIDER', `Prestataire non connecté : ${order.provider}`);
+    const res = await connector.requestVerificationEvidence({
+      providerIntentId: order.providerIntentId, paymentReference: order.paymentReference,
+      ...(input.smsCode ? { smsCode: input.smsCode } : {}), ...(input.screenshotSha256 ? { screenshotSha256: input.screenshotSha256 } : {}),
+    });
+    const record = this.verificationEvidence.append({
+      id: this.ids.next('EVID'),
+      kind: 'PROVIDER_VERIFICATION_EVIDENCE',
+      legalEffect: 'AUCUN',
+      notice: 'Pièce de dossier uniquement. Aucune quittance ni changement d’état ne peut en résulter : seule la confirmation serveur à serveur signée fait foi, puis le relevé du compte public.',
+      caseRef: input.caseRef,
+      provider: connector.id,
+      paymentReference: order.paymentReference,
+      paymentOrderId: order.id,
+      orderStatusAtRequest: order.status,
+      ...(input.smsCode ? { smsCodeSha256: sha256Hex(input.smsCode) } : {}),
+      ...(input.screenshotSha256 ? { screenshotSha256: input.screenshotSha256 } : {}),
+      providerResult: res.providerResult,
+      sandbox: res.sandbox,
+      requestedBy: user.id,
+      requestedAt: this.clock.now().toISOString(),
+    });
+    this.audit.append({
+      actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'payment.verification_evidence.requested', resourceType: 'payment_order', resourceId: order.id,
+      details: { evidenceId: record.id, caseRef: input.caseRef, provider: connector.id, legalEffect: 'AUCUN' },
+    });
+    return record;
   }
 
   byReference(ref: string): PaymentOrder | undefined {

@@ -32,6 +32,7 @@ export interface Receipt {
   channel: string;
   provider: string;
   providerTxnId: string;
+  confirmationMethod?: string;
   paidAt: string;
   issuedAt: string;
   finalizedAt?: string;
@@ -60,9 +61,14 @@ export interface VerifiedProviderConfirmation {
   provider: string;
   providerTxnId: string;
   paidAt: string;
+  /** Méthode de confirmation (rappel HMAC générique, rail BitriPay, registre opérateur KODA…). */
+  confirmationMethod?: string;
   signatureVerified: true;
   nonceUnique: true;
-  timestampInWindow: true;
+  /** Garde anti-rejeu : nonce (rappel générique) ou identifiant d'événement unique (webhook prestataire). */
+  replayGuard?: 'NONCE' | 'EVENT_ID';
+  /** NON_APPLICABLE : le prestataire ne signe pas d'horodatage ; l'anti-rejeu repose alors sur l'identifiant d'événement. */
+  timestampInWindow: true | 'NON_APPLICABLE';
 }
 
 /** Quatre derniers caractères alphanumériques de la référence du contribuable (§ 19.2). */
@@ -131,7 +137,10 @@ export class ReceiptService {
   }
 
   issueProvisional(c: VerifiedProviderConfirmation): Receipt {
-    if (c.kind !== 'VERIFIED_PROVIDER_CONFIRMATION' || !c.signatureVerified || !c.nonceUnique || !c.timestampInWindow) {
+    if (
+      c.kind !== 'VERIFIED_PROVIDER_CONFIRMATION' || c.signatureVerified !== true || c.nonceUnique !== true ||
+      !(c.timestampInWindow === true || (c.timestampInWindow === 'NON_APPLICABLE' && c.replayGuard === 'EVENT_ID'))
+    ) {
       throw conflict('RECEIPT_REQUIRES_VERIFIED_CONFIRMATION', 'Une quittance exige une confirmation prestataire vérifiée.');
     }
     if (this.receipts.findOne((r) => r.paymentOrderId === c.paymentOrderId)) {
@@ -161,6 +170,7 @@ export class ReceiptService {
       channel: c.channel,
       provider: c.provider,
       providerTxnId: c.providerTxnId,
+      ...(c.confirmationMethod ? { confirmationMethod: c.confirmationMethod } : {}),
       issuedAt: now.toISOString(),
       mention: 'Quittance provisoire — en attente de règlement',
       signature,

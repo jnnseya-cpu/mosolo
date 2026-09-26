@@ -323,6 +323,15 @@ paths:
         `Idempotency-Key` obligatoire : même clé + même contenu → même réponse (en-tête `idempotent-replayed: true`) ;
         même clé + contenu différent → 409 `IDEMPOTENCY_KEY_REUSED`. Le montant (= solde) et l'alias bénéficiaire (coffre)
         ne sont jamais fournis par le client (tout champ supplémentaire → 400).
+
+        Champ facultatif `provider` (`bitripay` | `koda`, canaux `MOBILE_MONEY` et `QR` uniquement) : une intention est créée
+        chez le prestataire (Idempotency-Key sortante = référence de paiement ; métadonnées = référence, ordre, obligation ;
+        aucune donnée personnelle), et la réponse porte en plus `provider`, `providerIntentId`, `checkoutUrl`, `qrPayload`, `sandbox`.
+        Sans clé API configurée : bac à sable local (`sandbox: true`, `providerIntentId` `sbx_…`, `checkoutUrl: null`, aucun appel réseau).
+        Échec sortant → 502 `PROVIDER_UNAVAILABLE` et **aucun ordre enregistré** ; montant non représentable dans les unités
+        mineures du prestataire (ex. CDF à zéro décimale chez KODA) → 422 `AMOUNT_NOT_REPRESENTABLE` ; compte de règlement du
+        prestataire ≠ bénéficiaire de l'obligation → 422 `SETTLEMENT_ACCOUNT_MISMATCH`. Le lien de paiement ne vaut jamais preuve :
+        seule la confirmation serveur à serveur signée fait passer l'ordre à `CONFIRME`.
       parameters:
         - { $ref: '#/components/parameters/Id' }
         - { $ref: '#/components/parameters/IdempotencyKey' }
@@ -342,6 +351,7 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
         '422': { $ref: '#/components/responses/Problem' }
+        '502': { $ref: '#/components/responses/Problem' }
 
   /v1/providers/{provider}/callbacks:
     post:
@@ -374,6 +384,97 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
         '422': { $ref: '#/components/responses/Problem' }
+
+  /v1/providers/koda/webhooks:
+    post:
+      tags: [Paiements]
+      summary: Webhook signé KODA → confirmation (CONFIRME + quittance provisoire)
+      description: |
+        Serveur à serveur uniquement. `x-koda-signature` = HMAC-SHA256 hexadécimal du **corps brut** avec le secret de webhook
+        (`KODA_WEBHOOK_SECRET` ; démo : `demo-whsec-koda`), comparé à temps constant. Invalide ou absente → 401 + alerte de sécurité.
+        Événements `payment.verified` et `payment.verified.late` → confirmation commune (`confirmFromProvider`, méthode
+        `KODA_OPERATOR_LEDGER`) : référence, liaison ordre ↔ intention, montant exact, doublon, écritures, quittance provisoire.
+        Montant en unités mineures KODA (**CDF à zéro décimale** : `25000` = 25 000 FC ; USD à deux décimales : `589` = 5,89 $).
+        Identifiant d'événement déjà traité → 200 `replayed: true`, sans double effet. Autre type → 200 ignoré + audit.
+        Forme exacte du corps [À VÉRIFIER sur /v1/openapi.json de KODA] : parseur tolérant (voir `KodaWebhookEvent`).
+      security: []
+      parameters:
+        - { name: x-koda-signature, in: header, required: true, schema: { type: string, pattern: '^(sha256=)?[0-9a-f]{64}$' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/KodaWebhookEvent' }
+      responses:
+        '200':
+          description: Traité, rejoué ou ignoré
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConnectorWebhookResponse' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /v1/providers/bitripay/webhooks:
+    post:
+      tags: [Paiements]
+      summary: Webhook signé BitriPay → confirmation, ou annonce de règlement (indice seulement)
+      description: |
+        Serveur à serveur uniquement. `BitriPay-Signature: t=<unix>,v1=<hex>` avec `v1` = HMAC-SHA256 de `"<t>.<corps brut>"`
+        (secret `whsec_…` ; démo : `demo-whsec-bitripay`), tolérance ±5 min ; en complément, `BitriPay-Signature-Ed25519`
+        (signature base64 du corps brut) vérifiée si la clé publique de la plateforme est configurée (exigible par configuration).
+        Format exact [À VÉRIFIER sur l'OpenAPI BitriPay]. Invalide → 401 + alerte.
+        `payment_intent.succeeded` → `CONFIRME` + quittance provisoire (méthode `BITRIPAY_RAIL`) ;
+        `payment_intent.canceled` → `ECHOUE` ; `payment_intent.payment_failed` → journalisé sans changement d'état (tentative non terminale) ;
+        `payment_intent.settled` → **annonce de règlement** : conservée comme indice de rapprochement, audit
+        `payment.settlement_announced`, **aucun passage à `REGLE` / `RAPPROCHE`** (réservé au relevé du compte public).
+      security: []
+      parameters:
+        - { name: BitriPay-Signature, in: header, required: true, schema: { type: string, examples: ['t=1790413200,v1=5f0c…'] } }
+        - { name: BitriPay-Signature-Ed25519, in: header, required: false, schema: { type: string, contentEncoding: base64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BitriPayWebhookEvent' }
+      responses:
+        '200':
+          description: Traité, rejoué, annonce enregistrée ou ignoré
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConnectorWebhookResponse' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /v1/payment-orders/{reference}/provider-verification-evidence:
+    post:
+      tags: [Paiements]
+      summary: Pièce de dossier — vérification capture / SMS chez le prestataire (R17, R18, R20)
+      x-extension: true
+      description: |
+        Relaie la demande à l'API de vérification du prestataire (KODA `POST /intents/{id}/verify`, BitriPay `POST /verifications`)
+        pour documenter un litige ou une exception. **Le résultat est une pièce de dossier (`legalEffect: AUCUN`)** : il ne change
+        jamais l'état du paiement et n'émet jamais de quittance (aucune quittance sur capture d'écran ou code SMS, § 18.5).
+        Interdit au contribuable (403). Aucune image n'est reçue : seulement son empreinte SHA-256 ; le code SMS est conservé haché.
+      parameters:
+        - { name: reference, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VerificationEvidenceRequest' }
+      responses:
+        '201':
+          description: Pièce enregistrée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerificationEvidence' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '502': { $ref: '#/components/responses/Problem' }
 
   /v1/settlements/statements:
     post:
@@ -1043,7 +1144,7 @@ components:
         code:
           type: string
           description: Code stable
-          examples: [RULE_NOT_EXECUTABLE, FORBIDDEN, SEPARATION_OF_DUTIES, IDEMPOTENCY_KEY_REUSED, NONCE_REPLAYED, FX_RATE_MISSING]
+          examples: [RULE_NOT_EXECUTABLE, FORBIDDEN, SEPARATION_OF_DUTIES, IDEMPOTENCY_KEY_REUSED, NONCE_REPLAYED, FX_RATE_MISSING, PROVIDER_UNAVAILABLE, AMOUNT_NOT_REPRESENTABLE, PROVIDER_ORDER_MISMATCH]
         instance: { type: string }
       additionalProperties: true
 
@@ -1452,6 +1553,10 @@ components:
       properties:
         channel: { type: string, enum: [MOBILE_MONEY, BANK, CARD, AGENT_POINT, USSD, QR, TRANSFER] }
         displayCurrency: { $ref: '#/components/schemas/CurrencyCode' }
+        provider:
+          type: string
+          enum: [bitripay, koda]
+          description: Prestataire connecté (candidat, sous réserve d'agrément et de convention) ; canaux MOBILE_MONEY et QR uniquement
     PaymentOrder:
       type: object
       required: [paymentReference, amount, indicativeAmount, beneficiaryAlias, expiresAt, status, ussdInstructions]
@@ -1470,6 +1575,11 @@ components:
         status: { $ref: '#/components/schemas/PaymentStatus' }
         channel: { type: string }
         ussdInstructions: { type: string }
+        provider: { type: string, enum: [bitripay, koda], description: Présent seulement si l'ordre est lié à un prestataire connecté }
+        providerIntentId: { type: string, examples: [sbx_koda_1a2b3c4d5e6f7a8b, pi_123] }
+        checkoutUrl: { type: [string, 'null'], description: Page de paiement du prestataire (null en bac à sable local). Ne vaut pas preuve de paiement. }
+        qrPayload: { type: [string, 'null'], description: Charge utile QR (BitriPay) }
+        sandbox: { type: boolean, description: Vrai en bac à sable local ou avec une clé de test du prestataire }
     ProviderCallback:
       type: object
       required: [providerTxnId, paymentReference, amount, status, completedAt]
@@ -1493,6 +1603,98 @@ components:
         receiptCode: { type: string, examples: [Q26KIN0000000017] }
         receiptStatus: { $ref: '#/components/schemas/ReceiptStatus' }
         replayed: { type: boolean }
+
+    KodaWebhookEvent:
+      type: object
+      description: |
+        Forme tolérée [À VÉRIFIER sur /v1/openapi.json] : identifiant d'événement `id` | `event_id` ; intention `intent_id` |
+        `intent.id` | `data.intent_id` ; montant entier (unités mineures KODA) `amount` | `data.amount` ; `currency` ; `receipt_id` ;
+        `metadata.payment_reference` | `metadata.order_id` (aussi sous `data.` ou `intent.`).
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [payment.verified, payment.verified.late] }
+        data:
+          type: object
+          properties:
+            intent_id: { type: string }
+            amount: { type: integer, examples: [25000] }
+            currency: { type: string, examples: [CDF] }
+            receipt_id: { type: string }
+            metadata:
+              type: object
+              properties:
+                payment_reference: { type: string }
+                order_id: { type: string }
+      additionalProperties: true
+    BitriPayWebhookEvent:
+      type: object
+      description: Forme supposée « à la Stripe » [À VÉRIFIER sur l'OpenAPI BitriPay].
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [payment_intent.succeeded, payment_intent.settled, payment_intent.canceled, payment_intent.payment_failed] }
+        created: { type: integer }
+        data:
+          type: object
+          properties:
+            object:
+              type: object
+              properties:
+                id: { type: string }
+                amount_minor: { type: integer }
+                currency: { type: string }
+                settlement_id: { type: string }
+                metadata:
+                  type: object
+                  properties:
+                    payment_reference: { type: string }
+                    order_id: { type: string }
+      additionalProperties: true
+    ConnectorWebhookResponse:
+      type: object
+      required: [received, results]
+      properties:
+        received: { type: boolean, const: true }
+        results:
+          type: array
+          items:
+            type: object
+            required: [eventId, eventType, outcome]
+            properties:
+              eventId: { type: string }
+              eventType: { type: string }
+              outcome: { type: string, enum: [PROCESSED, SETTLEMENT_ANNOUNCED, IGNORED] }
+              status: { type: string, enum: [CONFIRME, ECHOUE, DOUBLON] }
+              paymentReference: { type: string }
+              receiptNumber: { type: string }
+              receiptCode: { type: string }
+              receiptStatus: { $ref: '#/components/schemas/ReceiptStatus' }
+              reason: { type: string, enum: [UNKNOWN_TYPE, NON_TERMINAL_ATTEMPT_FAILURE] }
+              replayed: { type: boolean }
+    VerificationEvidenceRequest:
+      type: object
+      required: [caseRef]
+      additionalProperties: false
+      properties:
+        caseRef: { type: string, description: Dossier de litige ou d'exception, ex. LIT-2026-0001 }
+        smsCode: { type: string }
+        screenshotSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+    VerificationEvidence:
+      type: object
+      properties:
+        id: { type: string }
+        kind: { type: string, const: PROVIDER_VERIFICATION_EVIDENCE }
+        legalEffect: { type: string, const: AUCUN }
+        notice: { type: string }
+        caseRef: { type: string }
+        provider: { type: string }
+        paymentReference: { type: string }
+        orderStatusAtRequest: { $ref: '#/components/schemas/PaymentStatus' }
+        smsCodeSha256: { type: string }
+        screenshotSha256: { type: string }
+        providerResult: {}
+        sandbox: { type: boolean }
+        requestedBy: { type: string }
+        requestedAt: { type: string, format: date-time }
 
     StatementRequest:
       type: object

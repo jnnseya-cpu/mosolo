@@ -1,0 +1,259 @@
+/**
+ * Connecteur BitriPay (https://api.bitripay.com/v1, test / réel selon la clé) — prestataire CANDIDAT, non désigné.
+ *
+ * Faits documentés : Bearer sk_… ; Idempotency-Key sur tout POST financier ; POST /payment_intents {amount_minor,
+ * currency, description, allowed_operators[orange_cd, mpesa_cd, airtel_cd, africell_cd], metadata} →
+ * {id, checkout_url, qr_payload, client_secret} ; GET /payment_intents/{id} ; POST /payment_intents/{id}/cancel ;
+ * webhook `BitriPay-Signature` (HMAC, secret whsec_ du point de terminaison) + clé plateforme Ed25519 publiée à
+ * GET /v1/keys ; événements `payment_intent.succeeded` et `payment_intent.settled`.
+ *
+ * Hypothèses [À VÉRIFIER sur l'OpenAPI BitriPay] : format de l'en-tête de signature (schéma « à la Stripe »
+ * `t=<unix>,v1=<hex HMAC-SHA256 de "<t>.<corps brut>">`, tolérance ±5 min), en-tête `BitriPay-Signature-Ed25519`
+ * (signature base64 du corps brut), forme des événements (`data.object`), exposant du CDF (défaut ISO 4217 : 2),
+ * noms `payment_intent.payment_failed` / `payment_intent.canceled`, corps de POST /verifications.
+ */
+import { createPublicKey, verify as edVerify, type KeyObject } from 'node:crypto';
+import { hmacSha256Hex, randomSecret, safeEqualHex, sha256Hex } from '../../../core/crypto.js';
+import { ProviderHttpClient } from './http-client.js';
+import type { ConnectorRuntime } from './koda.js';
+import { fromMinorUnits, parseMinorInput, toMinorUnits, toSafeJsonInteger, type ExponentTable } from './minor-units.js';
+import {
+  ConnectorConfigError, headerValue, maskSecret, modeFromKey, pick, pickString, pickTimestamp, WebhookPayloadError, WebhookVerificationError,
+  type ConnectorMode, type CreatedIntent, type HeaderBag, type IntentRequest, type NormalizedProviderEvent, type PaymentConnector,
+  type VerificationEvidenceInput, type VerificationEvidenceResult, type VerifiedWebhook, type WebhookChecks,
+} from './types.js';
+
+export const BITRIPAY_DEFAULT_BASE_URL = 'https://api.bitripay.com/v1';
+export const BITRIPAY_DEMO_WEBHOOK_SECRET = 'demo-whsec-bitripay';
+export const BITRIPAY_SIGNATURE_HEADER = 'bitripay-signature';
+export const BITRIPAY_ED25519_HEADER = 'bitripay-signature-ed25519';
+export const BITRIPAY_TOLERANCE_SECONDS = 300;
+export const BITRIPAY_OPERATORS = ['orange_cd', 'mpesa_cd', 'airtel_cd', 'africell_cd'] as const;
+
+export interface BitriPayConfig {
+  apiKey?: string;
+  webhookSecret: string;
+  /** Clé publique Ed25519 de la plateforme (PEM ou 32 octets bruts en base64), épinglée par configuration. */
+  ed25519PublicKey?: string;
+  /** Exiger la signature HMAC `BitriPay-Signature` (défaut : oui). */
+  hmacRequired: boolean;
+  /** Exiger la signature Ed25519 (défaut : non ; vérifiée si présente et clé configurée). */
+  ed25519Required: boolean;
+  toleranceSeconds?: number;
+  baseUrl: string;
+  settlementAccountAlias: string;
+  /** Exposant du CDF chez BitriPay : 2 (ISO 4217, défaut) ou 0 [À VÉRIFIER]. */
+  cdfExponent: 0 | 2;
+  allowedOperators: string[];
+}
+
+const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
+
+export function parseEd25519PublicKey(value: string): KeyObject {
+  try {
+    if (value.includes('BEGIN PUBLIC KEY')) return createPublicKey(value);
+    const raw = Buffer.from(value, 'base64');
+    if (raw.length !== 32) throw new Error('32 octets attendus');
+    return createPublicKey({ key: Buffer.concat([ED25519_SPKI_PREFIX, raw]), format: 'der', type: 'spki' });
+  } catch (e) {
+    throw new ConnectorConfigError(`BITRIPAY_ED25519_PUBLIC_KEY invalide (${(e as Error).message}).`);
+  }
+}
+
+/** En-tête de signature attendu (utilitaire démo / tests) : `t=<unix>,v1=<hex>`. */
+export function signBitriPayWebhook(secret: string, rawBody: string, unixSeconds: number): string {
+  return `t=${unixSeconds},v1=${hmacSha256Hex(secret, `${unixSeconds}.${rawBody}`)}`;
+}
+
+export class BitriPayConnector implements PaymentConnector {
+  readonly id = 'bitripay' as const;
+  readonly label = 'BitriPay';
+  readonly mode: ConnectorMode;
+  readonly settlementAccountAlias: string;
+  readonly exponents: ExponentTable;
+  private readonly http?: ProviderHttpClient;
+  private readonly edKey?: KeyObject;
+  private readonly tolerance: number;
+
+  constructor(private readonly config: BitriPayConfig, runtime: ConnectorRuntime = {}) {
+    this.mode = modeFromKey('BitriPay', config.apiKey);
+    this.settlementAccountAlias = config.settlementAccountAlias;
+    if (config.cdfExponent !== 0 && config.cdfExponent !== 2) throw new ConnectorConfigError('BITRIPAY_CDF_EXPONENT doit valoir 0 ou 2.');
+    this.exponents = { CDF: config.cdfExponent, USD: 2 };
+    this.tolerance = config.toleranceSeconds ?? BITRIPAY_TOLERANCE_SECONDS;
+    if (config.ed25519PublicKey) this.edKey = parseEd25519PublicKey(config.ed25519PublicKey);
+    if (config.ed25519Required && !this.edKey) throw new ConnectorConfigError('Ed25519 exigé mais BITRIPAY_ED25519_PUBLIC_KEY absente.');
+    if (!config.hmacRequired && !config.ed25519Required) throw new ConnectorConfigError('BitriPay : au moins un schéma de signature doit être exigé.');
+    if (config.apiKey) {
+      this.http = new ProviderHttpClient({
+        provider: 'bitripay', baseUrl: config.baseUrl, apiKey: config.apiKey,
+        // BitriPay documente l'Idempotency-Key : un POST rejoué avec la même clé est sans double effet.
+        idempotentPostsWithKey: true,
+        ...(runtime.fetch ? { fetch: runtime.fetch } : {}), ...(runtime.logger ? { logger: runtime.logger } : {}),
+        ...(runtime.sleep ? { sleep: runtime.sleep } : {}), ...(runtime.timeoutMs ? { timeoutMs: runtime.timeoutMs } : {}),
+      });
+    }
+  }
+
+  get sandbox(): boolean {
+    return this.mode !== 'LIVE';
+  }
+
+  async createIntent(req: IntentRequest): Promise<CreatedIntent> {
+    const amountMinor = toSafeJsonInteger(toMinorUnits(req.amount, this.exponents));
+    if (!this.http) {
+      return { providerIntentId: `sbx_bitripay_${randomSecret(8)}`, checkoutUrl: null, qrPayload: null, sandbox: true };
+    }
+    const res = await this.http.request<Record<string, unknown>>('POST', '/payment_intents', {
+      moneyMoving: true,
+      idempotencyKey: req.paymentReference,
+      body: {
+        amount_minor: amountMinor,
+        currency: req.amount.currency,
+        description: `KINSHASA MOSOLO ${req.paymentReference}`,
+        allowed_operators: this.config.allowedOperators,
+        metadata: { payment_reference: req.paymentReference, order_id: req.paymentOrderId, obligation_id: req.obligationId },
+      },
+    });
+    const providerIntentId = pickString(res, 'id');
+    if (!providerIntentId) throw new WebhookPayloadError('PROVIDER_RESPONSE_INVALID', 'Réponse BitriPay sans id.');
+    return {
+      providerIntentId,
+      checkoutUrl: pickString(res, 'checkout_url') ?? null,
+      qrPayload: pickString(res, 'qr_payload') ?? null,
+      sandbox: this.sandbox,
+    };
+  }
+
+  async cancelIntent(providerIntentId: string, idempotencyKey: string): Promise<void> {
+    if (!this.http) return;
+    await this.http.request('POST', `/payment_intents/${encodeURIComponent(providerIntentId)}/cancel`, { moneyMoving: true, idempotencyKey, body: {} });
+  }
+
+  verifyWebhook(headers: HeaderBag, rawBody: string, now: Date): VerifiedWebhook {
+    const hmacHeader = headerValue(headers, BITRIPAY_SIGNATURE_HEADER);
+    const edHeader = headerValue(headers, BITRIPAY_ED25519_HEADER);
+    let hmacOk = false;
+    let edOk = false;
+
+    if (hmacHeader) {
+      const parts = hmacHeader.split(',').map((p) => p.trim().split('=') as [string, string | undefined]);
+      const t = parts.find(([k]) => k === 't')?.[1];
+      const v1s = parts.filter(([k, v]) => k === 'v1' && v).map(([, v]) => v!.toLowerCase());
+      if (!t || !/^\d{1,12}$/.test(t) || v1s.length === 0) throw new WebhookVerificationError('INVALID_SIGNATURE', 'En-tête BitriPay-Signature mal formé.');
+      const expected = hmacSha256Hex(this.config.webhookSecret, `${t}.${rawBody}`);
+      if (!v1s.some((v) => safeEqualHex(expected, v))) throw new WebhookVerificationError('INVALID_SIGNATURE', 'Signature BitriPay (HMAC) invalide.');
+      if (Math.abs(Math.floor(now.getTime() / 1000) - Number(t)) > this.tolerance) {
+        throw new WebhookVerificationError('TIMESTAMP_OUT_OF_WINDOW', `Horodatage signé hors de la fenêtre de ±${this.tolerance} s.`);
+      }
+      hmacOk = true;
+    } else if (this.config.hmacRequired) {
+      throw new WebhookVerificationError('SIGNATURE_MISSING', 'En-tête BitriPay-Signature obligatoire.');
+    }
+
+    if (edHeader && this.edKey) {
+      let sig: Buffer;
+      try {
+        sig = Buffer.from(edHeader.trim(), 'base64');
+      } catch {
+        sig = Buffer.alloc(0);
+      }
+      if (sig.length !== 64 || !edVerify(null, Buffer.from(rawBody, 'utf8'), this.edKey, sig)) {
+        throw new WebhookVerificationError('INVALID_SIGNATURE', 'Signature BitriPay (Ed25519) invalide.');
+      }
+      edOk = true;
+    } else if (this.config.ed25519Required) {
+      throw new WebhookVerificationError('SIGNATURE_MISSING', 'En-tête BitriPay-Signature-Ed25519 obligatoire.');
+    }
+    if (!hmacOk && !edOk) throw new WebhookVerificationError('SIGNATURE_MISSING', 'Aucune signature BitriPay vérifiable.');
+
+    let json: unknown;
+    try {
+      json = JSON.parse(rawBody);
+    } catch {
+      throw new WebhookPayloadError('INVALID_JSON', 'Corps JSON invalide.');
+    }
+    const checks: WebhookChecks = { signatureVerified: true, replayGuard: 'EVENT_ID', timestampInWindow: hmacOk ? true : 'NON_APPLICABLE' };
+    return { events: [this.normalize(json, rawBody, now)], checks };
+  }
+
+  private amountOf(obj: unknown, required: boolean) {
+    const minor = parseMinorInput(pick(obj, 'amount_minor', 'amount_received', 'amount'));
+    const currency = pickString(obj, 'currency')?.toUpperCase();
+    if (minor === undefined || !currency) {
+      if (required) throw new WebhookPayloadError('PROVIDER_AMOUNT_MISSING', 'Événement BitriPay sans montant entier ni devise.');
+      return undefined;
+    }
+    try {
+      return fromMinorUnits(minor, currency, this.exponents);
+    } catch (e) {
+      throw new WebhookPayloadError('PROVIDER_AMOUNT_INVALID', (e as Error).message);
+    }
+  }
+
+  /** Parseur tolérant (forme « à la Stripe » supposée) [À VÉRIFIER sur l'OpenAPI BitriPay]. */
+  private normalize(json: unknown, rawBody: string, now: Date): NormalizedProviderEvent {
+    const eventType = pickString(json, 'type', 'event') ?? 'inconnu';
+    const eventId = pickString(json, 'id', 'event_id') ?? `sha256:${sha256Hex(rawBody)}`;
+    const obj = pick(json, 'data.object', 'data') ?? {};
+    const providerIntentId = pickString(obj, 'payment_intent', 'id');
+    const paymentReference = pickString(obj, 'metadata.payment_reference');
+    const paymentOrderId = pickString(obj, 'metadata.order_id');
+    const base = {
+      eventId, eventType,
+      ...(providerIntentId ? { providerIntentId } : {}),
+      ...(paymentReference ? { paymentReference } : {}),
+      ...(paymentOrderId ? { paymentOrderId } : {}),
+    };
+    const completedAt = pickTimestamp(obj, 'succeeded_at', 'completed_at', 'created') ?? pickTimestamp(json, 'created') ?? now.toISOString();
+    switch (eventType) {
+      case 'payment_intent.succeeded': {
+        if (!providerIntentId) throw new WebhookPayloadError('PROVIDER_TXN_MISSING', 'Événement BitriPay sans identifiant d’intention.');
+        return { kind: 'PAYMENT', ...base, providerTxnId: providerIntentId, amount: this.amountOf(obj, true)!, status: 'SUCCESS', completedAt, confirmationMethod: 'BITRIPAY_RAIL' };
+      }
+      case 'payment_intent.canceled': {
+        if (!providerIntentId) throw new WebhookPayloadError('PROVIDER_TXN_MISSING', 'Événement BitriPay sans identifiant d’intention.');
+        const amount = this.amountOf(obj, false);
+        return {
+          kind: 'PAYMENT', ...base, providerTxnId: `${providerIntentId}:canceled`, ...(amount ? { amount } : {}),
+          status: 'FAILED', completedAt, confirmationMethod: 'BITRIPAY_RAIL',
+        };
+      }
+      case 'payment_intent.payment_failed':
+        // Tentative échouée : l'intention reste payable (nouvel essai du payeur) ⇒ journalisée, sans changement d'état.
+        return { kind: 'IGNORED', reason: 'NON_TERMINAL_ATTEMPT_FAILURE', ...base };
+      case 'payment_intent.settled': {
+        const amount = this.amountOf(obj, false);
+        const settlementId = pickString(obj, 'settlement_id', 'settlement.id');
+        const settledAt = pickTimestamp(obj, 'settled_at');
+        return { kind: 'SETTLEMENT', ...base, ...(amount ? { amount } : {}), ...(settlementId ? { settlementId } : {}), ...(settledAt ? { settledAt } : {}) };
+      }
+      default:
+        return { kind: 'IGNORED', reason: 'UNKNOWN_TYPE', ...base };
+    }
+  }
+
+  async requestVerificationEvidence(input: VerificationEvidenceInput): Promise<VerificationEvidenceResult> {
+    if (!this.http) {
+      return { sandbox: true, providerResult: { status: 'SANDBOX_NON_VERIFIE', note: 'Bac à sable local : aucun appel au prestataire.' } };
+    }
+    // Corps [À VÉRIFIER sur l'OpenAPI BitriPay] ; seule l'empreinte de la capture est transmise.
+    const providerResult = await this.http.request('POST', '/verifications', {
+      body: {
+        payment_intent: input.providerIntentId,
+        ...(input.smsCode ? { sms_code: input.smsCode } : {}),
+        ...(input.screenshotSha256 ? { screenshot_sha256: input.screenshotSha256 } : {}),
+      },
+    });
+    return { sandbox: this.sandbox, providerResult };
+  }
+
+  describe(): Record<string, unknown> {
+    return {
+      id: this.id, label: this.label, mode: this.mode, baseUrl: this.config.baseUrl, apiKey: maskSecret(this.config.apiKey),
+      webhookSecret: maskSecret(this.config.webhookSecret), ed25519PublicKeyConfigured: !!this.edKey,
+      hmacRequired: this.config.hmacRequired, ed25519Required: this.config.ed25519Required,
+      settlementAccountAlias: this.settlementAccountAlias, exponents: this.exponents, allowedOperators: this.config.allowedOperators,
+    };
+  }
+}

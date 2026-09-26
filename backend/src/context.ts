@@ -19,6 +19,8 @@ import { FieldService } from './modules/field/service.js';
 import { FxService } from './modules/fx/service.js';
 import { TaxpayerService } from './modules/identity/service.js';
 import { ObjectService } from './modules/objects/service.js';
+import type { ConnectorRuntime } from './modules/payments/connectors/koda.js';
+import { buildConnectorRegistry } from './modules/payments/connectors/registry.js';
 import { PaymentService } from './modules/payments/service.js';
 import { ReceiptService } from './modules/receipts/service.js';
 import { RuleService } from './modules/rules/service.js';
@@ -64,6 +66,10 @@ export interface AppOptions {
   aiProvider?: AIProvider;
   /** Charger les données de démonstration (défaut : oui). */
   seed?: boolean;
+  /** Variables des connecteurs BitriPay / KODA (défaut : process.env). Sans clé API : bac à sable local. */
+  connectorEnv?: Record<string, string | undefined>;
+  /** `fetch`, journal masqué et temporisation injectables (tests : jamais de réseau réel). */
+  connectorRuntime?: ConnectorRuntime;
 }
 
 export function createContext(opts: AppOptions = {}) {
@@ -82,7 +88,8 @@ export function createContext(opts: AppOptions = {}) {
   const ledger = new LedgerService(clock, audit);
   const assessment = new AssessmentService(clock, audit, comms, rules, taxpayers, objects, ledger);
   const receipts = new ReceiptService(clock, audit, alerts, secrets.receiptSigningKey);
-  const payments = new PaymentService(clock, audit, comms, alerts, assessment, taxpayers, vault, fx, receipts, ledger, secrets.providerSecrets);
+  const connectors = buildConnectorRegistry(opts.connectorEnv ?? process.env, opts.connectorRuntime ?? {});
+  const payments = new PaymentService(clock, audit, comms, alerts, assessment, taxpayers, vault, fx, receipts, ledger, secrets.providerSecrets, connectors);
   const treasury = new TreasuryService(clock, audit, comms, users, payments, assessment, receipts, vault, ledger, taxpayers);
   const drafts = new DraftService(clock, audit);
   const field = new FieldService(clock, audit, comms, alerts, users, objects);
@@ -128,7 +135,7 @@ export function createContext(opts: AppOptions = {}) {
   }));
 
   return {
-    clock, secrets, users, audit, idempotency, comms, alerts, fx, taxpayers, objects, vault, rules, ledger,
+    clock, secrets, users, audit, idempotency, comms, alerts, fx, taxpayers, objects, vault, rules, ledger, connectors,
     assessment, receipts, payments, treasury, drafts, field, appeals, ai, dashboards,
   };
 }
