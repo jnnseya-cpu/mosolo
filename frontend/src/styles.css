@@ -363,7 +363,7 @@ input[type='file'] { font-size: 13.5px; max-width: 100%; }
 .data-table .num { text-align: right; }
 .data-table.compact th, .data-table.compact td { padding: 6px 8px; }
 .table-scroll { overflow-x: auto; }
-.rtable-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.rtable-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); max-width: 100%; overflow-x: auto; }
 @media (max-width: 719px) {
   .rtable-wrap { background: transparent; border: 0; }
   .rtable thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

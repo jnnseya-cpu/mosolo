@@ -72,7 +72,7 @@ export default function ParkingDashboard() {
               <CartesianGrid horizontal={false} stroke={theme.grid} />
               <ReferenceArea x1={75} x2={85} fill={cat[6]} fillOpacity={0.12} />
               <XAxis type="number" domain={[0, 100]} tickFormatter={(v: number) => `${v} %`} stroke={theme.axis} tick={{ fontSize: 12 }} />
-              <YAxis type="category" dataKey="name" width={150} stroke={theme.axis} tick={{ fontSize: 12 }} />
+              <YAxis type="category" dataKey="name" width={172} stroke={theme.axis} tick={{ fontSize: 12 }} />
               <Tooltip cursor={{ fill: theme.grid, opacity: 0.4 }} content={<ChartTooltip format={(v) => `${v.toLocaleString(loc)} %`} />} />
               <Bar dataKey="value" name="Occupation" fill={cat[0]} radius={[0, 4, 4, 0]} maxBarSize={22} isAnimationActive={false} />
             </BarChart>

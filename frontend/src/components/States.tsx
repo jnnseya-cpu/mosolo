@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useApp } from '../context';
-import { describeError } from '../lib/api';
+import { ApiError, describeError } from '../lib/api';
 import { Icon } from './Icon';
 
 export function EmptyState({ title, children, icon = 'file' }: { title: string; children?: ReactNode; icon?: string }) {
@@ -16,6 +16,19 @@ export function EmptyState({ title, children, icon = 'file' }: { title: string; 
 export function ErrorState({ error, onRetry, children }: { error: unknown; onRetry?: () => void; children?: ReactNode }) {
   const { tr } = useApp();
   const d = describeError(error);
+  // Refus d'accès (cloisonnement par rôle, entité ou territoire) : information neutre, pas une panne.
+  const denied = error instanceof ApiError && error.status === 403;
+  if (denied) {
+    return (
+      <div className="state state-empty" role="status">
+        <Icon name="lock" size={28} />
+        <p className="state-title">Accès réservé</p>
+        <p className="state-body">Cet espace est réservé aux personnes habilitées de l’entité compétente (principe du moindre privilège). Chaque refus est journalisé.</p>
+        {d.code && d.code !== 'FORBIDDEN' && <p className="state-body small muted">Motif : {d.code}</p>}
+        {children}
+      </div>
+    );
+  }
   return (
     <div className="state state-error" role="alert">
       <Icon name={d.network ? 'offline' : 'alert'} size={28} />

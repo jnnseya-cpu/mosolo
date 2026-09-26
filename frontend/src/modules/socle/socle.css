@@ -12,7 +12,8 @@
 
 .socle-aside { display: grid; gap: 14px; }
 .socle-demo-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.socle-demo-list .btn { width: 100%; justify-content: flex-start; flex-wrap: wrap; text-align: left; gap: 8px; }
+.socle-demo-list .btn { width: 100%; max-width: 100%; min-width: 0; justify-content: flex-start; flex-wrap: wrap; text-align: left; gap: 8px; white-space: normal; overflow-wrap: anywhere; }
+.socle-demo-list, .socle-demo-list li { min-width: 0; max-width: 100%; }
 .socle-totp { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; padding: 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
 .socle-totp > :last-child { flex: 1 1 180px; min-width: 0; }
 .socle-current { font-size: 26px; letter-spacing: 0.18em; color: var(--navy); margin: 4px 0; }

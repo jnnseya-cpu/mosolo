@@ -46,6 +46,9 @@ const ROLE_ROUTES: [string[], string[]][] = [
   [['R09', 'R17', 'R20', 'R24', 'R29'], ['/ia']],
 ];
 
+/** Profils « usagers » (contribuable, mandataire, partenaires) qui voient les entrées publiques des modules. */
+const PUBLIC_USER_ROLES = ['R30', 'R31', 'R32', 'R33', 'R34', 'R36', 'R37'];
+
 /** Entrées de menu des modules d'extension (modules/registry.tsx). */
 const MODULE_NAV: NavItem[] = MODULE_ROUTES.filter((m) => m.nav).map((m) => ({
   to: m.path, key: 'nav.more' as UIKey, icon: m.nav!.icon, group: m.nav!.group, label: m.nav!.label, short: m.nav!.short ?? m.nav!.label, roles: m.nav!.roles,
@@ -57,7 +60,9 @@ export function visibleNav(roles: string[] | undefined): NavItem[] {
   for (const [rs, routes] of ROLE_ROUTES) if (roles.some((r) => rs.includes(r))) routes.forEach((x) => allowed.add(x));
   if (allowed.size === 1) allowed.add('/verifier');
   const core = NAV.filter((n) => allowed.has(n.to));
-  const extra = MODULE_NAV.filter((n) => n.roles!.length === 0 || n.roles!.some((r) => roles.includes(r)));
+  // Entrées publiques (roles: []) : pour le public et les usagers, pas dans les menus de travail des agents.
+  const isPublicUser = roles.length === 0 || roles.some((r) => PUBLIC_USER_ROLES.includes(r));
+  const extra = MODULE_NAV.filter((n) => (n.roles!.length === 0 ? isPublicUser : n.roles!.some((r) => roles.includes(r))));
   return [...core, ...extra];
 }
 
