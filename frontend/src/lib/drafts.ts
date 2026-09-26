@@ -1,33 +1,56 @@
 /**
  * Stockage local des brouillons (hors ligne) et file d'attente de synchronisation.
  * Un brouillon n'est pas un acte (§ 23.5.3) : il n'a aucun effet juridique.
+ *
+ * Sécurité (§ 23.5, lot IA) : les brouillons ne sont JAMAIS écrits en clair sur l'appareil. Le contenu vit en
+ * mémoire pendant la session ; sa copie persistante est chiffrée (AES-GCM-256, clé dérivée par utilisateur d'une
+ * clé d'appareil non exportable — modules/ia/secureStore.ts). Sans WebCrypto, rien n'est persisté (mémoire seule).
  */
-import { api, NetworkError, safeGet, safeSet } from './api';
+import { api, getDemoUser, NetworkError } from './api';
 import type { DraftSaveResult } from './types';
+import { migrateClearDrafts, openDraft, removeSealed, sealDraft, SEALED_PREFIX } from '../modules/ia/secureStore';
 
 export interface LocalDraft<T = unknown> { data: T; updatedAt: string; pending: boolean; version?: number; savedAt?: string }
 
-const PREFIX = 'mosolo.draft.';
+const cache = new Map<string, LocalDraft>();
+const scope = () => getDemoUser() ?? 'anonyme';
 
 export function readLocalDraft<T>(key: string): LocalDraft<T> | null {
-  const raw = safeGet(PREFIX + key);
-  if (!raw) return null;
-  try { return JSON.parse(raw) as LocalDraft<T>; } catch { return null; }
+  return (cache.get(key) as LocalDraft<T> | undefined) ?? null;
 }
 export function writeLocalDraft<T>(key: string, d: LocalDraft<T>): void {
-  safeSet(PREFIX + key, JSON.stringify(d));
+  cache.set(key, d as LocalDraft);
+  void sealDraft(key, d, scope());
 }
-export function removeLocalDraft(key: string): void { safeSet(PREFIX + key, null); }
+export function removeLocalDraft(key: string): void {
+  cache.delete(key);
+  removeSealed(key);
+}
 
 export function pendingDraftKeys(): string[] {
-  const out: string[] = [];
+  return [...cache.entries()].filter(([, d]) => d.pending).map(([k]) => k);
+}
+
+/**
+ * Au démarrage : chiffre les brouillons historiques en clair puis déchiffre en mémoire ceux de l'utilisateur courant.
+ * Un brouillon d'un autre utilisateur, ou altéré, ne se déchiffre pas et reste ignoré.
+ */
+export async function hydrateDrafts(): Promise<number> {
+  const s = scope();
+  try { await migrateClearDrafts(s); } catch { /* chiffrement indisponible */ }
+  let n = 0;
   try {
+    const keys: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k?.startsWith(PREFIX) && readLocalDraft(k.slice(PREFIX.length))?.pending) out.push(k.slice(PREFIX.length));
+      if (k?.startsWith(SEALED_PREFIX)) keys.push(k.slice(SEALED_PREFIX.length));
+    }
+    for (const key of keys) {
+      const opened = await openDraft<LocalDraft>(key, s);
+      if (opened?.data && typeof opened.data === 'object') { cache.set(key, opened.data); n++; }
     }
   } catch { /* stockage indisponible */ }
-  return out;
+  return n;
 }
 
 export async function putDraft<T>(key: string, data: T): Promise<DraftSaveResult> {

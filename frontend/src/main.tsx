@@ -13,18 +13,23 @@ import './styles.css';
 import { AppProvider } from './context';
 import { App } from './App';
 import { captureInstallPrompt } from './hooks/useInstallPrompt';
-import { flushPendingDrafts } from './lib/drafts';
+import { flushPendingDrafts, hydrateDrafts } from './lib/drafts';
 
 captureInstallPrompt();
 registerSW({ immediate: true });
 window.addEventListener('online', () => { void flushPendingDrafts(); });
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <BrowserRouter>
-      <AppProvider>
-        <App />
-      </AppProvider>
-    </BrowserRouter>
-  </StrictMode>,
-);
+function render() {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <BrowserRouter>
+        <AppProvider>
+          <App />
+        </AppProvider>
+      </BrowserRouter>
+    </StrictMode>,
+  );
+}
+
+// Brouillons chiffrés : déchiffrement en mémoire avant le premier rendu (plafonné à 800 ms).
+void Promise.race([hydrateDrafts(), new Promise((r) => setTimeout(r, 800))]).finally(render);
