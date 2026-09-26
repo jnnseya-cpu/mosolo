@@ -6,7 +6,7 @@ lang: fr-FR
 
 # KINSHASA MOSOLO {.unnumbered}
 
-![Ville de Kinshasa](../assets/logo-ville-de-kinshasa.png){width=80mm}
+![Ville de Kinshasa](../assets/couverture-ville-de-kinshasa.png){width=170mm}
 
 **Sovereign Revenue Maximisation Operating System for the City Province of Kinshasa**
 
@@ -24,7 +24,7 @@ lang: fr-FR
 | Bénéficiaires institutionnels | Gouvernement provincial de Kinshasa ; Direction générale des impôts provinciaux de Kinshasa (DGIPK) ; Direction générale des recettes de Kinshasa (DGRK) ; ministères et services provinciaux légalement responsables de recettes spécifiques ; communes et autres entités publiques autorisées, lorsque la loi le prévoit |
 | Destinataires | Gouverneur et Gouvernement provincial ; régies financières ; services juridiques ; Trésor et finances ; audit et inspection ; partenaires de mise en œuvre ; architectes, développeurs, testeurs |
 | Documents compagnons | Cahier des exigences consolidé v2.9 (24 septembre 2026) ; Spécification fonctionnelle des 81 modules et 16 verticales v1.2 ; Dossier Gouverneur v1.0 ; Note exécutive au Gouverneur (24 septembre 2026). **En cas de divergence, le présent document prévaut** (Annexe D). |
-| Identité visuelle | Logo officiel de la Ville de Kinshasa, reproduit sans modification ; couleurs de la charte de la Ville |
+| Identité visuelle | Visuel de couverture officiel de la Ville de Kinshasa (logo, liseré tricolore, silhouette de la ville), reproduit sans modification ; couleurs de la charte de la Ville |
 | Préparé par | Groupe Nseya Digital / JNN Global Ltd, pour le compte du programme KINSHASA MOSOLO |
 
 ## Conventions de lecture {.unnumbered}

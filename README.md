@@ -1,6 +1,6 @@
-# KINSHASA MOSOLO
+<img src="docs/assets/couverture-ville-de-kinshasa.webp" alt="Ville de Kinshasa" width="100%">
 
-<img src="docs/assets/logo-ville-de-kinshasa.png" alt="Ville de Kinshasa" width="260" align="right">
+# KINSHASA MOSOLO
 
 **Système d'exploitation souverain de maximisation des recettes de la Ville Province de Kinshasa**
 
@@ -18,7 +18,7 @@
 | `docs/KINSHASA_MOSOLO_Document_Maitre_v3.0.docx` | Version Word aux couleurs de la charte (générée) |
 | `docs/KINSHASA_MOSOLO_Document_Maitre_v3.0.md` | Version Markdown assemblée en un seul fichier (générée) |
 | [`docs/sources/`](docs/sources/) | Documents de travail d'origine (Cahier v2.9, Spécification fonctionnelle, Dossier Gouverneur, Note exécutive) |
-| [`docs/assets/`](docs/assets/) | Logos officiels, utilisés sans modification : Ville de Kinshasa (`logo-ville-de-kinshasa.png`, à déposer) et Groupe Nseya |
+| [`docs/assets/`](docs/assets/) | Visuels officiels, utilisés sans modification : couverture Ville de Kinshasa (`couverture-ville-de-kinshasa.webp`, copie PNG sans perte pour Word), logo seul de la Ville (`logo-ville-de-kinshasa.png`, à déposer), logo Groupe Nseya |
 | [`specs/`](specs/) | Contrat d'API, OpenAPI 3.1, catalogue des 239 événements de communication, référentiel des devises et langues, prompt système de la couche d'intelligence |
 | [`shared/`](shared/) | Paquet partagé `@mosolo/shared` : montants exacts, devises (🇨🇩 CDF principale, drapeaux), langues, catalogue d'événements, fiches de règles, états et rôles, format des recommandations IA |
 | [`backend/`](backend/) | API REST (Node.js, TypeScript, Fastify) : identité, objets, registre juridique, liquidation, paiements, coffre des bénéficiaires, rapprochement, grand livre, quittances, journal d'audit chaîné, communications, autosauvegarde, IA |
