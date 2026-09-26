@@ -4,15 +4,15 @@ import { useApp } from '../context';
 import { useApi } from '../hooks/useApi';
 import { useAutosave } from '../hooks/useAutosave';
 import { useInsight } from '../hooks/useInsight';
+import TresorWorkbench from '../modules/tresor/TresorWorkbench';
 import { PageHead } from '../components/Shell';
 import { AIInsightPanel } from '../components/AIInsightPanel';
-import { DataTable } from '../components/DataTable';
 import { MoneyText } from '../components/MoneyText';
 import { StatusBadge, type Tone } from '../components/StatusBadge';
 import { AutosaveBar } from '../components/VersionHistory';
 import { EmptyState, ErrorState, Loading } from '../components/States';
 import { Icon } from '../components/Icon';
-import { api, asList, describeError, safeGet, safeSet } from '../lib/api';
+import { api, describeError, safeGet, safeSet } from '../lib/api';
 import type { UIKey } from '../lib/i18n';
 import { ledgerLabel } from '../lib/labels';
 import type { ReconciliationException, VaultChangeRequest } from '../lib/types';
@@ -197,7 +197,7 @@ function StatementForm({ onImported }: { onImported: () => void }) {
 
 export default function Treasury() {
   const { tr, fmtDate, user, lang } = useApp();
-  const ex = useApi(async () => asList<ReconciliationException>(await api<unknown>('/v1/reconciliation/exceptions'), 'exceptions'), [user?.id]);
+  const [tick, setTick] = useState(0);
   const bal = useApi(() => api<Balance>('/v1/ledger/balance'), [user?.id]);
   const ai = useInsight('treasury', [user?.id]);
   const loc = lang === 'en' ? 'en' : 'fr';
@@ -224,7 +224,7 @@ export default function Treasury() {
               {(bal.data.accounts?.length ?? 0) > 0 && (
                 <ul className="list-rows compact-rows">
                   {bal.data.accounts!.map((a) => (
-                    <li key={`${a.account}-${a.currency}`} className="list-row"><div className="min0"><p className="row-title">{ledgerLabel(lang, a.account)}</p><span className="account-code">{a.account}</span></div><div className="row-side"><MoneyText money={absMoney(a.balance)} showIndicative={false} /><span className="nature">{tr(natureKey(a.balance))}</span></div></li>
+                    <li key={`${a.account}-${a.currency}`} className="list-row"><div className="min0"><p className="row-title">{ledgerLabel(lang, a.account) === a.account && a.label ? a.label : ledgerLabel(lang, a.account)}</p><span className="account-code">{a.account}</span></div><div className="row-side"><MoneyText money={absMoney(a.balance)} showIndicative={false} /><span className="nature">{tr(natureKey(a.balance))}</span></div></li>
                   ))}
                 </ul>
               )}
@@ -232,27 +232,13 @@ export default function Treasury() {
           )}
         </section>
 
-        <section className="panel span-7" aria-labelledby="ex-title">
-          <header className="panel-head"><h2 className="panel-title" id="ex-title">{tr('treasury.exceptions')}</h2>{ex.data && <span className="count">{ex.data.length}</span>}</header>
-          {ex.loading && <Loading />}
-          {ex.error !== null && <ErrorState error={ex.error} onRetry={ex.reload} />}
-          {ex.data && (
-            <DataTable rows={ex.data} rowKey={(e) => e.id} caption={tr('treasury.exceptions')}
-              empty={<EmptyState title={tr('treasury.noExceptions')} icon="check" />}
-              columns={[
-                { key: 'type', label: tr('treasury.type'), primary: true, render: (e) => <StatusBadge tone={e.type === 'MISSING_SETTLEMENT' ? 'warning' : 'serious'} label={tr(`exception.${e.type}` as UIKey)} /> },
-                { key: 'ref', label: tr('payment.reference'), render: (e) => <span className="mono">{e.paymentReference ?? '—'}</span> },
-                { key: 'detail', label: tr('treasury.detail'), render: (e) => <span className="small">{(e as { detail?: string }).detail ?? e.reason ?? '—'}</span> },
-                { key: 'at', label: tr('treasury.opened'), render: (e) => fmtDate((e as { openedAt?: string }).openedAt ?? e.createdAt, true) },
-              ]} />
-          )}
-        </section>
-
         <section className="panel span-7" aria-labelledby="st-title">
           <header className="panel-head"><div><h2 className="panel-title" id="st-title">{tr('treasury.statement')}</h2><p className="panel-sub">{tr('treasury.statementSub')}</p></div></header>
-          <StatementForm onImported={() => { ex.reload(); bal.reload(); }} />
+          <StatementForm onImported={() => { bal.reload(); setTick((n) => n + 1); }} />
         </section>
-        <div className="span-5"><AIInsightPanel rec={ai.rec} loading={ai.loading} error={ai.error} onRefresh={ai.reload} compact /></div>
+        <div className="span-12"><TresorWorkbench key={tick} onChanged={bal.reload} /></div>
+
+        <div className="span-12"><AIInsightPanel rec={ai.rec} loading={ai.loading} error={ai.error} onRefresh={ai.reload} compact /></div>
         <div className="span-12"><Vault /></div>
       </div>
     </div>

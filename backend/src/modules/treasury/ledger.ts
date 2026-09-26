@@ -15,6 +15,8 @@ export const LEDGER_ACCOUNTS = {
   RECETTES_CONSTATEES: 'Recettes constatées',
   FONDS_A_RECEVOIR_PRESTATAIRES: 'Fonds à recevoir des prestataires',
   COMPTE_PUBLIC_RECETTES: 'Compte public de recettes',
+  /** Suspens (§ 20.1) : fonds arrivés sur un compte public mais non identifiés ; daté, justifié, apuré sous double validation. */
+  COMPTE_ATTENTE: "Compte d'attente (suspens) — fonds non identifiés",
 } as const;
 export type LedgerAccount = keyof typeof LEDGER_ACCOUNTS;
 

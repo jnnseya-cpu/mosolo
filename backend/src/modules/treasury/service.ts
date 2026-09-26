@@ -4,7 +4,7 @@
  * Tout ce qui ne s'apparie pas devient une exception ; rien n'est forcé.
  */
 import { Money, type MoneyJSON } from '@mosolo/shared';
-import type { AuditLog } from '../../core/audit.js';
+import type { AuditActor, AuditLog } from '../../core/audit.js';
 import type { User, UserDirectory } from '../../core/auth.js';
 import { DAY_MS, type Clock } from '../../core/clock.js';
 import { canonicalJson, sha256Hex } from '../../core/crypto.js';
@@ -30,6 +30,23 @@ export interface StatementLine {
 export type ExceptionType =
   | 'ORPHAN_CREDIT' | 'CREDIT_WITHOUT_CONFIRMATION' | 'DUPLICATE_CREDIT' | 'WRONG_ACCOUNT' | 'UNKNOWN_ACCOUNT' | 'AMOUNT_MISMATCH' | 'MISSING_SETTLEMENT' | 'PROVIDER_AMBIGUOUS';
 
+/** Cycle de traitement d'une exception (§ 20, C3-113) : ouverte → en cours → résolue ou classée avec motif. */
+export type ExceptionStatus = 'OUVERTE' | 'EN_COURS' | 'RESOLUE' | 'CLASSEE';
+
+/** Les quatre files d'exception du § 20 (Cahier) / module 30. */
+export type ExceptionQueue = 'PAIEMENT_SANS_OBLIGATION' | 'OBLIGATION_SANS_REGLEMENT' | 'REGLEMENT_SANS_PAIEMENT' | 'ECART_MONTANT';
+
+export const EXCEPTION_QUEUE: Record<ExceptionType, ExceptionQueue> = {
+  DUPLICATE_CREDIT: 'PAIEMENT_SANS_OBLIGATION',
+  MISSING_SETTLEMENT: 'OBLIGATION_SANS_REGLEMENT',
+  PROVIDER_AMBIGUOUS: 'OBLIGATION_SANS_REGLEMENT',
+  ORPHAN_CREDIT: 'REGLEMENT_SANS_PAIEMENT',
+  CREDIT_WITHOUT_CONFIRMATION: 'REGLEMENT_SANS_PAIEMENT',
+  UNKNOWN_ACCOUNT: 'REGLEMENT_SANS_PAIEMENT',
+  AMOUNT_MISMATCH: 'ECART_MONTANT',
+  WRONG_ACCOUNT: 'ECART_MONTANT',
+};
+
 export interface ReconciliationException {
   id: string;
   type: ExceptionType;
@@ -37,9 +54,12 @@ export interface ReconciliationException {
   paymentReference?: string;
   line?: StatementLine;
   detail: string;
-  status: 'OUVERTE';
+  status: ExceptionStatus;
   openedAt: string;
   computed?: boolean;
+  queue?: ExceptionQueue;
+  /** Champs de traitement ajoutés par le module Trésor (affectation, échéance, résolution). */
+  [workflow: string]: unknown;
 }
 
 export interface StatementResult {
@@ -61,6 +81,8 @@ export class TreasuryService {
   readonly statements = new InMemoryRepository<StoredStatement>();
   readonly exceptions = new InMemoryRepository<ReconciliationException>();
   private readonly ids = new IdGenerator();
+  /** Surcouche de traitement (affectation, statut, résolution) fournie par le module Trésor avancé. */
+  private overlay: ((e: ReconciliationException) => ReconciliationException) | undefined;
 
   constructor(
     private readonly clock: Clock,
@@ -130,16 +152,10 @@ export class TreasuryService {
         continue;
       }
       // Appariement complet : écriture, RAPPROCHE, quittance définitive, obligation soldée.
-      const entry = this.ledger.postPair({
-        eventType: 'SETTLEMENT_CREDITED', description: `Crédit ${line.accountAlias} (${input.statementId}) pour ${order.paymentReference}`,
-        sourceType: 'payment_order', sourceId: order.id, debit: 'COMPTE_PUBLIC_RECETTES', credit: 'FONDS_A_RECEVOIR_PRESTATAIRES', amount: order.amount,
-      });
-      this.payments.settleAndReconcile(order.id, entry.id);
-      const receipt = this.receipts.finalize(order.id);
-      const obligation = this.assessment.setStatus(order.obligationId, 'SOLDEE');
-      this.audit.append({ actor, action: 'reconciliation.matched', resourceType: 'payment_order', resourceId: order.id, details: { statementId: input.statementId, receipt: receipt.number } });
-      this.comms.publish('receipt.finalized', [taxpayerRecipient(this.taxpayers.get(order.taxpayerId))], { reference: receipt.number }, { entity: obligation.entity });
-      result.matched.push({ paymentReference: order.paymentReference, receiptNumber: receipt.number, obligationId: obligation.id, amount: order.amount });
+      result.matched.push(this.completeMatch(order.id, {
+        debit: 'COMPTE_PUBLIC_RECETTES', description: `Crédit ${line.accountAlias} (${input.statementId}) pour ${order.paymentReference}`,
+        actor, details: { statementId: input.statementId },
+      }));
     }
     if (result.exceptions.length > 0) {
       this.comms.publish('reconciliation.exception.opened', this.users.withRole('R18').map(userRecipient), { reference: input.statementId }, { entity: 'TRESOR' });
@@ -148,15 +164,38 @@ export class TreasuryService {
     return { replayed: false, result };
   }
 
-  /** Exceptions ouvertes + « règlement manquant » calculé (confirmation sans crédit après J+1). */
-  listExceptions(user: User): ReconciliationException[] {
-    authorize(user, 'reconciliation.read');
+  /**
+   * Clôt la chaîne d'un paiement confirmé : écriture de règlement, RAPPROCHE, quittance définitive, obligation soldée.
+   * `debit` : compte public (relevé) ou compte d'attente (apurement d'un suspens décidé à quatre yeux).
+   */
+  completeMatch(orderId: string, opts: { debit: 'COMPTE_PUBLIC_RECETTES' | 'COMPTE_ATTENTE'; description: string; actor: AuditActor; details?: Record<string, unknown> }) {
+    const order = this.payments.orders.get(orderId);
+    if (!order || order.status !== 'CONFIRME') throw conflict('PAYMENT_NOT_CONFIRMED', `Le paiement ${order?.paymentReference ?? orderId} n'est pas au statut confirmé.`);
+    const entry = this.ledger.postPair({
+      eventType: 'SETTLEMENT_CREDITED', description: opts.description,
+      sourceType: 'payment_order', sourceId: order.id, debit: opts.debit, credit: 'FONDS_A_RECEVOIR_PRESTATAIRES', amount: order.amount,
+    });
+    this.payments.settleAndReconcile(order.id, entry.id);
+    const receipt = this.receipts.finalize(order.id);
+    const obligation = this.assessment.setStatus(order.obligationId, 'SOLDEE');
+    this.audit.append({ actor: opts.actor, action: 'reconciliation.matched', resourceType: 'payment_order', resourceId: order.id, details: { ...opts.details, receipt: receipt.number, ledgerEntryId: entry.id } });
+    this.comms.publish('receipt.finalized', [taxpayerRecipient(this.taxpayers.get(order.taxpayerId))], { reference: receipt.number }, { entity: obligation.entity });
+    return { paymentReference: order.paymentReference, receiptNumber: receipt.number, obligationId: obligation.id, amount: order.amount, ledgerEntryId: entry.id };
+  }
+
+  /** Branche la surcouche de traitement des exceptions (module Trésor avancé). */
+  setExceptionOverlay(fn: (e: ReconciliationException) => ReconciliationException): void {
+    this.overlay = fn;
+  }
+
+  /** Exceptions brutes (stockées + calculées), avant surcouche de traitement. */
+  rawExceptions(): ReconciliationException[] {
     const now = this.clock.now();
     const missing: ReconciliationException[] = this.payments.orders
       .find((o) => o.status === 'CONFIRME' && !!o.confirmedAt && now.getTime() - new Date(o.confirmedAt).getTime() > DAY_MS)
       .map((o) => ({
         id: `EXC-MS-${o.id}`, type: 'MISSING_SETTLEMENT', paymentReference: o.paymentReference,
-        detail: `Confirmation du ${o.confirmedAt} sans crédit constaté à J+1 : relance prestataire.`, status: 'OUVERTE', openedAt: now.toISOString(), computed: true,
+        detail: `Confirmation du ${o.confirmedAt} sans crédit constaté à J+1 : relance prestataire.`, status: 'OUVERTE', openedAt: new Date(new Date(o.confirmedAt!).getTime() + DAY_MS).toISOString(), computed: true,
       }));
     // Attente prestataire (résultat opérateur inconnu) non résolue : aucune quittance tant qu'elle reste ouverte.
     const held: ReconciliationException[] = this.payments.unresolvedHolds().map((h) => ({
@@ -164,6 +203,14 @@ export class TreasuryService {
       detail: `Résultat opérateur inconnu signalé par ${h.provider} le ${h.receivedAt} : interroger la résolution prestataire, puis attendre la confirmation signée ou le relevé.`,
       status: 'OUVERTE', openedAt: h.receivedAt, computed: true,
     }));
-    return [...this.exceptions.all(), ...missing, ...held];
+    return [...this.exceptions.all(), ...missing, ...held].map((e) => ({ ...e, queue: EXCEPTION_QUEUE[e.type] }));
   }
+
+  /** Exceptions ouvertes + « règlement manquant » calculé (confirmation sans crédit après J+1). */
+  listExceptions(user: User): ReconciliationException[] {
+    authorize(user, 'reconciliation.read');
+    const all = this.rawExceptions();
+    return this.overlay ? all.map(this.overlay) : all;
+  }
+
 }
