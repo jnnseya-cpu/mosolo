@@ -60,9 +60,9 @@ h2 { font-family: Fraunces, serif; font-weight: 600; font-size: 54px; line-heigh
 .num { font-family: Fraunces, serif; color: var(--navy); }
 /* Couverture */
 .cover { background: #fff; }
-.cover img.visual { position: absolute; right: 60px; top: 150px; width: 1080px; height: 720px; object-fit: contain; }
-.cover .text { position: absolute; left: 96px; top: 190px; width: 700px; }
-.cover .text h1 { font-size: 84px; line-height: 1.02; margin: 22px 0 30px; color: var(--navy); }
+.cover img.visual { position: absolute; right: 60px; top: 170px; width: 1060px; height: 707px; object-fit: contain; }
+.cover .text { position: absolute; left: 96px; top: 190px; width: 620px; }
+.cover .text h1 { font-size: 76px; line-height: 1.02; margin: 22px 0 30px; color: var(--navy); }
 .cover .text p { font-size: 25px; line-height: 1.45; color: var(--ink2); }
 .cover .text .date { margin-top: 40px; font-size: 20px; color: var(--ink); font-weight: 600; }
 /* Intercalaire */
