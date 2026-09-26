@@ -26,6 +26,7 @@ mkdirSync(outDir, { recursive: true });
 
 const ecrans = JSON.parse(readFileSync(join(HERE, 'ecrans.json'), 'utf8'));
 const services = JSON.parse(readFileSync(join(HERE, 'services.json'), 'utf8'));
+const modules = JSON.parse(readFileSync(join(HERE, 'modules.json'), 'utf8'));
 const url = (p) => pathToFileURL(p).href;
 const font = (f) => url(join(ROOT, 'node_modules/@fontsource', f));
 const COVER = url(join(ROOT, 'docs/assets/couverture-ville-de-kinshasa.png'));
@@ -249,6 +250,64 @@ for (let i = 0; i < rest.length; i += 2) {
 }
 
 slides.push((n, t) => `
+<section class="slide divider"><div class="tri"><i></i><i></i><i></i></div>
+  <div class="inner">
+    <div class="eyebrow">Partie 4</div>
+    <h1>Modules construits</h1>
+    <p>Quatorze modules construits à partir de l'audit exhaustif des 3&nbsp;793 exigences des documents sources : titres et pass wewa, stationnement, publicité, fiscal, recouvrement, canaux sans Internet, terrain, intégrité, pilotage sur données réelles, IA. Tout est testé et relié au même compte public.</p>
+  </div>
+  <div class="phones">${modules.slice(0, 8).map((e) => `<div class="phone sm"><img src="${shot('telephone', e.id)}"></div>`).join('')}</div>
+  ${foot(n, t, true)}
+</section>`);
+
+for (let i = 0; i < modules.length; i += 3) {
+  const group = modules.slice(i, i + 3);
+  slides.push((n, t) => `
+<section class="slide"><div class="tri"><i></i><i></i><i></i></div>
+  <div class="head"><span class="eyebrow">Modules · sur téléphone</span><h2>Modules construits · écrans ${group[0].id.slice(0, 2)} à ${group[group.length - 1].id.slice(0, 2)}</h2></div>
+  <div class="trio">${group.map((e) => `
+    <div class="col">
+      <div class="phone"><img src="${shot('telephone', e.id)}"></div>
+      <div class="txt"><div class="num">${e.id.slice(0, 2)}</div><h3>${esc(e.titre)}</h3><div class="aud">${esc(e.public)}</div><p>${esc(e.message)}</p></div>
+    </div>`).join('')}
+  </div>
+  ${foot(n, t)}
+</section>`);
+}
+
+const SINGLE4 = new Set(['32-gouverneur-donnees-reelles', '35-rakapay-pass-wewa', '49-entites-modules']);
+for (const e of modules.filter((x) => SINGLE4.has(x.id))) {
+  slides.push((n, t) => `
+<section class="slide"><div class="tri"><i></i><i></i><i></i></div>
+  <div class="head"><span class="eyebrow">Modules · sur ordinateur</span></div>
+  <div class="browser"><div class="bar"><i></i><i></i><i></i><span>KINSHASA MOSOLO · ${e.route}</span></div><img src="${shot('ordinateur', e.id)}"></div>
+  <div class="side">
+    <div class="num">${e.id.slice(0, 2)}</div>
+    <h2>${esc(e.titre)}</h2>
+    <div class="aud">${esc(e.public)}</div>
+    <div class="msg">${esc(e.message)}</div>
+    <ul>${e.points.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>
+  </div>
+  ${foot(n, t)}
+</section>`);
+}
+const rest4 = modules.filter((x) => !SINGLE4.has(x.id));
+for (let i = 0; i < rest4.length; i += 2) {
+  const pair = rest4.slice(i, i + 2);
+  slides.push((n, t) => `
+<section class="slide"><div class="tri"><i></i><i></i><i></i></div>
+  <div class="head"><span class="eyebrow">Modules · sur ordinateur</span></div>
+  <div class="duo">${pair.map((e) => `
+    <div>
+      <div class="browser"><div class="bar"><i></i><i></i><i></i><span>KINSHASA MOSOLO · ${e.route}</span></div><img src="${shot('ordinateur', e.id)}"></div>
+      <div class="cap"><div class="num">${e.id.slice(0, 2)}</div><h3>${esc(e.titre)}</h3><div class="aud">${esc(e.public)}</div><p>${esc(e.message)}</p>${e.points[1] ? `<p class="pt">${esc(e.points[1])}</p>` : ''}</div>
+    </div>`).join('')}
+  </div>
+  ${foot(n, t)}
+</section>`);
+}
+
+slides.push((n, t) => `
 <section class="slide close"><div class="tri"><i></i><i></i><i></i></div>
   <div class="head"><span class="eyebrow">Ce que montrent ces écrans</span></div>
   <div class="head" style="top:110px"><h2>Ce qui fonctionne déjà, et ce qui reste à décider</h2></div>
@@ -260,14 +319,15 @@ slides.push((n, t) => `
       <li>Comptes bénéficiaires protégés : deux validations et 72 heures</li>
       <li>Journal d'audit dont toute altération est détectée</li>
       <li>Analyse qui propose ; décision réservée à une personne habilitée</li>
+      <li>14 modules, 555 routes, 70 écrans et 388 tests automatisés au vert</li>
     </ul></div>
     <div><h3>Relève encore de la démonstration</h3><ul>
-      <li>Connexion de démonstration à remplacer par l'identification sécurisée</li>
-      <li>Données en mémoire : base PostgreSQL prête, à brancher</li>
-      <li>Chiffres du tableau de bord illustratifs, marqués « EXEMPLE »</li>
+      <li>Clés d'accès FIDO2 à raccorder (connexion OTP et mot de passe + code d'application en place)</li>
+      <li>Base PostgreSQL branchée en option ; hébergement souverain à retenir</li>
+      <li>Contribuables et montants fictifs de démonstration ; base de référence réelle à mesurer</li>
       <li>Canaux SMS, USSD et courriel en bac à sable jusqu'aux conventions</li>
       <li>Taux et barèmes à certifier par les services juridiques</li>
-      <li>Application Android native des agents à réaliser</li>
+      <li>Tarifs réels des verticales : actes J21, J23, J24, J25, J28 attendus</li>
     </ul></div>
   </div>
   <div class="ask"><strong>Décision attendue :</strong> mandater le programme, ordonner le relevé juridique certifié et la mesure de la base de référence, et autoriser le pilote de 180 jours à Gombe, Limete, Kalamu et Ngaliema.</div>

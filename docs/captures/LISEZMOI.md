@@ -4,7 +4,7 @@ Captures du socle logiciel KINSHASA MOSOLO en fonctionnement (backend en direct,
 
 | Dossier / fichier | Contenu |
 |---|---|
-| `KINSHASA_MOSOLO_Ecrans_Presentation_Gouvernement.pdf` | Dossier de 39 diapositives 16:9 : téléphone, ordinateur, puis services de la Ville (verticales, dont RakaPay), un texte par écran, conclusion |
+| `KINSHASA_MOSOLO_Ecrans_Presentation_Gouvernement.pdf` | Dossier de 59 diapositives 16:9 : téléphone, ordinateur, services de la Ville (verticales, dont RakaPay), puis modules construits (partie 4), un texte par écran, conclusion |
 | `diapositives/` | Les mêmes diapositives en PNG (1920 × 1080) |
 | `telephone/` | Chaque écran sur téléphone (390 × 844, haute définition) : premier écran et page entière (`-page`) |
 | `ordinateur/` | Chaque écran sur ordinateur (1440 × 900) : premier écran et page entière (`-page`) |
@@ -32,3 +32,7 @@ Captures du socle logiciel KINSHASA MOSOLO en fonctionnement (backend en direct,
 Les écrans 12 à 31 utilisent des données d'exemple locales, non opposables : aucun taux n'est affirmé ; les verticales marquées « Acte requis » n'exigent aucun paiement. Le tarif du pass wewa (500 FC par jour) est l'illustration du § H.27.16.1, en attente de l'acte J28.
 
 Régénération : `tools/presentation/build-deck.mjs` (voir l'en-tête du script).
+
+## Partie 4 — Modules construits (écrans 32 à 52)
+
+Captures de l'application complète (socle et 14 modules d'extension) sur données de démonstration réelles du serveur, chacune avec le profil qui la voit dans son travail : centre de commandement sur données réelles, indicateurs, transparence publique, pass wewa (conducteur fictif), contrôle des titres, stationnement, publicité, biens et relations, quitus, arriérés et échéancier, recouvrement, USSD et SVI, point de paiement agréé, supervision du terrain, signalement, enquêtes, IA, entités et modules, Trésor, CALCU, connexion. Liste et textes : `tools/presentation/modules.json`.
