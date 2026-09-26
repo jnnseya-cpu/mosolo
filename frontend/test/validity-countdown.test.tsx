@@ -14,10 +14,10 @@ function serverAt(h: number) {
 
 afterEach(() => { noteServerTime(new Date().toISOString()); vi.useRealTimers(); });
 
-describe('Compte à rebours de validité — règle 49 % / 21 %', () => {
+describe('Compte à rebours de validité — règle 50 % / 1 %', () => {
   it.each([
-    [0, 'vc-VERT', /VALIDE/], [5.0, 'vc-VERT', /VALIDE/], [5.2, 'vc-AMBRE', /VALIDE/], [7.8, 'vc-AMBRE', /VALIDE/],
-    [8.1, 'vc-ROUGE', /expire dans/], [10.5, 'vc-EXPIRE', /EXPIRÉ/], [-1, 'vc-PAS_ACTIF', /PAS ENCORE ACTIF/],
+    [0, 'vc-VERT', /VALIDE/], [4.9, 'vc-VERT', /VALIDE/], [5.1, 'vc-AMBRE', /VALIDE/], [9.8, 'vc-AMBRE', /VALIDE/],
+    [9.95, 'vc-ROUGE', /expire dans/], [10.5, 'vc-EXPIRE', /EXPIRÉ/], [-1, 'vc-PAS_ACTIF', /PAS ENCORE ACTIF/],
   ])('à +%s h : %s', (h, cls, text) => {
     serverAt(h as number);
     const { container } = renderWithApp(<ValidityCountdown from={FROM} until={UNTIL} />);
@@ -30,7 +30,7 @@ describe('Compte à rebours de validité — règle 49 % / 21 %', () => {
   });
 
   it('les dates seules (AAAA-MM-JJ) couvrent la journée entière à Kinshasa', () => {
-    noteServerTime('2026-09-30T20:00:00.000Z'); // 21:00 à Kinshasa, dernier jour
+    noteServerTime('2026-09-30T22:55:00.000Z'); // 23:55 à Kinshasa, 5 dernières minutes sur 30 jours (< 1 %)
     const { container } = renderWithApp(<ValidityCountdown from="2026-09-01" until="2026-09-30" />);
     expect(container.querySelector('.vc')!.className).toContain('vc-ROUGE');
   });

@@ -66,7 +66,7 @@ export class CanauxService {
       receiptCode = code.toUpperCase();
     } else {
       // Tout autre code (ticket, place, pass, certificat, quitus, badge…) : résolveur universel « preuves », même réponse
-      // que l'application, le SMS et WhatsApp — couleur 49 % / 21 % et temps restant à l'heure du serveur.
+      // que l'application, le SMS et WhatsApp — couleur 50 % / 1 % et temps restant à l'heure du serveur.
       const pv = this.ctx.ext.preuves as { svc: { lookup(c: string): { found: boolean; kindLabel: string; stateLabel: string; validity: { text: string } | null; message: string } } } | undefined;
       const r = pv?.svc.lookup(code);
       if (r?.found) return done({ kind: r.kindLabel, status: r.stateLabel.toUpperCase(), message: r.validity ? r.validity.text : r.message }, false);

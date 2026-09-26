@@ -49,7 +49,7 @@ Régénération : `tools/captures/` (serveur `MOSOLO_RATE_LIMIT=off`, frontend e
 
 ## Partie 6 — Preuves sur tous les canaux (`galerie/preuves-canaux/`, 18 écrans)
 
-Règle de couleur unique : **vert** tant qu'il reste au moins 49 % de validité, **ambre** de 21 % à moins de 49 %, **rouge** sous 21 % (encore valable), puis **EXPIRÉ**. L'heure de référence est celle du serveur.
+Règle de couleur unique : **vert** tant qu'il reste au moins 50 % de validité, **ambre** de 1 % à moins de 50 %, **rouge** sous 1 % (encore valable), puis **EXPIRÉ**. L'heure de référence est celle du serveur.
 
 Écrans et documents :
 - **Vérifier une preuve** : comment lire la couleur ; ticket de stationnement vert ; autorisation publicitaire rouge ; certificat pas encore actif.

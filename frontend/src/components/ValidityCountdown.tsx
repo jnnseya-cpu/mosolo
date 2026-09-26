@@ -1,11 +1,11 @@
 /**
- * Compte à rebours de validité d'une preuve — règle unique 49 % / 21 % (shared/validity.ts) :
- * vert ≥ 49 % de validité restante, ambre 21–49 %, rouge < 21 %, puis « EXPIRÉ ».
+ * Compte à rebours de validité d'une preuve — règle unique 50 % / 1 % (shared/validity.ts) :
+ * vert ≥ 50 % de validité restante, ambre 1–50 %, rouge < 1 %, puis « EXPIRÉ ».
  * La couleur n'est jamais seule (icône + texte + barre + pourcentage) ; l'heure de référence est celle du serveur
  * (écart mesuré à chaque réponse d'API, § H.11.6) : changer l'heure du téléphone ne change rien.
  */
 import { useEffect, useState } from 'react';
-import { formatValidityDuration, readValidity, type ValidityBand } from '@mosolo/shared';
+import { formatValidityDuration, readValidity, VALIDITY_AMBER_MIN_PCT, VALIDITY_GREEN_MIN_PCT, type ValidityBand } from '@mosolo/shared';
 import { serverNow } from '../lib/api';
 import { Icon } from './Icon';
 
@@ -47,7 +47,7 @@ export function ValidityCountdown({ from, until, blocked, compact, label }: Vali
   }
   const r = readValidity(from ?? null, until ?? null, now);
   const pct = r.pct === null ? 100 : Math.max(0, Math.min(100, r.pct));
-  const pctLabel = r.pct === null ? '' : `${pct >= 10 ? Math.floor(pct) : pct.toFixed(1)} %`;
+  const pctLabel = r.pct === null ? '' : `${pct >= 10 ? Math.floor(pct) : pct.toFixed(1).replace('.', ',')} %`;
   let text: string;
   switch (r.band) {
     case 'PERMANENT': text = 'Sans date de fin'; break;
@@ -80,7 +80,7 @@ export function ValidityCountdown({ from, until, blocked, compact, label }: Vali
       {r.pct !== null && (
         <div className="vc-bar" aria-hidden="true">
           <i style={{ width: `${r.band === 'PAS_ACTIF' ? 0 : pct}%` }} />
-          <b style={{ left: '49%' }} /><b style={{ left: '21%' }} />
+          <b style={{ left: `${VALIDITY_GREEN_MIN_PCT}%` }} /><b style={{ left: `${VALIDITY_AMBER_MIN_PCT}%` }} />
         </div>
       )}
       {(from || until) && (
@@ -94,9 +94,9 @@ export function ValidityCountdown({ from, until, blocked, compact, label }: Vali
 export function ValidityLegend() {
   return (
     <p className="vc-legend small">
-      <span className="vc-dot vc-VERT" /> ≥ 49 % de validité restante
-      <span className="vc-dot vc-AMBRE" /> 21 – 49 %
-      <span className="vc-dot vc-ROUGE" /> &lt; 21 %
+      <span className="vc-dot vc-VERT" /> ≥ 50 % de validité restante
+      <span className="vc-dot vc-AMBRE" /> 1 – 50 %
+      <span className="vc-dot vc-ROUGE" /> &lt; 1 %
       <span className="muted"> · heure du serveur (Kinshasa)</span>
     </p>
   );

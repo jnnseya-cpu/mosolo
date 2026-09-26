@@ -385,7 +385,7 @@ export class RakaPayService {
     const base = { passNumber: best.number, credentialId: best.id, validFrom: best.validFrom, validUntil: best.validUntil, displayStatus: s.status, validity: s.validity, serverTime: s.serverTime };
     if (s.status === 'VALIDE') return { color: 'VERT', text: `EN RÈGLE — ${s.text}`, nothingToPay: true, ...base };
     if (s.status === 'BIENTOT_EXPIRE') return { color: 'AMBRE', text: `EN RÈGLE — ${s.text}`, nothingToPay: true, ...base };
-    // Moins de 21 % de validité restante : encore en règle, affiché en rouge (règle 49 % / 21 %).
+    // Moins de 1 % de validité restante : encore en règle, affiché en rouge (règle 50 % / 1 %).
     if (s.status === 'CRITIQUE') return { color: 'ROUGE', text: `EN RÈGLE — ${s.text}`, nothingToPay: true, ...base };
     return { color: 'ROUGE', text: s.text, nothingToPay: false, ...base };
   }

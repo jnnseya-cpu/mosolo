@@ -85,7 +85,7 @@ export const OBLIGATION_TONE: Record<string, 'good' | 'warning' | 'serious' | 'i
 export const CASE_TONE: Record<string, 'good' | 'warning' | 'serious' | 'info' | 'neutral'> = {
   DEPOSE: 'info', EN_INSTRUCTION: 'info', COMPLEMENT_DEMANDE: 'warning', PROPOSE: 'warning', ACCEPTE: 'good', REFUSE: 'serious',
 };
-/** Titres d'étal — règle 49 % / 21 % : VERT, AMBRE, ROUGE (< 21 %, encore valable), ECHU (validité échue). */
+/** Titres d'étal — règle 50 % / 1 % : VERT, AMBRE, ROUGE (< 1 %, encore valable), ECHU (validité échue). */
 export const TITLE_TONE: Record<string, 'good' | 'warning' | 'serious' | 'critical' | 'info' | 'neutral'> = {
   VERT: 'good', AMBRE: 'warning', ROUGE: 'critical', ECHU: 'critical', GRIS: 'neutral', AUCUN: 'neutral', ANNULE: 'neutral',
 };

@@ -105,7 +105,7 @@ function PassCard({ me }: { me: MyWewa }) {
   const { fmtDate } = useApp();
   const s = me.status;
   const tone = s ? WEWA_TONE[s.color] : 'rouge';
-  // Rouge peut signifier « encore en règle, moins de 21 % de validité restante » (nothingToPay).
+  // Rouge peut signifier « encore en règle, moins de 1 % de validité restante » (nothingToPay).
   const ok = !!s && (s.color !== 'ROUGE' || s.nothingToPay);
   return (
     <article className={`rk-pass rkx-pass-${tone}`} aria-label="Pass wewa numérique">

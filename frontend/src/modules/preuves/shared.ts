@@ -1,3 +1,5 @@
+import { VALIDITY_AMBER_MIN_PCT, VALIDITY_GREEN_MIN_PCT } from '@mosolo/shared';
+
 /** Preuves — types de la réponse du résolveur universel (GET /v1/public/preuves?c=…). */
 export interface ProofValidity { band: string; pct: number | null; from: string | null; until: string | null; remainingSeconds: number | null; text: string; serverTime: string }
 
@@ -35,5 +37,5 @@ export const proofPrintUrl = (code: string) => `/preuve/${encodeURIComponent(cod
 export function colourSchedule(from: string, until: string): { green: number; amber: number; end: number } {
   const f = Date.parse(from); const u = Date.parse(until);
   const total = u - f;
-  return { green: f + total * 0.51, amber: f + total * 0.79, end: u };
+  return { green: f + total * (1 - VALIDITY_GREEN_MIN_PCT / 100), amber: f + total * (1 - VALIDITY_AMBER_MIN_PCT / 100), end: u };
 }

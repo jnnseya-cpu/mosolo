@@ -5,7 +5,7 @@
  * - logo officiel de la Ville inchangé, bandeau aux couleurs nationales, fond de sécurité, micro-texte du code ;
  * - QR vers la page de vérification (lisible par tout téléphone et par le terminal de contrôle), code court en gros ;
  * - un papier ne peut pas décompter : il porte l'ÉCHÉANCIER DES COULEURS (vert jusqu'à…, orange jusqu'à…, rouge jusqu'à…)
- *   selon la règle 49 % / 21 %, et rappelle que seule la vérification en ligne fait foi.
+ *   selon la règle 50 % / 1 %, et rappelle que seule la vérification en ligne fait foi.
  */
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';

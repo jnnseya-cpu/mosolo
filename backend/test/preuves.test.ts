@@ -49,7 +49,7 @@ describe('Preuves — résolveur universel (tout code, tout canal, heure serveur
     expect(unknown).toMatchObject({ found: false, kind: 'INCONNU', state: 'INCONNU' });
   });
 
-  it('un titre porte la validité 49 % / 21 % calculée à l’heure du serveur', async () => {
+  it('un titre porte la validité 50 % / 1 % calculée à l’heure du serveur', async () => {
     const { ext, clock, get } = await full();
     const c = ext.titres.credentials.all().find((x: { state: string }) => x.state === 'EMIS');
     expect(c).toBeDefined();
@@ -59,7 +59,9 @@ describe('Preuves — résolveur universel (tout code, tout canal, heure serveur
     const total = Date.parse(c.validUntil) - Date.parse(c.validFrom);
     clock.set(new Date(Date.parse(c.validFrom) + total * 0.6).toISOString());
     expect((await get(`/v1/public/preuves/${c.shortCode}`)).json().validity.band).toBe('AMBRE');
-    clock.set(new Date(Date.parse(c.validFrom) + total * 0.9).toISOString());
+    clock.set(new Date(Date.parse(c.validFrom) + total * 0.98).toISOString());
+    expect((await get(`/v1/public/preuves/${c.shortCode}`)).json().validity.band).toBe('AMBRE'); // 2 % restant
+    clock.set(new Date(Date.parse(c.validFrom) + total * 0.995).toISOString());
     const red = (await get(`/v1/public/preuves/${c.shortCode}`)).json();
     expect(red).toMatchObject({ state: 'VALIDE', validity: { band: 'ROUGE' } });
     clock.set(new Date(Date.parse(c.validUntil) + 86_400_000).toISOString());
@@ -164,7 +166,7 @@ describe('Pages légères /l — sans JavaScript, faible débit', () => {
     }
     const code = ext.verticales.certificates.all()[0].code;
     const v = await get(`/l/v?c=${encodeURIComponent(code)}`);
-    expect(v.body).toMatch(/49 %/);
+    expect(v.body).toMatch(/50 %/);
     expect(v.body).not.toMatch(/<script/i);
     const p = await get(`/l/imprimer?c=${encodeURIComponent(code)}`);
     expect(p.body).toMatch(/<svg/);

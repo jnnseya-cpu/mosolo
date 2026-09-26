@@ -5,7 +5,7 @@
  * application, page légère sans JavaScript (2G, téléphone basique), SMS, WhatsApp, USSD, SVI, papier imprimé.
  *
  * - Réponse minimale : ni nom, ni adresse, ni montant nominatif hors quittance ; la plaque d'un véhicule est masquée.
- * - Validité : règle unique 49 % / 21 % (shared/validity.ts), toujours à l'heure du SERVEUR.
+ * - Validité : règle unique 50 % / 1 % (shared/validity.ts), toujours à l'heure du SERVEUR.
  * - Chaque vérification passe par le limiteur anti-énumération du module « canaux » et est journalisée.
  */
 import { formatValidityDuration } from '@mosolo/shared';

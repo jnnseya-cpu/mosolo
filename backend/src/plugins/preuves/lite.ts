@@ -81,7 +81,7 @@ ${r.found && !r.authentic ? '<div><b>SIGNATURE NON AUTHENTIQUE</b></div>' : ''}
 </div>
 ${r.found ? `<p><b>${esc(r.title)}</b></p><dl>${facts}${dates}${r.situation ? `<dt>Situation</dt><dd>${esc(r.situation.label)}</dd>` : ''}</dl>` : ''}
 <p>${esc(r.message)}</p>
-<p style="font-size:13px">Vert : 49 % ou plus de validité restante · Orange : 21 à 49 % · Rouge : moins de 21 %. Vérifié le ${esc(kinDate(r.checkedAt))} (heure du serveur).</p>
+<p style="font-size:13px">Vert : 50 % ou plus de validité restante · Orange : 1 à 50 % · Rouge : moins de 1 %. Vérifié le ${esc(kinDate(r.checkedAt))} (heure du serveur).</p>
 <p class="np"><a href="/l/v?c=${encodeURIComponent(r.code)}">Actualiser</a>${r.found ? ` · <a href="/l/imprimer?c=${encodeURIComponent(r.code)}">Version imprimable</a>` : ''}</p>
 <p class="n">${esc(r.advice)}</p>
 ${codeForm('')}`);

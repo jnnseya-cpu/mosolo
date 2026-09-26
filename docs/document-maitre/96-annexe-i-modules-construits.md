@@ -423,7 +423,7 @@ Côté navigateur, l’écran `/ia` offre la boîte de réception (filtres par a
 | Apprentissage continu | Décisions humaines | C | A : note de version candidate | R29 + comité des modèles |
 | Communication | Communications, obligations | B | A : note ; B : relance n° 1 | R06, R07, R08 |
 
-## I.14 Preuves sur tous les canaux : compte à rebours 49 % / 21 %, WhatsApp, SMS, version légère, papier
+## I.14 Preuves sur tous les canaux : compte à rebours 50 % / 1 %, WhatsApp, SMS, version légère, papier
 
 Tout le monde n’a pas un téléphone Android ou iOS. Le module d’extension `preuves` rend **chaque preuve vérifiable par son code, sur tous les canaux**, avec la même réponse :
 
@@ -449,15 +449,15 @@ Les preuves couvertes sont :
 
 | Part de validité restante | Couleur | Texte | Au contrôle |
 |---|---|---|---|
-| 49 % ou plus | Vert | ✓ VALIDE — encore … | Valable |
-| De 21 % à moins de 49 % | Ambre (orange) | ⚠ VALIDE — expire dans … | Valable |
-| Moins de 21 % | Rouge | ⚠ VALIDE — EXPIRE DANS … | **Valable** (à renouveler) |
+| 50 % ou plus | Vert | ✓ VALIDE — encore … | Valable |
+| De 1 % à moins de 50 % | Ambre (orange) | ⚠ VALIDE — expire dans … | Valable |
+| Moins de 1 % | Rouge | ⚠ VALIDE — EXPIRE DANS … | **Valable** (à renouveler) |
 | 0 % | Rouge | ✗ EXPIRÉ DEPUIS … | Non valable |
 | Avant le début | Gris | PAS ENCORE ACTIF | Non valable |
 
-Cette règle remplace les seuils ambre fixés en durée de l’Annexe H (§ H.11.4) et les seuils propres à chaque module. Elle est calculée en un seul endroit (`shared/validity.ts`), côté serveur comme côté client. La couleur n’est jamais seule : icône, texte, barre de progression graduée à 49 % et 21 %, et pourcentage l’accompagnent.
+Cette règle remplace les seuils ambre fixés en durée de l’Annexe H (§ H.11.4) et les seuils propres à chaque module. Elle est calculée en un seul endroit (`shared/validity.ts`), côté serveur comme côté client. La couleur n’est jamais seule : icône, texte, barre de progression graduée à 50 % et 1 %, et pourcentage l’accompagnent.
 
-L’heure de référence est **celle du serveur**. Chaque réponse porte l’en-tête `x-mosolo-server-time` : changer l’heure du téléphone ne change rien. Le rouge sous 21 % n’est **pas** une infraction. Le résultat du contrôle reste « VALIDE », et le feu de contrôle du stationnement reste distinct de la couleur d’affichage : aucun constat n’est possible sur un titre encore valable.
+L’heure de référence est **celle du serveur**. Chaque réponse porte l’en-tête `x-mosolo-server-time` : changer l’heure du téléphone ne change rien. Le rouge sous 1 % n’est **pas** une infraction. Le résultat du contrôle reste « VALIDE », et le feu de contrôle du stationnement reste distinct de la couleur d’affichage : aucun constat n’est possible sur un titre encore valable.
 
 | Canal | Pour qui | Ce qu’il fait | Garde-fous |
 |---|---|---|---|

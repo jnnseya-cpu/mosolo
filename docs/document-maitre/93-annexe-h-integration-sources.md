@@ -914,7 +914,7 @@ La v3.0 (§ 19.4) cite trois couleurs ; le modèle complet comprend six statuts.
 
 Le seuil de passage à l'ambre est paramétré par type de titre dans la fiche de configuration du module.
 
-> **Décision du maître d'ouvrage (26/09/2026), qui prévaut sur les seuils en durée ci-dessus et sur ceux du § H.11.4.** Toute preuve à durée limitée affiche un **compte à rebours**. Il est **vert** tant qu'il reste au moins 49 % de la validité, **ambre** de 21 % à moins de 49 %, et **rouge** sous 21 %. Sous 21 %, la preuve est encore valable : le contrôle répond « VALIDE » et aucun constat n'est possible. Elle passe ensuite à « EXPIRÉ ». Voir l'Annexe I, § I.14.
+> **Décision du maître d'ouvrage (26/09/2026), qui prévaut sur les seuils en durée ci-dessus et sur ceux du § H.11.4.** Toute preuve à durée limitée affiche un **compte à rebours**. Il est **vert** tant qu'il reste au moins 50 % de la validité, **ambre** de 1 % à moins de 50 %, et **rouge** sous 1 %. Sous 1 %, la preuve est encore valable : le contrôle répond « VALIDE » et aucun constat n'est possible. Elle passe ensuite à « EXPIRÉ ». Voir l'Annexe I, § I.14.
 
 ### H.11.3 Modèles de validité
 

@@ -1,7 +1,7 @@
 /**
  * Module d'extension « preuves » : vérification universelle de toute preuve par son code, sur tous les canaux —
  * application, pages légères sans JavaScript (/l), SMS, WhatsApp (assistant officiel sur consentement), USSD/SVI
- * (via « canaux ») et papier imprimé. Règle de couleur unique 49 % / 21 % à l'heure du serveur.
+ * (via « canaux ») et papier imprimé. Règle de couleur unique 50 % / 1 % à l'heure du serveur.
  */
 import { definePlugin } from '../types.js';
 import { registerPreuvesRoutes } from './routes.js';

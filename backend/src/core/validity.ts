@@ -1,5 +1,5 @@
 /**
- * Validité des preuves à l'heure du SERVEUR (§ H.11.6) — règle unique 49 % / 21 % (shared/validity.ts).
+ * Validité des preuves à l'heure du SERVEUR (§ H.11.6) — règle unique 50 % / 1 % (shared/validity.ts).
  * Toute réponse qui présente une preuve limitée dans le temps porte un objet `validity` : le client en tire le compte à
  * rebours et la couleur en direct, corrigés de l'écart entre son horloge et `serverTime`.
  */

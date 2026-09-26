@@ -88,7 +88,7 @@ export const STATUS_PRESENTATION: Record<DisplayStatus, { color: StatusColor; ic
   PAS_ENCORE_ACTIF: { color: 'gris', icon: 'clock', signal: 'AUCUN' },
   VALIDE: { color: 'vert', icon: 'check', signal: 'COURT' },
   BIENTOT_EXPIRE: { color: 'ambre', icon: 'alert', signal: 'AUCUN' },
-  /** Encore valable, moins de 21 % de validité restante (ou tolérance après l'échéance). */
+  /** Encore valable, moins de 1 % de validité restante (ou tolérance après l'échéance). */
   CRITIQUE: { color: 'rouge', icon: 'alert', signal: 'AUCUN' },
   EXPIRE: { color: 'rouge', icon: 'x', signal: 'DISTINCT' },
   SUSPENDU: { color: 'bleu', icon: 'info', signal: 'AUCUN' },

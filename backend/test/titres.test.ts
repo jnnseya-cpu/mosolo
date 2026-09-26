@@ -104,22 +104,24 @@ describe('Moteur de titres — modèles de validité (heure serveur, fuseau de K
     expect(computeWindow({ ...base, model: 'GLISSANT_CONDITIONNEL', periodDays: 90 }, { start: t0 }).until).toBeGreaterThan(t0);
   });
 
-  it('passe du gris au vert (≥ 49 %), à l’ambre (21–49 %), au rouge (< 21 %) puis expiré ; couleur toujours doublée d’icône et de texte (AC-TIT-02, AC-TIT-04)', () => {
+  it('passe du gris au vert (≥ 50 %), à l’ambre (1–50 %), au rouge (< 1 %) puis expiré ; couleur toujours doublée d’icône et de texte (AC-TIT-02, AC-TIT-04)', () => {
     const c = { state: 'EMIS' as const, validFrom: '2026-09-26T10:00:00.000Z', validUntil: '2026-09-26T22:59:59.999Z', toleranceMinutes: 15, amberMinutes: 120, model: 'JOURNALIER' as const };
     const at = (iso: string) => statusAt(c, new Date(iso));
     expect(at('2026-09-26T09:00:00Z')).toMatchObject({ status: 'PAS_ENCORE_ACTIF', color: 'gris' });
     expect(at('2026-09-26T09:00:00Z').text).toMatch(/VALIDE À PARTIR DU 26\/09\/2026 11:00/);
     expect(at('2026-09-26T12:00:00Z')).toMatchObject({ status: 'VALIDE', color: 'vert', icon: 'check', signal: 'COURT' });
-    // Fenêtre de 13 h : il reste 6 h à 17:00 (46 %) → ambre ; 1 h 30 à 21:30 (11 %) → rouge, encore valable.
+    // Fenêtre de 13 h : 6 h restantes à 17:00 (46 %) et 1 h 30 à 21:30 (11,5 %) → ambre ; 5 min à 22:55 (0,6 %) → rouge, encore valable.
     const amber = at('2026-09-26T17:00:00Z');
     expect(amber).toMatchObject({ status: 'BIENTOT_EXPIRE', color: 'ambre', icon: 'alert', validity: { band: 'AMBRE' } });
     expect(amber.text).toMatch(/^VALIDE — expire dans 5 h 59 min/);
-    const red = at('2026-09-26T21:30:00Z');
+    expect(at('2026-09-26T21:30:00Z')).toMatchObject({ status: 'BIENTOT_EXPIRE', color: 'ambre' });
+    expect(at('2026-09-26T22:50:00Z').validity.band).toBe('AMBRE'); // 1,3 % restant
+    const red = at('2026-09-26T22:55:00Z');
     expect(red).toMatchObject({ status: 'CRITIQUE', color: 'rouge', icon: 'alert', validity: { band: 'ROUGE' } });
-    expect(red.text).toMatch(/^EXPIRE DANS 1 h 29 min/);
+    expect(red.text).toMatch(/^EXPIRE DANS 4 min/);
     expect(controlResultOf(red.status)).toBe('VALIDE');
-    expect(at('2026-09-26T16:30:00Z').validity.band).toBe('VERT'); // 50 % restant
-    expect(at('2026-09-26T16:40:00Z').validity.band).toBe('AMBRE'); // 48,7 % restant
+    expect(at('2026-09-26T16:29:00Z').validity.band).toBe('VERT'); // 50,1 % restant
+    expect(at('2026-09-26T16:31:00Z').validity.band).toBe('AMBRE'); // 49,9 % restant
     expect(at('2026-09-26T23:10:00Z').status).toBe('CRITIQUE'); // tolérance
     expect(at('2026-09-26T23:30:00Z')).toMatchObject({ status: 'EXPIRE', color: 'rouge', icon: 'x', signal: 'DISTINCT' });
     expect(statusAt({ ...c, state: 'SUSPENDU', stateReason: 'Contestation' }, new Date('2026-09-26T12:00:00Z'))).toMatchObject({ status: 'SUSPENDU', color: 'bleu' });
@@ -261,11 +263,11 @@ describe('Contrôle des titres — QR dynamique, usage unique, plaque, constats'
     expect(s.svc.credential(c.id).state).toBe('CONSOMME');
   });
 
-  it('contrôle par plaque : rouge sous 21 % de validité mais encore VALIDE, puis expiré ; constat sans montant ni obligation (AC-TIT-06)', async () => {
+  it('contrôle par plaque : rouge sous 1 % de validité mais encore VALIDE, puis expiré ; constat sans montant ni obligation (AC-TIT-06)', async () => {
     const s = await setup();
     defineType(s.svc, 'TST-JOUR', { model: 'JOURNALIER', dayMode: 'CALENDAIRE' });
     await buyAndPay(s, 'TST-JOUR', { plate: 'KN 7777 BB' });
-    s.clock.set('2026-09-26T21:30:00.000Z');
+    s.clock.set('2026-09-26T22:55:00.000Z'); // 5 min avant la fin de journée (< 1 % restant)
     const list = (await s.env.req('GET', '/v1/vehicules/KN7777BB/titres?commune=Limete', CTRL)).json();
     expect(list.credentials[0]).toMatchObject({ status: 'CRITIQUE', color: 'rouge', icon: 'alert', result: 'VALIDE' });
     expect(list.credentials[0].remainingSeconds).toBeGreaterThan(0);

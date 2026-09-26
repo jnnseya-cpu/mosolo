@@ -2,9 +2,9 @@
  * Règle unique de couleur de validité des preuves (titres, tickets, places, pass, certificats, autorisations, quitus,
  * badges, mandats, références de paiement…) — décision du maître d'ouvrage du 26/09/2026 :
  *
- * - VERT   : il reste au moins 49 % de la durée de validité ;
- * - AMBRE  : il reste de 21 % à moins de 49 % ;
- * - ROUGE  : il reste moins de 21 % (le titre est encore valable) ;
+ * - VERT   : il reste au moins 50 % de la durée de validité ;
+ * - AMBRE  : il reste de 1 % à moins de 50 % ;
+ * - ROUGE  : il reste moins de 1 % (le titre est encore valable) ;
  * - EXPIRÉ : la validité est échue (rouge, avec « ✗ EXPIRÉ DEPUIS … ») ;
  * - GRIS   : pas encore actif.
  *
@@ -12,8 +12,8 @@
  * est TOUJOURS l'heure du serveur (§ H.11.6) : le client corrige son horloge par l'écart mesuré avec `serverTime`.
  * Une quittance ne périme jamais (bande PERMANENT).
  */
-export const VALIDITY_GREEN_MIN_PCT = 49;
-export const VALIDITY_AMBER_MIN_PCT = 21;
+export const VALIDITY_GREEN_MIN_PCT = 50;
+export const VALIDITY_AMBER_MIN_PCT = 1;
 
 export type ValidityBand = 'VERT' | 'AMBRE' | 'ROUGE' | 'EXPIRE' | 'PAS_ACTIF' | 'PERMANENT';
 
@@ -87,9 +87,9 @@ export function validityText(r: ValidityReading, withSeconds = false): string {
 }
 
 export const VALIDITY_BAND_LABEL: Record<ValidityBand, string> = {
-  VERT: 'Vert — 49 % ou plus de validité restante',
-  AMBRE: 'Ambre — de 21 % à moins de 49 %',
-  ROUGE: 'Rouge — moins de 21 %',
+  VERT: 'Vert — 50 % ou plus de validité restante',
+  AMBRE: 'Ambre — de 1 % à moins de 50 %',
+  ROUGE: 'Rouge — moins de 1 %',
   EXPIRE: 'Expiré',
   PAS_ACTIF: 'Pas encore actif',
   PERMANENT: 'Sans date de fin',

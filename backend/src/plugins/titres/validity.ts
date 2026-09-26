@@ -75,7 +75,7 @@ export interface StatusView {
   text: string;
   /** Secondes restantes avant la fin (positif) ou écoulées depuis (négatif). */
   remainingSeconds: number;
-  /** Règle 49 % / 21 % : part de validité restante et bande de couleur (même calcul dans toute l'application). */
+  /** Règle 50 % / 1 % : part de validité restante et bande de couleur (même calcul dans toute l'application). */
   validity: { band: ValidityBand; pct: number | null; from: string; until: string };
   invalidReason?: 'REVOQUE' | 'ANNULE' | 'REMPLACE' | 'DEJA_UTILISE' | 'EPUISE' | 'CONDITION_NON_REMPLIE';
   serverTime: string;
@@ -123,7 +123,7 @@ export function statusAt(c: Pick<Credential, 'state' | 'stateReason' | 'validFro
   if (t < from) return base('PAS_ENCORE_ACTIF', `VALIDE À PARTIR DU ${kinshasaLabel(from)}`);
   if (t > until + c.toleranceMinutes * MIN) return base('EXPIRE', `EXPIRÉ DEPUIS ${formatDuration(t - until)}`);
   if (t > until) return base('CRITIQUE', `EXPIRÉ — TOLÉRANCE EN COURS (${formatDuration(until + c.toleranceMinutes * MIN - t)})`);
-  // Couleur par part de validité restante (décision du 26/09/2026) : ≥ 49 % vert, 21–49 % ambre, < 21 % rouge.
+  // Couleur par part de validité restante (décision du 26/09/2026) : ≥ 50 % vert, 1–50 % ambre, < 1 % rouge.
   if (reading.band === 'ROUGE') return base('CRITIQUE', `EXPIRE DANS ${formatDuration(remaining)}`);
   if (reading.band === 'AMBRE') return base('BIENTOT_EXPIRE', `VALIDE — expire dans ${formatDuration(remaining)}`);
   return base('VALIDE', `VALIDE — encore ${formatDuration(remaining)}`);

@@ -60,14 +60,14 @@ export default function ProofVerify() {
   );
 }
 
-/** Exemples illustratifs (fictifs) de la règle : fenêtres de 10 h positionnées à 80 %, 35 % et 10 % de validité restante. */
+/** Exemples illustratifs (fictifs) de la règle : fenêtres de 100 h positionnées à 80 %, 25 % et 0,5 % de validité restante. */
 function HowToRead() {
   const [t0] = useState(serverNow);
   const H = 3_600_000;
   const ex = [
-    { pct: 0.8, label: 'Vert — 49 % ou plus de validité restante' },
-    { pct: 0.35, label: 'Orange — de 21 % à moins de 49 %' },
-    { pct: 0.1, label: 'Rouge — moins de 21 % : encore valable, à renouveler' },
+    { pct: 0.8, label: 'Vert — 50 % ou plus de validité restante' },
+    { pct: 0.25, label: 'Orange — de 1 % à moins de 50 %' },
+    { pct: 0.005, label: 'Rouge — moins de 1 % : encore valable, à renouveler tout de suite' },
   ];
   return (
     <section className="card pv-howto" aria-labelledby="pv-howto-t">
@@ -75,8 +75,8 @@ function HowToRead() {
       <p className="small muted">Toute preuve à durée limitée (ticket, place, pass, certificat, autorisation, quitus, badge) affiche un compte à rebours. Sa couleur dépend de la part de validité qui reste, à l’heure du serveur. Exemples illustratifs, fictifs :</p>
       <div className="pv-howto-grid">
         {ex.map((e) => {
-          const until = t0 + e.pct * 10 * H;
-          return <ValidityCountdown key={e.pct} label={e.label} from={new Date(until - 10 * H).toISOString()} until={new Date(until).toISOString()} />;
+          const until = t0 + e.pct * 100 * H;
+          return <ValidityCountdown key={e.pct} label={e.label} from={new Date(until - 100 * H).toISOString()} until={new Date(until).toISOString()} />;
         })}
       </div>
       <p className="small">Une fois la validité échue, la preuve affiche <strong>✗ EXPIRÉ</strong>. Une preuve révoquée, suspendue ou remplacée n’affiche pas de compte à rebours mais la mention qui s’applique.</p>

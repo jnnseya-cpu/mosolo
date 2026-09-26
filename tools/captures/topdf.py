@@ -8,11 +8,11 @@ PT={'01-choix-bitripay':'Contribuable — choix de la passerelle BitriPay','02-r
 '05-console-prestataires':'Trésor — console des prestataires connectés','05-console-prestataires-page':'Trésor — console complète',
 '06-confirmation-signee':'Trésor — webhook signé reçu, paiement confirmé','07-journal-webhooks':'Trésor — journal des webhooks signés'}
 for k,v in PT.items(): titles[('prestataires',k)]=v
-PC={'01-verifier-comment-lire':'Vérifier une preuve — comment lire la couleur (49 % / 21 %)','02-ticket-stationnement-vert':'Ticket de stationnement — vert, compte à rebours en direct',
-'03-support-publicitaire-rouge':'Autorisation publicitaire — rouge : moins de 21 % restant, encore valable','04-certificat-pas-encore-actif':'Autorisation d’événement — pas encore active (gris)',
+PC={'01-verifier-comment-lire':'Vérifier une preuve — comment lire la couleur (vert ≥ 50 %, ambre 1–50 %, rouge < 1 %)','02-ticket-stationnement-vert':'Ticket de stationnement — vert, compte à rebours en direct',
+'03-support-publicitaire-ambre':'Autorisation publicitaire — ambre : 5 % restant (entre 1 % et 50 %), encore valable','04-certificat-pas-encore-actif':'Autorisation d’événement — pas encore active (gris)',
 '05-impression-a6':'Preuve imprimée A6 — logo de la Ville, QR, échéancier des couleurs','06-impression-ticket-80mm':'Preuve imprimée — ticket thermique 80 mm','07-impression-ticket-58mm':'Preuve imprimée — ticket thermique 58 mm',
 '08a-whatsapp-consentement':'WhatsApp — consentement explicite avant tout message','08b-whatsapp-verification':'WhatsApp — vérification d’un ticket par son code','08c-whatsapp-comment-payer':'WhatsApp — comment payer, sans aucun lien de paiement',
-'09-sms-telephone-basique':'SMS « V + code » — téléphone basique, sans Internet','10-version-legere-accueil':'Version légère /l — sans JavaScript, moins de 10 Ko','11-version-legere-resultat-rouge':'Version légère — résultat rouge avec barre en caractères',
+'09-sms-telephone-basique':'SMS « V + code » — téléphone basique, sans Internet','10-version-legere-accueil':'Version légère /l — sans JavaScript, moins de 10 Ko','11-version-legere-resultat-ambre':'Version légère — résultat ambre avec barre en caractères',
 '12-version-legere-imprimable':'Version légère — version imprimable avec QR','13-stationnement-compte-a-rebours':'Stationnement — compte à rebours de la place payée','14-pass-wewa-compte-a-rebours':'Pass wewa — compte à rebours et impression','15-quitus-compte-a-rebours':'Quitus fiscal — compte à rebours et impression'}
 for k,v in PC.items(): titles[('preuves-canaux',k)]=v
 SEC={'preuves-canaux':'Preuves et canaux sans application','verification-publique':'Vérification publique','prestataires':'BitriPay et KODA','verticales-usagers':'Verticales — usagers','verticales-agents':'Verticales — agents'}

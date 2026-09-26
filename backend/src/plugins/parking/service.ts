@@ -37,7 +37,7 @@ export function newTicketCode(): string {
   return `PKT${core}${checkChar(`PKT${core}`)}`;
 }
 
-/** @deprecated la couleur suit désormais la règle 49 % / 21 % (core/validity.ts). */
+/** @deprecated la couleur suit désormais la règle 50 % / 1 % (core/validity.ts). */
 export const REMINDER_MINUTES = 10;
 /** Validité d'une référence non payée avant abandon de la demande de session. */
 const UNPAID_ABANDON_MS = 48 * HOUR_MS;
@@ -547,8 +547,8 @@ export class ParkingService {
     else if (!paidInitial) status = now.getTime() - new Date(s.createdAt).getTime() > UNPAID_ABANDON_MS ? 'ABANDONNEE' : 'EN_ATTENTE_PAIEMENT';
     else status = paidUntil! > now ? 'ACTIVE' : 'EXPIREE';
     let light: Light = 'ROUGE';
-    // Feu de CONTRÔLE (VERT/AMBRE = titre valable, ROUGE = aucun titre) ; la couleur d'affichage suit la règle 49 % / 21 %
-    // (`validity.band`) : une place encore payée à moins de 21 % s'affiche rouge, mais reste valable au contrôle.
+    // Feu de CONTRÔLE (VERT/AMBRE = titre valable, ROUGE = aucun titre) ; la couleur d'affichage suit la règle 50 % / 1 %
+    // (`validity.band`) : une place encore payée à moins de 1 % s'affiche rouge, mais reste valable au contrôle.
     if (status === 'ACTIVE') light = readValidity(startAt, paidUntil, now).band === 'VERT' ? 'VERT' : 'AMBRE';
     return { status, light, startAt, paidUntil, pendingSegments, payments: pays };
   }

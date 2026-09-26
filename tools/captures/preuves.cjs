@@ -5,7 +5,7 @@ const OUT = process.argv[2];
 const j = (u, who) => JSON.parse(execSync(`curl -s ${who ? `-H 'x-demo-user: ${who}'` : ''} "http://localhost:8080${u}"`).toString());
 const PKT = j('/v1/parking/sessions/mine', 'u-contribuable').items.find((s) => s.status === 'ACTIVE' && s.ticketCode).ticketCode;
 const devs = j('/v1/publicite/devices/mine', 'pb-annonceur').items;
-const RED = devs.find((d) => d.authorization?.validity?.band === 'ROUGE').qrToken;
+const RED = devs.find((d) => d.authorization?.validity?.band === 'AMBRE' && d.authorization.validity.pct < 20).qrToken;
 const CERT = 'POV-2026-00001-H';
 const sizes = { telephone: [390, 844, 2], ordinateur: [1440, 900, 1.5] };
 const W = 'http://localhost:4173';
@@ -14,13 +14,13 @@ const W = 'http://localhost:4173';
   const shots = [
     ['01-verifier-comment-lire', `${W}/preuve`, 'u-contribuable'],
     ['02-ticket-stationnement-vert', `${W}/preuve/${PKT}`, 'u-contribuable'],
-    ['03-support-publicitaire-rouge', `${W}/preuve?c=${RED}`, 'u-contribuable'],
+    ['03-support-publicitaire-ambre', `${W}/preuve?c=${RED}`, 'u-contribuable'],
     ['04-certificat-pas-encore-actif', `${W}/preuve/EVT-2026-00001-W`, 'u-contribuable'],
     ['05-impression-a6', `${W}/preuve/${PKT}/imprimer?format=a6`, 'u-contribuable'],
     ['06-impression-ticket-80mm', `${W}/preuve/${PKT}/imprimer?format=ticket80`, 'u-contribuable'],
     ['07-impression-ticket-58mm', `${W}/preuve/${CERT}/imprimer?format=ticket58`, 'u-contribuable'],
     ['10-version-legere-accueil', `http://localhost:8080/l`, null],
-    ['11-version-legere-resultat-rouge', `http://localhost:8080/l/v?c=${RED}`, null],
+    ['11-version-legere-resultat-ambre', `http://localhost:8080/l/v?c=${RED}`, null],
     ['12-version-legere-imprimable', `http://localhost:8080/l/imprimer?c=${PKT}`, null],
     ['13-stationnement-compte-a-rebours', `${W}/stationnement`, 'u-contribuable'],
     ['14-pass-wewa-compte-a-rebours', `${W}/services/rakapay`, 'rk-conducteur'],

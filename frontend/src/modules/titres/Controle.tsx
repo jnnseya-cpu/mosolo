@@ -200,7 +200,7 @@ export default function Controle() {
     } else {
       const from = new Date(found.validFrom).getTime(); const until = new Date(found.validUntil).getTime();
       const left = Math.round((until - now) / 1000);
-      // Règle unique 49 % / 21 %, à l'heure serveur (`now` = heure du paquet signé + temps écoulé).
+      // Règle unique 50 % / 1 %, à l'heure serveur (`now` = heure du paquet signé + temps écoulé).
       const band = readValidity(found.validFrom, found.validUntil, now).band;
       const [st, color, icon] = band === 'ROUGE' || band === 'EXPIRE' ? ['CRITIQUE', 'rouge', 'alert'] : band === 'AMBRE' ? ['BIENTOT_EXPIRE', 'ambre', 'alert'] : ['VALIDE', 'vert', 'check'];
       if (now < from) res = { ...base, result: 'INVALIDE', status: 'PAS_ENCORE_ACTIF', color: 'gris', icon: 'clock', text: 'PAS ENCORE ACTIF' };

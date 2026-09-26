@@ -18,7 +18,7 @@ import { actorOf, addDays, CATEGORY_LABELS, formatShortCode, maskIuc, newShortCo
 
 /** Durée de validité et seuil ambre — [paramètres de DÉMONSTRATION ; « période fixée par la règle », acte J6]. */
 export const CLEARANCE_VALIDITY_DAYS = 90;
-/** @deprecated remplacé par la règle 49 % / 21 % (core/validity.ts) ; conservé pour les fiches existantes. */
+/** @deprecated remplacé par la règle 50 % / 1 % (core/validity.ts) ; conservé pour les fiches existantes. */
 export const CLEARANCE_AMBER_DAYS = 15;
 
 export interface ClearanceBlocker { obligationId: string; label: string; dueDate: string; reason: 'IMPAYEE' | 'EN_ATTENTE_DE_RAPPROCHEMENT' | 'CONTESTEE_SANS_EFFET_SUSPENSIF' }
@@ -165,7 +165,7 @@ export class ClearanceService {
     const today = this.d.today();
     if (c.status === 'REVOQUE') return 'REVOQUE';
     if (c.validUntil < today) return 'EXPIRE';
-    // Règle 49 % / 21 % : sous 49 % de validité restante, le quitus est signalé « expire bientôt » (ambre ou rouge).
+    // Règle 50 % / 1 % : sous 50 % de validité restante, le quitus est signalé « expire bientôt » (ambre ou rouge).
     const v = validityView(c.validFrom, c.validUntil, new Date(this.d.nowIso()));
     if (v.band === 'EXPIRE') return 'EXPIRE';
     if (v.band === 'AMBRE' || v.band === 'ROUGE') return 'BIENTOT_EXPIRE';

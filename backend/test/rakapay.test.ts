@@ -83,10 +83,13 @@ describe('Pass wewa — achat individuel', () => {
     expect(c.attribution).toMatchObject({ commune: 'Kalamu', basis: 'STATION_DEPART', sourceId: 'ST-KAL-VICTOIRE' });
     expect(c.subject.driverId).toBeDefined();
     expect(c.holderTaxpayerId).toBe(RK_DEMO.driver2Taxpayer);
-    // Règle 49 % / 21 % (heure serveur) : sous 21 % le pass s'affiche rouge mais reste en règle ; échu, rien n'est valable.
-    s.clock.advanceHours(23);
+    // Règle 50 % / 1 % (heure serveur) : sous 1 % le pass s'affiche rouge mais reste en règle ; échu, rien n'est valable.
+    const total = Date.parse(c.validUntil) - Date.parse(c.validFrom);
+    s.clock.set(new Date(Date.parse(c.validUntil) - total * 0.3).toISOString());
+    expect(s.rk.motoStatus(m2)).toMatchObject({ color: 'AMBRE', nothingToPay: true, displayStatus: 'BIENTOT_EXPIRE' });
+    s.clock.set(new Date(Date.parse(c.validUntil) - total * 0.005).toISOString());
     expect(s.rk.motoStatus(m2)).toMatchObject({ color: 'ROUGE', nothingToPay: true, displayStatus: 'CRITIQUE' });
-    s.clock.advanceHours(2);
+    s.clock.set(new Date(Date.parse(c.validUntil) + 2 * 3_600_000).toISOString());
     expect(s.rk.motoStatus(m2)).toMatchObject({ color: 'ROUGE', nothingToPay: false });
   });
 

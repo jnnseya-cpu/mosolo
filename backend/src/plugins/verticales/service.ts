@@ -898,8 +898,8 @@ export class VerticalesService {
   }
 
   /**
-   * Statut d'un titre (heure serveur), règle 49 % / 21 % : GRIS en attente de paiement ; VERT (≥ 49 % restant),
-   * AMBRE (21–49 %), ROUGE (< 21 %, encore valable) ; ECHU (validité échue).
+   * Statut d'un titre (heure serveur), règle 50 % / 1 % : GRIS en attente de paiement ; VERT (≥ 50 % restant),
+   * AMBRE (1–50 %), ROUGE (< 1 %, encore valable) ; ECHU (validité échue).
    */
   titleView(t: StallTitle) {
     const o = this.ctx.assessment.obligations.get(t.obligationId);

@@ -113,12 +113,14 @@ describe('verticales — marchés sans espèces : titre d’étal par le circuit
     expect(after.receipts[0].status).toBe('PROVISOIRE');
     expect(after.stalls[0].current.status).toBe('VERT');
     expect(after.obligations[0].payable).toBe(false);
-    // Règle 49 % / 21 % sur 30 jours : ambre à 16 j (47 % restant), rouge encore valable à 28 j (7 %), puis échu.
+    // Règle 50 % / 1 % sur 30 jours : ambre à 16 j (47 % restant) et à 29 j (3 %), rouge encore valable à 29 j 20 h (0,6 %), puis échu.
     env.clock.advance(16 * 86_400_000);
     expect((await env.req('GET', '/v1/verticales/marches/space', 'u-contribuable')).json().stalls[0].current.status).toBe('AMBRE');
-    env.clock.advance(12 * 86_400_000);
+    env.clock.advance(13 * 86_400_000);
+    expect((await env.req('GET', '/v1/verticales/marches/space', 'u-contribuable')).json().stalls[0].current.status).toBe('AMBRE');
+    env.clock.advance(20 * 3_600_000);
     expect((await env.req('GET', '/v1/verticales/marches/space', 'u-contribuable')).json().stalls[0].current).toMatchObject({ status: 'ROUGE', validity: { band: 'ROUGE' } });
-    env.clock.advance(3 * 86_400_000);
+    env.clock.advance(86_400_000);
     expect((await env.req('GET', '/v1/verticales/marches/space', 'u-contribuable')).json().stalls[0].current.status).toBe('ECHU');
   });
 
