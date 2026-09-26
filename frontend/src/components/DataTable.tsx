@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-export interface Column<T> { key: string; label: string; render: (row: T) => ReactNode; num?: boolean; primary?: boolean }
+export interface Column<T> { key: string; label: string; render: (row: T) => ReactNode; num?: boolean; primary?: boolean; full?: boolean }
 
 /** Tableau aligné (chiffres tabulaires) qui se replie en cartes sur petit écran. */
 export function DataTable<T>({ columns, rows, rowKey, caption, empty }: {
@@ -18,7 +18,7 @@ export function DataTable<T>({ columns, rows, rowKey, caption, empty }: {
           {rows.map((r) => (
             <tr key={rowKey(r)}>
               {columns.map((c) => (
-                <td key={c.key} data-label={c.label} className={`${c.num ? 'num' : ''} ${c.primary ? 'cell-primary' : ''}`}>{c.render(r)}</td>
+                <td key={c.key} data-label={c.label} className={`${c.num ? 'num' : ''} ${c.primary ? 'cell-primary' : ''} ${c.full ? 'cell-full' : ''}`}>{c.render(r)}</td>
               ))}
             </tr>
           ))}

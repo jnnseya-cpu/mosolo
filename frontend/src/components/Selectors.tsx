@@ -1,4 +1,15 @@
-import { CURRENCIES, CURRENCY_CODES, LANGUAGES, LANGUAGE_CODES, isCurrencyCode, isLanguageCode } from '@mosolo/shared';
+import { CURRENCIES, CURRENCY_CODES, LANGUAGES, LANGUAGE_CODES, ROLES, isCurrencyCode, isLanguageCode } from '@mosolo/shared';
+import type { DemoUser } from '../lib/types';
+
+/** Libellé court d'un utilisateur de démo : le rôle (« Gouverneur », « Contribuable »…), nom complet en infobulle. */
+export function shortLabel(u: DemoUser, all: DemoUser[]): string {
+  const role = u.roles[0];
+  const base = role && role in ROLES ? ROLES[role as keyof typeof ROLES] : u.name;
+  const same = all.filter((x) => x.roles[0] === role);
+  if (same.length <= 1) return base;
+  const n = u.name.replace(/\s*\((démo|contribuable fictif|locataire fictive)\)\s*/i, '').trim();
+  return `${base} · ${n.length > 22 ? n.slice(0, 21) + '…' : n}`;
+}
 import { useApp } from '../context';
 import { isDraftLanguage } from '../lib/i18n';
 
@@ -45,10 +56,10 @@ export function DemoUserSelector({ id = 'user-select' }: { id?: string }) {
   return (
     <div className="ctl">
       <label htmlFor={id} className="ctl-label">{tr('header.demoUser')}</label>
-      <select id={id} value={user?.id ?? ''} disabled={users.length === 0} onChange={(e) => setUserId(e.target.value)}>
+      <select id={id} value={user?.id ?? ''} title={user ? `${user.name} — ${user.roles.join(', ')}` : undefined} disabled={users.length === 0} onChange={(e) => setUserId(e.target.value)}>
         {users.length === 0 && <option value="">{usersError ? tr('header.usersUnavailable') : tr('common.loading')}</option>}
         {users.map((u) => (
-          <option key={u.id} value={u.id}>{u.name} — {u.roles.join(', ')}{u.entity ? ` · ${u.entity}` : ''}</option>
+          <option key={u.id} value={u.id} title={`${u.name} — ${u.roles.join(', ')}${u.entity ? ` · ${u.entity}` : ''}`}>{shortLabel(u, users)}</option>
         ))}
       </select>
     </div>

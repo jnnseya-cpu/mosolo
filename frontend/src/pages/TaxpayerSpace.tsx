@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { isCurrencyCode, CURRENCIES, formatMoney, type CurrencyCode } from '@mosolo/shared';
+import { isCurrencyCode, CURRENCIES, formatMoney, type CurrencyCode, type MapStatusColor } from '@mosolo/shared';
 import { useApp } from '../context';
 import { useApi } from '../hooks/useApi';
 import { useAutosave } from '../hooks/useAutosave';
@@ -26,6 +26,14 @@ const CHANNELS: { id: string; icon: string; key: UIKey }[] = [
   { id: 'USSD', icon: 'keypad', key: 'pay.channel.USSD' },
   { id: 'AGENT_POINT', icon: 'store', key: 'pay.channel.AGENT_POINT' },
 ];
+
+/** Couleur de situation (§ 16.6) déduite du statut probant quand le backend ne la fournit pas. */
+function mapFromProbative(s?: string): MapStatusColor {
+  if (s === 'VERIFIE') return 'green';
+  if (s === 'CONTESTE') return 'red';
+  if (s === 'DECLARE' || s === 'OBSERVE') return 'amber';
+  return 'grey';
+}
 
 function fmtInput(v: unknown): string {
   const m = asMoney(v);
@@ -210,7 +218,11 @@ export default function TaxpayerSpace() {
   const isTaxpayer = !!user?.roles.some((r) => r === 'R30' || r === 'R31');
   const demoTaxpayer = users.find((u) => u.roles.includes('R30'));
   const taxpayerId = (isTaxpayer ? user?.taxpayerId ?? user?.id : null) ?? safeGet('mosolo.taxpayerId') ?? demoTaxpayer?.taxpayerId ?? demoTaxpayer?.id ?? null;
-  const q = useApi(taxpayerId ? () => api<TaxpayerProfile>(`/v1/taxpayers/${encodeURIComponent(taxpayerId)}`) : null, [taxpayerId, user?.id]);
+  const q = useApi(taxpayerId ? async () => {
+    // Le backend renvoie { taxpayer, objects, obligations, receipts, … } ; on aplatit le profil.
+    const raw = await api<TaxpayerProfile & { taxpayer?: Partial<TaxpayerProfile> }>(`/v1/taxpayers/${encodeURIComponent(taxpayerId)}`);
+    return { ...(raw.taxpayer ?? {}), ...raw, id: raw.taxpayer?.id ?? raw.id } as TaxpayerProfile;
+  } : null, [taxpayerId, user?.id]);
   const [panel, setPanel] = useState<Panel>(null);
   const p = q.data;
   const obligations = useMemo(() => p?.obligations ?? [], [p]);
@@ -254,7 +266,7 @@ export default function TaxpayerSpace() {
                 { key: 'due', label: tr('taxpayer.dueDate'), render: (o) => fmtDate(o.dueDate) },
                 { key: 'status', label: tr('space.col.status'), render: (o) => <StatusBadge tone={OBLIGATION_TONE[o.status] ?? 'neutral'} label={tr(obligationKey(o.status))} /> },
                 {
-                  key: 'actions', label: tr('space.col.actions'), render: (o) => (
+                  key: 'actions', label: tr('space.col.actions'), full: true, render: (o) => (
                     <div className="row-actions">
                       <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPanel({ kind: 'explain', ob: o })}><Icon name="info" size={16} /> {tr('taxpayer.explain')}</button>
                       {o.status !== 'SOLDEE' && o.status !== 'ANNULEE' && <button type="button" className="btn btn-primary btn-sm" onClick={() => setPanel({ kind: 'pay', ob: o })}>{tr('taxpayer.pay')}</button>}
@@ -277,7 +289,7 @@ export default function TaxpayerSpace() {
                       <p className="small muted">{[o.commune, o.quartier].filter(Boolean).join(' · ')}{o.localityRank ? ` · ${tr('space.rank', { n: o.localityRank })}` : ''} · <span className="mono">{o.identifier ?? o.id}</span></p>
                     </div>
                     <div className="row-side">
-                      <MapStatusChip status={o.mapStatus} />
+                      <MapStatusChip status={o.mapStatus ?? mapFromProbative(o.probativeStatus)} />
                       {o.probativeStatus && <span className="tag">{tr(`probative.${o.probativeStatus}` as UIKey)}</span>}
                     </div>
                   </li>

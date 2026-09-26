@@ -142,7 +142,7 @@ export default function Governor() {
       {ex && <ExampleNotice text={fallback ? tr('gov.fallback') : tr('common.example')} />}
 
       <div className="kpi-row">
-        <Tile label={tr('governor.confirmedToday')} value={bigMoney(t.confirmedToday)} sub={t.delta ? tr('gov.vsYesterday', { n: t.delta }) : undefined} />
+        <Tile label={tr('governor.confirmedToday')} value={bigMoney(t.confirmedToday)} sub={t.delta ? tr('gov.vsYesterday', { n: /%/.test(t.delta) ? t.delta : `${t.delta.replace('.', ',')} %` }) : undefined} />
         <Tile label={tr('governor.settled')} value={bigMoney(t.settled)} sub={tr('gov.ofConfirmed', { n: pct(t.settled, t.confirmedToday) })} />
         <Tile label={tr('governor.reconciled')} value={bigMoney(t.reconciled)} sub={tr('gov.ofSettled', { n: pct(t.reconciled, t.settled) })} />
         <Tile label={tr('governor.reconRate')} value={rate !== undefined ? `${rate.toLocaleString(nloc)} %` : '—'}

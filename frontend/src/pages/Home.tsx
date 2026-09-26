@@ -37,8 +37,12 @@ function ChainTimeline() {
       const rect = w.getBoundingClientRect();
       const total = w.offsetHeight - window.innerHeight;
       const p = Math.min(1, Math.max(0, -rect.top / Math.max(total, 1)));
-      const max = t.scrollWidth - t.clientWidth;
-      t.style.transform = `translate3d(${-p * max}px,0,0)`;
+      const max = Math.max(0, t.scrollWidth - t.clientWidth);
+      const first = t.firstElementChild as HTMLElement | null;
+      const step = first?.offsetWidth || 300;
+      // Pas discret : aucune carte n'est coupée au repos
+      const x = Math.min(max, Math.round((p * max) / step) * step);
+      t.style.transform = `translate3d(${-x}px,0,0)`;
       w.style.setProperty('--progress', String(p));
     };
     const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };

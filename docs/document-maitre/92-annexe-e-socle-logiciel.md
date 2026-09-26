@@ -44,6 +44,9 @@ flowchart LR
 
 ## E.2 Invariants démontrés par les tests automatisés
 
+État au 26 septembre 2026 : **74 tests automatisés, tous verts** (shared : 16 ; backend : 47 ; frontend : 11), vérification de types stricte sans erreur, construction de la PWA réussie. Le backend implémente les 39 routes du contrat, vérifiées contre `specs/openapi.yaml` ; le schéma PostgreSQL (`backend/db/schema.sql`) a été chargé dans PostgreSQL 16 et refuse toute modification ou suppression du journal d'audit ainsi que toute écriture comptable déséquilibrée.
+
+
 | Critère (ch. 41) | Invariant | Paquet |
 |---|---|---|
 | AC-LEG-01 | Une règle `A_VERIFIER` ne peut produire aucune obligation | shared, backend |
@@ -76,3 +79,21 @@ flowchart LR
 | Paiements | Prestataire simulé signé HMAC | Banques et émetteurs agréés BCC, mTLS + signatures |
 | Données du tableau de bord | Données d'exemple marquées « EXEMPLE » | Entrepôt analytique alimenté par CQRS |
 | Application terrain | Parcours hors ligne dans la PWA | Application Android native (Kotlin), MDM, stockage chiffré |
+
+## E.4 Écrans de l'application (PWA)
+
+| Route | Écran | Points clés |
+|---|---|---|
+| `/` | Accueil | Visuel de couverture officiel de la Ville, scène nocturne de la ville, frise des 13 maillons, chiffres sourcés, principes |
+| `/inscription` | Inscription | Question de situation à l'adresse (8 réponses), autosauvegarde, rappel « déclarer n'est pas prouver » |
+| `/espace` | Espace contribuable | Objets et statuts cartographiques, obligations et explication du calcul, paiement par référence, quittances, réclamation |
+| `/verifier` | Vérification publique de quittance | Résultat minimal, lecture QR si l'appareil le permet |
+| `/gouverneur` | Centre de commandement | Tuiles, communes, catégories, échelle de la recette, campagne, scénarios, alertes, recommandations |
+| `/communications` | Console des communications | Catalogue de 239 événements, couverture par canal, aperçu de courriel à la charte, envoi de test, délivrances |
+| `/registre` | Registre juridique | Fiches de règles, statuts, circuit des quatre approbations |
+| `/tresor` | Trésor et rapprochement | Exceptions, équilibre du grand livre, relevés, coffre des bénéficiaires |
+| `/terrain` | Agent de terrain | Missions, capture hors ligne (GPS, photo hachée), synchronisation signée |
+| `/audit` | Audit | Vérification de la chaîne, journal |
+| `/ia` | Recommandations | Boîte de décision humaine |
+
+Toutes les pages s'adaptent au téléphone (390 px), à la tablette et au poste de travail, en mode clair et sombre ; l'application est installable et fonctionne hors ligne pour son enveloppe et les vérifications publiques récentes.
