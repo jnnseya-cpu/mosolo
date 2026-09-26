@@ -51,10 +51,10 @@ export function canTransition(from: PaymentStatus, to: PaymentStatus): boolean {
 }
 
 /** Statut d'une quittance (§ 19) */
-export type ReceiptStatus = 'PROVISOIRE' | 'DEFINITIVE' | 'ANNULEE' | 'REMPLACEE' | 'SUSPECTE';
+export type ReceiptStatus = 'PROVISOIRE' | 'DEFINITIVE' | 'ANNULEE' | 'REMPLACEE' | 'SUSPECTE' | 'CONTREPASSEE' | 'REMBOURSEE';
 
 /** Résultat de vérification publique (§ 19.2) */
-export type PublicReceiptCheck = 'VALID' | 'PENDING' | 'CANCELLED' | 'REPLACED' | 'FRAUD_SUSPECTED' | 'UNKNOWN';
+export type PublicReceiptCheck = 'VALID' | 'PENDING' | 'CANCELLED' | 'REPLACED' | 'FRAUD_SUSPECTED' | 'REVERSED' | 'REFUNDED' | 'UNKNOWN';
 
 /**
  * Échelle unifiée de la recette (§ 26.1, Cahier v2 : onze états) : potentiel estimé, assiette vérifiée, liquidé,

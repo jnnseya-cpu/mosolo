@@ -68,6 +68,8 @@ export const fr = {
   'verify.pending': 'Paiement confirmé — règlement en cours',
   'verify.cancelled': 'Quittance non valable',
   'verify.replaced': 'Quittance remplacée',
+  'verify.reversed': 'Quittance non valable — contrepassée',
+  'verify.refunded': 'Quittance non valable — paiement remboursé',
   'verify.fraud': 'Vérification impossible — contactez la régie',
   'verify.unknown': 'Aucune quittance ne correspond',
   'payment.reference': 'Référence de paiement',

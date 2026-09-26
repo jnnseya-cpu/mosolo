@@ -30,6 +30,8 @@ const VIEW: Record<PublicReceiptCheck, { icon: string; tone: string; key: UIKey 
   CANCELLED: { icon: 'ban', tone: 'critical', key: 'verify.cancelled' },
   REPLACED: { icon: 'replace', tone: 'info', key: 'verify.replaced' },
   FRAUD_SUSPECTED: { icon: 'alert', tone: 'serious', key: 'verify.fraud' },
+  REVERSED: { icon: 'ban', tone: 'critical', key: 'verify.reversed' },
+  REFUNDED: { icon: 'ban', tone: 'critical', key: 'verify.refunded' },
   UNKNOWN: { icon: 'question', tone: 'neutral', key: 'verify.unknown' },
 };
 

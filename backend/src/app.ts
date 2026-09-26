@@ -49,7 +49,7 @@ export function buildApp(opts: AppOptions & { logger?: boolean } = {}): FastifyI
 
   void app.register(cors, {
     origin: true,
-    exposedHeaders: ['idempotent-replayed', 'x-mosolo-subject', 'content-language'],
+    exposedHeaders: ['idempotent-replayed', 'x-mosolo-subject', 'content-language', 'retry-after', 'x-mosolo-sha256', 'x-mosolo-signature'],
   });
 
   // Corps brut conservé : nécessaire à la vérification des signatures (prestataires, terminaux).

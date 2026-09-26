@@ -797,6 +797,23 @@ export class PaymentService {
     return this.orders.find((o) => o.obligationId === obligationId);
   }
 
+  /**
+   * Contrepassation d'un paiement décidée en double validation (module Trésor) : transition contrôlée par la table
+   * partagée des états (canTransition), jamais une réécriture directe. Les contre-écritures sont rattachées à l'ordre.
+   */
+  markReversed(orderId: string, reversalEntryIds: string[]): PaymentOrder {
+    const o = this.orders.get(orderId);
+    if (!o) throw notFound('PAYMENT_ORDER_NOT_FOUND', `Ordre inconnu : ${orderId}`);
+    return this.transition(o, 'CONTREPASSE', { ledgerEntryIds: [...o.ledgerEntryIds, ...reversalEntryIds] });
+  }
+
+  /** Remboursement approuvé en double validation vers l'instrument d'origine (transition contrôlée). */
+  markRefunded(orderId: string, refundEntryId: string): PaymentOrder {
+    const o = this.orders.get(orderId);
+    if (!o) throw notFound('PAYMENT_ORDER_NOT_FOUND', `Ordre inconnu : ${orderId}`);
+    return this.transition(o, 'REMBOURSE', { ledgerEntryIds: [...o.ledgerEntryIds, refundEntryId] });
+  }
+
   /** Règlement puis rapprochement (appelé par le Trésor). */
   settleAndReconcile(orderId: string, ledgerEntryId: string): PaymentOrder {
     const o = this.orders.get(orderId)!;

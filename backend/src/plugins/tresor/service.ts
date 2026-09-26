@@ -599,7 +599,7 @@ export class TresorService {
         for (const e of this.settlementEntries(o.id)) reversed.push(this.ctx.ledger.reverse(e.id, `Contrepassation ${op.id} : ${input.reason}`, actor).id);
         if (o.status !== 'CONTREPASSE') {
           // Transition contrôlée par la table partagée des états de paiement (CONFIRME|CONTESTE → CONTREPASSE).
-          this.ctx.payments.orders.update({ ...o, status: 'CONTREPASSE', ledgerEntryIds: [...o.ledgerEntryIds, ...reversed] });
+          this.ctx.payments.markReversed(o.id, reversed);
           this.ctx.audit.append({ actor, action: 'payment.reversed', resourceType: 'payment_order', resourceId: o.id, details: { operationId: op.id, from: o.status, proposedBy: op.proposedBy } });
         }
         const r = this.ctx.receipts.byPaymentOrder(o.id);
@@ -617,7 +617,7 @@ export class TresorService {
           eventType: 'REFUND', description: `Remboursement ${o.paymentReference} vers l'instrument d'origine (${op.id})`,
           sourceType: 'payment_order', sourceId: o.id, debit: 'RECETTES_CONSTATEES', credit: 'COMPTE_PUBLIC_RECETTES', amount: o.amount,
         });
-        this.ctx.payments.orders.update({ ...o, status: 'REMBOURSE', ledgerEntryIds: [...o.ledgerEntryIds, entry.id] });
+        this.ctx.payments.markRefunded(o.id, entry.id);
         this.ctx.audit.append({ actor, action: 'payment.refunded', resourceType: 'payment_order', resourceId: o.id, details: { operationId: op.id, ledgerEntryId: entry.id, destination: 'INSTRUMENT_ORIGINE' } });
         const r = this.ctx.receipts.byPaymentOrder(o.id);
         const receipt = r && r.status === 'DEFINITIVE' ? this.ctx.receipts.applyDecision(r.id, 'REMBOURSEE', decision) : undefined;
