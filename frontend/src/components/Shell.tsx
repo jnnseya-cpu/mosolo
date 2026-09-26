@@ -7,8 +7,9 @@ import type { UIKey } from '../lib/i18n';
 import { CityLogo, MakerMark, Tricolour } from './Brand';
 import { Icon } from './Icon';
 import { CurrencySelector, DemoUserSelector, LanguageSelector } from './Selectors';
+import { MODULE_ROUTES } from '../modules/registry';
 
-export interface NavItem { to: string; key: UIKey; icon: string; group: 'public' | 'pilotage' | 'operations' }
+export interface NavItem { to: string; key: UIKey; icon: string; group: 'public' | 'pilotage' | 'operations'; label?: string; short?: string; roles?: string[] }
 
 export const NAV: NavItem[] = [
   { to: '/', key: 'nav.home', icon: 'home', group: 'public' },
@@ -44,12 +45,25 @@ const ROLE_ROUTES: [string[], string[]][] = [
   [['R26'], ['/communications', '/audit']],
 ];
 
+/** Entrées de menu des modules d'extension (modules/registry.tsx). */
+const MODULE_NAV: NavItem[] = MODULE_ROUTES.filter((m) => m.nav).map((m) => ({
+  to: m.path, key: 'nav.more' as UIKey, icon: m.nav!.icon, group: m.nav!.group, label: m.nav!.label, short: m.nav!.short ?? m.nav!.label, roles: m.nav!.roles,
+}));
+
 export function visibleNav(roles: string[] | undefined): NavItem[] {
-  if (!roles) return NAV; // utilisateurs inconnus (hors ligne) : tout afficher
+  if (!roles) return [...NAV, ...MODULE_NAV]; // utilisateurs inconnus (hors ligne) : tout afficher
   const allowed = new Set<string>(['/']);
   for (const [rs, routes] of ROLE_ROUTES) if (roles.some((r) => rs.includes(r))) routes.forEach((x) => allowed.add(x));
   if (allowed.size === 1) allowed.add('/verifier');
-  return NAV.filter((n) => allowed.has(n.to));
+  const core = NAV.filter((n) => allowed.has(n.to));
+  const extra = MODULE_NAV.filter((n) => n.roles!.some((r) => roles.includes(r)));
+  return [...core, ...extra];
+}
+
+/** Libellé d'une entrée (clé traduite, ou libellé fourni par un module). */
+function navLabel(n: NavItem, tr: (k: UIKey) => string, short = false): string {
+  if (n.label) return short ? n.short ?? n.label : n.label;
+  return tr(short ? SHORT[n.to] ?? n.key : n.key);
 }
 
 export function OfflineBanner() {
@@ -131,7 +145,7 @@ function Sidebar() {
             {items.filter((n) => n.group === g.id).map((n) => (
               <li key={n.to}>
                 <NavLink to={n.to} end={n.to === '/'} className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`}>
-                  <Icon name={n.icon} size={18} /> <span>{tr(n.key)}</span>
+                  <Icon name={n.icon} size={18} /> <span>{navLabel(n, tr)}</span>
                 </NavLink>
               </li>
             ))}
@@ -157,7 +171,7 @@ function BottomNav() {
         {bottom.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.to === '/'} className={({ isActive }) => `bn-link ${isActive ? 'active' : ''}`}>
             <Icon name={n.icon} size={22} />
-            <span>{tr(SHORT[n.to] ?? n.key)}</span>
+            <span>{navLabel(n, tr, true)}</span>
           </NavLink>
         ))}
         {hasMore && (
@@ -176,7 +190,7 @@ function BottomNav() {
                   {items.filter((n) => n.group === g.id).map((n) => (
                     <li key={n.to}>
                       <NavLink to={n.to} end={n.to === '/'} className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`}>
-                        <Icon name={n.icon} size={18} /> <span>{tr(n.key)}</span>
+                        <Icon name={n.icon} size={18} /> <span>{navLabel(n, tr)}</span>
                       </NavLink>
                     </li>
                   ))}

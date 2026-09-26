@@ -28,6 +28,7 @@ import { LedgerService } from './modules/treasury/ledger.js';
 import { TreasuryService } from './modules/treasury/service.js';
 import { VaultService } from './modules/vault/service.js';
 import { Money } from '@mosolo/shared';
+import type { MosoloPlugin } from './plugins/types.js';
 
 export interface Secrets {
   /** Clé HMAC de signature du journal d'audit (production : HSM). */
@@ -70,6 +71,8 @@ export interface AppOptions {
   connectorEnv?: Record<string, string | undefined>;
   /** `fetch`, journal masqué et temporisation injectables (tests : jamais de réseau réel). */
   connectorRuntime?: ConnectorRuntime;
+  /** Modules d'extension (défaut : `DEFAULT_PLUGINS`). */
+  plugins?: MosoloPlugin<any>[];
 }
 
 export function createContext(opts: AppOptions = {}) {
@@ -137,6 +140,8 @@ export function createContext(opts: AppOptions = {}) {
   return {
     clock, secrets, users, audit, idempotency, comms, alerts, fx, taxpayers, objects, vault, rules, ledger, connectors,
     assessment, receipts, payments, treasury, drafts, field, appeals, ai, dashboards,
+    /** Services des modules d'extension, par nom (voir plugins/). */
+    ext: {} as Record<string, unknown>,
   };
 }
 

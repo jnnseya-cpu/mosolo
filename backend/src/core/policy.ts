@@ -24,6 +24,13 @@ export type Action =
   | 'alerts.read'
   | 'draft.write';
 
+/**
+ * Action d'un module d'extension (verticale) : `<module>:<action>`, ex. `parking:session.create`.
+ * Déclarée par `definePolicy` ; non déclarée ⇒ refusée (moindre privilège). Jamais permise à l'IA.
+ */
+export type ExtensionAction = `${string}:${string}`;
+export type AnyAction = Action | ExtensionAction;
+
 export interface Resource {
   taxpayerId?: string;
   entity?: string;
@@ -54,6 +61,10 @@ const inTerritory =
 const contextIn =
   (...ctx: string[]): Grant =>
   (_u, r) => (r.context !== undefined && ctx.includes(r.context) ? 'full' : false);
+
+/** Briques de décision réutilisables par les modules d'extension. */
+export const GRANTS = { always, minimal, ownTaxpayer, mandant, sameEntity, inTerritory, contextIn } as const;
+export type { Grant };
 
 /** Rôles d'agents publics (R01 à R29). */
 export const PUBLIC_AGENT_ROLES = Array.from({ length: 29 }, (_, i) => `R${String(i + 1).padStart(2, '0')}` as RoleCode);
@@ -117,6 +128,20 @@ const MATRIX: Record<Action, Partial<Record<RoleCode, Grant>>> = {
   'draft.write': { ...allAgents(always), R30: always, R31: always },
 };
 
+const EXTENSIONS: Record<string, Partial<Record<RoleCode, Grant>>> = {};
+
+/** Déclare la matrice d'une action d'extension (une seule fois ; redéclaration identique tolérée). */
+export function definePolicy(action: ExtensionAction, grants: Partial<Record<RoleCode, Grant>>): void {
+  EXTENSIONS[action] = grants;
+}
+
+/** Tous les rôles d'agents publics (R01 à R29) avec la même décision. */
+export const allAgentRoles = allAgents;
+
+function grantsFor(action: AnyAction): Partial<Record<RoleCode, Grant>> {
+  return (MATRIX as Record<string, Partial<Record<RoleCode, Grant>>>)[action] ?? EXTENSIONS[action] ?? {};
+}
+
 /** Correspondance des actions métier avec les interdits constitutionnels de l'IA (§ 23.1). */
 const AI_FORBIDDEN_MAP: Partial<Record<Action, (typeof AI_FORBIDDEN_ACTIONS)[number]>> = {
   'rule.create': 'CREATE_TAX', 'rule.approve': 'CREATE_TAX', 'assessment.liquidate': 'CREATE_TAX',
@@ -134,7 +159,7 @@ const AI_ALLOWED: Action[] = ['ai.insight', 'draft.write'];
  * Garde de l'IA : lève une erreur si un acteur IA tente une action de niveau C ou interdite.
  * Accepte aussi directement un code de `AI_FORBIDDEN_ACTIONS`.
  */
-export function assertAiMay(actor: Principal, action: Action | (typeof AI_FORBIDDEN_ACTIONS)[number]): void {
+export function assertAiMay(actor: Principal, action: AnyAction | (typeof AI_FORBIDDEN_ACTIONS)[number]): void {
   if (actor.kind !== 'ai') return;
   const forbiddenCode = (AI_FORBIDDEN_ACTIONS as readonly string[]).includes(action)
     ? action
@@ -148,7 +173,7 @@ export function assertAiMay(actor: Principal, action: Action | (typeof AI_FORBID
 }
 
 /** Évalue une décision d'accès sans lever d'erreur. */
-export function evaluate(principal: Principal, action: Action, resource: Resource = {}): Access | false {
+export function evaluate(principal: Principal, action: AnyAction, resource: Resource = {}): Access | false {
   if (principal.kind === 'ai') {
     try {
       assertAiMay(principal, action);
@@ -157,7 +182,7 @@ export function evaluate(principal: Principal, action: Action, resource: Resourc
       return false;
     }
   }
-  const grants = MATRIX[action];
+  const grants = grantsFor(action);
   let best: Access | false = false;
   for (const role of principal.roles) {
     const g = grants[role];
@@ -170,12 +195,13 @@ export function evaluate(principal: Principal, action: Action, resource: Resourc
 }
 
 /** Le rôle peut-il, en principe, effectuer l'action (quel que soit le périmètre) ? */
-export function hasAnyGrant(user: User, action: Action): boolean {
-  return user.roles.some((r) => MATRIX[action][r] !== undefined);
+export function hasAnyGrant(user: User, action: AnyAction): boolean {
+  const g = grantsFor(action);
+  return user.roles.some((r) => g[r] !== undefined);
 }
 
 /** Autorise ou lève 403 FORBIDDEN. Retourne le niveau d'accès (complet ou minimal). */
-export function authorize(principal: Principal, action: Action, resource: Resource = {}): Access {
+export function authorize(principal: Principal, action: AnyAction, resource: Resource = {}): Access {
   if (principal.kind === 'ai') {
     assertAiMay(principal, action);
     return 'full';

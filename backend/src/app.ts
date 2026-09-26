@@ -25,6 +25,7 @@ import { registerSystemRoutes } from './modules/system/routes.js';
 import { registerTreasuryRoutes } from './modules/treasury/routes.js';
 import { registerVaultRoutes } from './modules/vault/routes.js';
 import { seed } from './seed.js';
+import { DEFAULT_PLUGINS } from './plugins/index.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -35,8 +36,11 @@ declare module 'fastify' {
 export function buildApp(opts: AppOptions & { logger?: boolean } = {}): FastifyInstance {
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 1_048_576 });
   const ctx = createContext(opts);
+  const plugins = opts.plugins ?? DEFAULT_PLUGINS;
+  for (const p of plugins) ctx.ext[p.name] = p.create(ctx);
   if (opts.seed !== false) {
     seed(ctx);
+    for (const p of plugins) p.seed?.(ctx, ctx.ext[p.name]);
     // Doctrine (§ 18.1) : l'alias de règlement de chaque connecteur doit exister dans le coffre — sinon, pas de démarrage.
     // (Sans données semées, le contrôle est refait à chaque création d'intention par la résolution d'alias.)
     ctx.connectors.validate((alias) => ctx.vault.aliasExists(alias));
@@ -108,5 +112,6 @@ export function buildApp(opts: AppOptions & { logger?: boolean } = {}): FastifyI
   registerFieldRoutes(app, ctx);
   registerAppealRoutes(app, ctx);
   registerAlertRoutes(app, ctx);
+  for (const p of plugins) p.routes?.(app, ctx, ctx.ext[p.name]);
   return app;
 }

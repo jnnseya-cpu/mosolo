@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { Shell } from './components/Shell';
 import { Splash } from './pages/Offline';
+import { MODULE_ROUTES } from './modules/registry';
 
 const Home = lazy(() => import('./pages/Home'));
 const Registration = lazy(() => import('./pages/Registration'));
@@ -38,6 +39,7 @@ export function App() {
           <Route path="/terrain" element={<Field />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="/ia" element={<AIInbox />} />
+          {MODULE_ROUTES.map((m) => <Route key={m.path} path={m.path} element={<m.element />} />)}
           <Route path="/hors-ligne" element={<OfflinePage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
