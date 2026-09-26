@@ -7,6 +7,7 @@ import type { AIRecommendation } from '@mosolo/shared';
 import type { AuditLog } from '../../core/audit.js';
 import type { AiActor, User } from '../../core/auth.js';
 import type { Clock } from '../../core/clock.js';
+import { canonicalJson, sha256Hex } from '../../core/crypto.js';
 import { conflict, notFound } from '../../core/errors.js';
 import { assertAiMay, authorize } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
@@ -57,7 +58,11 @@ export class AIService {
     });
     this.audit.append({
       actor: { kind: 'ai', id: ai.id }, action: 'ai.insight_generated', resourceType: 'ai_recommendation', resourceId: rec.id,
-      details: { context, autonomy: rec.autonomy, modelVersion: rec.modelVersion },
+      // Journal IA (§ 23.3) : version du modèle et de la consigne, empreintes de l'entrée et de la sortie, données citées.
+      details: {
+        context, autonomy: rec.autonomy, modelVersion: rec.modelVersion, promptVersion: `${context}-v1`,
+        inputHash: sha256Hex(canonicalJson(this.snapshot())), outputHash: sha256Hex(canonicalJson(draft)), sources: draft.sources,
+      },
     });
     return rec;
   }
