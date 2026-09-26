@@ -12,7 +12,11 @@ export type ObjStatus = 'VERIFIE' | 'DECLARE' | 'OBSERVE' | 'CONTESTE';
 export type DueStatus = 'A_PAYER' | 'SOLDEE' | 'EN_RETARD' | 'SANS_ACTE' | 'CONTESTEE';
 
 export interface VObject { label: string; ref: string; detail: string; status: ObjStatus }
-export interface VObligation { label: string; period: string; amount?: number; due?: string; status: DueStatus; basis: string }
+export interface VObligation {
+  label: string; period: string; amount?: number; due?: string; status: DueStatus; basis: string;
+  /** § 20.3 : commune du fait générateur (lieu du bien, de l'emplacement, de la zone), jamais l'adresse du contribuable. */
+  commune?: string;
+}
 export interface VReceipt { code: string; label: string; date: string; amount: number }
 
 export interface Vertical {
@@ -73,8 +77,8 @@ export const VERTICALS: Vertical[] = [
       { label: 'Immeuble à usage mixte', ref: 'KIN-KAL-11-0457', detail: 'Kalamu · Matonge · rang 2', status: 'DECLARE' },
     ],
     obligations: [
-      { label: 'Impôt foncier', period: 'Exercice 2027', amount: 216000, due: '2027-02-01', status: 'SOLDEE', basis: 'Règle IF-RES v3 — ACTIVE' },
-      { label: 'Impôt foncier', period: 'Exercice 2027', amount: 540000, due: '2027-02-01', status: 'A_PAYER', basis: 'Règle IF-MIX v2 — ACTIVE' },
+      { label: 'Impôt foncier', period: 'Exercice 2027', amount: 216000, due: '2027-02-01', status: 'SOLDEE', commune: 'Limete', basis: 'Règle IF-RES v3 — ACTIVE' },
+      { label: 'Impôt foncier', period: 'Exercice 2027', amount: 540000, due: '2027-02-01', status: 'A_PAYER', commune: 'Kalamu', basis: 'Règle IF-MIX v2 — ACTIVE' },
     ],
     services: [
       { label: 'Déclarer un nouveau bien', hint: 'Statut « déclaré » jusqu’à vérification' },
@@ -96,8 +100,8 @@ export const VERTICALS: Vertical[] = [
       { label: 'Local commercial — rez-de-chaussée', ref: 'BAIL-2026-01207', detail: 'Gombe · boulevard du 30 Juin', status: 'DECLARE' },
     ],
     obligations: [
-      { label: 'Impôt sur les revenus locatifs', period: 'Janvier 2027', amount: 66000, due: '2027-02-15', status: 'A_PAYER', basis: 'Règle IRL v4 — ACTIVE' },
-      { label: 'Impôt sur les revenus locatifs', period: 'Décembre 2026', amount: 66000, due: '2027-01-15', status: 'SOLDEE', basis: 'Règle IRL v4 — ACTIVE' },
+      { label: 'Impôt sur les revenus locatifs', period: 'Janvier 2027', amount: 66000, due: '2027-02-15', status: 'A_PAYER', commune: 'Ngaliema', basis: 'Règle IRL v4 — ACTIVE' },
+      { label: 'Impôt sur les revenus locatifs', period: 'Décembre 2026', amount: 66000, due: '2027-01-15', status: 'SOLDEE', commune: 'Ngaliema', basis: 'Règle IRL v4 — ACTIVE' },
     ],
     services: [
       { label: 'Enregistrer un bail', hint: 'Bailleur et locataire confirment chacun' },
@@ -118,7 +122,7 @@ export const VERTICALS: Vertical[] = [
       { label: 'Dépôt secondaire', ref: 'ETB-KIN-LMT-01877', detail: 'Limete · 7e rue', status: 'OBSERVE' },
     ],
     obligations: [
-      { label: 'Déclaration d’activité annuelle', period: '2027', due: '2027-03-31', status: 'A_PAYER', amount: 150000, basis: 'Règle ACT-DEC v1 — À VÉRIFIER : non exigible tant que non ACTIVE' },
+      { label: 'Déclaration d’activité annuelle', period: '2027', due: '2027-03-31', status: 'A_PAYER', amount: 150000, commune: 'Gombe', basis: 'Règle ACT-DEC v1 — À VÉRIFIER : non exigible tant que non ACTIVE' },
     ],
     services: [
       { label: 'Déclarer une activité', hint: 'Une seule saisie pour tous les services' },
@@ -155,7 +159,7 @@ export const VERTICALS: Vertical[] = [
     vigilance: 'Acte de zonage et barème requis : aucun ticket vendu avant publication.',
     objectsTitle: 'Mes véhicules enregistrés',
     objects: [{ label: 'Véhicule particulier', ref: 'KN-0932-AF', detail: 'Plaque associée au compte', status: 'VERIFIE' }],
-    obligations: [{ label: 'Stationnement payant — zone Gombe centre', period: 'Barème en attente', status: 'SANS_ACTE', basis: 'Règle PARK-Z1 — ACTE REQUIS' }],
+    obligations: [{ label: 'Stationnement payant — zone Gombe centre', period: 'Barème en attente', status: 'SANS_ACTE', commune: 'Gombe', basis: 'Règle PARK-Z1 — ACTE REQUIS' }],
     services: [
       { label: 'Consulter les zones et horaires', hint: 'Carte publiée avec l’acte de zonage' },
       { label: 'Contester un constat', hint: 'Aucune fourrière décidée par un algorithme' },
@@ -174,8 +178,8 @@ export const VERTICALS: Vertical[] = [
       { label: 'Enseigne lumineuse', ref: 'PUB-KAL-0311', detail: 'Kalamu · avenue Victoire', status: 'OBSERVE' },
     ],
     obligations: [
-      { label: 'Taxe sur la publicité', period: '2027', amount: 1200000, due: '2027-03-31', status: 'A_PAYER', basis: 'Règle PUB-PAN v2 — ACTIVE' },
-      { label: 'Taxe sur la publicité', period: '2027', amount: 180000, due: '2027-03-31', status: 'CONTESTEE', basis: 'Règle PUB-ENS v2 — ACTIVE' },
+      { label: 'Taxe sur la publicité', period: '2027', amount: 1200000, due: '2027-03-31', status: 'A_PAYER', commune: 'Gombe', basis: 'Règle PUB-PAN v2 — ACTIVE' },
+      { label: 'Taxe sur la publicité', period: '2027', amount: 180000, due: '2027-03-31', status: 'CONTESTEE', commune: 'Kalamu', basis: 'Règle PUB-ENS v2 — ACTIVE' },
     ],
     services: [
       { label: 'Demander une autorisation d’affichage', hint: 'Emplacement, format, durée' },
@@ -210,8 +214,8 @@ export const VERTICALS: Vertical[] = [
     objectsTitle: 'Mes emplacements',
     objects: [{ label: 'Étal — pagne et tissus', ref: 'MCH-GMB-C-1044', detail: 'Marché central · rangée C', status: 'VERIFIE' }],
     obligations: [
-      { label: 'Droit d’étal — mensuel', period: 'Février 2027', amount: 15000, due: '2027-02-05', status: 'A_PAYER', basis: 'Règle MCH-ETAL v1 — ACTIVE' },
-      { label: 'Droit d’étal — mensuel', period: 'Janvier 2027', amount: 15000, due: '2027-01-05', status: 'SOLDEE', basis: 'Règle MCH-ETAL v1 — ACTIVE' },
+      { label: 'Droit d’étal — mensuel', period: 'Février 2027', amount: 15000, due: '2027-02-05', status: 'A_PAYER', commune: 'Gombe', basis: 'Règle MCH-ETAL v1 — ACTIVE' },
+      { label: 'Droit d’étal — mensuel', period: 'Janvier 2027', amount: 15000, due: '2027-01-05', status: 'SOLDEE', commune: 'Gombe', basis: 'Règle MCH-ETAL v1 — ACTIVE' },
     ],
     services: [
       { label: 'Payer au jour, à la semaine ou au mois', hint: 'USSD, Mobile Money, point agréé' },
@@ -254,7 +258,7 @@ export const VERTICALS: Vertical[] = [
     vigilance: 'Assiette déclarative sur billetterie : rapprochement déclaration ↔ contrôle.',
     objectsTitle: 'Mes événements',
     objects: [{ label: 'Concert — Stade des Martyrs', ref: 'EVT-2027-0042', detail: '14 février 2027 · jauge déclarée 38 000', status: 'DECLARE' }],
-    obligations: [{ label: 'Droit sur les spectacles', period: 'EVT-2027-0042', amount: 2400000, due: '2027-02-21', status: 'A_PAYER', basis: 'Règle EVT-SPEC v1 — À VÉRIFIER : non exigible tant que non ACTIVE' }],
+    obligations: [{ label: 'Droit sur les spectacles', period: 'EVT-2027-0042', amount: 2400000, due: '2027-02-21', status: 'A_PAYER', commune: 'Lingwala', basis: 'Règle EVT-SPEC v1 — À VÉRIFIER : non exigible tant que non ACTIVE' }],
     services: [
       { label: 'Demander une autorisation', hint: 'Pièces en ligne, suivi du dossier' },
       { label: 'Déclarer la billetterie', hint: 'Import du fichier RakaPay ou d’un autre opérateur' },
@@ -269,7 +273,7 @@ export const VERTICALS: Vertical[] = [
     vigilance: 'Quitus et droits liés aux chantiers : l’un ne se substitue pas à l’autre.',
     objectsTitle: 'Mes chantiers',
     objects: [{ label: 'Immeuble R+4 — logements', ref: 'CHT-NGL-2026-117', detail: 'Ngaliema · Ma Campagne · en cours', status: 'VERIFIE' }],
-    obligations: [{ label: 'Droits liés au chantier', period: 'Phase gros œuvre', amount: 3600000, due: '2027-04-30', status: 'A_PAYER', basis: 'Règle CHT-DRT v2 — ACTIVE' }],
+    obligations: [{ label: 'Droits liés au chantier', period: 'Phase gros œuvre', amount: 3600000, due: '2027-04-30', status: 'A_PAYER', commune: 'Ngaliema', basis: 'Règle CHT-DRT v2 — ACTIVE' }],
     services: [
       { label: 'Déposer une demande', hint: 'Plans et pièces en ligne' },
       { label: 'Demander le quitus', hint: 'Après visite de conformité' },
@@ -300,8 +304,8 @@ export const VERTICALS: Vertical[] = [
     objectsTitle: 'Mes dossiers',
     objects: [{ label: 'Arriéré impôt foncier 2025', ref: 'REC-2026-08812', detail: 'Échéancier proposé en 4 mensualités', status: 'VERIFIE' }],
     obligations: [
-      { label: 'Échéance 2/4', period: 'Février 2027', amount: 125000, due: '2027-02-28', status: 'A_PAYER', basis: 'Échéancier REC-2026-08812 — accordé' },
-      { label: 'Échéance 1/4', period: 'Janvier 2027', amount: 125000, due: '2027-01-31', status: 'SOLDEE', basis: 'Échéancier REC-2026-08812 — accordé' },
+      { label: 'Échéance 2/4', period: 'Février 2027', amount: 125000, due: '2027-02-28', status: 'A_PAYER', commune: 'Limete', basis: 'Échéancier REC-2026-08812 — accordé' },
+      { label: 'Échéance 1/4', period: 'Janvier 2027', amount: 125000, due: '2027-01-31', status: 'SOLDEE', commune: 'Limete', basis: 'Échéancier REC-2026-08812 — accordé' },
     ],
     services: [
       { label: 'Demander un échéancier', hint: 'Réponse motivée' },

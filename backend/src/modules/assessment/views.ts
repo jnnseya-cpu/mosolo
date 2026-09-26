@@ -8,7 +8,7 @@ export function obligationSummary(o: Obligation, access: Access) {
     entity: o.entity, status: o.status, dueDate: o.dueDate, ruleCode: o.ruleCode, ruleVersion: o.ruleVersion,
     ...(o.supersedes ? { supersedes: o.supersedes } : {}), ...(o.supersededBy ? { supersededBy: o.supersededBy } : {}),
   };
-  return access === 'full' ? { ...base, amount: o.amount, createdAt: o.createdAt } : { ...base, amount: null, masked: true };
+  return access === 'full' ? { ...base, amount: o.amount, createdAt: o.createdAt, attribution: o.attribution } : { ...base, amount: null, masked: true };
 }
 
 export function obligationDetail(o: Obligation) {

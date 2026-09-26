@@ -36,6 +36,7 @@ function ObligationCard({ o }: { o: VObligation }) {
       {open && (
         <dl className="kv kv-dense vx-due-detail">
           <div><dt>Règle appliquée</dt><dd>{o.basis}</dd></div>
+          {o.commune && <div><dt>Recette comptée pour</dt><dd>{o.commune} <span className="small muted">— commune où se trouve le bien, l’emplacement ou l’activité, pas celle de votre domicile</span></dd></div>}
           <div><dt>Effet</dt><dd>{notExecutable ? 'Aucun montant exigible tant que la règle n’est pas ACTIVE (quatre visas).' : 'Montant exigible à l’échéance ; contestation possible à tout moment.'}</dd></div>
         </dl>
       )}

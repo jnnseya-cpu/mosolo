@@ -2,7 +2,7 @@
  * Orchestrateur de paiement (D5, ch. 18) : MOSOLO émet des références et reçoit des confirmations signées ;
  * il ne détient jamais les fonds. Le compte bénéficiaire est un ALIAS résolu dans le coffre.
  */
-import { Money, PRIMARY_CURRENCY, canTransition, type CurrencyCode, type MoneyJSON, type PaymentStatus } from '@mosolo/shared';
+import { Money, PRIMARY_CURRENCY, UNATTRIBUTED_COMMUNE, canTransition, type CurrencyCode, type MoneyJSON, type PaymentStatus, type TerritorialAttribution } from '@mosolo/shared';
 import { z } from 'zod';
 import type { AuditLog } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
@@ -59,6 +59,19 @@ export interface PaymentOrder {
   settledAt?: string;
   reconciledAt?: string;
   ledgerEntryIds: string[];
+  /** Copie du rattachement territorial de l'obligation (§ 20.3) : la recette compte pour cette commune. */
+  attribution?: TerritorialAttribution;
+}
+
+/** Recettes réelles par commune du fait générateur (agrégats seulement, par devise, niveaux jamais additionnés). */
+export interface CommuneRevenue {
+  commune: string;
+  /** Paiements confirmés (CONFIRME, REGLE, RAPPROCHE). */
+  confirmedCount: number;
+  /** Montant payé, confirmé par le prestataire (inclut le rapproché). */
+  paid: MoneyJSON[];
+  /** Dont montant rapproché avec le relevé du compte public : seul chiffre de recette arrivée. */
+  reconciled: MoneyJSON[];
 }
 
 export interface ProviderConfirmation {
@@ -286,6 +299,7 @@ export class PaymentService {
       channel: input.channel,
       // Montant = solde de l'obligation, jamais saisi par le client.
       amount: obligation.amount,
+      attribution: obligation.attribution,
       indicativeAmount: this.indicative(obligation.amount, input.displayCurrency),
       beneficiaryAlias,
       expiresAt: new Date(now.getTime() + REFERENCE_VALIDITY_HOURS * HOUR_MS).toISOString(),
@@ -751,6 +765,28 @@ export class PaymentService {
       details: { evidenceId: record.id, caseRef: input.caseRef, provider: connector.id, legalEffect: 'AUCUN' },
     });
     return record;
+  }
+
+  /** § 20.3 : regroupement par commune du fait générateur ; sans lieu établi ⇒ « NON_ATTRIBUE », jamais deviné. */
+  revenueByCommune(): CommuneRevenue[] {
+    const rows = new Map<string, { confirmedCount: number; paid: Map<string, Money>; reconciled: Map<string, Money> }>();
+    const add = (m: Map<string, Money>, v: MoneyJSON) => {
+      const cur = m.get(v.currency);
+      m.set(v.currency, cur ? cur.add(Money.fromJSON(v)) : Money.fromJSON(v));
+    };
+    for (const o of this.orders.all()) {
+      if (o.status !== 'CONFIRME' && o.status !== 'REGLE' && o.status !== 'RAPPROCHE') continue;
+      const commune = o.attribution?.commune ?? UNATTRIBUTED_COMMUNE;
+      const row = rows.get(commune) ?? { confirmedCount: 0, paid: new Map(), reconciled: new Map() };
+      row.confirmedCount += 1;
+      add(row.paid, o.amount);
+      if (o.status === 'RAPPROCHE') add(row.reconciled, o.amount);
+      rows.set(commune, row);
+    }
+    const json = (m: Map<string, Money>) => [...m.values()].map((x) => x.toJSON());
+    return [...rows.entries()]
+      .map(([commune, r]) => ({ commune, confirmedCount: r.confirmedCount, paid: json(r.paid), reconciled: json(r.reconciled) }))
+      .sort((a, b) => (a.commune === UNATTRIBUTED_COMMUNE ? 1 : b.commune === UNATTRIBUTED_COMMUNE ? -1 : a.commune.localeCompare(b.commune, 'fr')));
   }
 
   byReference(ref: string): PaymentOrder | undefined {

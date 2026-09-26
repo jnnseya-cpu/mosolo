@@ -3,7 +3,7 @@
  * Déterministe : mêmes règle, version, entrées ⇒ même montant. Chaque obligation fige la version de règle
  * appliquée et porte son explication complète (AC-ASS-01). Aucune obligation sans règle exécutable (AC-LEG-01).
  */
-import { isRuleExecutable, Money, type MoneyJSON, type ObligationStatus, type RevenueCategory } from '@mosolo/shared';
+import { isRuleExecutable, Money, type MoneyJSON, type ObligationStatus, type RevenueCategory, type TerritorialAttribution } from '@mosolo/shared';
 import type { AuditLog } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { DAY_MS, isoDate, type Clock } from '../../core/clock.js';
@@ -82,6 +82,8 @@ export interface Obligation {
   supersedes?: string;
   supersededBy?: string;
   appealId?: string;
+  /** Commune du fait générateur (lieu de l'objet), figée à la liquidation (§ 20.3). */
+  attribution: TerritorialAttribution;
 }
 
 export interface CalculateInput {
@@ -185,11 +187,26 @@ export class AssessmentService {
     return { trace, obligation };
   }
 
+  /**
+   * Règle d'attribution (§ 20.3) : commune où se situe l'objet taxé, jamais l'adresse du contribuable.
+   * Objet sans commune établie ⇒ NON_LOCALISE (commune null), sans aucune déduction.
+   */
+  private attributeFromObject(objectId: string, now: Date): TerritorialAttribution {
+    const o = this.objects.get(objectId);
+    const commune = typeof o.commune === 'string' && o.commune.trim() ? o.commune.trim() : null;
+    return commune
+      ? { commune, ...(o.quartier ? { quartier: o.quartier } : {}), basis: 'LIEU_OBJET', sourceId: o.id, attributedAt: now.toISOString() }
+      : { commune: null, basis: 'NON_LOCALISE', sourceId: o.id, attributedAt: now.toISOString() };
+  }
+
   private issue(p: {
     taxpayerId: string; objectId: string; rule: { id: string; code: string; version: number; revenueCategory: RevenueCategory; label: string; administeringEntity: string; beneficiaryAccountAlias: string; currency: string };
     amount: MoneyJSON; dueDate: string; createdBy: string; explanation: ObligationExplanation; trace: AssessmentTrace; supersedes?: string; appealId?: string;
+    /** Repris tel quel lors d'une rectification : le fait générateur n'a pas changé de lieu. */
+    attribution?: TerritorialAttribution;
   }): Obligation {
     const now = this.clock.now();
+    const attribution = p.attribution ?? this.attributeFromObject(p.objectId, now);
     const id = this.ids.next(`OBL-${now.getUTCFullYear()}-${p.rule.code}`);
     const zero = Money.fromJSON(p.amount).isZero();
     const ledgerEntry = zero
@@ -219,10 +236,11 @@ export class AssessmentService {
       ...(ledgerEntry ? { ledgerEntryId: ledgerEntry.id } : {}),
       ...(p.supersedes ? { supersedes: p.supersedes } : {}),
       ...(p.appealId ? { appealId: p.appealId } : {}),
+      attribution,
     });
     this.audit.append({
       actor: { kind: 'system', id: 'moteur-liquidation' }, action: p.supersedes ? 'assessment.rectified' : 'assessment.issued',
-      resourceType: 'obligation', resourceId: id, details: { ruleId: p.rule.id, ruleVersion: p.rule.version, amount: p.amount, supersedes: p.supersedes ?? null },
+      resourceType: 'obligation', resourceId: id, details: { ruleId: p.rule.id, ruleVersion: p.rule.version, amount: p.amount, supersedes: p.supersedes ?? null, commune: attribution.commune, attributionBasis: attribution.basis },
     });
     const tp = this.taxpayers.get(p.taxpayerId);
     this.comms.publish(p.supersedes ? 'assessment.rectified' : 'assessment.issued', [taxpayerRecipient(tp)], { reference: id }, { entity: p.rule.administeringEntity });
@@ -268,6 +286,7 @@ export class AssessmentService {
       trace: { ...original.trace, result: amount, computedAt: now },
       supersedes: original.id,
       appealId: ctx.appealId,
+      attribution: original.attribution,
     });
     this.obligations.update({ ...original, status: 'ANNULEE', supersededBy: rectified.id });
     return rectified;

@@ -79,6 +79,11 @@ function Explanation({ id }: { id: string }) {
         <div><dt>{tr('explain.amount')}</dt><dd>{(ex.amount ?? d.amount) ? <MoneyText money={(ex.amount ?? d.amount)!} indicative={asMoney(d.indicativeAmount)} /> : '—'}</dd></div>
         <div><dt>{tr('taxpayer.dueDate')}</dt><dd>{fmtDate(ex.dueDate ?? d.dueDate)}</dd></div>
         <div><dt>{tr('taxpayer.appealPath')}</dt><dd>{ex.appealPath ?? '—'}</dd></div>
+        {d.attribution && (
+          <div><dt>{tr('attribution.label')}</dt><dd>{d.attribution.commune
+            ? <>{d.attribution.commune}{d.attribution.quartier ? ` · ${d.attribution.quartier}` : ''} <span className="small muted">— {tr(`attribution.basis.${d.attribution.basis}` as UIKey)}</span></>
+            : tr('attribution.none')}</dd></div>
+        )}
       </dl>
       <p className="small muted">{tr('explain.note')}</p>
     </div>

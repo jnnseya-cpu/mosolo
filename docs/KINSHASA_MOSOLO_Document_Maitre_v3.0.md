@@ -1970,6 +1970,36 @@ Le grand livre (module 59) enregistre chaque événement financier par des écri
 
 Clôture quotidienne signée (hachage de la journée chaîné à la précédente), comptes d'attente (suspens) datés et justifiés, interface d'export vers la comptabilité publique du Trésor provincial. **Aucune correction sans contre-écriture liée à l'original.**
 
+## 20.3 Attribution territoriale des recettes
+
+**Règle.** Une recette est comptée pour la **commune du fait générateur** : la commune où se trouve l'objet taxé ou celle où le service payant est consommé. Elle n'est **jamais** comptée d'après l'adresse du contribuable, ni d'après le lieu où il paie (guichet, agence, téléphone).
+
+| Recette | Lieu qui détermine la commune | Base d'attribution |
+|---|---|---|
+| Impôt foncier | Parcelle ou immeuble | `LIEU_OBJET` |
+| Impôt sur les revenus locatifs | Unité locative louée | `LIEU_OBJET` |
+| Droit d'étal, occupation du domaine public | Emplacement au marché ou sur la voie publique | `LIEU_OBJET` |
+| Taxe sur la publicité | Dispositif publicitaire | `LIEU_OBJET` |
+| Obligations d'une entreprise | Établissement concerné (une ligne par établissement) | `LIEU_OBJET` |
+| Chantier, quitus | Terrain du chantier | `LIEU_OBJET` |
+| Événement | Lieu de l'événement | `LIEU_OBJET` |
+| Site de télécommunications | Site | `LIEU_OBJET` |
+| Stationnement | Zone de stationnement utilisée | `ZONE_SERVICE` |
+| Ticket de transport RakaPay | Station de départ | `STATION_DEPART` |
+| Pass wewa | Station d'attache enregistrée du conducteur | `STATION_DEPART` |
+| Recouvrement d'un arriéré | Commune de l'obligation d'origine | Reprise de l'obligation |
+| Recette sans lieu établi | Aucune : « non attribuée » | `NON_LOCALISE` |
+
+**Exemple.** Un contribuable domicilié à Bandalungwa qui stationne à Masina et paie un étal au marché de Kalamu produit une recette comptée pour Masina, une recette comptée pour Kalamu, et, s'il est propriétaire à Bandalungwa, un impôt foncier compté pour Bandalungwa. Il conserve un seul compte et voit tous ses paiements, quelle que soit la commune.
+
+**Garanties.**
+
+- **Figée à la liquidation.** La commune est enregistrée sur l'obligation au moment où elle est émise, puis recopiée sur chaque ordre de paiement. Une correction ultérieure de la localisation d'un objet ne réécrit pas les obligations déjà émises ; une rectification reprend la commune d'origine. Toute modification passe par une rectification tracée (§ 22.2).
+- **Jamais devinée.** Un objet sans commune établie produit une recette « non attribuée » (`NON_LOCALISE`), affichée comme telle. Elle n'est jamais rattachée par défaut à l'adresse du contribuable ou de l'agent. La réduction de cette part est un indicateur de qualité du recensement.
+- **Agrégats seulement.** Le tableau de bord présente, par commune, le nombre de paiements confirmés, le montant payé et, **dont**, le montant rapproché avec le relevé du compte public. Ces deux niveaux ne s'additionnent pas (§ 26.2), et aucun nom de contribuable n'y figure.
+
+**« Compté pour » n'est pas « versé à ».** L'argent est toujours versé au compte public de l'entité bénéficiaire désignée par la règle (§ 18.1), en général un compte de la Province. L'attribution territoriale sert à la mesure (tableau de bord, carte, publication trimestrielle), au pilotage des campagnes et à la comparaison entre communes. Une éventuelle part reversée aux communes (entités territoriales décentralisées) ne peut être calculée qu'à partir d'un texte en vigueur. Aucune clé de répartition n'est paramétrée avant lecture de l'Ordonnance-loi n° 18/004 et des actes provinciaux applicables (§ 6.3) [À VÉRIFIER] [ACTE REQUIS].
+
 # 21. Recouvrement et exécution
 
 ## 21.1 Principes

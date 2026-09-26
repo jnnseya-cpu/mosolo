@@ -121,6 +121,7 @@ function BuyPass() {
           <dl className="kv">
             <div><dt>Montant</dt><dd><MoneyText money={cdf(DAY_EXAMPLE * d.days)} /> <span className="small muted">[EXEMPLE]</span></dd></div>
             <div><dt>Bénéficiaire</dt><dd>Compte public des recettes provinciales</dd></div>
+            <div><dt>Recette comptée pour</dt><dd>Kalamu <span className="small muted">— commune de la station d’attache</span></dd></div>
             <div><dt>Statut</dt><dd><StatusBadge tone="warning" label="En attente de paiement" /></dd></div>
           </dl>
           <ol className="steps">

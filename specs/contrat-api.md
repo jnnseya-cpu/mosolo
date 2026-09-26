@@ -26,7 +26,7 @@ Contrat partagé entre `backend/` et `frontend/`. Le frontend n'appelle le backe
 | POST | `/v1/legal-rules/:id/approve` | R13/R14/R15/R16 | `{role}` ; quatre personnes distinctes ; la 4e approbation publie ; activation à la date d'effet |
 | POST | `/v1/assessments/calculate` | moteur, contrôleur | `{ruleId, taxpayerId, objectId, inputs, simulate}` → trace ; si `simulate=false` et règle non exécutable → 422 `RULE_NOT_EXECUTABLE` |
 | GET | `/v1/obligations?taxpayerId=` | selon droits | Obligations |
-| GET | `/v1/obligations/:id` | selon droits | Obligation + explication (règle, version, base légale, formule, entrées, montant, échéance, voie de recours) |
+| GET | `/v1/obligations/:id` | selon droits | Obligation + explication (règle, version, base légale, formule, entrées, montant, échéance, voie de recours) + `attribution` (§ 20.3 : commune du fait générateur, figée à la liquidation) |
 | POST | `/v1/obligations/:id/payment-orders` | contribuable, mandataire, guichet | `Idempotency-Key` ; `{channel, displayCurrency?, provider?}` → `{paymentReference, amount, indicativeAmount, beneficiaryAlias, expiresAt, status, ussdInstructions}` ; avec `provider: 'bitripay'\|'koda'` (canaux `MOBILE_MONEY`, `QR` seulement), en plus `{provider, providerIntentId, checkoutUrl, qrPayload, sandbox}` ; prestataire injoignable → 502 `PROVIDER_UNAVAILABLE` (aucun ordre créé) |
 | POST | `/v1/providers/:provider/callbacks` | prestataire | Signature `x-signature` (HMAC-SHA256 du corps brut), `x-nonce`, `x-timestamp` ; `{providerTxnId, paymentReference, amount, status, completedAt}` → quittance provisoire |
 | POST | `/v1/providers/koda/webhooks` | prestataire KODA | Corps brut signé : `x-koda-signature` = HMAC-SHA256 hex ; `payment.verified`, `payment.verified.late` → `CONFIRME` + quittance provisoire ; rejeu d'événement → 200 sans effet ; signature invalide → 401 + alerte → `{received, results[]}` |
@@ -48,7 +48,7 @@ Contrat partagé entre `backend/` et `frontend/`. Le frontend n'appelle le backe
 | POST | `/v1/ai/insights` | agents | `{context: 'governor'|'rental'|'treasury'|'communications', subjectId?}` → `AIRecommendation` |
 | GET | `/v1/ai/recommendations` | agents | Liste |
 | POST | `/v1/ai/recommendations/:id/decide` | agents habilités | `{decision: 'ACCEPTEE'|'REJETEE'|'MODIFIEE', reason}` |
-| GET | `/v1/dashboards/governor` | R01, R02, R05 | Tuiles, communes, catégories, échelle, tendance, scénarios, alertes, actions (données `example: true`) |
+| GET | `/v1/dashboards/governor` | R01, R02, R05 | Tuiles, communes, catégories, échelle, tendance, scénarios, alertes, actions (données `example: true`) ; `liveByCommune` : recettes réelles par commune du fait générateur (`example: false`) |
 | GET | `/v1/exchange-rates/:date` | public | Taux officiels (démo, source déclarée) |
 | POST | `/v1/field-sync/batches` | terminal enrôlé | Lot signé (HMAC clé d'appareil) → acceptés, conflits |
 | POST | `/v1/appeals` · `/v1/appeals/:id/decide` | contribuable ; R21 (≠ instructeur) | Réclamation, décision |

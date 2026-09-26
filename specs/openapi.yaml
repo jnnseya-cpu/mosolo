@@ -1482,6 +1482,18 @@ components:
           oneOf:
             - { $ref: '#/components/schemas/ObligationDetail' }
             - { type: 'null' }
+    TerritorialAttribution:
+      type: object
+      description: |
+        § 20.3 — commune du fait générateur (lieu de l'objet ou du service), jamais l'adresse du contribuable ni le lieu
+        du paiement. Figée à la liquidation ; `commune: null` ⇔ `basis: NON_LOCALISE` (recette « non attribuée », jamais devinée).
+      required: [commune, basis, attributedAt]
+      properties:
+        commune: { type: [string, 'null'] }
+        quartier: { type: string }
+        basis: { type: string, enum: [LIEU_OBJET, ZONE_SERVICE, STATION_DEPART, NON_LOCALISE] }
+        sourceId: { type: string }
+        attributedAt: { type: string, format: date-time }
     ObligationStatus:
       type: string
       enum: [EMISE, EXIGIBLE, PARTIELLEMENT_PAYEE, SOLDEE, EN_RETARD, CONTESTEE, ANNULEE, ADMISE_EN_NON_VALEUR]
@@ -1508,6 +1520,7 @@ components:
         supersedes: { type: string }
         supersededBy: { type: string }
         createdAt: { type: string, format: date-time }
+        attribution: { $ref: '#/components/schemas/TerritorialAttribution' }
     ObligationExplanation:
       type: object
       required: [rule, legalBasis, baseDefinition, base, formula, rates, amount, dueDate, appealPath]
@@ -2078,6 +2091,23 @@ components:
       type: object
       required: [example, tiles, ladder, byCommune, byCategory, trend, scenarios, criticalAlerts, actions]
       properties:
+        liveByCommune:
+          type: object
+          description: Recettes RÉELLES par commune du fait générateur (§ 20.3) ; « payé » inclut « rapproché », jamais additionnés.
+          properties:
+            example: { type: boolean, const: false }
+            rule: { type: string }
+            note: { type: string }
+            rows:
+              type: array
+              items:
+                type: object
+                required: [commune, confirmedCount, paid, reconciled]
+                properties:
+                  commune: { type: string, description: 'Nom de commune, ou NON_ATTRIBUE' }
+                  confirmedCount: { type: integer }
+                  paid: { type: array, items: { $ref: '#/components/schemas/MoneyJSON' } }
+                  reconciled: { type: array, items: { $ref: '#/components/schemas/MoneyJSON' } }
         example: { type: boolean, const: true }
         exampleNotice: { type: string }
         currency: { type: string, const: CDF }

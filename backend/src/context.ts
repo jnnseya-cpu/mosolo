@@ -132,7 +132,7 @@ export function createContext(opts: AppOptions = {}) {
     activeRules: rules.rules.find((r) => r.status === 'ACTIVE').length,
     securityAlerts: alerts.alerts.count(),
     pendingBeneficiaryChanges: vault.requests.find((r) => r.status !== 'EFFECTIF').length,
-  }));
+  }), () => payments.revenueByCommune());
 
   return {
     clock, secrets, users, audit, idempotency, comms, alerts, fx, taxpayers, objects, vault, rules, ledger, connectors,

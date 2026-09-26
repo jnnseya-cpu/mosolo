@@ -93,3 +93,25 @@ export function hasIncompatibility(roles: RoleCode[]): [RoleCode, RoleCode] | nu
   const set = new Set(roles);
   return INCOMPATIBLE_ROLES.find(([a, b]) => set.has(a) && set.has(b)) ?? null;
 }
+
+/**
+ * Rattachement territorial d'une recette (§ 20.3). Règle : la commune du FAIT GÉNÉRATEUR — lieu de l'objet taxé
+ * (parcelle, unité locative, étal, dispositif, établissement, chantier) ou lieu où le service est consommé
+ * (zone de stationnement, station de départ d'un ticket). Jamais l'adresse du contribuable ni le lieu du paiement.
+ * Figé à la liquidation ; une correction de localisation passe par rectification tracée, jamais par réécriture.
+ */
+export const ATTRIBUTION_BASES = ['LIEU_OBJET', 'ZONE_SERVICE', 'STATION_DEPART', 'NON_LOCALISE'] as const;
+export type AttributionBasis = (typeof ATTRIBUTION_BASES)[number];
+
+export interface TerritorialAttribution {
+  /** null si le lieu n'est pas établi : la recette est alors « non attribuée », jamais devinée. */
+  commune: string | null;
+  quartier?: string;
+  basis: AttributionBasis;
+  /** Objet, zone ou station d'où provient le rattachement. */
+  sourceId?: string;
+  attributedAt: string;
+}
+
+/** Libellé de regroupement d'une recette sans lieu établi. */
+export const UNATTRIBUTED_COMMUNE = 'NON_ATTRIBUE';

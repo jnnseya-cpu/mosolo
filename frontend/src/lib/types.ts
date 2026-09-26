@@ -6,7 +6,7 @@
 import type {
   MoneyJSON, CurrencyCode, LanguageCode, MapStatusColor, ObligationStatus, PaymentStatus, ReceiptStatus,
   PublicReceiptCheck, ProbativeStatus, VerificationLevel, RuleSheet, AIRecommendation, Channel, Severity,
-  CommunicationEvent, ResidentialSituation,
+  CommunicationEvent, ResidentialSituation, TerritorialAttribution,
 } from '@mosolo/shared';
 
 export interface DemoUser { id: string; name: string; roles: string[]; entity?: string; taxpayerId?: string; territory?: string[] }
@@ -19,6 +19,8 @@ export interface FiscalObject {
 export interface Obligation {
   id: string; label?: string; ruleCode?: string; ruleId?: string; period?: string; amount: MoneyJSON;
   indicativeAmount?: MoneyJSON | { amount: MoneyJSON; rate?: string }; dueDate?: string; status: ObligationStatus | string; objectId?: string;
+  /** § 20.3 : commune du fait générateur (lieu de l'objet), jamais l'adresse du contribuable. */
+  attribution?: TerritorialAttribution;
 }
 
 export interface Receipt {

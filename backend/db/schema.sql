@@ -200,9 +200,16 @@ CREATE TABLE obligation (
   supersedes                 TEXT REFERENCES obligation(id),
   superseded_by              TEXT REFERENCES obligation(id),
   appeal_id                  TEXT,
+  -- § 20.3 : commune du fait générateur (lieu de l'objet), figée à la liquidation ; NULL = non localisé
+  attribution_commune        TEXT,
+  attribution_quartier       TEXT,
+  attribution_basis          TEXT NOT NULL CHECK (attribution_basis IN ('LIEU_OBJET','ZONE_SERVICE','STATION_DEPART','NON_LOCALISE')),
+  attribution_source_id      TEXT,
+  CHECK ((attribution_basis = 'NON_LOCALISE') = (attribution_commune IS NULL)),
   created_by                 TEXT NOT NULL,
   created_at                 TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE INDEX obligation_attribution_commune_idx ON obligation (attribution_commune);
 -- Une obligation n'est jamais supprimée : rectification par obligation liée (supersedes).
 CREATE TRIGGER obligation_no_delete BEFORE DELETE ON obligation FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
@@ -258,6 +265,7 @@ CREATE TABLE payment_order (
   confirmed_at        TIMESTAMPTZ,
   settled_at          TIMESTAMPTZ,
   reconciled_at       TIMESTAMPTZ,
+  attribution_commune TEXT,                -- copie de l'obligation (§ 20.3) ; agrégats par commune
   created_by          TEXT NOT NULL,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -492,6 +492,13 @@ export const EXTRA_FR = {
   'exception.AMOUNT_MISMATCH': 'Écart de montant',
   'exception.MISSING_SETTLEMENT': 'Règlement manquant',
   'exception.PROVIDER_AMBIGUOUS': 'Résultat opérateur inconnu',
+  // Attribution territoriale (§ 20.3)
+  'attribution.label': 'Recette comptée pour',
+  'attribution.none': 'Non attribuée : lieu non établi',
+  'attribution.basis.LIEU_OBJET': 'commune où se trouve le bien ou l’activité',
+  'attribution.basis.ZONE_SERVICE': 'zone où le service est utilisé',
+  'attribution.basis.STATION_DEPART': 'station de départ ou d’attache',
+  'attribution.basis.NON_LOCALISE': 'lieu non établi',
   'vault.title': 'Coffre des comptes bénéficiaires',
   'vault.sub': 'Changement de compte : proposition, deux approbateurs distincts, vérification hors bande, délai de 72 h.',
   'vault.rules': 'Toute modification d’un compte bénéficiaire exige une vérification hors bande (appel au numéro connu de la banque) et n’entre en vigueur qu’après 72 heures de délai de refroidissement.',

@@ -4,6 +4,7 @@ import type { Clock } from '../../core/clock.js';
 import type { AuditLog } from '../../core/audit.js';
 import { authorize } from '../../core/policy.js';
 import type { AIService } from '../ai/service.js';
+import type { CommuneRevenue } from '../payments/service.js';
 import { categories, communeBreakdown, exampleAlerts, ladder, scenarios, tiles, trend } from './example-data.js';
 
 export interface LiveCounters {
@@ -23,6 +24,8 @@ export class DashboardService {
     private readonly audit: AuditLog,
     private readonly ai: AIService,
     private readonly live: () => LiveCounters,
+    /** Recettes réelles par commune du fait générateur (§ 20.3). */
+    private readonly liveByCommune: () => CommuneRevenue[] = () => [],
   ) {}
 
   governor(user: User) {
@@ -44,6 +47,12 @@ export class DashboardService {
       criticalAlerts: alerts,
       actions: this.ai.governorActions(),
       live: { ...liveCounters, example: false, note: 'Compteurs réels du socle (agrégats, sans montant nominatif).' },
+      liveByCommune: {
+        example: false,
+        rule: 'Commune du fait générateur (lieu de l’objet ou du service), jamais l’adresse du contribuable (§ 20.3).',
+        note: '« Payé » inclut « rapproché » : ces deux niveaux ne s’additionnent pas. Seul le rapproché est une recette arrivée au compte public.',
+        rows: this.liveByCommune(),
+      },
     };
   }
 }
