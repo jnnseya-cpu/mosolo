@@ -64,4 +64,11 @@ export function registerPaymentRoutes(app: FastifyInstance, ctx: AppContext): vo
     const record = await ctx.payments.requestVerificationEvidence(user, { paymentReference: req.params.reference, ...body });
     return reply.code(201).send(record);
   });
+
+  // « Ce paiement a-t-il eu lieu ? » auprès du prestataire : pièce de dossier (legalEffect AUCUN).
+  app.post<{ Params: { reference: string } }>('/v1/payment-orders/:reference/provider-resolution', async (req, reply) => {
+    const user = requireUser(req);
+    const record = await ctx.payments.resolveWithProvider(user, req.params.reference);
+    return reply.code(201).send(record);
+  });
 }

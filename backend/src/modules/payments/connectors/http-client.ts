@@ -44,6 +44,8 @@ export interface ProviderHttpClientOptions {
   idempotentPostsWithKey?: boolean;
   logger?: HttpLogger;
   sleep?: (ms: number) => Promise<void>;
+  /** En-têtes ajoutés à chaque requête (ex. `BitriPay-Account` : compte connecté pour lequel la clé agit). */
+  extraHeaders?: Record<string, string>;
 }
 
 export class ProviderHttpError extends ApiError {
@@ -84,6 +86,7 @@ export class ProviderHttpClient {
       authorization: `Bearer ${this.opts.apiKey}`,
       accept: 'application/json',
       'user-agent': 'kinshasa-mosolo/1.0',
+      ...(this.opts.extraHeaders ?? {}),
     };
     if (options.body !== undefined) headers['content-type'] = 'application/json';
     if (options.idempotencyKey) headers['idempotency-key'] = options.idempotencyKey;

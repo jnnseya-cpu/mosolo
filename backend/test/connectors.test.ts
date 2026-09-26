@@ -284,3 +284,81 @@ describe('Configuration et pièces de dossier', () => {
     expect(env.app.ctx.receipts.receipts.count()).toBe(0);
   });
 });
+
+describe('BitriPay : comptes connectés, attente prestataire, résolution', () => {
+  const ACCT = 'acct_VilleKinshasaDGIPK01';
+
+  it('compte connecté : en-tête BitriPay-Account sur chaque requête, jamais de frais d’application ; résolution = pièce de dossier', async () => {
+    const { fetch, calls } = mockFetch((c) => (c.method === 'GET'
+      ? { status: 200, body: { status: 'CONFIRMED', matches: [] } }
+      : { status: 200, body: { id: 'pi_9', checkout_url: 'https://pay.bitripay.com/pi_9', qr_payload: 'BTRP|pi_9' } }));
+    const env = await setupConnectors({ BITRIPAY_API_KEY: 'sk_live_INTEGRATEUR0001', BITRIPAY_WEBHOOK_SECRET: 'whsec_live', BITRIPAY_ACCOUNT_ID: ACCT }, fetch);
+    const order = (await createProviderOrder(env, 'bitripay', 'QR')).json();
+    const body = JSON.parse(calls[0]!.body!);
+    expect(calls[0]!.headers['bitripay-account']).toBe(ACCT);
+    expect(body).not.toHaveProperty('application_fee_minor');
+    expect(env.app.ctx.connectors.get('bitripay')!.describe()).toMatchObject({ connectedAccountId: ACCT, applicationFee: 'INTERDIT' });
+
+    const url = `/v1/payment-orders/${order.paymentReference}/provider-resolution`;
+    expect((await env.req('POST', url, 'u-contribuable')).statusCode).toBe(403);
+    const res = await env.req('POST', url, 'u-analyste-rappro');
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ kind: 'PROVIDER_PAYMENT_RESOLUTION', legalEffect: 'AUCUN', orderStatusAtRequest: 'INITIE', providerResult: { status: 'CONFIRMED' } });
+    expect(calls[1]).toMatchObject({ method: 'GET' });
+    expect(calls[1]!.url).toContain('/payment_resolution?payment_intent=pi_9');
+    expect(calls[1]!.headers['bitripay-account']).toBe(ACCT);
+    // « CONFIRMED » chez le prestataire ne vaut ni confirmation signée, ni quittance.
+    expect(env.app.ctx.payments.byReference(order.paymentReference)!.status).toBe('INITIE');
+    expect(env.app.ctx.receipts.receipts.count()).toBe(0);
+  });
+
+  it('événement d’un autre compte → 422 + alerte, sans effet ; compte de la Ville → CONFIRME', async () => {
+    const env = await setupConnectors({ BITRIPAY_ACCOUNT_ID: ACCT });
+    const order = (await createProviderOrder(env, 'bitripay')).json();
+    const other = await bitripayWebhook(env, { ...bitripayEvent('payment_intent.succeeded', order), account: 'acct_AutreMarchand' });
+    expect(other.statusCode).toBe(422);
+    expect(other.json().code).toBe('CONNECTED_ACCOUNT_MISMATCH');
+    const missing = await bitripayWebhook(env, bitripayEvent('payment_intent.succeeded', order));
+    expect(missing.json().code).toBe('CONNECTED_ACCOUNT_MISMATCH');
+    expect(env.app.ctx.payments.byReference(order.paymentReference)!.status).toBe('INITIE');
+    const ok = await bitripayWebhook(env, { ...bitripayEvent('payment_intent.succeeded', order), account: ACCT });
+    expect(ok.json().results[0]).toMatchObject({ status: 'CONFIRME' });
+
+    const plain = await setupConnectors();
+    const o2 = (await createProviderOrder(plain, 'bitripay')).json();
+    const unexpected = await bitripayWebhook(plain, { ...bitripayEvent('payment_intent.succeeded', o2), account: ACCT });
+    expect(unexpected.json().code).toBe('UNEXPECTED_CONNECTED_ACCOUNT');
+  });
+
+  it('payment_intent.ambiguous_hold → aucune quittance, exception PROVIDER_AMBIGUOUS jusqu’à la confirmation signée', async () => {
+    const env = await setupConnectors();
+    const order = (await createProviderOrder(env, 'bitripay')).json();
+    const held = await bitripayWebhook(env, bitripayEvent('payment_intent.ambiguous_hold', order));
+    expect(held.statusCode).toBe(200);
+    expect(held.json().results[0]).toMatchObject({ outcome: 'HELD', reason: 'PROVIDER_AMBIGUOUS', paymentReference: order.paymentReference });
+    expect(env.app.ctx.payments.byReference(order.paymentReference)!.status).toBe('INITIE');
+    expect(env.app.ctx.receipts.receipts.count()).toBe(0);
+    const ex = (await env.req('GET', '/v1/reconciliation/exceptions', 'u-analyste-rappro')).json();
+    const list = Array.isArray(ex) ? ex : ex.items ?? ex.exceptions;
+    expect(list).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'PROVIDER_AMBIGUOUS', paymentReference: order.paymentReference })]));
+
+    await bitripayWebhook(env, bitripayEvent('payment_intent.succeeded', order));
+    const after = (await env.req('GET', '/v1/reconciliation/exceptions', 'u-analyste-rappro')).json();
+    const list2 = Array.isArray(after) ? after : after.items ?? after.exceptions;
+    expect(list2.filter((e: { type: string }) => e.type === 'PROVIDER_AMBIGUOUS')).toHaveLength(0);
+  });
+
+  it('frais d’application retenu sur l’intention → quittance due au payeur, alerte critique', async () => {
+    const env = await setupConnectors();
+    const order = (await createProviderOrder(env, 'bitripay')).json();
+    const res = await bitripayWebhook(env, bitripayEvent('payment_intent.succeeded', order, { application_fee_minor: 225 }));
+    expect(res.json().results[0]).toMatchObject({ status: 'CONFIRME', receiptStatus: 'PROVISOIRE' });
+    expect(env.app.ctx.alerts.alerts.find((a) => a.type === 'APPLICATION_FEE_ON_PUBLIC_REVENUE')).toEqual([
+      expect.objectContaining({ severity: 'CRITICAL' }),
+    ]);
+  });
+
+  it('identifiant de compte connecté mal formé → erreur de configuration', () => {
+    expect(() => buildApp({ connectorEnv: { BITRIPAY_ACCOUNT_ID: 'compte-ville' } })).toThrow(/BITRIPAY_ACCOUNT_ID/);
+  });
+});

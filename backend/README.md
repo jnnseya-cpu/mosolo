@@ -187,6 +187,7 @@ est refusée au démarrage ; hors bac à sable local, le secret de webhook est o
 | `BITRIPAY_BASE_URL` | URL de l'API | `https://api.bitripay.com/v1` |
 | `BITRIPAY_SETTLEMENT_ACCOUNT_ALIAS` | alias du compte public de règlement (**doit exister dans le coffre**) | `KIN-DGIPK-RECETTES-01` |
 | `BITRIPAY_CDF_EXPONENT` | décimales du CDF chez BitriPay (0 ou 2) [À VÉRIFIER] | `2` (ISO 4217) |
+| `BITRIPAY_ACCOUNT_ID` | compte connecté de la Ville (`acct_…`) si la clé est celle d'un intégrateur : en-tête `BitriPay-Account` sur chaque requête, `account` exigé sur chaque webhook ; aucun frais d'application n'est jamais envoyé | — (clé propre de la Ville) |
 | `BITRIPAY_ALLOWED_OPERATORS` | opérateurs proposés | `orange_cd,mpesa_cd,airtel_cd,africell_cd` |
 
 Un alias de règlement absent du coffre **empêche le démarrage** (`ConnectorConfigError`) : MOSOLO ne détient jamais les fonds.

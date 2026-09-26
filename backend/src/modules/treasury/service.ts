@@ -28,7 +28,7 @@ export interface StatementLine {
 }
 
 export type ExceptionType =
-  | 'ORPHAN_CREDIT' | 'CREDIT_WITHOUT_CONFIRMATION' | 'DUPLICATE_CREDIT' | 'WRONG_ACCOUNT' | 'UNKNOWN_ACCOUNT' | 'AMOUNT_MISMATCH' | 'MISSING_SETTLEMENT';
+  | 'ORPHAN_CREDIT' | 'CREDIT_WITHOUT_CONFIRMATION' | 'DUPLICATE_CREDIT' | 'WRONG_ACCOUNT' | 'UNKNOWN_ACCOUNT' | 'AMOUNT_MISMATCH' | 'MISSING_SETTLEMENT' | 'PROVIDER_AMBIGUOUS';
 
 export interface ReconciliationException {
   id: string;
@@ -158,6 +158,12 @@ export class TreasuryService {
         id: `EXC-MS-${o.id}`, type: 'MISSING_SETTLEMENT', paymentReference: o.paymentReference,
         detail: `Confirmation du ${o.confirmedAt} sans crédit constaté à J+1 : relance prestataire.`, status: 'OUVERTE', openedAt: now.toISOString(), computed: true,
       }));
-    return [...this.exceptions.all(), ...missing];
+    // Attente prestataire (résultat opérateur inconnu) non résolue : aucune quittance tant qu'elle reste ouverte.
+    const held: ReconciliationException[] = this.payments.unresolvedHolds().map((h) => ({
+      id: `EXC-HOLD-${h.id}`, type: 'PROVIDER_AMBIGUOUS', ...(h.paymentReference ? { paymentReference: h.paymentReference } : {}),
+      detail: `Résultat opérateur inconnu signalé par ${h.provider} le ${h.receivedAt} : interroger la résolution prestataire, puis attendre la confirmation signée ou le relevé.`,
+      status: 'OUVERTE', openedAt: h.receivedAt, computed: true,
+    }));
+    return [...this.exceptions.all(), ...missing, ...held];
   }
 }

@@ -2082,6 +2082,7 @@ Sans clé API, chaque connecteur fonctionne en **bac à sable local** : aucune c
 | BitriPay | `payment_intent.succeeded` | Confirmation commune → `CONFIRME` + quittance provisoire | `BITRIPAY_RAIL` |
 | BitriPay | `payment_intent.canceled` | `ECHOUE` si l'ordre est encore `INITIE` | `BITRIPAY_RAIL` |
 | BitriPay | `payment_intent.payment_failed` | Journalisé (`payment.attempt_failed`), **sans changement d'état** : une tentative échouée n'est pas terminale, le payeur peut réessayer sur la même intention | — |
+| BitriPay | `payment_intent.ambiguous_hold` | **Attente prestataire** (résultat opérateur inconnu, paiement en revue manuelle chez BitriPay) : **aucun changement d'état, aucune quittance**, alerte et exception de rapprochement `PROVIDER_AMBIGUOUS` jusqu'à la confirmation signée ou l'échec | — |
 | BitriPay | `payment_intent.settled` | **Annonce de règlement** : conservée comme indice de rapprochement, audit `payment.settlement_announced`. L'ordre **reste `CONFIRME`** | — |
 | Tous | Autre type | 200, ignoré, audit `payment.webhook.ignored` | — |
 
@@ -2121,7 +2122,7 @@ Les clés API sont des clés **secrètes** `sk_…`, lues uniquement depuis les 
 
 Un relais serveur, réservé au comptable public (R17), à l'analyste de rapprochement (R18) et à l'agent de contentieux (R20), permet seulement de joindre le résultat de cette vérification à un **dossier de litige ou d'exception**. Ce résultat est une pièce de dossier (`legalEffect: AUCUN`) : il ne modifie jamais l'état du paiement et ne produit jamais de quittance. Aucune image n'est reçue par MOSOLO — seule son empreinte SHA-256 — et le code SMS présenté n'est conservé que sous forme hachée. Chaque demande est journalisée.
 
-Sont également interdits : la confirmation d'un paiement à partir de l'URL de retour (`success_url`) ou de la page de paiement du prestataire ; le règlement vers un compte absent du coffre ; la compensation de commissions sur le montant réglé sans convention approuvée (§ 20.1).
+Sont également interdits : tout **frais d'application** (`application_fee_minor`) prélevé sur une intention de paiement d'une recette publique (§ 18.15) ; la confirmation d'un paiement à partir de l'URL de retour (`success_url`) ou de la page de paiement du prestataire ; le règlement vers un compte absent du coffre ; la compensation de commissions sur le montant réglé sans convention approuvée (§ 20.1).
 
 ## 18.13 Diagrammes de séquence
 
@@ -2200,7 +2201,29 @@ Les éléments ci-dessous ne sont pas documentés publiquement ou l'ont été de
 | 13 | BitriPay | Noms `payment_intent.payment_failed` et `payment_intent.canceled` | Traités respectivement comme tentative non terminale et comme échec [À VÉRIFIER sur l'OpenAPI BitriPay] |
 | 14 | BitriPay | Corps de `POST /verifications` | `{payment_intent, sms_code?, screenshot_sha256?}` (pièce de dossier uniquement) [À VÉRIFIER sur l'OpenAPI BitriPay] |
 | 15 | BitriPay | Exploitation des relevés (`settlements:read`) et rapports (`reconciliation:read`) | Non raccordés : seul le relevé du compte public fait foi ; ces sources pourront alimenter la décomposition des règlements groupés (§ 20.1) |
+| 17 | BitriPay | Paramètres de `GET /payment_resolution` | `payment_intent` et `reference` ; réponse CONFIRMED, PENDING, AMBIGUOUS ou NOT_FOUND versée au dossier [À VÉRIFIER sur l'OpenAPI BitriPay] |
+| 18 | BitriPay | Présence du champ `account` dans les webhooks des comptes connectés, et son absence pour un compte propre | Exigé et comparé au compte configuré ; refusé s'il est présent sans compte configuré [À VÉRIFIER sur l'OpenAPI BitriPay] |
+| 19 | BitriPay | Nom du champ de frais sur l'intention reçue | `application_fee_minor` ou `application_fee_amount` [À VÉRIFIER sur l'OpenAPI BitriPay] |
 | 16 | Les deux | Un compte marchand, donc un alias de règlement, par entité bénéficiaire | Un alias par connecteur ; toute obligation d'une autre entité est refusée (`SETTLEMENT_ACCOUNT_MISMATCH`) [À VÉRIFIER dans la convention] |
+
+## 18.15 BitriPay : comptes connectés, attente prestataire et résolution
+
+BitriPay propose aux plateformes et intégrateurs d'ouvrir, par API, le compte marchand de chacun de leurs clients (`POST /accounts`), puis d'agir pour ce compte avec leur propre clé en ajoutant l'en-tête `BitriPay-Account: acct_…` à chaque requête. BitriPay conserve la licence d'agrégateur et reste la partie régulée ; chaque client est le **marchand en titre** (*merchant of record*), avec ses portefeuilles, son profil de règlement, ses relevés et sa vérification. Le client peut revendiquer son compte par un lien à usage unique, voir l'intégrateur dans son équipe, et le retirer à tout moment : clés, portefeuilles et historique restent les siens.
+
+Ce modèle est compatible avec la doctrine de MOSOLO **à quatre conditions**, que le connecteur applique :
+
+| Condition | Application dans le socle |
+|---|---|
+| La Ville est le marchand en titre | Le compte connecté est celui de l'entité publique (régie) ; son profil de règlement verse au **compte public inscrit au coffre** (`settlementAccountAlias`). Paramètre `BITRIPAY_ACCOUNT_ID` (format `acct_…` contrôlé au démarrage) ; l'en-tête `BitriPay-Account` accompagne **chaque** requête, y compris les lectures |
+| Aucun prélèvement sur la recette | Le connecteur **n'envoie jamais** `application_fee_minor`. La rémunération d'un intégrateur relève d'un contrat plafonné et facturé séparément (modèle hybride plafonné, § 20.1), jamais d'une retenue sur la recette. Si un événement de paiement révèle un frais retenu, la quittance reste due au payeur (il a payé l'intégralité), mais une **alerte critique** `APPLICATION_FEE_ON_PUBLIC_REVENUE` est levée et le rapprochement fera apparaître l'écart au compte public |
+| Chaque événement concerne la Ville | Le champ `account` de chaque webhook doit être celui de la Ville : sinon `422 CONNECTED_ACCOUNT_MISMATCH` et alerte, sans effet. Sans compte connecté configuré, un événement portant un `account` est refusé (`UNEXPECTED_CONNECTED_ACCOUNT`) |
+| La Ville garde la maîtrise | Le compte est revendiqué par la Ville (lien de revendication), l'intégrateur n'y a que le rôle *développeur* (clés, webhooks, création de paiements — rien sur le règlement, les virements ou les exports) et la Ville peut le détacher à tout moment. Ces dispositions figurent dans la convention [ACTE REQUIS] |
+
+**Attente prestataire.** Lorsque le résultat chez l'opérateur est inconnu, BitriPay place le paiement en revue manuelle et émet `payment_intent.ambiguous_hold`. MOSOLO n'en tire **aucune** conséquence financière : l'ordre reste `INITIE`, aucune quittance n'est émise, une alerte est levée et une exception calculée `PROVIDER_AMBIGUOUS` apparaît dans la file du Trésor tant que ni confirmation signée ni échec ne sont arrivés.
+
+**Résolution.** Pour instruire une exception, le comptable public, l'analyste de rapprochement ou l'agent de contentieux peut interroger `GET /payment_resolution` (« ce paiement a-t-il eu lieu ? ») par la route `POST /v1/payment-orders/{référence}/provider-resolution`. La réponse du prestataire est une **pièce de dossier** (`legalEffect: AUCUN`) : même « CONFIRMED », elle ne vaut ni confirmation signée ni quittance. Seuls la confirmation signée serveur à serveur et le relevé du compte public font foi.
+
+**Bac à sable.** Avec une clé de test, les numéros suivants pilotent le moteur de tentatives de BitriPay et permettent la recette de chaque issue sans opérateur : `+243000000501` réussite ; `+243000000404` portefeuille introuvable ; `+243000000408` résultat ambigu (`payment_intent.ambiguous_hold`) ; `+243000000500` délai puis réussite ; `+243000000503` opérateur indisponible ; tout numéro finissant par `0000` refus du payeur. Les autres services de BitriPay (transferts, virements groupés, change, abonnements, crédit, diaspora, paiements hors ligne, agents d'IA) **ne sont pas raccordés** : ils sortent du périmètre d'une recette publique et exigeraient chacun une base légale et une convention propres.
 
 # 23. Architecture des agents d'intelligence artificielle
 

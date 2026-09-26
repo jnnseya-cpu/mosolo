@@ -24,7 +24,7 @@ import { ProviderHttpError } from './connectors/http-client.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
 import {
   WebhookPayloadError, WebhookVerificationError, type ConfirmationMethod, type ConnectorId, type HeaderBag, type NormalizedProviderEvent,
-  type PaymentEvent, type SettlementEvent, type WebhookChecks,
+  type HoldEvent, type PaymentEvent, type SettlementEvent, type WebhookChecks,
 } from './connectors/types.js';
 
 export const PAYMENT_CHANNELS = ['MOBILE_MONEY', 'BANK', 'CARD', 'AGENT_POINT', 'USSD', 'QR', 'TRANSFER'] as const;
@@ -111,10 +111,39 @@ export interface SettlementAnnouncement {
   receivedAt: string;
 }
 
+/** Paiement mis en attente par le prestataire (résultat opérateur inconnu) : exception jusqu'à résolution. */
+export interface ProviderHold {
+  id: string;
+  provider: string;
+  eventId: string;
+  reason: 'PROVIDER_AMBIGUOUS';
+  providerIntentId?: string;
+  paymentReference?: string;
+  paymentOrderId?: string;
+  amount?: MoneyJSON;
+  receivedAt: string;
+}
+
+/** Réponse « ce paiement a-t-il eu lieu ? » du prestataire : PIÈCE DE DOSSIER, sans aucun effet. */
+export interface ProviderResolutionRecord {
+  id: string;
+  kind: 'PROVIDER_PAYMENT_RESOLUTION';
+  legalEffect: 'AUCUN';
+  notice: string;
+  provider: string;
+  paymentReference: string;
+  paymentOrderId: string;
+  orderStatusAtRequest: PaymentStatus;
+  providerResult: unknown;
+  sandbox: boolean;
+  requestedBy: string;
+  requestedAt: string;
+}
+
 export interface WebhookEventResult {
   eventId: string;
   eventType: string;
-  outcome: 'PROCESSED' | 'SETTLEMENT_ANNOUNCED' | 'IGNORED';
+  outcome: 'PROCESSED' | 'SETTLEMENT_ANNOUNCED' | 'HELD' | 'IGNORED';
   status?: CallbackResponse['status'];
   paymentReference?: string;
   receiptNumber?: string;
@@ -190,6 +219,8 @@ export class PaymentService {
   readonly confirmations = new InMemoryRepository<ProviderConfirmation>();
   readonly webhookEvents = new InMemoryRepository<WebhookEventRecord>();
   readonly settlementAnnouncements = new InMemoryAppendOnlyRepository<SettlementAnnouncement>();
+  readonly providerHolds = new InMemoryAppendOnlyRepository<ProviderHold>();
+  readonly providerResolutions = new InMemoryAppendOnlyRepository<ProviderResolutionRecord>();
   readonly verificationEvidence = new InMemoryAppendOnlyRepository<VerificationEvidenceRecord>();
   private readonly nonces = new Set<string>();
   /** Obligations dont une intention prestataire est en cours de création (verrou anti-concurrence). */
@@ -528,6 +559,7 @@ export class PaymentService {
       let result: WebhookEventResult;
       if (ev.kind === 'PAYMENT') result = this.applyPaymentEvent(providerId, ev, verified.checks);
       else if (ev.kind === 'SETTLEMENT') result = this.announceSettlement(providerId, ev);
+      else if (ev.kind === 'HOLD') result = this.recordHold(providerId, ev);
       else {
         this.audit.append({
           actor: { kind: 'provider', id: providerId },
@@ -545,7 +577,7 @@ export class PaymentService {
   }
 
   /** Référence MOSOLO d'un événement : métadonnées (référence, ordre) et intention stockée doivent concorder. */
-  private resolveEventOrder(providerId: string, ev: PaymentEvent | SettlementEvent): PaymentOrder | undefined {
+  private resolveEventOrder(providerId: string, ev: PaymentEvent | SettlementEvent | HoldEvent): PaymentOrder | undefined {
     const byIntent = ev.providerIntentId ? this.orders.findOne((o) => o.provider === providerId && o.providerIntentId === ev.providerIntentId) : undefined;
     const byOrderId = ev.paymentOrderId ? this.orders.get(ev.paymentOrderId) : undefined;
     const byRef = ev.paymentReference ? this.byReference(ev.paymentReference) : undefined;
@@ -573,7 +605,75 @@ export class PaymentService {
       providerTxnId: ev.providerTxnId, paymentReference, amount, status: ev.status, completedAt: ev.completedAt,
       confirmationMethod: ev.confirmationMethod, ...(ev.providerIntentId ? { providerIntentId: ev.providerIntentId } : {}),
     }, checks);
+    if (ev.applicationFeeMinor) {
+      // Le payeur a bien payé : la quittance reste due. Mais un frais retenu sur une recette publique est interdit ;
+      // le rapprochement fera apparaître l'écart au compte public. Alerte critique, sans blocage du contribuable.
+      this.alerts.raise({
+        type: 'APPLICATION_FEE_ON_PUBLIC_REVENUE', severity: 'CRITICAL', source: `prestataire:${providerId}`,
+        detail: `Frais d'application de ${ev.applicationFeeMinor} unités mineures retenu sur ${paymentReference} : interdit sur une recette publique.`,
+        context: { eventId: ev.eventId, paymentReference, providerIntentId: ev.providerIntentId, applicationFeeMinor: ev.applicationFeeMinor },
+        actor: { kind: 'provider', id: providerId },
+      });
+    }
     return { eventId: ev.eventId, eventType: ev.eventType, outcome: 'PROCESSED', ...r };
+  }
+
+  /** Mise en attente du prestataire : aucune transition, aucune quittance ; exception ouverte jusqu'à résolution. */
+  private recordHold(providerId: string, ev: HoldEvent): WebhookEventResult {
+    const order = this.resolveEventOrder(providerId, ev);
+    const paymentReference = order?.paymentReference ?? ev.paymentReference;
+    const hold = this.providerHolds.append({
+      id: this.ids.next('HOLD'), provider: providerId, eventId: ev.eventId, reason: ev.reason,
+      ...(ev.providerIntentId ? { providerIntentId: ev.providerIntentId } : {}),
+      ...(paymentReference ? { paymentReference } : {}), ...(order ? { paymentOrderId: order.id } : {}),
+      ...(ev.amount ? { amount: ev.amount } : {}), receivedAt: this.clock.now().toISOString(),
+    });
+    this.alerts.raise({
+      type: 'PROVIDER_AMBIGUOUS', severity: 'HIGH', source: `prestataire:${providerId}`,
+      detail: `Résultat opérateur inconnu pour ${paymentReference ?? ev.providerIntentId ?? ev.eventId} : paiement en revue chez le prestataire, aucune quittance.`,
+      context: { holdId: hold.id, eventId: ev.eventId, paymentReference }, actor: { kind: 'provider', id: providerId },
+    });
+    this.audit.append({
+      actor: { kind: 'provider', id: providerId }, action: 'payment.provider_hold', resourceType: 'payment_order', resourceId: order?.id ?? ev.providerIntentId ?? ev.eventId,
+      outcome: 'FAILURE', details: { holdId: hold.id, eventId: ev.eventId, reason: ev.reason, orderStatus: order?.status },
+    });
+    return { eventId: ev.eventId, eventType: ev.eventType, outcome: 'HELD', reason: ev.reason, ...(paymentReference ? { paymentReference } : {}) };
+  }
+
+  /** Attentes prestataire non résolues : ordre toujours ni confirmé, ni réglé, ni échoué. */
+  unresolvedHolds(): ProviderHold[] {
+    return this.providerHolds.all().filter((h) => {
+      const o = h.paymentOrderId ? this.orders.get(h.paymentOrderId) : h.paymentReference ? this.byReference(h.paymentReference) : undefined;
+      return !o || o.status === 'INITIE';
+    });
+  }
+
+  /**
+   * « Ce paiement a-t-il eu lieu ? » auprès du prestataire (BitriPay GET /payment_resolution), réservé à R17, R18
+   * et R20 pour instruire une exception. PIÈCE DE DOSSIER : ne modifie jamais l'état et n'émet jamais de quittance.
+   */
+  async resolveWithProvider(user: User, paymentReference: string): Promise<ProviderResolutionRecord> {
+    authorize(user, 'payment.evidence');
+    const order = this.byReference(paymentReference);
+    if (!order) throw notFound('PAYMENT_REFERENCE_NOT_FOUND', `Référence inconnue : ${paymentReference}`);
+    if (!order.provider || !order.providerIntentId) {
+      throw unprocessable('NO_PROVIDER_INTENT', 'Cet ordre n’est lié à aucune intention d’un prestataire connecté.');
+    }
+    const connector = this.connectors.get(order.provider);
+    if (!connector) throw unprocessable('UNKNOWN_PROVIDER', `Prestataire non connecté : ${order.provider}`);
+    if (!connector.resolvePayment) throw unprocessable('PROVIDER_RESOLUTION_UNSUPPORTED', `${connector.label} ne propose pas d'interrogation de résolution.`);
+    const res = await connector.resolvePayment(order.providerIntentId, order.paymentReference);
+    const record = this.providerResolutions.append({
+      id: this.ids.next('RESOL'), kind: 'PROVIDER_PAYMENT_RESOLUTION', legalEffect: 'AUCUN',
+      notice: 'Réponse du prestataire versée au dossier : ni confirmation, ni quittance. Seuls une confirmation signée et le relevé du compte public font foi.',
+      provider: connector.id, paymentReference: order.paymentReference, paymentOrderId: order.id, orderStatusAtRequest: order.status,
+      providerResult: res.providerResult, sandbox: res.sandbox, requestedBy: user.id, requestedAt: this.clock.now().toISOString(),
+    });
+    this.audit.append({
+      actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'payment.provider_resolution.requested', resourceType: 'payment_order', resourceId: order.id,
+      details: { resolutionId: record.id, provider: connector.id, legalEffect: 'AUCUN' },
+    });
+    return record;
   }
 
   /** Annonce de règlement : journalisée et conservée comme indice ; ne fait JAMAIS passer à REGLE / RAPPROCHE. */

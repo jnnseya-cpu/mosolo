@@ -63,6 +63,8 @@ export interface PaymentEvent extends EventBase {
   confirmationMethod: ConfirmationMethod;
   providerReceiptId?: string;
   late?: boolean;
+  /** Frais d'application prélevés sur l'intention (unités mineures) : interdit sur une recette publique ⇒ alerte. */
+  applicationFeeMinor?: string;
 }
 
 export interface SettlementEvent extends EventBase {
@@ -78,7 +80,23 @@ export interface IgnoredEvent extends EventBase {
   reason: 'UNKNOWN_TYPE' | 'NON_TERMINAL_ATTEMPT_FAILURE';
 }
 
-export type NormalizedProviderEvent = PaymentEvent | SettlementEvent | IgnoredEvent;
+/**
+ * Mise en attente par le prestataire (résultat opérateur inconnu, ex. BitriPay `payment_intent.ambiguous_hold`) :
+ * AUCUN changement d'état, AUCUNE quittance ; exception de rapprochement jusqu'à résolution.
+ */
+export interface HoldEvent extends EventBase {
+  kind: 'HOLD';
+  reason: 'PROVIDER_AMBIGUOUS';
+  amount?: MoneyJSON;
+}
+
+export type NormalizedProviderEvent = PaymentEvent | SettlementEvent | HoldEvent | IgnoredEvent;
+
+/** « Ce paiement a-t-il eu lieu ? » selon le prestataire : PIÈCE DE DOSSIER, sans effet juridique ni financier. */
+export interface ProviderResolution {
+  sandbox: boolean;
+  providerResult: unknown;
+}
 
 export interface VerifiedWebhook {
   events: NormalizedProviderEvent[];
@@ -113,6 +131,8 @@ export interface PaymentConnector {
   verifyWebhook(headers: HeaderBag, rawBody: string, now: Date): VerifiedWebhook;
   /** Relais vers l'API de vérification capture/SMS du prestataire : PIÈCE DE DOSSIER uniquement. */
   requestVerificationEvidence(input: VerificationEvidenceInput): Promise<VerificationEvidenceResult>;
+  /** Interrogation « ce paiement a-t-il eu lieu ? » (si le prestataire la propose) : pièce de dossier uniquement. */
+  resolvePayment?(providerIntentId: string, paymentReference: string): Promise<ProviderResolution>;
   /** Configuration affichable (clés masquées). */
   describe(): Record<string, unknown>;
 }

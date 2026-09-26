@@ -91,6 +91,7 @@ export function buildConnectorRegistry(env: NodeJS.ProcessEnv | Record<string, s
       settlementAccountAlias: env.BITRIPAY_SETTLEMENT_ACCOUNT_ALIAS || DEFAULT_SETTLEMENT_ACCOUNT_ALIAS,
       cdfExponent: cdf,
       allowedOperators: list(env.BITRIPAY_ALLOWED_OPERATORS, BITRIPAY_OPERATORS),
+      ...(env.BITRIPAY_ACCOUNT_ID ? { connectedAccountId: env.BITRIPAY_ACCOUNT_ID } : {}),
     },
     runtime,
   );

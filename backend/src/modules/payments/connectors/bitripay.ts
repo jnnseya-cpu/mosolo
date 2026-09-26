@@ -11,6 +11,15 @@
  * `t=<unix>,v1=<hex HMAC-SHA256 de "<t>.<corps brut>">`, tolérance ±5 min), en-tête `BitriPay-Signature-Ed25519`
  * (signature base64 du corps brut), forme des événements (`data.object`), exposant du CDF (défaut ISO 4217 : 2),
  * noms `payment_intent.payment_failed` / `payment_intent.canceled`, corps de POST /verifications.
+ *
+ * Comptes connectés (plateformes et agrégateurs) : BitriPay détient la licence d'agrégateur ; chaque client est
+ * le « merchant of record » avec ses portefeuilles, son profil de règlement et ses relevés. Si MOSOLO est intégré
+ * par un tiers, la Ville (régie) est le compte connecté : l'en-tête `BitriPay-Account: acct_…` accompagne CHAQUE
+ * requête et chaque webhook doit porter ce même `account`. Doctrine : AUCUN `application_fee_minor` n'est jamais
+ * envoyé (la rémunération d'un intégrateur relève d'un contrat plafonné, jamais d'un prélèvement sur la recette
+ * publique) ; un frais constaté sur un événement déclenche une alerte critique.
+ * `payment_intent.ambiguous_hold` (résultat opérateur inconnu, paiement en revue manuelle) : aucune quittance,
+ * exception de rapprochement. GET /payment_resolution : pièce de dossier, jamais une confirmation.
  */
 import { createPublicKey, verify as edVerify, type KeyObject } from 'node:crypto';
 import { hmacSha256Hex, randomSecret, safeEqualHex, sha256Hex } from '../../../core/crypto.js';
@@ -29,6 +38,17 @@ export const BITRIPAY_SIGNATURE_HEADER = 'bitripay-signature';
 export const BITRIPAY_ED25519_HEADER = 'bitripay-signature-ed25519';
 export const BITRIPAY_TOLERANCE_SECONDS = 300;
 export const BITRIPAY_OPERATORS = ['orange_cd', 'mpesa_cd', 'airtel_cd', 'africell_cd'] as const;
+export const BITRIPAY_ACCOUNT_HEADER = 'bitripay-account';
+const CONNECTED_ACCOUNT_RE = /^acct_[A-Za-z0-9_]{4,64}$/;
+
+/** Numéros « magiques » du bac à sable BitriPay (clé de test) : chaque issue du moteur de tentatives. */
+export const BITRIPAY_SANDBOX_MSISDNS = {
+  '+243000000501': 'succeed',
+  '+243000000404': 'fail',
+  '+243000000408': 'ambiguous',
+  '+243000000500': 'timeout_then_succeed',
+  '+243000000503': 'provider_unavailable',
+} as const;
 
 export interface BitriPayConfig {
   apiKey?: string;
@@ -45,6 +65,8 @@ export interface BitriPayConfig {
   /** Exposant du CDF chez BitriPay : 2 (ISO 4217, défaut) ou 0 [À VÉRIFIER]. */
   cdfExponent: 0 | 2;
   allowedOperators: string[];
+  /** Compte connecté de la Ville (`acct_…`) quand la clé est celle d'un intégrateur ; absent si la Ville utilise sa propre clé. */
+  connectedAccountId?: string;
 }
 
 const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
@@ -84,6 +106,9 @@ export class BitriPayConnector implements PaymentConnector {
     if (config.ed25519PublicKey) this.edKey = parseEd25519PublicKey(config.ed25519PublicKey);
     if (config.ed25519Required && !this.edKey) throw new ConnectorConfigError('Ed25519 exigé mais BITRIPAY_ED25519_PUBLIC_KEY absente.');
     if (!config.hmacRequired && !config.ed25519Required) throw new ConnectorConfigError('BitriPay : au moins un schéma de signature doit être exigé.');
+    if (config.connectedAccountId !== undefined && !CONNECTED_ACCOUNT_RE.test(config.connectedAccountId)) {
+      throw new ConnectorConfigError('BITRIPAY_ACCOUNT_ID invalide : identifiant de compte connecté « acct_… » attendu.');
+    }
     if (config.apiKey) {
       this.http = new ProviderHttpClient({
         provider: 'bitripay', baseUrl: config.baseUrl, apiKey: config.apiKey,
@@ -91,6 +116,7 @@ export class BitriPayConnector implements PaymentConnector {
         idempotentPostsWithKey: true,
         ...(runtime.fetch ? { fetch: runtime.fetch } : {}), ...(runtime.logger ? { logger: runtime.logger } : {}),
         ...(runtime.sleep ? { sleep: runtime.sleep } : {}), ...(runtime.timeoutMs ? { timeoutMs: runtime.timeoutMs } : {}),
+        ...(config.connectedAccountId ? { extraHeaders: { [BITRIPAY_ACCOUNT_HEADER]: config.connectedAccountId } } : {}),
       });
     }
   }
@@ -107,6 +133,7 @@ export class BitriPayConnector implements PaymentConnector {
     const res = await this.http.request<Record<string, unknown>>('POST', '/payment_intents', {
       moneyMoving: true,
       idempotencyKey: req.paymentReference,
+      // Jamais d'application_fee_minor : la recette publique est réglée intégralement au compte de la Ville.
       body: {
         amount_minor: amountMinor,
         currency: req.amount.currency,
@@ -173,8 +200,21 @@ export class BitriPayConnector implements PaymentConnector {
     } catch {
       throw new WebhookPayloadError('INVALID_JSON', 'Corps JSON invalide.');
     }
+    this.checkAccount(json);
     const checks: WebhookChecks = { signatureVerified: true, replayGuard: 'EVENT_ID', timestampInWindow: hmacOk ? true : 'NON_APPLICABLE' };
     return { events: [this.normalize(json, rawBody, now)], checks };
+  }
+
+  /** Chaque événement doit concerner le compte de la Ville, et lui seul. */
+  private checkAccount(json: unknown): void {
+    const account = pickString(json, 'account');
+    const expected = this.config.connectedAccountId;
+    if (expected && account !== expected) {
+      throw new WebhookPayloadError('CONNECTED_ACCOUNT_MISMATCH', `Événement BitriPay pour le compte « ${account ?? 'absent'} » au lieu du compte de la Ville.`);
+    }
+    if (!expected && account) {
+      throw new WebhookPayloadError('UNEXPECTED_CONNECTED_ACCOUNT', `Événement BitriPay d'un compte connecté (${account}) alors qu'aucun n'est configuré.`);
+    }
   }
 
   private amountOf(obj: unknown, required: boolean) {
@@ -209,7 +249,11 @@ export class BitriPayConnector implements PaymentConnector {
     switch (eventType) {
       case 'payment_intent.succeeded': {
         if (!providerIntentId) throw new WebhookPayloadError('PROVIDER_TXN_MISSING', 'Événement BitriPay sans identifiant d’intention.');
-        return { kind: 'PAYMENT', ...base, providerTxnId: providerIntentId, amount: this.amountOf(obj, true)!, status: 'SUCCESS', completedAt, confirmationMethod: 'BITRIPAY_RAIL' };
+        const fee = parseMinorInput(pick(obj, 'application_fee_minor', 'application_fee_amount'));
+        return {
+          kind: 'PAYMENT', ...base, providerTxnId: providerIntentId, amount: this.amountOf(obj, true)!, status: 'SUCCESS', completedAt, confirmationMethod: 'BITRIPAY_RAIL',
+          ...(fee !== undefined && fee !== 0n ? { applicationFeeMinor: fee.toString() } : {}),
+        };
       }
       case 'payment_intent.canceled': {
         if (!providerIntentId) throw new WebhookPayloadError('PROVIDER_TXN_MISSING', 'Événement BitriPay sans identifiant d’intention.');
@@ -222,6 +266,10 @@ export class BitriPayConnector implements PaymentConnector {
       case 'payment_intent.payment_failed':
         // Tentative échouée : l'intention reste payable (nouvel essai du payeur) ⇒ journalisée, sans changement d'état.
         return { kind: 'IGNORED', reason: 'NON_TERMINAL_ATTEMPT_FAILURE', ...base };
+      case 'payment_intent.ambiguous_hold': {
+        const amount = this.amountOf(obj, false);
+        return { kind: 'HOLD', reason: 'PROVIDER_AMBIGUOUS', ...base, ...(amount ? { amount } : {}) };
+      }
       case 'payment_intent.settled': {
         const amount = this.amountOf(obj, false);
         const settlementId = pickString(obj, 'settlement_id', 'settlement.id');
@@ -248,12 +296,23 @@ export class BitriPayConnector implements PaymentConnector {
     return { sandbox: this.sandbox, providerResult };
   }
 
+  /** GET /payment_resolution [paramètres À VÉRIFIER] : CONFIRMED / PENDING / AMBIGUOUS / NOT_FOUND — pièce de dossier. */
+  async resolvePayment(providerIntentId: string, paymentReference: string) {
+    if (!this.http) {
+      return { sandbox: true, providerResult: { status: 'SANDBOX_NON_VERIFIE', note: 'Bac à sable local : aucun appel au prestataire.' } };
+    }
+    const q = new URLSearchParams({ payment_intent: providerIntentId, reference: paymentReference });
+    const providerResult = await this.http.request('GET', `/payment_resolution?${q.toString()}`);
+    return { sandbox: this.sandbox, providerResult };
+  }
+
   describe(): Record<string, unknown> {
     return {
       id: this.id, label: this.label, mode: this.mode, baseUrl: this.config.baseUrl, apiKey: maskSecret(this.config.apiKey),
       webhookSecret: maskSecret(this.config.webhookSecret), ed25519PublicKeyConfigured: !!this.edKey,
       hmacRequired: this.config.hmacRequired, ed25519Required: this.config.ed25519Required,
       settlementAccountAlias: this.settlementAccountAlias, exponents: this.exponents, allowedOperators: this.config.allowedOperators,
+      connectedAccountId: this.config.connectedAccountId ?? null, applicationFee: 'INTERDIT',
     };
   }
 }

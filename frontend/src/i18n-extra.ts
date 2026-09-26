@@ -491,6 +491,7 @@ export const EXTRA_FR = {
   'exception.UNKNOWN_ACCOUNT': 'Compte inconnu',
   'exception.AMOUNT_MISMATCH': 'Écart de montant',
   'exception.MISSING_SETTLEMENT': 'Règlement manquant',
+  'exception.PROVIDER_AMBIGUOUS': 'Résultat opérateur inconnu',
   'vault.title': 'Coffre des comptes bénéficiaires',
   'vault.sub': 'Changement de compte : proposition, deux approbateurs distincts, vérification hors bande, délai de 72 h.',
   'vault.rules': 'Toute modification d’un compte bénéficiaire exige une vérification hors bande (appel au numéro connu de la banque) et n’entre en vigueur qu’après 72 heures de délai de refroidissement.',
