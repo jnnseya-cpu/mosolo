@@ -51,7 +51,7 @@ export default function Audit() {
               { key: 'actor', label: tr('audit.actor'), render: (e) => <span className="mono small">{actor(e)}</span> },
               { key: 'action', label: tr('audit.action'), primary: true, render: (e) => <><span className="row-title">{auditActionLabel(lang, e.action ?? e.type ?? '')}</span><span className="account-code">{e.action ?? e.type}</span></> },
               { key: 'res', label: tr('audit.resource'), render: (e) => <span className="small">{[e.resourceType, e.resourceId ?? e.subject].filter(Boolean).join(' · ') || '—'}</span> },
-              { key: 'hash', label: tr('audit.hash'), render: (e) => <span className="mono small hash">{e.hash ? `${e.hash.slice(0, 12)}…` : '—'}</span> },
+              { key: 'hash', label: tr('audit.hash'), render: (e) => <span className="mono small nowrap-cell">{e.hash ? `${e.hash.slice(0, 12)}…` : "—"}</span> },
             ]} />
         )}
       </section>

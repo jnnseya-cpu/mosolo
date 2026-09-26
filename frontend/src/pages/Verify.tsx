@@ -8,6 +8,7 @@ import { MoneyText } from '../components/MoneyText';
 import { ErrorState } from '../components/States';
 import { api } from '../lib/api';
 import type { UIKey } from '../lib/i18n';
+import { revenueCategoryLabel } from '../lib/labels';
 import type { PublicReceiptResult } from '../lib/types';
 
 const VIEW: Record<PublicReceiptCheck, { icon: string; tone: string; key: UIKey }> = {
@@ -69,7 +70,7 @@ function Scanner({ onCode, onClose }: { onCode: (c: string) => void; onClose: ()
 }
 
 export default function Verify() {
-  const { tr, fmtDate } = useApp();
+  const { tr, fmtDate, lang } = useApp();
   const params = useParams();
   const [search] = useSearchParams();
   const nav = useNavigate();
@@ -137,7 +138,7 @@ export default function Verify() {
                   <dl className="kv kv-verdict">
                     {result.amount && <div><dt>{tr('verify.amount')}</dt><dd><MoneyText money={result.amount} /></dd></div>}
                     {(result.paidOn ?? result.date ?? result.paidAt) && <div><dt>{tr('verify.date')}</dt><dd>{fmtDate(result.paidOn ?? result.date ?? result.paidAt)}</dd></div>}
-                    {(result.category ?? result.revenueCategory) && <div><dt>{tr('verify.category')}</dt><dd>{result.category ?? result.revenueCategory}</dd></div>}
+                    {(result.category ?? result.revenueCategory) && <div><dt>{tr('verify.category')}</dt><dd>{result.category ?? revenueCategoryLabel(lang, result.revenueCategory ?? '')}</dd></div>}
                     {(result.beneficiaryAdministration ?? result.beneficiary ?? result.administration) && <div><dt>{tr('verify.beneficiary')}</dt><dd>{result.beneficiaryAdministration ?? result.beneficiary ?? result.administration}</dd></div>}
                     {(result.taxpayerRefSuffix ?? result.taxpayerRefLast4) && <div><dt>{tr('verify.ref4')}</dt><dd className="mono">{result.taxpayerRefSuffix ?? `…${result.taxpayerRefLast4}`}</dd></div>}
                   </dl>
