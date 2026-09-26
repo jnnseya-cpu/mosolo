@@ -12,6 +12,7 @@ import { ErrorState, ExampleNotice, Loading } from '../components/States';
 import { Icon } from '../components/Icon';
 import { api, asList, describeError, NetworkError } from '../lib/api';
 import type { UIKey } from '../lib/i18n';
+import { periodicityLabel, revenueCategoryLabel } from '../lib/labels';
 
 type Rule = RuleSheet & { sample?: boolean; demo?: boolean; createdAt?: string; publishedAt?: string; activatedAt?: string };
 
@@ -89,10 +90,10 @@ function ApprovalTimeline({ rule, onDone }: { rule: Rule; onDone: () => void }) 
 }
 
 function RuleDetail({ rule, onChanged }: { rule: Rule; onChanged: () => void }) {
-  const { tr, fmtDate } = useApp();
+  const { tr, fmtDate, lang } = useApp();
   const rows: [UIKey, ReactNode][] = [
     ['rules.f.code', <span className="mono">{rule.code} · v{rule.version}</span>],
-    ['rules.f.category', rule.revenueCategory],
+    ['rules.f.category', revenueCategoryLabel(lang, rule.revenueCategory)],
     ['rules.f.instruments', rule.legalInstrumentIds.join(' · ') || '—'],
     ['rules.f.articles', rule.articles.join(' · ') || '—'],
     ['rules.f.authority', rule.competentAuthority],
@@ -104,7 +105,7 @@ function RuleDetail({ rule, onChanged }: { rule: Rule; onChanged: () => void }) 
     ['rules.f.formula', <code className="formula">{rule.formula}</code>],
     ['rules.f.rates', <span className="mono small">{Object.entries(rule.rateTable).map(([k, v]) => `${k} = ${v}`).join(' · ')}</span>],
     ['rules.f.currency', `${CURRENCIES[rule.currency]?.flag ?? ''} ${rule.currency} · ${rule.rounding}`],
-    ['rules.f.periodicity', rule.periodicity],
+    ['rules.f.periodicity', periodicityLabel(lang, rule.periodicity)],
     ['rules.f.due', rule.dueRule],
     ['rules.f.exemptions', rule.exemptions.length ? rule.exemptions.map((x) => x.basis).join(' · ') : '—'],
     ['rules.f.penalties', rule.penalties.length ? rule.penalties.map((x) => x.description).join(' · ') : '—'],
@@ -137,7 +138,7 @@ const EMPTY: NewRule = {
 };
 
 function NewRuleForm({ onCreated }: { onCreated: () => void }) {
-  const { tr } = useApp();
+  const { tr, lang } = useApp();
   const draft = useAutosave<NewRule>('legal-rule-new', EMPTY);
   const v = draft.value;
   const [busy, setBusy] = useState(false);
@@ -180,7 +181,7 @@ function NewRuleForm({ onCreated }: { onCreated: () => void }) {
         <div className="field">
           <label className="label" htmlFor="nr-cat">{tr('rules.f.category')}</label>
           <select id="nr-cat" value={v.revenueCategory} onChange={set('revenueCategory')}>
-            {['IMPOT_PROVINCIAL', 'INTERET_COMMUN', 'PROVINCIAL_SPECIFIQUE', 'RECETTE_ETD', 'DROIT_ADMINISTRATIF', 'REDEVANCE_SERVICE', 'PENALITE', 'CONCESSION_DOMANIALE'].map((c) => <option key={c}>{c}</option>)}
+            {['IMPOT_PROVINCIAL', 'INTERET_COMMUN', 'PROVINCIAL_SPECIFIQUE', 'RECETTE_ETD', 'DROIT_ADMINISTRATIF', 'REDEVANCE_SERVICE', 'PENALITE', 'CONCESSION_DOMANIALE'].map((c) => <option key={c} value={c}>{revenueCategoryLabel(lang, c)}</option>)}
           </select>
         </div>
         <div className="field">
@@ -200,7 +201,7 @@ function NewRuleForm({ onCreated }: { onCreated: () => void }) {
       <div className="field-row">
         <div className="field">
           <label className="label" htmlFor="nr-per">{tr('rules.f.periodicity')}</label>
-          <select id="nr-per" value={v.periodicity} onChange={set('periodicity')}>{['ANNUELLE', 'MENSUELLE', 'PONCTUELLE'].map((c) => <option key={c}>{c}</option>)}</select>
+          <select id="nr-per" value={v.periodicity} onChange={set('periodicity')}>{['ANNUELLE', 'MENSUELLE', 'PONCTUELLE'].map((c) => <option key={c} value={c}>{periodicityLabel(lang, c)}</option>)}</select>
         </div>
         {text('effectiveFrom', 'rules.f.effectiveFrom', { type: 'date' })}
       </div>

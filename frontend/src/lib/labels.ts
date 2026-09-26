@@ -12,6 +12,8 @@ function lookup(lang: LanguageCode, key: string, code: string): string {
 }
 
 export const categoryLabel = (lang: LanguageCode, code: string) => lookup(lang, `objcat.${code}`, code);
+export const revenueCategoryLabel = (lang: LanguageCode, code: string) => lookup(lang, `revcat.${code}`, code);
+export const periodicityLabel = (lang: LanguageCode, code: string) => lookup(lang, `periodicity.${code}`, code);
 export const ledgerLabel = (lang: LanguageCode, code: string) => lookup(lang, `ledger.${code}`, code);
 export const levelLabel = (lang: LanguageCode, code: string) => { const k = `levelFull.${code}`; return hasKey(k) ? tr(lang, k) : code; };
 

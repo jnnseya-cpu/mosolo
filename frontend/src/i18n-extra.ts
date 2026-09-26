@@ -691,6 +691,21 @@ export const EXTRA_FR = {
   'roleShort.R30': 'Contribuable',
   'roleShort.R31': 'Mandataire',
   'roleShort.R32': 'Point de paiement agréé',
+  'revcat.IMPOT_PROVINCIAL': 'Impôt provincial',
+  'revcat.INTERET_COMMUN': 'Taxe d’intérêt commun',
+  'revcat.PROVINCIAL_SPECIFIQUE': 'Taxe provinciale spécifique',
+  'revcat.RECETTE_ETD': 'Recette des ETD',
+  'revcat.RECETTE_CENTRALE': 'Recette du pouvoir central',
+  'revcat.PARTAGEE': 'Recette partagée',
+  'revcat.DROIT_ADMINISTRATIF': 'Droit administratif',
+  'revcat.REDEVANCE_SERVICE': 'Redevance de service',
+  'revcat.PENALITE': 'Pénalité',
+  'revcat.CONCESSION_DOMANIALE': 'Concession domaniale',
+  'revcat.RECETTE_COMMERCIALE': 'Recette commerciale',
+  'revcat.ACTE_REQUIS': 'Acte requis',
+  'periodicity.ANNUELLE': 'Annuelle',
+  'periodicity.MENSUELLE': 'Mensuelle',
+  'periodicity.PONCTUELLE': 'Ponctuelle',
 } as const;
 
 export type ExtraKey = keyof typeof EXTRA_FR;
