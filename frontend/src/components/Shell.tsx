@@ -70,7 +70,7 @@ function Header() {
     <header className="app-header">
       <div className="hdr-inner">
         <NavLink to="/" className="hdr-brand" aria-label={tr('header.homeLink')}>
-          <CityLogo height={36} />
+          <CityLogo height={44} />
           <span className="hdr-divider" aria-hidden="true" />
           <span className="hdr-name">
             <span className="hdr-app">KINSHASA MOSOLO</span>

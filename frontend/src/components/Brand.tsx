@@ -15,14 +15,20 @@ export function CityLogo({ height = 40, variant = 'onDark' }: { height?: number;
       </span>
     );
   }
+  // Le logo a un fond blanc : sur fond sombre, il est posé sur une plaque blanche (le fichier reste intact).
   return (
-    <img
-      src="/logo-ville-de-kinshasa.png"
-      alt="Ville de Kinshasa"
-      className="city-logo"
-      style={{ height, width: 'auto' }}
-      onError={() => setFailed(true)}
-    />
+    <span className={`city-logo-plate city-logo-plate-${variant}`}>
+      <picture>
+        <source srcSet="/logo-ville-de-kinshasa.webp" type="image/webp" />
+        <img
+          src="/logo-ville-de-kinshasa.png"
+          alt="Ville de Kinshasa"
+          className="city-logo"
+          style={{ height, width: 'auto' }}
+          onError={() => setFailed(true)}
+        />
+      </picture>
+    </span>
   );
 }
 
