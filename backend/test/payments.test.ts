@@ -158,7 +158,8 @@ describe('Rappels prestataires', () => {
       ['amount', 'beneficiaryAdministration', 'message', 'paidOn', 'revenueCategory', 'settlementStatus', 'status', 'taxpayerRefSuffix', 'verifiedAt'].sort(),
     );
     const iuc = env.app.ctx.taxpayers.get(DEMO.taxpayerId).iuc;
-    expect(body.taxpayerRefSuffix).toBe('…' + iuc.slice(-4));
+    expect(body.taxpayerRefSuffix).toBe('…' + iuc.replace(/-/g, '').slice(-4));
+    expect(body.taxpayerRefSuffix).toMatch(/^…[0-9A-Z]{4}$/);
     const text = JSON.stringify(body);
     expect(text).not.toContain('Mbuyi');
     expect(text).not.toContain(iuc);

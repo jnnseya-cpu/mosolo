@@ -1,0 +1,2032 @@
+openapi: 3.1.0
+info:
+  title: KINSHASA MOSOLO — API du socle (v1)
+  version: 1.0.0
+  summary: Plateforme souveraine des recettes de la Ville-Province de Kinshasa
+  description: |
+    Contrat de référence : `specs/contrat-api.md`. Montants au format `MoneyJSON` (`{"amount": "150.00", "currency": "USD"}`),
+    jamais de nombre flottant. Erreurs au format RFC 9457 (`application/problem+json`) avec un `code` stable.
+
+    **Authentification de démonstration** : en-tête `x-demo-user: <userId>` (voir `GET /v1/demo/users`).
+    En production : OIDC + clés d'accès (passkeys), mTLS + signatures pour les prestataires.
+
+    Routes marquées `x-extension: true` : compléments du socle, non listés dans le contrat v1 (le frontend peut les ignorer).
+  license:
+    name: Propriété de la Ville-Province de Kinshasa
+servers:
+  - url: http://localhost:8080
+    description: Développement local (`npm run dev -w backend`)
+tags:
+  - { name: Système }
+  - { name: Identité }
+  - { name: Objets }
+  - { name: Registre juridique }
+  - { name: Liquidation }
+  - { name: Paiements }
+  - { name: Trésor }
+  - { name: Quittances }
+  - { name: Coffre }
+  - { name: Audit }
+  - { name: Communications }
+  - { name: Brouillons }
+  - { name: IA }
+  - { name: Tableaux de bord }
+  - { name: Change }
+  - { name: Terrain }
+  - { name: Réclamations }
+  - { name: Sécurité }
+
+security:
+  - demoUser: []
+
+paths:
+  /health:
+    get:
+      tags: [Système]
+      summary: Santé du service
+      security: []
+      responses:
+        '200':
+          description: Service disponible
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, time]
+                properties:
+                  status: { type: string, const: ok }
+                  service: { type: string }
+                  time: { type: string, format: date-time }
+
+  /v1/meta:
+    get:
+      tags: [Système]
+      summary: Devises (avec drapeaux), langues, compteurs du catalogue, communes, entités
+      security: []
+      responses:
+        '200':
+          description: Métadonnées
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Meta' }
+
+  /v1/demo/users:
+    get:
+      tags: [Système]
+      summary: Utilisateurs de démonstration
+      security: []
+      responses:
+        '200':
+          description: Utilisateurs semés
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DemoUser' }
+
+  /v1/registrations:
+    post:
+      tags: [Identité]
+      summary: Inscription d'un contribuable (public)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegistrationRequest' }
+      responses:
+        '201':
+          description: Compte créé (niveau N0, téléphone à vérifier)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [taxpayerId, iuc, verificationLevel]
+                properties:
+                  taxpayerId: { type: string, examples: [TP-000001] }
+                  iuc: { type: string, examples: [KIN-7F3K9Q2M-X] }
+                  verificationLevel: { $ref: '#/components/schemas/VerificationLevel' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /v1/taxpayers/{id}:
+    get:
+      tags: [Identité]
+      summary: Profil, objets, obligations, quittances
+      description: |
+        Contribuable (soi), mandataire, agents habilités. `access: minimal` (agent de terrain dans son territoire) :
+        aucun montant (`amount: null`), ni bail ni quittance. Gouverneur et super-administrateur : 403.
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      responses:
+        '200':
+          description: Profil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaxpayerProfile' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /v1/fiscal-objects:
+    post:
+      tags: [Objets]
+      summary: Déclaration d'un objet fiscal provisoire
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FiscalObjectRequest' }
+      responses:
+        '201':
+          description: Objet provisoire créé
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FiscalObject' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /v1/leases:
+    post:
+      tags: [Objets]
+      summary: Déclaration de bail (bailleur, locataire ou mandataire)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LeaseRequest' }
+      responses:
+        '201':
+          description: Bail déclaré
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Lease' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /v1/legal-rules:
+    get:
+      tags: [Registre juridique]
+      summary: Liste des fiches de règles (tous agents)
+      responses:
+        '200':
+          description: Fiches
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RuleSheet' }
+        '403': { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [Registre juridique]
+      summary: Création d'une fiche (R13) — statut BROUILLON
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RuleInput' }
+      responses:
+        '201':
+          description: Fiche créée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuleSheet' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /v1/legal-rules/{id}:
+    get:
+      tags: [Registre juridique]
+      summary: Détail d'une fiche avec les entrées requises par la formule
+      x-extension: true
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      responses:
+        '200':
+          description: Fiche
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/RuleSheet' }
+                  - type: object
+                    properties:
+                      requiredInputs: { type: array, items: { type: string } }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /v1/legal-rules/{id}/approve:
+    post:
+      tags: [Registre juridique]
+      summary: Visa (REDACTEUR R13 → VERIFICATEUR_JURIDIQUE R14 → VALIDATEUR_FINANCIER R15 → AUTORITE_PUBLICATION R16)
+      description: |
+        Quatre personnes distinctes (sinon 403 `SEPARATION_OF_DUTIES`). La 4e approbation publie (`PUBLIEE`),
+        puis `ACTIVE` dès la date d'effet. Publication bloquée (422) si un instrument est abrogé
+        (`ABROGATED_INSTRUMENT`), non en vigueur (`INSTRUMENT_NOT_IN_FORCE`) ou si la source n'est pas certifiée (`SOURCE_NOT_CERTIFIED`).
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              additionalProperties: false
+              properties:
+                role: { $ref: '#/components/schemas/ApprovalRole' }
+      responses:
+        '200':
+          description: Fiche après visa
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuleSheet' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /v1/legal-instruments:
+    get:
+      tags: [Registre juridique]
+      summary: Registre des instruments juridiques (liste noire des abrogés incluse)
+      x-extension: true
+      responses:
+        '200':
+          description: Instruments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LegalInstrument' }
+
+  /v1/assessments/calculate:
+    post:
+      tags: [Liquidation]
+      summary: Calcul déterministe (simulation ou liquidation) — R06, R07, R11
+      description: |
+        `simulate: true` est permis pour une règle non exécutable (ex. A_VERIFIER) : la trace porte `nonOpposable: true`.
+        `simulate: false` exige une règle exécutable, sinon 422 `RULE_NOT_EXECUTABLE` (tentative journalisée) ;
+        en cas de succès, une obligation est créée (201).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CalculateRequest' }
+      responses:
+        '200':
+          description: Simulation (aucune obligation)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalculateResponse' }
+        '201':
+          description: Liquidation (obligation créée)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalculateResponse' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /v1/obligations:
+    get:
+      tags: [Liquidation]
+      summary: Obligations (selon droits ; contribuable = les siennes)
+      parameters:
+        - { name: taxpayerId, in: query, required: false, schema: { type: string } }
+      responses:
+        '200':
+          description: Obligations visibles
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ObligationSummary' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /v1/obligations/{id}:
+    get:
+      tags: [Liquidation]
+      summary: Obligation + explication (règle, version, base légale, formule, entrées, montant, échéance, voie de recours)
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      responses:
+        '200':
+          description: Obligation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ObligationDetail' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /v1/obligations/{id}/payment-orders:
+    post:
+      tags: [Paiements]
+      summary: Création d'une référence de paiement (contribuable, mandataire, guichet)
+      description: |
+        `Idempotency-Key` obligatoire : même clé + même contenu → même réponse (en-tête `idempotent-replayed: true`) ;
+        même clé + contenu différent → 409 `IDEMPOTENCY_KEY_REUSED`. Le montant (= solde) et l'alias bénéficiaire (coffre)
+        ne sont jamais fournis par le client (tout champ supplémentaire → 400).
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PaymentOrderRequest' }
+      responses:
+        '201':
+          description: Référence émise (ou rejouée)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentOrder' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /v1/providers/{provider}/callbacks:
+    post:
+      tags: [Paiements]
+      summary: Confirmation signée d'un prestataire → CONFIRME + quittance provisoire
+      description: |
+        Vérifications : `x-signature` = HMAC-SHA256 hexadécimal du corps brut avec le secret du prestataire ;
+        `x-timestamp` dans ±5 min ; `x-nonce` unique (sinon 409 `NONCE_REPLAYED` + alerte) ; `providerTxnId` unique
+        (rejeu → 200 avec `replayed: true`, sans double effet) ; montant et référence identiques à l'ordre
+        (sinon 422 `AMOUNT_MISMATCH` / `UNKNOWN_PAYMENT_REFERENCE` + alerte). Aucune quittance par un autre moyen.
+      security: []
+      parameters:
+        - { name: provider, in: path, required: true, schema: { type: string, examples: [mm-operator-a] } }
+        - { name: x-signature, in: header, required: true, schema: { type: string, pattern: '^(sha256=)?[0-9a-f]{64}$' } }
+        - { name: x-nonce, in: header, required: true, schema: { type: string } }
+        - { name: x-timestamp, in: header, required: true, schema: { type: string, format: date-time } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProviderCallback' }
+      responses:
+        '200':
+          description: Traité (y compris rejeu idempotent)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CallbackResponse' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /v1/settlements/statements:
+    post:
+      tags: [Trésor]
+      summary: Import d'un relevé (R17) → rapprochement à trois voies
+      description: Idempotent par `statementId` (rejeu identique → 200 ; contenu différent → 409 `STATEMENT_ALREADY_IMPORTED`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StatementRequest' }
+      responses:
+        '201':
+          description: Relevé importé et rapproché
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatementResult' }
+        '200':
+          description: Relevé déjà importé (rejeu)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatementResult' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /v1/reconciliation/exceptions:
+    get:
+      tags: [Trésor]
+      summary: Exceptions de rapprochement (R17, R18, R22)
+      responses:
+        '200':
+          description: Exceptions ouvertes (dont « règlement manquant » calculé à J+1)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ReconciliationException' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /v1/ledger/entries:
+    get:
+      tags: [Trésor]
+      summary: Écritures du grand livre (R17, R22, R23)
+      parameters:
+        - { name: sourceId, in: query, required: false, schema: { type: string } }
+      responses:
+        '200':
+          description: Écritures (ajout seul, chaînées)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LedgerEntry' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /v1/ledger/entries/{id}:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    delete:
+      tags: [Trésor]
+      summary: Interdit — grand livre en ajout seul
+      x-extension: true
+      responses:
+        '405': { $ref: '#/components/responses/Problem' }
+    put:
+      tags: [Trésor]
+      summary: Interdit — grand livre en ajout seul
+      x-extension: true
+      responses:
+        '405': { $ref: '#/components/responses/Problem' }
+    patch:
+      tags: [Trésor]
+      summary: Interdit — grand livre en ajout seul
+      x-extension: true
+      responses:
+        '405': { $ref: '#/components/responses/Problem' }
+
+  /v1/ledger/entries/{id}/reversals:
+    post:
+      tags: [Trésor]
+      summary: Contre-écriture liée à l'original (R17) — seule forme de correction
+      x-extension: true
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              additionalProperties: false
+              properties:
+                reason: { type: string, minLength: 5 }
+      responses:
+        '201':
+          description: Contre-écriture passée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LedgerEntry' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /v1/ledger/balance:
+    get:
+      tags: [Trésor]
+      summary: Équilibre du grand livre (R17, R22, R23)
+      responses:
+        '200':
+          description: Équilibre par devise et soldes par compte
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LedgerBalance' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /v1/public/receipts/{code}:
+    get:
+      tags: [Quittances]
+      summary: Vérification publique minimale d'une quittance (code court ou numéro)
+      security: []
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string, examples: [Q26KIN0000000017] } }
+      responses:
+        '200':
+          description: Résultat minimal (aucun nom, adresse ni historique)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicReceiptCheck' }
+
+  /v1/beneficiary-accounts:
+    get:
+      tags: [Coffre]
+      summary: Comptes (masqués) et demandes de changement (R17, R19, R22)
+      x-extension: true
+      responses:
+        '200':
+          description: Vue du coffre
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accounts: { type: array, items: { $ref: '#/components/schemas/BeneficiaryAccount' } }
+                  changeRequests: { type: array, items: { $ref: '#/components/schemas/ChangeRequest' } }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /v1/beneficiary-accounts/change-requests:
+    post:
+      tags: [Coffre]
+      summary: Proposition de changement de compte bénéficiaire (R17)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangeRequestInput' }
+      responses:
+        '201':
+          description: Demande créée (numéro de compte masqué)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangeRequest' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /v1/beneficiary-accounts/change-requests/{id}/approve:
+    post:
+      tags: [Coffre]
+      summary: Approbation (R19) — 2 approbateurs distincts, vérification hors bande, effet après 72 h
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outOfBandVerified]
+              additionalProperties: false
+              properties:
+                outOfBandVerified: { type: boolean, description: 'Doit valoir true (sinon 422 OUT_OF_BAND_VERIFICATION_REQUIRED)' }
+      responses:
+        '200':
+          description: Demande après approbation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangeRequest' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /v1/audit/events:
+    get:
+      tags: [Audit]
+      summary: Journal d'audit (R22, R23)
+      parameters:
+        - { name: action, in: query, required: false, schema: { type: string }, description: Préfixe d'action }
+        - { name: resourceId, in: query, required: false, schema: { type: string } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 1000, default: 100 } }
+        - { name: offset, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200':
+          description: Événements
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total, items]
+                properties:
+                  total: { type: integer }
+                  items: { type: array, items: { $ref: '#/components/schemas/AuditRecord' } }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /v1/audit/events/{id}:
+    parameters: [ { $ref: '#/components/parameters/Id' } ]
+    delete:
+      tags: [Audit]
+      summary: Interdit — journal en ajout seul
+      x-extension: true
+      responses:
+        '405': { $ref: '#/components/responses/Problem' }
+    put:
+      tags: [Audit]
+      summary: Interdit — journal en ajout seul
+      x-extension: true
+      responses:
+        '405': { $ref: '#/components/responses/Problem' }
+    patch:
+      tags: [Audit]
+      summary: Interdit — journal en ajout seul
+      x-extension: true
+      responses:
+        '405': { $ref: '#/components/responses/Problem' }
+
+  /v1/audit/verify:
+    get:
+      tags: [Audit]
+      summary: Vérification de l'intégrité de la chaîne (R22, R23)
+      responses:
+        '200':
+          description: Résultat
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditVerification' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /v1/communications/overview:
+    get:
+      tags: [Communications]
+      summary: Synthèse, couverture par canal, dernières délivrances (agents)
+      responses:
+        '200':
+          description: Synthèse
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommunicationsOverview' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /v1/communications/events:
+    get:
+      tags: [Communications]
+      summary: Catalogue des événements (agents)
+      parameters:
+        - { name: category, in: query, required: false, schema: { type: string } }
+        - { name: mandatory, in: query, required: false, schema: { type: string, enum: ['true', 'false'] } }
+      responses:
+        '200':
+          description: Catalogue
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total, categories, events]
+                properties:
+                  total: { type: integer }
+                  categories: { type: array, items: { $ref: '#/components/schemas/EventCategory' } }
+                  events: { type: array, items: { $ref: '#/components/schemas/CommunicationEvent' } }
+
+  /v1/communications/preview/{eventCode}:
+    get:
+      tags: [Communications]
+      summary: Aperçu du courriel HTML (charte Ville de Kinshasa + bloc de l'entité émettrice)
+      description: |
+        Logo `/logo-ville-de-kinshasa.png`, bandeau tricolore, bloc entité (DGIPK, DGTK, MINFIN…), mention d'avis obligatoire,
+        « La version française fait foi. » si `lang ≠ fr`, pied « Plateforme KINSHASA MOSOLO — réalisée par Groupe Nseya ».
+        L'objet (encodé URI) est aussi renvoyé dans l'en-tête `x-mosolo-subject`.
+      parameters:
+        - { name: eventCode, in: path, required: true, schema: { type: string, examples: [assessment.issued] } }
+        - { $ref: '#/components/parameters/Lang' }
+        - { name: entity, in: query, required: false, schema: { $ref: '#/components/schemas/EntityCode' } }
+      responses:
+        '200':
+          description: Courriel rendu
+          headers:
+            x-mosolo-subject: { schema: { type: string } }
+            content-language: { schema: { type: string } }
+          content:
+            text/html:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /v1/communications/test:
+    post:
+      tags: [Communications]
+      summary: Envoi de test à soi-même (statut `journalise` en bac à sable si pas de clé fournisseur)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [eventCode]
+              additionalProperties: false
+              properties:
+                eventCode: { type: string }
+                entity: { $ref: '#/components/schemas/EntityCode' }
+                lang: { $ref: '#/components/schemas/LanguageCode' }
+      responses:
+        '201':
+          description: Délivrances
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [eventCode, entity, sandbox, deliveries]
+                properties:
+                  eventCode: { type: string }
+                  entity: { type: string }
+                  sandbox: { type: boolean }
+                  deliveries: { type: array, items: { $ref: '#/components/schemas/Delivery' } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /v1/drafts/{key}:
+    parameters:
+      - { name: key, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9._:-]{1,120}$' } }
+    put:
+      tags: [Brouillons]
+      summary: Enregistrement automatique — crée une nouvelle version à chaque appel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data]
+              additionalProperties: false
+              properties:
+                data: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Version enregistrée
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key, version, savedAt, changeSummary, changes]
+                properties:
+                  key: { type: string }
+                  version: { type: integer }
+                  savedAt: { type: string, format: date-time }
+                  changeSummary: { type: string, examples: ['3 champs modifiés : surface (120 → 135), usage (habitation → commerce), photo ajouté'] }
+                  changes: { type: array, items: { $ref: '#/components/schemas/FieldChange' } }
+        '400': { $ref: '#/components/responses/Problem' }
+    get:
+      tags: [Brouillons]
+      summary: Dernière version (propriétaire uniquement)
+      responses:
+        '200':
+          description: Brouillon
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DraftVersion' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /v1/drafts/{key}/versions:
+    get:
+      tags: [Brouillons]
+      summary: Historique complet des versions (propriétaire uniquement)
+      parameters:
+        - { name: key, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DraftVersion' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /v1/ai/insights:
+    post:
+      tags: [IA]
+      summary: Analyse de la couche d'intelligence (moteur déterministe) → AIRecommendation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [context]
+              additionalProperties: false
+              properties:
+                context: { type: string, enum: [governor, rental, treasury, communications] }
+                subjectId: { type: string }
+      responses:
+        '201':
+          description: Recommandation émise (sans effet tant qu'elle n'est pas décidée)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AIRecommendation' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /v1/ai/recommendations:
+    get:
+      tags: [IA]
+      summary: Liste des recommandations (agents)
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [EMISE, ACCEPTEE, MODIFIEE, REJETEE] } }
+        - { name: context, in: query, required: false, schema: { type: string, enum: [governor, rental, treasury, communications] } }
+      responses:
+        '200':
+          description: Recommandations
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AIRecommendation' }
+
+  /v1/ai/recommendations/{id}/decide:
+    post:
+      tags: [IA]
+      summary: Décision humaine (journalisée) — aucune exécution automatique
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, reason]
+              additionalProperties: false
+              properties:
+                decision: { type: string, enum: [ACCEPTEE, REJETEE, MODIFIEE] }
+                reason: { type: string, minLength: 3 }
+      responses:
+        '200':
+          description: Recommandation décidée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AIRecommendation' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /v1/dashboards/governor:
+    get:
+      tags: [Tableaux de bord]
+      summary: 'Centre de commandement du Gouverneur (R01, R02, R05) — données « example: true »'
+      responses:
+        '200':
+          description: Tableau de bord (agrégats seulement)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GovernorDashboard' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /v1/exchange-rates/{date}:
+    get:
+      tags: [Change]
+      summary: Taux officiels de démonstration (source déclarée « BCC (démo) »)
+      security: []
+      parameters:
+        - { name: date, in: path, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Taux (CDF pour une unité de devise)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExchangeRates' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404':
+          description: '`FX_RATE_MISSING` — aucun taux publié pour cette date'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /v1/field-sync/batches:
+    post:
+      tags: [Terrain]
+      summary: Lot de constats signé par la clé de l'appareil enrôlé (R10)
+      description: |
+        `x-device-signature` = HMAC-SHA256 hexadécimal du corps brut avec la clé de l'appareil. Appareil révoqué → 403
+        `DEVICE_REVOKED` (+ alerte). Idempotent par `batchId`. Deux agents divergents sur un même champ → les deux constats
+        sont conservés et un conflit `A_ARBITRER` est ouvert. Aucun constat ne crée de dette.
+      parameters:
+        - { name: x-device-signature, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FieldBatch' }
+      responses:
+        '200':
+          description: Résultat de synchronisation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FieldBatchResult' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /v1/appeals:
+    post:
+      tags: [Réclamations]
+      summary: Dépôt d'une réclamation (contribuable, mandataire) — l'obligation passe CONTESTEE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [obligationId, grounds]
+              additionalProperties: false
+              properties:
+                obligationId: { type: string }
+                grounds: { type: string, minLength: 5 }
+                requestedAmount: { $ref: '#/components/schemas/MoneyJSON' }
+      responses:
+        '201':
+          description: Réclamation déposée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appeal' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /v1/appeals/{id}:
+    get:
+      tags: [Réclamations]
+      summary: Dossier de réclamation
+      x-extension: true
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      responses:
+        '200':
+          description: Réclamation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appeal' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /v1/appeals/{id}/instruct:
+    post:
+      tags: [Réclamations]
+      summary: Instruction et proposition (R20) — étape préalable à la décision
+      x-extension: true
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [proposal, analysis]
+              additionalProperties: false
+              properties:
+                proposal: { $ref: '#/components/schemas/AppealDecision' }
+                analysis: { type: string, minLength: 5 }
+                proposedAmount: { $ref: '#/components/schemas/MoneyJSON' }
+      responses:
+        '200':
+          description: Réclamation instruite (PROPOSITION)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appeal' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /v1/appeals/{id}/decide:
+    post:
+      tags: [Réclamations]
+      summary: Décision (R21, distinct de l'instructeur) — crée une obligation rectificative, ne supprime rien
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, reason]
+              additionalProperties: false
+              properties:
+                decision: { $ref: '#/components/schemas/AppealDecision' }
+                reason: { type: string, minLength: 5 }
+                rectifiedAmount:
+                  allOf: [ { $ref: '#/components/schemas/MoneyJSON' } ]
+                  description: Obligatoire si PARTIELLEMENT_ACCEPTEE ; 0 par défaut si ACCEPTEE
+      responses:
+        '200':
+          description: Réclamation décidée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appeal' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /v1/security/alerts:
+    get:
+      tags: [Sécurité]
+      summary: Alertes de sécurité et de fraude (R22, R24, R28)
+      x-extension: true
+      responses:
+        '200':
+          description: Alertes
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SecurityAlert' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+components:
+  securitySchemes:
+    demoUser:
+      type: apiKey
+      in: header
+      name: x-demo-user
+      description: Identifiant d'un utilisateur de démonstration (voir GET /v1/demo/users). DÉMO UNIQUEMENT.
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 200 }
+    Lang:
+      name: lang
+      in: query
+      required: false
+      description: Sinon `Accept-Language` ; français par défaut (langue de référence).
+      schema: { $ref: '#/components/schemas/LanguageCode' }
+
+  responses:
+    Problem:
+      description: Erreur RFC 9457
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, detail, code]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code:
+          type: string
+          description: Code stable
+          examples: [RULE_NOT_EXECUTABLE, FORBIDDEN, SEPARATION_OF_DUTIES, IDEMPOTENCY_KEY_REUSED, NONCE_REPLAYED, FX_RATE_MISSING]
+        instance: { type: string }
+      additionalProperties: true
+
+    CurrencyCode:
+      type: string
+      enum: [CDF, USD, EUR, GBP, CAD, CHF, ZAR, XAF, AOA, ZMW, RWF, UGX, KES, TZS, BIF, CNY, AED]
+    LanguageCode:
+      type: string
+      enum: [fr, ln, sw, kg, lua, en]
+    EntityCode:
+      type: string
+      enum: [GOUVERNORAT, MINFIN, DGIPK, DGTK, TRESOR, AUDIT, PLATEFORME, CONTENTIEUX, PUBLIC]
+    RoleCode:
+      type: string
+      pattern: '^R(0[1-9]|[12][0-9]|3[0-7])$'
+    VerificationLevel:
+      type: string
+      enum: [N0, N0A, N1, N2, N3]
+    MoneyJSON:
+      type: object
+      required: [amount, currency]
+      additionalProperties: false
+      properties:
+        amount: { type: string, pattern: '^\d+(\.\d+)?$', examples: ['150.00'] }
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+    FxConversion:
+      type: object
+      required: [amount, rate, rateDate, source, indicative]
+      properties:
+        amount: { $ref: '#/components/schemas/MoneyJSON' }
+        rate: { type: string, examples: ['2850'] }
+        rateDate: { type: string, format: date }
+        source: { type: string, examples: ['BCC (démo)'] }
+        indicative: { type: boolean, const: true }
+        demo: { type: boolean }
+
+    Meta:
+      type: object
+      properties:
+        name: { type: string }
+        apiVersion: { type: string }
+        primaryCurrency: { $ref: '#/components/schemas/CurrencyCode' }
+        currencies:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { $ref: '#/components/schemas/CurrencyCode' }
+              name: { type: string }
+              flag: { type: string }
+              country: { type: string }
+              decimals: { type: integer }
+              role: { type: string, enum: [principale, legale_secondaire, paiement_diaspora, affichage] }
+              assessable: { type: boolean }
+              payable: { type: boolean }
+        referenceLanguage: { $ref: '#/components/schemas/LanguageCode' }
+        languages:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { $ref: '#/components/schemas/LanguageCode' }
+              name: { type: string }
+              nativeName: { type: string }
+              role: { type: string }
+              status: { type: string }
+              completeness: { type: integer }
+        catalogue:
+          type: object
+          properties:
+            events: { type: integer, examples: [239] }
+            categories: { type: integer, examples: [23] }
+            mandatory: { type: integer, examples: [126] }
+        communes: { type: array, items: { type: string }, minItems: 24, maxItems: 24 }
+        entities: { type: array, items: { type: object, properties: { code: { type: string }, name: { type: string }, shortName: { type: string } } } }
+        roles: { type: object, additionalProperties: { type: string } }
+        demo: { type: object, additionalProperties: { type: string } }
+        receiptVerificationKey:
+          type: object
+          properties:
+            algorithm: { type: string, const: Ed25519 }
+            publicKeyPem: { type: string }
+
+    DemoUser:
+      type: object
+      required: [id, name, roles, entity]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        roles: { type: array, items: { $ref: '#/components/schemas/RoleCode' } }
+        roleLabels: { type: array, items: { type: string } }
+        entity: { type: string }
+        taxpayerId: { type: string }
+        territory: { type: array, items: { type: string } }
+
+    RegistrationRequest:
+      type: object
+      required: [phone, fullName, language, situation]
+      additionalProperties: false
+      properties:
+        phone: { type: string, examples: ['+243810000001'] }
+        fullName: { type: string }
+        language: { $ref: '#/components/schemas/LanguageCode' }
+        situation: { type: string, enum: [owner_occupier, landlord, tenant, subtenant, authorised_occupier, property_manager, business_tenant, other] }
+        email: { type: string, format: email }
+
+    FiscalObjectRequest:
+      type: object
+      required: [category, commune, quartier, localityRank, lat, lon]
+      additionalProperties: false
+      properties:
+        taxpayerId: { type: string }
+        category: { type: string, enum: [PARCELLE, BATIMENT, UNITE_LOCATIVE, ACTIVITE, VEHICULE, PANNEAU, AUTRE] }
+        commune: { type: string, description: Une des 24 communes de Kinshasa }
+        quartier: { type: string }
+        localityRank: { type: integer, enum: [1, 2, 3, 4] }
+        lat: { type: number, minimum: -5.2, maximum: -3.9 }
+        lon: { type: number, minimum: 15.0, maximum: 16.6 }
+        attributes: { type: object, additionalProperties: true }
+    FiscalObject:
+      allOf:
+        - $ref: '#/components/schemas/FiscalObjectRequest'
+        - type: object
+          required: [id, status, probativeStatus, createdBy, createdAt]
+          properties:
+            id: { type: string }
+            observed: { type: object, additionalProperties: true }
+            status: { type: string, enum: [PROVISOIRE, VALIDE] }
+            probativeStatus: { type: string, enum: [DECLARE, OBSERVE, VERIFIE, CONTESTE] }
+            createdBy: { type: string }
+            createdAt: { type: string, format: date-time }
+
+    LeaseRequest:
+      type: object
+      required: [unitObjectId, rent, periodicity, start]
+      additionalProperties: false
+      properties:
+        unitObjectId: { type: string }
+        lessorId: { type: string }
+        lesseeId: { type: string }
+        rent: { $ref: '#/components/schemas/MoneyJSON' }
+        periodicity: { type: string, enum: [MENSUELLE, TRIMESTRIELLE, SEMESTRIELLE, ANNUELLE] }
+        start: { type: string, format: date }
+        end: { type: string, format: date }
+    Lease:
+      allOf:
+        - $ref: '#/components/schemas/LeaseRequest'
+        - type: object
+          properties:
+            id: { type: string }
+            declaredBy: { type: string }
+            declaredByRole: { type: string, enum: [BAILLEUR, LOCATAIRE, MANDATAIRE] }
+            probativeStatus: { type: string }
+            createdAt: { type: string, format: date-time }
+
+    TaxpayerProfile:
+      type: object
+      required: [access, taxpayer, objects, obligations]
+      properties:
+        access: { type: string, enum: [full, minimal] }
+        taxpayer:
+          type: object
+          properties:
+            id: { type: string }
+            iuc: { type: string }
+            fullName: { type: string }
+            phone: { type: string, description: Masqué sauf pour le titulaire }
+            language: { $ref: '#/components/schemas/LanguageCode' }
+            situation: { type: string }
+            verificationLevel: { $ref: '#/components/schemas/VerificationLevel' }
+            createdAt: { type: string, format: date-time }
+        objects: { type: array, items: { $ref: '#/components/schemas/FiscalObject' } }
+        leases: { type: [array, 'null'], items: { $ref: '#/components/schemas/Lease' } }
+        obligations: { type: array, items: { $ref: '#/components/schemas/ObligationSummary' } }
+        paymentOrders:
+          type: array
+          items:
+            type: object
+            properties:
+              paymentOrderId: { type: string }
+              paymentReference: { type: string }
+              obligationId: { type: string }
+              status: { $ref: '#/components/schemas/PaymentStatus' }
+              amount: { $ref: '#/components/schemas/MoneyJSON' }
+              expiresAt: { type: string, format: date-time }
+        receipts: { type: [array, 'null'], items: { $ref: '#/components/schemas/Receipt' } }
+        inbox: { type: array, items: { type: object, additionalProperties: true }, description: Messages in-app (titulaire uniquement) }
+        masked: { type: boolean }
+
+    ApprovalRole:
+      type: string
+      enum: [REDACTEUR, VERIFICATEUR_JURIDIQUE, VALIDATEUR_FINANCIER, AUTORITE_PUBLICATION]
+    RuleStatus:
+      type: string
+      enum: [A_VERIFIER, BROUILLON, REVUE_JURIDIQUE, REVUE_FINANCIERE, APPROUVEE, PUBLIEE, ACTIVE, SUSPENDUE, EXPIREE, ABROGEE, ARCHIVEE]
+    RuleInput:
+      type: object
+      additionalProperties: false
+      required: [code, revenueCategory, label, legalInstrumentIds, articles, competentAuthority, administeringEntity, taxableEvent, liableParty, baseDefinition, formula, rateTable, currency, rounding, periodicity, dueRule, effectiveFrom, beneficiaryAccountAlias, appealPath, sourceVerification]
+      properties:
+        code: { type: string, pattern: '^[A-Z0-9-]{2,40}$' }
+        revenueCategory: { type: string, enum: [IMPOT_PROVINCIAL, INTERET_COMMUN, PROVINCIAL_SPECIFIQUE, RECETTE_ETD, RECETTE_CENTRALE, PARTAGEE, DROIT_ADMINISTRATIF, REDEVANCE_SERVICE, PENALITE, CONCESSION_DOMANIALE, RECETTE_COMMERCIALE, ACTE_REQUIS] }
+        label: { type: string }
+        legalInstrumentIds: { type: array, items: { type: string }, minItems: 1 }
+        articles: { type: array, items: { type: string }, minItems: 1 }
+        competentAuthority: { type: string }
+        administeringEntity: { type: string }
+        taxableEvent: { type: string }
+        liableParty: { type: string }
+        withholdingAgent: { type: string }
+        baseDefinition: { type: string }
+        formula:
+          type: string
+          description: 'Langage de règles : nombres décimaux, identifiants, + - * /, parenthèses, max(), min(). Identifiant résolu dans les entrées, puis `rateTable[nom]`, puis `rateTable["nom:<rang>"]`.'
+          examples: ['max(0, loyers_percus * taux / 100 - retenues_imputees)', 'forfait']
+        rateTable: { type: object, additionalProperties: { type: string }, examples: [{ 'forfait:1': '450', 'forfait:2': '150' }] }
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+        rounding: { type: string, enum: [HALF_UP, HALF_EVEN, DOWN, UP] }
+        periodicity: { type: string, enum: [ANNUELLE, MENSUELLE, PONCTUELLE] }
+        dueRule: { type: string }
+        exemptions: { type: array, items: { type: object, properties: { basis: { type: string }, proof: { type: string } } } }
+        penalties: { type: array, items: { type: object, properties: { basis: { type: string }, description: { type: string } } } }
+        effectiveFrom: { type: string, format: date }
+        effectiveTo: { type: string, format: date }
+        beneficiaryAccountAlias: { type: string, description: Alias du coffre (jamais un numéro de compte) }
+        appealPath: { type: string }
+        sourceVerification: { type: string, enum: [OFFICIEL_CERTIFIE, PRESSE, DOCUMENT_DE_TRAVAIL, AUCUNE] }
+        changeReason: { type: string }
+    RuleSheet:
+      allOf:
+        - $ref: '#/components/schemas/RuleInput'
+        - type: object
+          required: [id, version, status, approvals]
+          properties:
+            id: { type: string }
+            version: { type: integer }
+            status: { $ref: '#/components/schemas/RuleStatus' }
+            approvals:
+              type: array
+              items:
+                type: object
+                properties:
+                  role: { $ref: '#/components/schemas/ApprovalRole' }
+                  userId: { type: string }
+                  at: { type: string, format: date-time }
+            supersedesVersionId: { type: string }
+            createdBy: { type: string }
+            createdAt: { type: string, format: date-time }
+            publishedAt: { type: string, format: date-time }
+            activatedAt: { type: string, format: date-time }
+            sample: { type: boolean, description: Fiche modèle de l'Annexe B (A_VERIFIER) }
+            demo: { type: boolean, description: Règle fictive de démonstration }
+    LegalInstrument:
+      type: object
+      required: [id, title, status]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        status: { type: string, enum: [A_VERIFIER, EN_VIGUEUR, MODIFIE, ABROGE] }
+        abrogatedOn: { type: string, format: date }
+        abrogatedBy: { type: string }
+        demo: { type: boolean }
+
+    CalculateRequest:
+      type: object
+      required: [ruleId, taxpayerId, objectId, simulate]
+      additionalProperties: false
+      properties:
+        ruleId: { type: string }
+        taxpayerId: { type: string }
+        objectId: { type: string }
+        inputs: { type: object, additionalProperties: { type: string, pattern: '^-?\d+(\.\d+)?$' }, description: Valeurs décimales en chaînes }
+        simulate: { type: boolean }
+    AssessmentTrace:
+      type: object
+      required: [ruleId, ruleVersion, legalInstrumentIds, formula, inputs, rates, result, computedAt, nonOpposable]
+      properties:
+        ruleId: { type: string }
+        ruleCode: { type: string }
+        ruleVersion: { type: integer }
+        ruleStatus: { $ref: '#/components/schemas/RuleStatus' }
+        legalInstrumentIds: { type: array, items: { type: string } }
+        formula: { type: string }
+        inputs: { type: object, additionalProperties: { type: string } }
+        rates: { type: object, additionalProperties: { type: string } }
+        localityRank: { type: integer }
+        rounding: { type: string }
+        rawResult: { type: string }
+        result: { $ref: '#/components/schemas/MoneyJSON' }
+        computedAt: { type: string, format: date-time }
+        simulate: { type: boolean }
+        nonOpposable: { type: boolean }
+        executable: { type: boolean }
+        executabilityReason: { type: string }
+    CalculateResponse:
+      type: object
+      required: [trace, obligation]
+      properties:
+        trace: { $ref: '#/components/schemas/AssessmentTrace' }
+        obligation:
+          oneOf:
+            - { $ref: '#/components/schemas/ObligationDetail' }
+            - { type: 'null' }
+    ObligationStatus:
+      type: string
+      enum: [EMISE, EXIGIBLE, PARTIELLEMENT_PAYEE, SOLDEE, EN_RETARD, CONTESTEE, ANNULEE, ADMISE_EN_NON_VALEUR]
+    ObligationSummary:
+      type: object
+      required: [id, taxpayerId, objectId, label, status, dueDate, amount]
+      properties:
+        id: { type: string }
+        taxpayerId: { type: string }
+        objectId: { type: string }
+        label: { type: string }
+        revenueCategory: { type: string }
+        entity: { type: string }
+        status: { $ref: '#/components/schemas/ObligationStatus' }
+        dueDate: { type: string, format: date }
+        ruleCode: { type: string }
+        ruleVersion: { type: integer }
+        amount:
+          oneOf:
+            - { $ref: '#/components/schemas/MoneyJSON' }
+            - { type: 'null' }
+          description: null si accès minimal
+        masked: { type: boolean }
+        supersedes: { type: string }
+        supersededBy: { type: string }
+        createdAt: { type: string, format: date-time }
+    ObligationExplanation:
+      type: object
+      required: [rule, legalBasis, baseDefinition, base, formula, rates, amount, dueDate, appealPath]
+      properties:
+        rule:
+          type: object
+          properties:
+            id: { type: string }
+            code: { type: string }
+            label: { type: string }
+            version: { type: integer }
+        legalBasis:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              title: { type: string }
+              status: { type: string }
+        articles: { type: array, items: { type: string } }
+        competentAuthority: { type: string }
+        administeringEntity: { type: string }
+        taxableEvent: { type: string }
+        liableParty: { type: string }
+        baseDefinition: { type: string }
+        base: { type: object, additionalProperties: { type: string } }
+        formula: { type: string }
+        rates: { type: object, additionalProperties: { type: string } }
+        localityRank: { type: integer }
+        rounding: { type: string }
+        amount: { $ref: '#/components/schemas/MoneyJSON' }
+        dueDate: { type: string, format: date }
+        dueRule: { type: string }
+        appealPath: { type: string }
+        computedAt: { type: string, format: date-time }
+        rectification:
+          type: object
+          properties:
+            supersedes: { type: string }
+            appealId: { type: string }
+            reason: { type: string }
+    ObligationDetail:
+      allOf:
+        - $ref: '#/components/schemas/ObligationSummary'
+        - type: object
+          required: [explanation, trace]
+          properties:
+            beneficiaryAccountAlias: { type: string }
+            explanation: { $ref: '#/components/schemas/ObligationExplanation' }
+            trace: { $ref: '#/components/schemas/AssessmentTrace' }
+            appealId: { type: string }
+            paymentOrders:
+              type: array
+              items:
+                type: object
+                properties:
+                  paymentOrderId: { type: string }
+                  paymentReference: { type: string }
+                  status: { $ref: '#/components/schemas/PaymentStatus' }
+                  expiresAt: { type: string, format: date-time }
+            receipts:
+              type: array
+              items:
+                type: object
+                properties:
+                  number: { type: string }
+                  code: { type: string }
+                  status: { $ref: '#/components/schemas/ReceiptStatus' }
+
+    PaymentStatus:
+      type: string
+      enum: [INITIE, CONFIRME, REGLE, RAPPROCHE, ECHOUE, DOUBLON, CONTREPASSE, REMBOURSE, CONTESTE]
+    PaymentOrderRequest:
+      type: object
+      required: [channel]
+      additionalProperties: false
+      properties:
+        channel: { type: string, enum: [MOBILE_MONEY, BANK, CARD, AGENT_POINT, USSD, QR, TRANSFER] }
+        displayCurrency: { $ref: '#/components/schemas/CurrencyCode' }
+    PaymentOrder:
+      type: object
+      required: [paymentReference, amount, indicativeAmount, beneficiaryAlias, expiresAt, status, ussdInstructions]
+      properties:
+        paymentOrderId: { type: string }
+        paymentReference: { type: string, pattern: '^PR-[0-9A-Z]{4}-[0-9A-Z]{4}$', examples: [PR-7F3K-9Q2M] }
+        obligationId: { type: string }
+        amount: { $ref: '#/components/schemas/MoneyJSON' }
+        indicativeAmount:
+          oneOf:
+            - { $ref: '#/components/schemas/FxConversion' }
+            - { type: 'null' }
+          description: Contre-valeur indicative (CDF par défaut pour une obligation en devise ; ou `displayCurrency`)
+        beneficiaryAlias: { type: string, examples: [KIN-DGIPK-RECETTES-01] }
+        expiresAt: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/PaymentStatus' }
+        channel: { type: string }
+        ussdInstructions: { type: string }
+    ProviderCallback:
+      type: object
+      required: [providerTxnId, paymentReference, amount, status, completedAt]
+      properties:
+        providerTxnId: { type: string }
+        paymentReference: { type: string }
+        amount: { $ref: '#/components/schemas/MoneyJSON' }
+        status: { type: string, enum: [SUCCESS, FAILED] }
+        completedAt: { type: string, format: date-time }
+        payerAmount:
+          allOf: [ { $ref: '#/components/schemas/MoneyJSON' } ]
+          description: Montant réellement payé par le payeur dans sa devise (ex. EUR, carte diaspora), converti par le prestataire
+        payerMsisdnHash: { type: string }
+    CallbackResponse:
+      type: object
+      required: [status, paymentReference]
+      properties:
+        status: { type: string, enum: [CONFIRME, ECHOUE, DOUBLON] }
+        paymentReference: { type: string }
+        receiptNumber: { type: string, examples: [Q-2026-KIN-000000001-7] }
+        receiptCode: { type: string, examples: [Q26KIN0000000017] }
+        receiptStatus: { $ref: '#/components/schemas/ReceiptStatus' }
+        replayed: { type: boolean }
+
+    StatementRequest:
+      type: object
+      required: [statementId, lines]
+      additionalProperties: false
+      properties:
+        statementId: { type: string }
+        lines:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [accountAlias, amount, valueDate, paymentReference]
+            additionalProperties: false
+            properties:
+              accountAlias: { type: string }
+              amount: { $ref: '#/components/schemas/MoneyJSON' }
+              valueDate: { type: string, format: date }
+              paymentReference: { type: string }
+    StatementResult:
+      type: object
+      properties:
+        statementId: { type: string }
+        importedAt: { type: string, format: date-time }
+        importedBy: { type: string }
+        lines: { type: integer }
+        matched:
+          type: array
+          items:
+            type: object
+            properties:
+              paymentReference: { type: string }
+              receiptNumber: { type: string }
+              obligationId: { type: string }
+              amount: { $ref: '#/components/schemas/MoneyJSON' }
+        exceptions: { type: array, items: { $ref: '#/components/schemas/ReconciliationException' } }
+    ReconciliationException:
+      type: object
+      required: [id, type, detail, status, openedAt]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [ORPHAN_CREDIT, CREDIT_WITHOUT_CONFIRMATION, DUPLICATE_CREDIT, WRONG_ACCOUNT, UNKNOWN_ACCOUNT, AMOUNT_MISMATCH, MISSING_SETTLEMENT] }
+        statementId: { type: string }
+        paymentReference: { type: string }
+        line: { type: object, additionalProperties: true }
+        detail: { type: string }
+        status: { type: string, const: OUVERTE }
+        openedAt: { type: string, format: date-time }
+        computed: { type: boolean }
+    LedgerEntry:
+      type: object
+      required: [id, seq, at, eventType, lines, prevHash, hash]
+      properties:
+        id: { type: string }
+        seq: { type: integer }
+        at: { type: string, format: date-time }
+        eventType: { type: string, examples: [ASSESSMENT, PAYMENT_CONFIRMED, SETTLEMENT_CREDITED, REVERSAL] }
+        description: { type: string }
+        sourceType: { type: string }
+        sourceId: { type: string }
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              account: { type: string, enum: [CREANCES_CONTRIBUABLES, RECETTES_CONSTATEES, FONDS_A_RECEVOIR_PRESTATAIRES, COMPTE_PUBLIC_RECETTES] }
+              side: { type: string, enum: [DEBIT, CREDIT] }
+              amount: { $ref: '#/components/schemas/MoneyJSON' }
+        reversalOf: { type: string }
+        reason: { type: string }
+        prevHash: { type: string }
+        hash: { type: string }
+    LedgerBalance:
+      type: object
+      required: [balanced, entries, byCurrency, accounts]
+      properties:
+        balanced: { type: boolean }
+        entries: { type: integer }
+        byCurrency:
+          type: array
+          items:
+            type: object
+            properties:
+              currency: { $ref: '#/components/schemas/CurrencyCode' }
+              debit: { $ref: '#/components/schemas/MoneyJSON' }
+              credit: { $ref: '#/components/schemas/MoneyJSON' }
+              balanced: { type: boolean }
+        accounts:
+          type: array
+          items:
+            type: object
+            properties:
+              account: { type: string }
+              label: { type: string }
+              currency: { $ref: '#/components/schemas/CurrencyCode' }
+              balance: { $ref: '#/components/schemas/MoneyJSON' }
+        headHash: { type: [string, 'null'] }
+
+    ReceiptStatus:
+      type: string
+      enum: [PROVISOIRE, DEFINITIVE, ANNULEE, REMPLACEE, SUSPECTE]
+    Receipt:
+      type: object
+      properties:
+        id: { type: string }
+        number: { type: string }
+        code: { type: string }
+        status: { $ref: '#/components/schemas/ReceiptStatus' }
+        paymentReference: { type: string }
+        obligationId: { type: string }
+        revenueCategory: { type: string }
+        administration: { type: string }
+        beneficiaryAlias: { type: string }
+        amount: { $ref: '#/components/schemas/MoneyJSON' }
+        payerAmount: { $ref: '#/components/schemas/MoneyJSON' }
+        indicativeAmount: { $ref: '#/components/schemas/FxConversion' }
+        channel: { type: string }
+        provider: { type: string }
+        providerTxnId: { type: string }
+        paidAt: { type: string, format: date-time }
+        issuedAt: { type: string, format: date-time }
+        finalizedAt: { type: string, format: date-time }
+        mention: { type: string }
+        signature: { type: string, description: Ed25519, base64url }
+        signatureAlgorithm: { type: string, const: Ed25519 }
+        qrPayload: { type: string, examples: ['MOSOLO1|Q26KIN0000000017|<signature>'] }
+        verificationPath: { type: string }
+    PublicReceiptCheck:
+      type: object
+      required: [status, message, verifiedAt]
+      additionalProperties: false
+      properties:
+        status: { type: string, enum: [VALID, PENDING, CANCELLED, REPLACED, FRAUD_SUSPECTED, UNKNOWN] }
+        message: { type: string }
+        settlementStatus: { type: string, enum: [PENDING_SETTLEMENT, RECONCILED], description: Présent si VALID ou PENDING }
+        revenueCategory: { type: string }
+        amount: { $ref: '#/components/schemas/MoneyJSON' }
+        paidOn: { type: string, format: date }
+        beneficiaryAdministration: { type: string }
+        taxpayerRefSuffix: { type: string, examples: ['…7K2Q'] }
+        verifiedAt: { type: string, format: date-time }
+
+    BeneficiaryAccount:
+      type: object
+      properties:
+        alias: { type: string }
+        entity: { type: string }
+        bankName: { type: string }
+        accountNumber: { type: string, description: Masqué (•••• 1234) }
+        holderName: { type: string }
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+        version: { type: integer }
+        effectiveSince: { type: string, format: date-time }
+    ChangeRequestInput:
+      type: object
+      required: [alias, bankName, accountNumber, holderName, reason]
+      additionalProperties: false
+      properties:
+        alias: { type: string }
+        bankName: { type: string }
+        accountNumber: { type: string, pattern: '^[A-Z0-9 ]{8,40}$' }
+        holderName: { type: string }
+        reason: { type: string }
+    ChangeRequest:
+      type: object
+      required: [id, alias, status, approvals]
+      properties:
+        id: { type: string }
+        alias: { type: string }
+        proposed:
+          type: object
+          properties:
+            bankName: { type: string }
+            accountNumber: { type: string, description: Masqué }
+            holderName: { type: string }
+        reason: { type: string }
+        requestedBy: { type: string }
+        requestedAt: { type: string, format: date-time }
+        approvals:
+          type: array
+          items:
+            type: object
+            properties:
+              userId: { type: string }
+              at: { type: string, format: date-time }
+              outOfBandVerified: { type: boolean, const: true }
+        status: { type: string, enum: [EN_ATTENTE_APPROBATION, EN_REFROIDISSEMENT, EFFECTIF] }
+        coolingEndsAt: { type: string, format: date-time }
+        effectiveAt: { type: string, format: date-time }
+
+    AuditRecord:
+      type: object
+      required: [id, seq, at, actor, action, resourceType, outcome, prevHash, hash, signature]
+      properties:
+        id: { type: string }
+        seq: { type: integer }
+        at: { type: string, format: date-time }
+        actor:
+          type: object
+          properties:
+            kind: { type: string, enum: [user, system, provider, device, ai, public] }
+            id: { type: string }
+            roles: { type: array, items: { type: string } }
+        action: { type: string }
+        resourceType: { type: string }
+        resourceId: { type: [string, 'null'] }
+        outcome: { type: string, enum: [SUCCESS, DENIED, FAILURE] }
+        details: { type: object, additionalProperties: true }
+        prevHash: { type: string }
+        hash: { type: string }
+        signature: { type: string }
+    AuditVerification:
+      type: object
+      required: [ok, length]
+      properties:
+        ok: { type: boolean }
+        length: { type: integer }
+        brokenAt: { type: integer, description: Numéro de séquence du premier enregistrement invalide }
+        reason: { type: string }
+        headHash: { type: string }
+        verifiedAt: { type: string, format: date-time }
+
+    EventCategory:
+      type: object
+      properties:
+        code: { type: string }
+        libelle: { type: string }
+    Channel:
+      type: string
+      enum: [email, in-app, sms, push, whatsapp, ussd, svi, courrier]
+    CommunicationEvent:
+      type: object
+      properties:
+        code: { type: string }
+        categorie: { type: string }
+        libelle: { type: string }
+        objet: { type: string }
+        gravite: { type: string, enum: [info, success, warning, critical] }
+        canaux_defaut: { type: array, items: { $ref: '#/components/schemas/Channel' } }
+        whatsapp_optin: { type: boolean }
+        obligatoire: { type: boolean }
+        public: { type: array, items: { type: string, enum: [C, G, X] } }
+    Delivery:
+      type: object
+      required: [id, at, eventCode, channel, recipientId, status, provider]
+      properties:
+        id: { type: string }
+        at: { type: string, format: date-time }
+        eventCode: { type: string }
+        category: { type: string }
+        channel: { $ref: '#/components/schemas/Channel' }
+        recipientId: { type: string }
+        recipientKind: { type: string, enum: [taxpayer, user] }
+        recipientMasked: { type: string }
+        status: { type: string, enum: [en_file, envoye, delivre, lu, echoue, journalise, supprime_par_preference] }
+        provider: { type: string }
+        providerMode: { type: string, enum: [internal, live, sandbox, aucun] }
+        mandatory: { type: boolean }
+        entity: { type: string }
+        lang: { $ref: '#/components/schemas/LanguageCode' }
+        attempts: { type: integer }
+        contentHash: { type: string }
+    CommunicationsOverview:
+      type: object
+      required: [catalogue, categories, mandatory, delivered, attempted, channelsWired, coverage, recent]
+      properties:
+        catalogue: { type: integer, examples: [239] }
+        categories: { type: integer, examples: [23] }
+        mandatory: { type: integer, examples: [126] }
+        delivered: { type: integer }
+        attempted: { type: integer }
+        sandboxLogged: { type: integer }
+        suppressedByPreference: { type: integer }
+        channelsWired: { type: integer, description: Canaux raccordés (in-app + canaux avec clé fournisseur) }
+        channelsTotal: { type: integer, examples: [8] }
+        coverage: { type: object, additionalProperties: { type: integer }, description: Événements diffusés par défaut par canal }
+        channels:
+          type: array
+          items:
+            type: object
+            properties:
+              channel: { $ref: '#/components/schemas/Channel' }
+              provider: { type: string }
+              mode: { type: string, enum: [internal, live, sandbox] }
+              wired: { type: boolean }
+              defaultEvents: { type: integer }
+              sent: { type: integer }
+        recent: { type: array, items: { $ref: '#/components/schemas/Delivery' } }
+
+    FieldChange:
+      type: object
+      properties:
+        field: { type: string }
+        kind: { type: string, enum: [ajoute, modifie, supprime] }
+        before: {}
+        after: {}
+    DraftVersion:
+      type: object
+      required: [key, version, savedAt, data, changeSummary]
+      properties:
+        key: { type: string }
+        version: { type: integer }
+        savedAt: { type: string, format: date-time }
+        savedBy: { type: string }
+        data: { type: object, additionalProperties: true }
+        changes: { type: array, items: { $ref: '#/components/schemas/FieldChange' } }
+        changeSummary: { type: string }
+        contentHash: { type: string }
+
+    AIRecommendation:
+      type: object
+      description: Format de sortie standard (§ 23.5.7) — `@mosolo/shared` AIRecommendation
+      required: [id, agent, modelVersion, autonomy, createdAt, status, situation, insight, risk, recommendation, nextAction, owner, deadline, confidence, sources]
+      properties:
+        id: { type: string }
+        agent: { type: string, examples: ['Aide à la décision exécutive', 'Rapprochement', 'Intelligence locative', 'Communication'] }
+        modelVersion: { type: string, examples: [regles-deterministes-1.0] }
+        autonomy: { type: string, enum: [A_AUTO, B_VALIDATION, C_RECOMMANDATION] }
+        createdAt: { type: string, format: date-time }
+        status: { type: string, enum: [EMISE, ACCEPTEE, MODIFIEE, REJETEE] }
+        decidedBy: { type: string }
+        decidedAt: { type: string, format: date-time }
+        decisionReason: { type: string }
+        situation: { type: string }
+        insight: { type: string }
+        risk: { type: string }
+        recommendation: { type: string }
+        nextAction: { type: string }
+        owner: { type: string, description: Rôle responsable — jamais « l'IA » }
+        deadline: { type: string, format: date }
+        confidence: { type: string, enum: [HIGH, MEDIUM, LOW] }
+        sources: { type: array, items: { type: string } }
+        decision:
+          type: object
+          properties:
+            bestOption: { type: string }
+            alternativeOption: { type: string }
+            riskOfInaction: { type: string }
+            financialImpact: { type: string }
+            operationalImpact: { type: string }
+        context: { type: string, enum: [governor, rental, treasury, communications] }
+        subjectId: { type: string }
+        example: { type: boolean }
+        aiAssistedNotice: { type: string }
+
+    GovernorDashboard:
+      type: object
+      required: [example, tiles, ladder, byCommune, byCategory, trend, scenarios, criticalAlerts, actions]
+      properties:
+        example: { type: boolean, const: true }
+        exampleNotice: { type: string }
+        currency: { type: string, const: CDF }
+        generatedAt: { type: string, format: date-time }
+        tiles:
+          type: object
+          properties:
+            confirmedToday: { $ref: '#/components/schemas/MoneyJSON' }
+            settledToday: { $ref: '#/components/schemas/MoneyJSON' }
+            reconciledToday: { $ref: '#/components/schemas/MoneyJSON' }
+            reconRateJ1: { type: string, examples: ['96.4'] }
+            comparisonDMinus1: { type: string }
+            criticalAlerts: { type: integer }
+        ladder:
+          type: array
+          minItems: 11
+          maxItems: 11
+          items:
+            type: object
+            properties:
+              rank: { type: integer }
+              level: { type: string, enum: [potential, verified_base, assessed, due, overdue, disputed, initiated, confirmed, settled, reconciled, available] }
+              amount: { $ref: '#/components/schemas/MoneyJSON' }
+        byCommune:
+          type: array
+          minItems: 24
+          maxItems: 24
+          items:
+            type: object
+            properties:
+              commune: { type: string }
+              collected: { $ref: '#/components/schemas/MoneyJSON' }
+              target: { $ref: '#/components/schemas/MoneyJSON' }
+              complianceRate: { type: string }
+              censusCoverage: { type: string }
+              rentalCoverage: { type: string }
+              color: { type: string, enum: [green, amber, red] }
+        byCategory:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+              label: { type: string }
+              collected: { $ref: '#/components/schemas/MoneyJSON' }
+              target: { $ref: '#/components/schemas/MoneyJSON' }
+        trend:
+          type: array
+          items:
+            type: object
+            properties:
+              month: { type: string, examples: ['2026-09'] }
+              collected: { $ref: '#/components/schemas/MoneyJSON' }
+              target: { $ref: '#/components/schemas/MoneyJSON' }
+        scenarios:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string, enum: [conservateur, attendu, ambitieux] }
+              label: { type: string }
+              yearEnd: { $ref: '#/components/schemas/MoneyJSON' }
+              assumptions: { type: array, items: { type: string } }
+        criticalAlerts:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              severity: { type: string }
+              title: { type: string }
+              detail: { type: string }
+              example: { type: boolean }
+        actions: { type: array, items: { $ref: '#/components/schemas/AIRecommendation' } }
+        live:
+          type: object
+          description: Compteurs réels du socle (agrégats)
+          additionalProperties: true
+
+    ExchangeRates:
+      type: object
+      required: [date, base, source, demo, rates]
+      properties:
+        date: { type: string, format: date }
+        base: { type: string, const: CDF }
+        source: { type: string, examples: ['BCC (démo)'] }
+        demo: { type: boolean }
+        note: { type: string }
+        rates:
+          type: array
+          items:
+            type: object
+            properties:
+              currency: { $ref: '#/components/schemas/CurrencyCode' }
+              flag: { type: string }
+              name: { type: string }
+              cdfPerUnit: { type: string }
+
+    FieldBatch:
+      type: object
+      required: [batchId, deviceId, createdAt, operations]
+      properties:
+        batchId: { type: string }
+        deviceId: { type: string }
+        createdAt: { type: string, format: date-time }
+        operations:
+          type: array
+          maxItems: 500
+          items:
+            type: object
+            required: [opId, objectId, field, value, observedAt]
+            properties:
+              opId: { type: string }
+              objectId: { type: string }
+              field: { type: string, pattern: '^[A-Za-z0-9_.]{1,64}$' }
+              value: { type: [string, number, boolean, 'null'] }
+              observedAt: { type: string, format: date-time }
+    FieldBatchResult:
+      type: object
+      required: [batchId, accepted, rejected, conflicts, revokedDevices]
+      properties:
+        batchId: { type: string }
+        accepted: { type: array, items: { type: string } }
+        rejected:
+          type: array
+          items:
+            type: object
+            properties:
+              opId: { type: string }
+              reason: { type: string, enum: [OBJECT_NOT_FOUND, OUT_OF_TERRITORY] }
+        conflicts:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              objectId: { type: string }
+              field: { type: string }
+              status: { type: string, const: A_ARBITRER }
+              versions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    observationId: { type: string }
+                    agentId: { type: string }
+                    value: {}
+                    observedAt: { type: string, format: date-time }
+        revokedDevices: { type: array, items: { type: string } }
+        replayed: { type: boolean }
+
+    AppealDecision:
+      type: string
+      enum: [ACCEPTEE, PARTIELLEMENT_ACCEPTEE, REJETEE]
+    Appeal:
+      type: object
+      required: [id, obligationId, taxpayerId, grounds, status]
+      properties:
+        id: { type: string }
+        obligationId: { type: string }
+        taxpayerId: { type: string }
+        grounds: { type: string }
+        requestedAmount: { $ref: '#/components/schemas/MoneyJSON' }
+        status: { type: string, enum: [DEPOSEE, PROPOSITION, ACCEPTEE, PARTIELLEMENT_ACCEPTEE, REJETEE] }
+        submittedBy: { type: string }
+        submittedAt: { type: string, format: date-time }
+        instructorId: { type: string }
+        proposal: { type: object, additionalProperties: true }
+        decision:
+          type: object
+          properties:
+            decision: { $ref: '#/components/schemas/AppealDecision' }
+            reason: { type: string }
+            decidedBy: { type: string }
+            at: { type: string, format: date-time }
+            rectifiedAmount: { $ref: '#/components/schemas/MoneyJSON' }
+        rectifyingObligationId: { type: string }
+
+    SecurityAlert:
+      type: object
+      properties:
+        id: { type: string }
+        at: { type: string, format: date-time }
+        type: { type: string, examples: [INVALID_SIGNATURE, NONCE_REPLAYED, AMOUNT_MISMATCH, REVOKED_DEVICE_SYNC, RECEIPT_SIGNATURE_INVALID] }
+        severity: { type: string, enum: [MEDIUM, HIGH, CRITICAL] }
+        source: { type: string }
+        detail: { type: string }
+        context: { type: object, additionalProperties: true }

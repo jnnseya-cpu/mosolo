@@ -65,6 +65,11 @@ export interface VerifiedProviderConfirmation {
   timestampInWindow: true;
 }
 
+/** Quatre derniers caractères alphanumériques de la référence du contribuable (§ 19.2). */
+export function refSuffix(ref: string): string {
+  return ref.replace(/[^0-9A-Za-z]/g, '').slice(-4);
+}
+
 const PUBLIC_STATUS: Record<ReceiptStatus, PublicReceiptCheck> = {
   PROVISOIRE: 'PENDING',
   DEFINITIVE: 'VALID',
@@ -121,7 +126,7 @@ export class ReceiptService {
   private signedPayload(r: Pick<Receipt, 'number' | 'code' | 'paymentReference' | 'amount' | 'taxpayerRef' | 'administration' | 'paidAt' | 'revenueCategory'>): string {
     return canonicalJson({
       number: r.number, code: r.code, paymentReference: r.paymentReference, amount: r.amount,
-      taxpayerRefSuffix: r.taxpayerRef.slice(-4), administration: r.administration, paidAt: r.paidAt, revenueCategory: r.revenueCategory,
+      taxpayerRefSuffix: refSuffix(r.taxpayerRef), administration: r.administration, paidAt: r.paidAt, revenueCategory: r.revenueCategory,
     });
   }
 
@@ -219,7 +224,7 @@ export class ReceiptService {
       amount: r.amount,
       paidOn: r.paidAt.slice(0, 10),
       beneficiaryAdministration: r.administration,
-      taxpayerRefSuffix: '…' + r.taxpayerRef.slice(-4),
+      taxpayerRefSuffix: '…' + refSuffix(r.taxpayerRef),
       verifiedAt,
     };
   }
