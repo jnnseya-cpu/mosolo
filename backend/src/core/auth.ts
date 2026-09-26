@@ -1,6 +1,9 @@
 /**
- * Authentification de DÉMONSTRATION : l'utilisateur est désigné par l'en-tête `x-demo-user`.
- * En production : OIDC + clés d'accès (passkeys), jeton court portant rôles, entité et niveau d'authentification (ch. 31).
+ * Authentification (ch. 31) :
+ *  - jeton de session signé `Authorization: Bearer <jwt>` émis par le fournisseur d'identité local compatible OIDC
+ *    (plugin « socle », backend/src/plugins/socle) ; vérifié par le vérificateur enregistré pour l'annuaire ;
+ *  - en-tête de DÉMONSTRATION `x-demo-user`, accepté UNIQUEMENT si MOSOLO_DEMO_MODE ≠ « false » (défaut : démo active).
+ * Cible de production : IdP OIDC souverain (Keycloak) + clés d'accès (passkeys) pour les rôles sensibles.
  */
 import { hasIncompatibility, ROLES, type LanguageCode, type RoleCode } from '@mosolo/shared';
 import type { FastifyRequest } from 'fastify';
@@ -21,6 +24,32 @@ export interface User {
   email?: string;
   phone?: string;
   lang?: LanguageCode;
+  /** Contexte d'authentification (présent si la requête porte un jeton de session ; absent en mode démo par en-tête). */
+  auth?: AuthContext;
+}
+
+/** Niveaux d'authentification (`acr`) — du plus faible au plus fort. */
+export const ACR = {
+  /** Mot de passe seul (non émis : un facteur ne suffit jamais pour un compte de travail). */
+  PWD: 'urn:mosolo:acr:pwd',
+  /** Code à usage unique envoyé au téléphone (contribuables). */
+  OTP: 'urn:mosolo:acr:otp',
+  /** Mot de passe + TOTP (comptes de travail). */
+  MFA: 'urn:mosolo:acr:mfa',
+  /** Clé d'accès / FIDO2 résistante au hameçonnage — [À RACCORDER] (aucun jeton de ce niveau n'est émis aujourd'hui). */
+  PHR: 'urn:mosolo:acr:phr',
+} as const;
+export type AcrValue = (typeof ACR)[keyof typeof ACR];
+const ACR_RANK: Record<string, number> = { [ACR.PWD]: 1, [ACR.OTP]: 2, [ACR.MFA]: 3, [ACR.PHR]: 4 };
+
+export interface AuthContext {
+  method: 'bearer';
+  sessionId: string;
+  acr: AcrValue;
+  amr: string[];
+  /** Instant d'authentification (ISO). */
+  authTime: string;
+  expiresAt: string;
 }
 
 /** Principal « agent d'IA » : n'a aucun droit d'écriture sur les domaines financiers ou juridiques. */
@@ -68,16 +97,53 @@ declare module 'fastify' {
   }
 }
 
+/** Vérifie un jeton porteur et retourne l'utilisateur authentifié (lève 401 si invalide, expiré ou révoqué). */
+export type BearerVerifier = (token: string, req: FastifyRequest) => User;
+const bearerVerifiers = new WeakMap<UserDirectory, BearerVerifier>();
+
+/** Enregistré par le fournisseur d'identité (plugin « socle ») pour l'annuaire de l'application. */
+export function registerBearerVerifier(directory: UserDirectory, verifier: BearerVerifier): void {
+  bearerVerifiers.set(directory, verifier);
+}
+
+/** Mode démonstration : actif sauf si MOSOLO_DEMO_MODE vaut explicitement « false ». */
+export function isDemoMode(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (env.MOSOLO_DEMO_MODE ?? 'true').trim().toLowerCase() !== 'false';
+}
+
+/**
+ * Exige un niveau d'authentification minimal (« step-up »). En mode démonstration par en-tête (aucun contexte
+ * d'authentification), la vérification est levée pour ne pas bloquer les parcours de démonstration.
+ */
+export function requireAcr(user: User, minimum: AcrValue): void {
+  if (!user.auth) {
+    if (isDemoMode()) return;
+    throw unauthorized('AUTH_REQUIRED', 'Authentification requise.');
+  }
+  if ((ACR_RANK[user.auth.acr] ?? 0) < (ACR_RANK[minimum] ?? 99)) {
+    throw forbidden('MFA_REQUIRED', 'Cette action exige une authentification renforcée (niveau supérieur).', { acr: user.auth.acr, required: minimum });
+  }
+}
+
 export function resolveDemoUser(req: FastifyRequest, directory: UserDirectory): User | undefined {
+  const authz = req.headers.authorization;
+  const verifier = bearerVerifiers.get(directory);
+  // Sans fournisseur d'identité chargé, l'en-tête Authorization est ignoré (comportement historique).
+  if (verifier && typeof authz === 'string' && authz.trim() !== '') {
+    const m = /^Bearer\s+(\S+)$/i.exec(authz.trim());
+    if (!m) throw unauthorized('INVALID_AUTHORIZATION', 'En-tête Authorization invalide (attendu : Bearer <jeton>).');
+    return verifier(m[1]!, req);
+  }
   const header = req.headers['x-demo-user'];
   const id = Array.isArray(header) ? header[0] : header;
   if (!id) return undefined;
+  if (!isDemoMode()) throw unauthorized('DEMO_AUTH_DISABLED', 'Authentification de démonstration désactivée : utilisez un jeton de session (Authorization: Bearer).');
   const user = directory.get(id);
   if (!user) throw unauthorized('UNKNOWN_DEMO_USER', `Utilisateur de démonstration inconnu : ${id}`);
   return user;
 }
 
 export function requireUser(req: FastifyRequest): User {
-  if (!req.user) throw unauthorized('AUTH_REQUIRED', 'Authentification requise (démo : en-tête x-demo-user).');
+  if (!req.user) throw unauthorized('AUTH_REQUIRED', isDemoMode() ? 'Authentification requise (jeton de session, ou en-tête de démonstration x-demo-user).' : 'Authentification requise (jeton de session).');
   return req.user;
 }

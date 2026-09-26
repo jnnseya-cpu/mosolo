@@ -7,16 +7,23 @@
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "start:persistent": "tsx src/persistence/server.ts",
+    "db:backup": "tsx src/persistence/backup-cli.ts backup",
+    "db:restore": "tsx src/persistence/backup-cli.ts restore",
+    "db:verify": "tsx src/persistence/backup-cli.ts verify"
   },
   "dependencies": {
-    "@mosolo/shared": "0.1.0",
     "@fastify/cors": "^10.0.0",
+    "@mosolo/shared": "0.1.0",
     "fastify": "^5.1.0",
+    "pg": "^8.23.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
+    "@types/pg": "^8.23.1",
+    "pg-mem": "^3.0.14",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"

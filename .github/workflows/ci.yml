@@ -1,0 +1,118 @@
+# KINSHASA MOSOLO — intégration continue : installation reproductible, contrôle de types et tests des trois paquets,
+# construction du frontend, et tests de persistance sur un vrai PostgreSQL (service éphémère).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verification:
+    name: Types, tests et construction (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    env:
+      # Identifiants de démonstration uniquement ; aucun secret réel n'est utilisé en CI.
+      MOSOLO_DEMO_MODE: 'true'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Installation (npm ci)
+        run: npm ci --no-audit --no-fund
+
+      - name: Contrôle de types — shared
+        run: npm run typecheck -w shared
+      - name: Contrôle de types — backend
+        run: npm run typecheck -w backend
+      - name: Contrôle de types — frontend
+        run: npm run typecheck -w frontend
+
+      - name: Tests — shared
+        run: npm test -w shared
+      - name: Tests — backend
+        run: npm test -w backend
+      - name: Tests — frontend
+        run: npm test -w frontend
+
+      - name: Construction — frontend
+        run: npm run build -w frontend
+
+      - name: Audit des dépendances (production, niveau élevé)
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true
+
+  persistance-postgresql:
+    name: Persistance sur PostgreSQL réel (migrations, sauvegarde, restauration)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: verification
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mosolo
+          POSTGRES_PASSWORD: mosolo-ci
+          POSTGRES_DB: mosolo
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U mosolo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://mosolo:mosolo-ci@localhost:5432/mosolo
+      MOSOLO_AUDIT_HMAC_KEY: cle-audit-ci-non-secrete-0123456789
+      MOSOLO_BACKUP_KEY: cle-sauvegarde-ci-non-secrete-0123456789
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Démarrage persistant (migrations + instantané initial), arrêt propre
+        working-directory: backend
+        run: |
+          PORT=8081 timeout 60 npx tsx src/persistence/server.ts > /tmp/mosolo-1.log 2>&1 &
+          for i in $(seq 1 40); do curl -sf http://localhost:8081/health && break; sleep 1; done
+          curl -sf http://localhost:8081/.well-known/openid-configuration > /dev/null
+          kill -TERM %1 || true; wait || true
+          cat /tmp/mosolo-1.log | tail -n 20
+      - name: Sauvegarde signée puis vérification (chaîne d'audit incluse)
+        working-directory: backend
+        run: |
+          npx tsx src/persistence/backup-cli.ts backup /tmp/sauvegarde.json
+          npx tsx src/persistence/backup-cli.ts verify /tmp/sauvegarde.json
+      - name: Journal en ajout seul — UPDATE refusé par la base
+        run: |
+          if psql "$DATABASE_URL" -c "UPDATE append_only_journal SET doc = '{}'::jsonb WHERE seq = 1"; then
+            echo "UPDATE accepté : le déclencheur d'ajout seul est absent" && exit 1
+          fi
+      - name: Restauration puis redémarrage sur la base restaurée
+        working-directory: backend
+        run: |
+          npx tsx src/persistence/backup-cli.ts restore /tmp/sauvegarde.json --confirm
+          PORT=8082 timeout 60 npx tsx src/persistence/server.ts > /tmp/mosolo-2.log 2>&1 &
+          for i in $(seq 1 40); do curl -sf http://localhost:8082/health && break; sleep 1; done
+          kill -TERM %1 || true; wait || true
+          grep -q "restaurés" /tmp/mosolo-2.log
+          ! grep -q "NON VÉRIFIÉE" /tmp/mosolo-2.log
