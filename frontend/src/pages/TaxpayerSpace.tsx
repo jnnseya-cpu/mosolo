@@ -20,6 +20,17 @@ import { OBLIGATION_TONE, PAYMENT_TONE, RECEIPT_TONE, obligationKey } from '../l
 import type { UIKey } from '../lib/i18n';
 import { asMoney } from '../lib/normalize';
 import type { Obligation, ObligationDetail, ObligationExplanation, PaymentOrder, Receipt, TaxpayerProfile } from '../lib/types';
+import '../modules/fiscal/fiscal.css';
+
+/** Accès aux démarches fiscales (module fiscal) depuis l'espace contribuable. */
+const FISCAL_LINKS: { to: string; icon: string; title: string; text: string }[] = [
+  { to: '/fiscal/biens', icon: 'building', title: 'Mes biens et relations', text: 'Identifiant géofiscal, QR par bien, rattachements et quotes-parts.' },
+  { to: '/fiscal/declarations', icon: 'file', title: 'Déclaration pré-remplie', text: 'Confirmer ou corriger, déposer, recevoir l’accusé de réception.' },
+  { to: '/fiscal/exonerations', icon: 'scale', title: 'Demande d’exonération', text: 'Pièces, durée ; décision en double validation.' },
+  { to: '/fiscal/quitus', icon: 'shieldCheck', title: 'Quitus fiscal', text: 'Attestation de régularité vérifiable par QR.' },
+  { to: '/fiscal/baux', icon: 'ticket', title: 'Attestation de bail', text: 'Pour le bailleur et le locataire d’un bail enregistré.' },
+  { to: '/fiscal/carte', icon: 'pin', title: 'Carte de mes biens', text: 'Situation fiscale et vérification, en couleurs.' },
+];
 
 const CHANNELS: { id: string; icon: string; key: UIKey }[] = [
   { id: 'MOBILE_MONEY', icon: 'phone', key: 'pay.channel.MOBILE_MONEY' },
@@ -283,6 +294,18 @@ export default function TaxpayerSpace() {
                 },
               ]}
             />
+          </section>
+
+          <section className="section" aria-labelledby="sec-fiscal">
+            <div className="section-head"><h2 id="sec-fiscal">Mes démarches fiscales</h2></div>
+            <nav className="fs-space-links" aria-label="Démarches fiscales">
+              {FISCAL_LINKS.map((l) => (
+                <Link key={l.to} to={l.to} className="fs-space-link">
+                  <Icon name={l.icon} size={20} />
+                  <span><strong>{l.title}</strong><span className="small muted">{l.text}</span></span>
+                </Link>
+              ))}
+            </nav>
           </section>
 
           <section className="section" aria-labelledby="sec-obj">

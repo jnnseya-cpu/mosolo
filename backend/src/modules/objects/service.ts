@@ -31,6 +31,17 @@ export interface FiscalObject {
   probativeStatus: ProbativeStatus;
   createdBy: string;
   createdAt: string;
+  /** Objet parent dans la hiérarchie parcelle → bâtiment → unité (§ 16.1). */
+  parentObjectId?: string;
+  /** Avenue ou voie (hiérarchie SIG commune › quartier › avenue › parcelle). */
+  avenue?: string;
+  /**
+   * Identifiant géographique fiscal (§ 17.3) : UUID interne permanent + code territorial lisible,
+   * attribués à la validation et jamais réattribués.
+   */
+  igf?: { uuid: string; code: string; codeVersion: number; assignedAt: string; assignedBy: string };
+  validatedBy?: string;
+  validatedAt?: string;
 }
 
 export const LEASE_PERIODICITIES = ['MENSUELLE', 'TRIMESTRIELLE', 'SEMESTRIELLE', 'ANNUELLE'] as const;
@@ -59,6 +70,8 @@ export interface CreateObjectInput {
   lat: number;
   lon: number;
   attributes: Record<string, unknown>;
+  parentObjectId?: string;
+  avenue?: string;
 }
 
 export class ObjectService {
@@ -79,6 +92,7 @@ export class ObjectService {
     const taxpayerId = user.roles.includes('R30') && !input.taxpayerId ? user.taxpayerId : input.taxpayerId;
     authorize(user, 'object.create', { taxpayerId, communes: [input.commune] });
     if (taxpayerId) this.taxpayers.get(taxpayerId);
+    if (input.parentObjectId) this.get(input.parentObjectId);
     const isAgent = !user.roles.includes('R30');
     const obj = this.objects.insert({
       id: fixedId ?? this.ids.next('OBJ'),
@@ -95,6 +109,8 @@ export class ObjectService {
       probativeStatus: isAgent ? 'OBSERVE' : 'DECLARE',
       createdBy: user.id,
       createdAt: this.clock.now().toISOString(),
+      ...(input.parentObjectId ? { parentObjectId: input.parentObjectId } : {}),
+      ...(input.avenue ? { avenue: input.avenue } : {}),
     });
     this.audit.append({
       actor: { kind: 'user', id: user.id, roles: user.roles },
@@ -113,6 +129,41 @@ export class ObjectService {
     const o = this.objects.get(id);
     if (!o) throw notFound('OBJECT_NOT_FOUND', `Objet fiscal inconnu : ${id}`);
     return o;
+  }
+
+  /**
+   * Validation d'un objet par un agent habilité (l'autorisation est vérifiée par l'appelant) :
+   * statut VALIDE, statut probant VÉRIFIÉ, identifiant géofiscal figé s'il n'existe pas encore.
+   */
+  markValidated(id: string, by: User, igf: { uuid: string; code: string; codeVersion: number }): FiscalObject {
+    const o = this.get(id);
+    const now = this.clock.now().toISOString();
+    const updated = this.objects.update({
+      ...o,
+      status: 'VALIDE',
+      probativeStatus: o.probativeStatus === 'CONTESTE' ? 'CONTESTE' : 'VERIFIE',
+      igf: o.igf ?? { ...igf, assignedAt: now, assignedBy: by.id },
+      validatedBy: by.id,
+      validatedAt: now,
+    });
+    this.audit.append({
+      actor: { kind: 'user', id: by.id, roles: by.roles }, action: 'object.validated', resourceType: 'fiscal_object', resourceId: id,
+      details: { igf: updated.igf?.code, igfUuid: updated.igf?.uuid, firstAssignment: !o.igf },
+    });
+    return updated;
+  }
+
+  /** Rattache le redevable principal d'un objet provisoire (après validation d'une relation de propriété). */
+  setHolder(id: string, taxpayerId: string): FiscalObject {
+    const o = this.get(id);
+    this.taxpayers.get(taxpayerId);
+    return this.objects.update({ ...o, taxpayerId });
+  }
+
+  /** Statut probant de l'objet (ex. CONTESTÉ pendant un conflit de revendications). */
+  setProbativeStatus(id: string, probativeStatus: ProbativeStatus): FiscalObject {
+    const o = this.get(id);
+    return this.objects.update({ ...o, probativeStatus });
   }
 
   byTaxpayer(taxpayerId: string): FiscalObject[] {

@@ -36,7 +36,35 @@ export interface AssessmentTrace {
   nonOpposable: boolean;
   executable: boolean;
   executabilityReason?: string;
+  /** Montant avant exonérations (présent seulement si une exonération s'applique). */
+  grossResult?: MoneyJSON;
+  /** Exonérations appliquées (registre des exonérations, décision humaine en double validation). */
+  adjustments?: AssessmentAdjustment[];
+  /** Origine de la liquidation (ex. déclaration déposée). */
+  source?: { type: 'DECLARATION'; id: string };
 }
+
+/**
+ * Réduction appliquée à la liquidation (exonération approuvée en double validation). Le moteur ne décide
+ * jamais d'une exonération : il applique une décision humaine datée, fondée sur un instrument du registre.
+ */
+export interface AssessmentAdjustment {
+  kind: 'EXONERATION';
+  sourceId: string;
+  label: string;
+  legalBasis: { instrumentId: string; title: string; article: string };
+  /** Pourcentage exonéré (chaîne décimale, 100 = exonération totale). */
+  rate: string;
+  reduction: MoneyJSON;
+  validFrom: string;
+  validTo: string;
+  decidedBy: string[];
+}
+
+/** Fournisseur de réductions (branché par un module d'extension, ex. registre des exonérations). */
+export type AssessmentAdjuster = (p: {
+  taxpayerId: string; objectId: string; rule: { id: string; code: string; revenueCategory: RevenueCategory }; at: Date; gross: Money;
+}) => AssessmentAdjustment[];
 
 export interface ObligationExplanation {
   rule: { id: string; code: string; label: string; version: number };
@@ -57,7 +85,11 @@ export interface ObligationExplanation {
   dueRule: string;
   appealPath: string;
   computedAt: string;
-  rectification?: { supersedes: string; appealId: string; reason: string };
+  rectification?: { supersedes: string; appealId: string; reason: string; decisionType?: 'RECLAMATION' | 'REMISE' | 'CORRECTION_DECLARATION' };
+  /** Montant brut et exonérations appliquées (trace dans l'explication). */
+  grossAmount?: MoneyJSON;
+  adjustments?: AssessmentAdjustment[];
+  source?: { type: 'DECLARATION'; id: string };
 }
 
 export interface Obligation {
@@ -99,6 +131,7 @@ export const PAYABLE_STATUSES: ObligationStatus[] = ['EMISE', 'EXIGIBLE', 'EN_RE
 export class AssessmentService {
   readonly obligations = new InMemoryRepository<Obligation>();
   private readonly ids = new IdGenerator();
+  private readonly adjusters: AssessmentAdjuster[] = [];
 
   constructor(
     private readonly clock: Clock,
@@ -110,8 +143,25 @@ export class AssessmentService {
     private readonly ledger: LedgerService,
   ) {}
 
+  /** Branche un fournisseur de réductions (exonérations approuvées). */
+  registerAdjuster(fn: AssessmentAdjuster): void {
+    this.adjusters.push(fn);
+  }
+
   calculate(user: User, input: CalculateInput): { trace: AssessmentTrace; obligation?: Obligation } {
     authorize(user, input.simulate ? 'assessment.simulate' : 'assessment.liquidate');
+    return this.compute(user, input);
+  }
+
+  /**
+   * Liquidation déclenchée par le dépôt d'une déclaration (procédure déclarative). L'appelant a déjà autorisé
+   * le dépôt ; la garde de la règle ACTIVE (AC-LEG-01) reste appliquée ici, sans exception.
+   */
+  liquidateDeclaration(user: User, input: CalculateInput, declarationId: string): { trace: AssessmentTrace; obligation?: Obligation } {
+    return this.compute(user, input, { type: 'DECLARATION', id: declarationId });
+  }
+
+  private compute(user: User, input: CalculateInput, source?: { type: 'DECLARATION'; id: string }): { trace: AssessmentTrace; obligation?: Obligation } {
     const actor = { kind: 'user' as const, id: user.id, roles: user.roles };
     const rule = this.rules.get(input.ruleId);
     const taxpayer = this.taxpayers.get(input.taxpayerId);
@@ -130,8 +180,14 @@ export class AssessmentService {
       throw unprocessable('RULE_NOT_EXECUTABLE', `Règle ${rule.code} v${rule.version} non exécutable : ${exec.reason}.`, { ruleStatus: rule.status, reason: exec.reason });
     }
     const evaluation = this.rules.evaluate(rule, input.inputs, object.localityRank);
-    const result = Money.of(evaluation.value, rule.currency, rule.rounding);
-    if (result.isNegative()) throw unprocessable('NEGATIVE_ASSESSMENT', 'Le calcul produit un montant négatif ; vérifier la formule.');
+    const gross = Money.of(evaluation.value, rule.currency, rule.rounding);
+    if (gross.isNegative()) throw unprocessable('NEGATIVE_ASSESSMENT', 'Le calcul produit un montant négatif ; vérifier la formule.');
+    const adjustments = this.adjusters.flatMap((fn) => fn({ taxpayerId: taxpayer.id, objectId: object.id, rule, at: now, gross }));
+    let result = gross;
+    for (const a of adjustments) {
+      const r = Money.fromJSON(a.reduction);
+      result = r.compare(result) >= 0 ? Money.zero(result.currency) : result.subtract(r);
+    }
     const trace: AssessmentTrace = {
       ruleId: rule.id,
       ruleCode: rule.code,
@@ -150,10 +206,12 @@ export class AssessmentService {
       nonOpposable: input.simulate || !exec.ok,
       executable: exec.ok,
       ...(exec.ok ? {} : { executabilityReason: exec.reason }),
+      ...(adjustments.length ? { grossResult: gross.toJSON(), adjustments } : {}),
+      ...(source ? { source } : {}),
     };
     this.audit.append({
       actor, action: input.simulate ? 'assessment.simulated' : 'assessment.calculated', resourceType: 'rule', resourceId: rule.id,
-      details: { taxpayerId: taxpayer.id, objectId: object.id, result: trace.result, nonOpposable: trace.nonOpposable },
+      details: { taxpayerId: taxpayer.id, objectId: object.id, result: trace.result, nonOpposable: trace.nonOpposable, ...(adjustments.length ? { exemptions: adjustments.map((a) => a.sourceId) } : {}), ...(source ? { source } : {}) },
     });
     if (input.simulate) return { trace };
 
@@ -180,6 +238,8 @@ export class AssessmentService {
       dueRule: rule.dueRule,
       appealPath: rule.appealPath,
       computedAt: now.toISOString(),
+      ...(adjustments.length ? { grossAmount: gross.toJSON(), adjustments } : {}),
+      ...(source ? { source } : {}),
     };
     const obligation = this.issue({
       taxpayerId: taxpayer.id, objectId: object.id, rule, amount: result.toJSON(), dueDate, createdBy: user.id, explanation, trace,
@@ -267,7 +327,7 @@ export class AssessmentService {
    * Obligation rectificative (décision sur réclamation) : l'originale est conservée au statut ANNULEE,
    * sa créance est contrepassée, une nouvelle obligation liée est émise.
    */
-  rectify(originalId: string, newAmount: MoneyJSON, ctx: { appealId: string; reason: string; decidedBy: User }): Obligation {
+  rectify(originalId: string, newAmount: MoneyJSON, ctx: { appealId: string; reason: string; decidedBy: User; decisionType?: 'RECLAMATION' | 'REMISE' | 'CORRECTION_DECLARATION' }): Obligation {
     const original = this.get(originalId);
     const rule = this.rules.get(original.ruleId);
     if (original.ledgerEntryId && !this.ledger.isReversed(original.ledgerEntryId)) {
@@ -282,7 +342,7 @@ export class AssessmentService {
       amount,
       dueDate: original.dueDate,
       createdBy: ctx.decidedBy.id,
-      explanation: { ...original.explanation, amount, computedAt: now, rectification: { supersedes: original.id, appealId: ctx.appealId, reason: ctx.reason } },
+      explanation: { ...original.explanation, amount, computedAt: now, rectification: { supersedes: original.id, appealId: ctx.appealId, reason: ctx.reason, ...(ctx.decisionType ? { decisionType: ctx.decisionType } : {}) } },
       trace: { ...original.trace, result: amount, computedAt: now },
       supersedes: original.id,
       appealId: ctx.appealId,
