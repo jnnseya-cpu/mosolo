@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import {
   Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
@@ -44,6 +44,13 @@ function Tile({ label, value, sub, tone, toneLabel }: { label: string; value: st
       </div>
     </div>
   );
+}
+
+/** Étiquette de valeur en bout de barre (une ligne, chiffres tabulaires). */
+function barLabel(p: unknown, fmt: (v: number, l: string) => string, lang: string, color: string) {
+  const { x, y, width, height, value } = p as { x?: number; y?: number; width?: number; height?: number; value?: number };
+  if (x === undefined || y === undefined) return null;
+  return <text x={Number(x) + Number(width ?? 0) + 6} y={Number(y) + Number(height ?? 0) / 2 + 4} fontSize={11} fill={color} style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(Number(value ?? 0), lang)}</text>;
 }
 
 /** Étiquette directe en fin de courbe (≤ 4 séries). */
@@ -160,13 +167,13 @@ export default function Governor() {
             </>
           }>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={shownCommunes} layout="vertical" margin={{ top: 4, right: 56, bottom: 4, left: 0 }} barCategoryGap={6}>
+            <BarChart data={shownCommunes} layout="vertical" margin={{ top: 4, right: 64, bottom: 4, left: 0 }} barCategoryGap={6}>
               <CartesianGrid horizontal={false} stroke={theme.grid} />
               <XAxis type="number" tickFormatter={(v: number) => compact(v, lang)} tick={{ fontSize: 11, fill: theme.axis }} axisLine={false} tickLine={false} />
               <YAxis type="category" dataKey="name" width={92} tick={{ fontSize: 12, fill: theme.ink }} axisLine={false} tickLine={false} interval={0} />
               <Tooltip cursor={{ fill: theme.grid, opacity: 0.5 }} content={<ChartTooltip format={fmtC} />} />
               <Bar dataKey="value" name={tr('gov.confirmed')} fill={cat[0]} radius={[0, 4, 4, 0]} maxBarSize={14} isAnimationActive={false}>
-                <LabelList dataKey="value" position="right" formatter={(v: number) => compact(v, lang)} style={{ fontSize: 11, fill: theme.ink, fontVariantNumeric: 'tabular-nums' }} />
+                <LabelList dataKey="value" content={(p) => barLabel(p, compact, lang, theme.ink)} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -177,7 +184,7 @@ export default function Governor() {
           table={{ columns: [tr('gov.category'), `${tr('explain.amount')} (${disp})`, tr('gov.share')], rows: cats.map((c) => [c.name, formatMoney(dispMoney(c.money), { locale: loc }), `${Math.round((c.value / catTotal) * 100)} %`]) }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={cats} dataKey="value" nameKey="name" innerRadius="60%" outerRadius="88%" paddingAngle={1} stroke={theme.surface} strokeWidth={2} isAnimationActive={false}
+              <Pie data={cats} dataKey="value" nameKey="name" innerRadius="56%" outerRadius="78%" paddingAngle={1} stroke={theme.surface} strokeWidth={2} isAnimationActive={false}
                 label={cats.length <= 4 ? ({ percent }: { percent: number }) => `${Math.round(percent * 100)} %` : false} labelLine={false}>
                 {cats.map((c, i) => <Cell key={c.name} fill={cat[Math.min(i, 7)]} />)}
               </Pie>
@@ -190,14 +197,14 @@ export default function Governor() {
           legend={<Legend items={groupNames.map((g, i) => ({ label: g, color: cat[i]! }))} />}
           table={{ columns: [tr('gov.level'), `${tr('explain.amount')} (${disp})`], rows: d.ladder.map((l) => [tr(`ladder.${l.level}` as UIKey), formatMoney(dispMoney(l.amount), { locale: loc })]) }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={ladder} layout="vertical" margin={{ top: 4, right: 56, bottom: 4, left: 0 }} barCategoryGap={5}>
+            <BarChart data={ladder} layout="vertical" margin={{ top: 4, right: 64, bottom: 4, left: 0 }} barCategoryGap={5}>
               <CartesianGrid horizontal={false} stroke={theme.grid} />
               <XAxis type="number" tickFormatter={(v: number) => compact(v, lang)} tick={{ fontSize: 11, fill: theme.axis }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 12, fill: theme.ink }} axisLine={false} tickLine={false} interval={0} />
+              <YAxis type="category" dataKey="name" width={176} tick={{ fontSize: 11.5, fill: theme.ink }} axisLine={false} tickLine={false} interval={0} />
               <Tooltip cursor={{ fill: theme.grid, opacity: 0.5 }} content={<ChartTooltip format={fmtC} />} />
               <Bar dataKey="value" name={tr('explain.amount')} radius={[0, 4, 4, 0]} maxBarSize={14} isAnimationActive={false}>
                 {ladder.map((l) => <Cell key={l.level} fill={cat[l.group]} />)}
-                <LabelList dataKey="value" position="right" formatter={(v: number) => compact(v, lang)} style={{ fontSize: 11, fill: theme.ink, fontVariantNumeric: 'tabular-nums' }} />
+                <LabelList dataKey="value" content={(p) => barLabel(p, compact, lang, theme.ink)} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -215,7 +222,7 @@ export default function Governor() {
               const v = c.compliance ?? 0;
               const step = Math.min(SEQ_NAVY.length - 1, Math.floor(v / (100 / SEQ_NAVY.length)));
               return (
-                <li key={c.name} className="heat-tile" style={{ background: SEQ_NAVY[step], color: step >= 3 ? '#fff' : '#111', ...(pos ? { gridColumn: pos[0], gridRow: pos[1] } : {}) }}
+                <li key={c.name} className="heat-tile" style={{ background: SEQ_NAVY[step], color: step >= 3 ? '#fff' : '#111', ...(pos ? { '--gc': pos[0], '--gr': pos[1] } : {}) } as CSSProperties}
                   title={`${c.name} — ${v} %`}>
                   <span className="heat-name">{c.name}</span>
                   <span className="heat-val">{c.compliance !== undefined ? `${Math.round(v)} %` : '—'}</span>
@@ -233,10 +240,10 @@ export default function Governor() {
           legend={<Legend items={[{ label: tr('gov.actual'), color: cat[0]! }, { label: tr('gov.targetLine'), color: theme.reference, dashed: true }]} />}
           table={{ columns: [tr('gov.period'), tr('gov.actual'), tr('gov.targetLine')], rows: trend.map((p) => [p.label, fmtC(p.actual), fmtC(p.target)]) }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trend} margin={{ top: 8, right: 52, bottom: 4, left: 0 }}>
+            <LineChart data={trend} margin={{ top: 8, right: 72, bottom: 4, left: 0 }}>
               <CartesianGrid vertical={false} stroke={theme.grid} />
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: theme.axis }} axisLine={{ stroke: theme.grid }} tickLine={false} interval="preserveStartEnd" minTickGap={16} />
-              <YAxis tick={{ fontSize: 11, fill: theme.axis }} tickFormatter={(v: number) => compact(v, lang)} axisLine={false} tickLine={false} width={56} />
+              <YAxis tick={{ fontSize: 11, fill: theme.axis }} tickFormatter={(v: number) => compact(v, lang)} axisLine={false} tickLine={false} width={68} />
               <Tooltip content={<ChartTooltip format={fmtC} />} />
               <Line type="monotone" dataKey="target" name={tr('gov.targetLine')} stroke={theme.reference} strokeWidth={1.5} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
               <Line type="monotone" dataKey="actual" name={tr('gov.actual')} stroke={cat[0]} strokeWidth={2} dot={{ r: 3, strokeWidth: 0, fill: cat[0] }} activeDot={{ r: 5 }} isAnimationActive={false}>
@@ -250,10 +257,10 @@ export default function Governor() {
           legend={<Legend items={[{ label: tr('gov.actual'), color: theme.ink }, ...d.scenarioNames.map((n, i) => ({ label: n, color: scenColors[i] ?? cat[i]! }))]} />}
           table={{ columns: [tr('gov.period'), tr('gov.actual'), ...d.scenarioNames], rows: scen.map((s) => [String(s.label), typeof s.actual === 'number' ? fmtC(s.actual) : '—', ...d.scenarioNames.map((_, i) => (typeof s[`s${i}`] === 'number' ? fmtC(s[`s${i}`] as number) : '—'))]) }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={scen} margin={{ top: 8, right: 52, bottom: 4, left: 0 }}>
+            <LineChart data={scen} margin={{ top: 8, right: 72, bottom: 4, left: 0 }}>
               <CartesianGrid vertical={false} stroke={theme.grid} />
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: theme.axis }} axisLine={{ stroke: theme.grid }} tickLine={false} interval="preserveStartEnd" minTickGap={12} />
-              <YAxis tick={{ fontSize: 11, fill: theme.axis }} tickFormatter={(v: number) => compact(v, lang)} axisLine={false} tickLine={false} width={56} domain={['auto', 'auto']} />
+              <YAxis tick={{ fontSize: 11, fill: theme.axis }} tickFormatter={(v: number) => compact(v, lang)} axisLine={false} tickLine={false} width={68} domain={['auto', 'auto']} />
               <Tooltip content={<ChartTooltip format={fmtC} />} />
               <Line type="monotone" dataKey="actual" name={tr('gov.actual')} stroke={theme.ink} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
               {d.scenarioNames.map((n, i) => (

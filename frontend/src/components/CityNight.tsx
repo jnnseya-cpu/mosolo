@@ -77,7 +77,7 @@ function renderLayer(w: number, h: number, lights: Light[], scale: number, glow:
     for (let i = steps; i >= 0; i--) { const x = i / steps; g.lineTo(x * w, (riverY(x) + riverHalfWidth(x)) * h); }
     g.closePath();
     const grad = g.createLinearGradient(0, 0, 0, h * 0.45);
-    grad.addColorStop(0, 'rgba(8,12,34,0.95)'); grad.addColorStop(1, 'rgba(18,26,66,0.9)');
+    grad.addColorStop(0, 'rgba(6,9,26,0.85)'); grad.addColorStop(1, 'rgba(10,15,40,0.8)');
     g.fillStyle = grad; g.fill();
     g.strokeStyle = 'rgba(255,196,119,0.10)'; g.lineWidth = 1 * scale; g.stroke();
   }

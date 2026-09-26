@@ -13,7 +13,11 @@ function isSharedKey(k: string): k is MessageKey {
  */
 export function tr(lang: LanguageCode, key: UIKey, vars: Record<string, string | number> = {}): string {
   if (isSharedKey(key)) return t(lang, key, vars);
-  const raw = EXTRA_FR[key];
+  const raw: string | undefined = (EXTRA_FR as Record<string, string>)[key];
+  if (raw === undefined) {
+    if (import.meta.env.DEV) console.warn(`[i18n] clé manquante : ${key}`);
+    return key;
+  }
   return raw.replace(/\{\{(\w+)\}\}/g, (_, k: string) => (k in vars ? String(vars[k]) : `{{${k}}}`));
 }
 

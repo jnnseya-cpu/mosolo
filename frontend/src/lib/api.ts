@@ -26,6 +26,7 @@ export class ApiError extends Error {
     readonly title: string,
     readonly detail?: string,
     readonly code?: string,
+    readonly body?: Record<string, unknown>,
   ) {
     super(detail ?? title);
     this.name = 'ApiError';
@@ -66,13 +67,14 @@ export async function api<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   const ct = res.headers.get('content-type') ?? '';
   if (!res.ok) {
     let title = res.statusText || `HTTP ${res.status}`; let detail: string | undefined; let code: string | undefined;
+    let body: Record<string, unknown> | undefined;
     if (ct.includes('json')) {
       try {
-        const p = (await res.json()) as { title?: string; detail?: string; code?: string; message?: string };
-        title = p.title ?? title; detail = p.detail ?? p.message; code = p.code;
+        const p = (await res.json()) as { title?: string; detail?: string; code?: string; message?: string } & Record<string, unknown>;
+        title = p.title ?? title; detail = p.detail ?? p.message; code = p.code; body = p;
       } catch { /* corps illisible */ }
     }
-    throw new ApiError(res.status, title, detail, code);
+    throw new ApiError(res.status, title, detail, code, body);
   }
   if (opts.raw) return (await res.text()) as unknown as T;
   if (res.status === 204) return undefined as T;

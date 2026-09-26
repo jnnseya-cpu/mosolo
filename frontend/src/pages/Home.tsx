@@ -201,7 +201,7 @@ export default function Home() {
             <ul className="inst-list">
               <li>{tr('entity.DGIPK')}</li>
               <li>{tr('entity.DGTK')}</li>
-              <li>{tr('entity.MPF')}</li>
+              <li>{tr('entity.MINFIN')}</li>
               <li>{tr('entity.TRESOR')}</li>
             </ul>
           </div>

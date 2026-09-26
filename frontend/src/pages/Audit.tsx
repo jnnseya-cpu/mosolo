@@ -8,7 +8,7 @@ import { Icon } from '../components/Icon';
 import { api, asList } from '../lib/api';
 import type { AuditEvent, AuditVerify } from '../lib/types';
 
-type Ev = AuditEvent & { resourceType?: string; resourceId?: string; outcome?: string; actor?: string | { id?: string; kind?: string } };
+type Ev = Omit<AuditEvent, 'actor'> & { resourceType?: string; resourceId?: string; outcome?: string; actor?: string | { id?: string; kind?: string } };
 
 export default function Audit() {
   const { tr, fmtDate, user } = useApp();

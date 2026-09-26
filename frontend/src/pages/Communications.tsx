@@ -17,7 +17,7 @@ import { DEMO_COMMS, localPreviewHtml } from '../demo/communications';
 import { useInsight } from '../hooks/useInsight';
 import { AIInsightPanel } from '../components/AIInsightPanel';
 
-export const ENTITIES = ['DGIPK', 'DGTK', 'MPF', 'TRESOR'] as const;
+export const ENTITIES = ['DGIPK', 'DGTK', 'MINFIN', 'TRESOR'] as const;
 
 const DELIVERY_TONE: Record<string, { tone: Tone; key: UIKey }> = {
   en_file: { tone: 'neutral', key: 'delivery.en_file' }, envoye: { tone: 'good', key: 'delivery.envoye' }, sent: { tone: 'good', key: 'delivery.envoye' },
@@ -45,16 +45,14 @@ function DeliveryRow({ d }: { d: Delivery }) {
   const { tr, fmtDate } = useApp();
   const st = DELIVERY_TONE[normStatus(d.status)] ?? { tone: 'neutral' as Tone, key: 'delivery.en_file' as UIKey };
   return (
-    <li className="list-row delivery-row">
-      <span className="tag tag-channel">{tr(`channel.${d.channel}` as UIKey)}</span>
-      <div className="min0">
-        <p className="mono row-title truncate">{d.eventCode}</p>
-        <p className="small muted">{d.provider ?? '—'}{d.recipient ? ` · ${d.recipient}` : ''}</p>
-      </div>
-      <div className="row-side">
+    <li className="delivery-row">
+      <div className="delivery-top">
+        <span className="tag tag-channel">{tr(`channel.short.${d.channel}` as UIKey)}</span>
         <StatusBadge tone={st.tone} label={tr(st.key)} />
-        <time className="small muted nowrap" dateTime={d.at ?? d.createdAt}>{fmtDate(d.at ?? d.createdAt, true)}</time>
+        <time className="small muted nowrap delivery-time" dateTime={d.at ?? d.createdAt}>{fmtDate(d.at ?? d.createdAt, true)}</time>
       </div>
+      <p className="mono small row-title truncate" title={d.eventCode}>{d.eventCode}</p>
+      <p className="small muted truncate">{d.provider ?? '—'}{d.recipient ? ` · ${d.recipient}` : ''}</p>
     </li>
   );
 }

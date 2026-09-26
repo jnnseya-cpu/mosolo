@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { isCurrencyCode, CURRENCIES, type CurrencyCode } from '@mosolo/shared';
+import { isCurrencyCode, CURRENCIES, formatMoney, type CurrencyCode } from '@mosolo/shared';
 import { useApp } from '../context';
 import { useApi } from '../hooks/useApi';
 import { useAutosave } from '../hooks/useAutosave';
@@ -13,7 +13,7 @@ import { MapStatusChip } from '../components/MapStatusChip';
 import { AutosaveBar } from '../components/VersionHistory';
 import { EmptyState, ErrorState, Loading } from '../components/States';
 import { Icon } from '../components/Icon';
-import { api, describeError, newIdempotencyKey, safeGet } from '../lib/api';
+import { api, ApiError, describeError, newIdempotencyKey, safeGet } from '../lib/api';
 import { OBLIGATION_TONE, PAYMENT_TONE, RECEIPT_TONE, obligationKey } from '../lib/status';
 import type { UIKey } from '../lib/i18n';
 import { asMoney } from '../lib/normalize';
@@ -26,6 +26,12 @@ const CHANNELS: { id: string; icon: string; key: UIKey }[] = [
   { id: 'USSD', icon: 'keypad', key: 'pay.channel.USSD' },
   { id: 'AGENT_POINT', icon: 'store', key: 'pay.channel.AGENT_POINT' },
 ];
+
+function fmtInput(v: unknown): string {
+  const m = asMoney(v);
+  if (m) return formatMoney(m);
+  return typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v);
+}
 
 function Explanation({ id }: { id: string }) {
   const { tr, fmtDate } = useApp();
@@ -55,7 +61,7 @@ function Explanation({ id }: { id: string }) {
         <h3 className="h-sub">{tr('explain.inputs')}</h3>
         {inputs.length ? (
           <table className="data-table compact">
-            <tbody>{inputs.map(([k, v]) => <tr key={k}><th scope="row" className="mono">{k}</th><td className="num">{typeof v === 'object' && v && 'amount' in v ? String((v as { amount: string; currency: string }).amount) + ' ' + String((v as { currency: string }).currency) : String(v)}</td></tr>)}</tbody>
+            <tbody>{inputs.map(([k, v]) => <tr key={k}><th scope="row" className="mono">{k}</th><td className="num">{fmtInput(v)}</td></tr>)}</tbody>
           </table>
         ) : <p className="muted">—</p>}
       </div>
@@ -76,6 +82,7 @@ function PayFlow({ ob }: { ob: Obligation }) {
   const [busy, setBusy] = useState(false);
   const [order, setOrder] = useState<PaymentOrder | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [reused, setReused] = useState(false);
   const display: CurrencyCode | undefined = currency !== ob.amount.currency && isCurrencyCode(currency) && CURRENCIES[currency].payable ? currency : undefined;
 
   async function go(e: FormEvent) {
@@ -87,6 +94,16 @@ function PayFlow({ ob }: { ob: Obligation }) {
       });
       setOrder(r);
     } catch (x) {
+      // Une référence active existe déjà : on la réaffiche au lieu d'une erreur
+      if (x instanceof ApiError && x.code === 'ACTIVE_PAYMENT_REFERENCE_EXISTS' && x.body) {
+        const b = x.body as Partial<PaymentOrder> & { existing?: Partial<PaymentOrder> };
+        const ref = b.paymentReference ?? b.existing?.paymentReference;
+        if (ref) {
+          setOrder({ ...(b.existing ?? {}), paymentReference: ref, amount: b.amount ?? b.existing?.amount ?? ob.amount, status: b.status ?? b.existing?.status ?? 'INITIE' } as PaymentOrder);
+          setReused(true);
+          return;
+        }
+      }
       setErr(describeError(x).message);
     } finally {
       setBusy(false);
@@ -117,6 +134,7 @@ function PayFlow({ ob }: { ob: Obligation }) {
         </form>
       ) : (
         <div className="result-card" role="status">
+          {reused && <p className="notice notice-ok">{tr('pay.reused')}</p>}
           <p className="label">{tr('payment.reference')}</p>
           <p className="ref-big mono">{order.paymentReference}</p>
           <dl className="kv">
