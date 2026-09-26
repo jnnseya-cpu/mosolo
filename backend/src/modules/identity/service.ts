@@ -1,12 +1,15 @@
 /** Identité des contribuables (ch. 9) : inscription, identifiant unique du contribuable (IUC), préférences. */
 import { RESIDENTIAL_SITUATIONS, type LanguageCode, type ResidentialSituation, type VerificationLevel } from '@mosolo/shared';
-import type { AuditLog } from '../../core/audit.js';
+import type { AuditActor, AuditLog } from '../../core/audit.js';
 import type { Clock } from '../../core/clock.js';
 import { checkChar, randomCode } from '../../core/crypto.js';
 import { conflict, notFound } from '../../core/errors.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import type { CommunicationService, RecipientPrefs } from '../communications/service.js';
 import { taxpayerRecipient } from './recipients.js';
+
+/** Nature juridique du titulaire du compte (§ 9.1). Absent = personne physique (comptes antérieurs). */
+export type TaxpayerKind = 'PERSONNE_PHYSIQUE' | 'PERSONNE_MORALE';
 
 export interface Taxpayer {
   id: string;
@@ -19,7 +22,19 @@ export interface Taxpayer {
   verificationLevel: VerificationLevel;
   createdAt: string;
   prefs: RecipientPrefs;
+  kind?: TaxpayerKind;
+  /** Téléphone vérifié par code à usage unique (N0 effectif). */
+  phoneVerifiedAt?: string;
+  /** Compte créé par enrôlement assisté (N0-A), éventuellement sans téléphone. */
+  assisted?: boolean;
+  /** Fusion d'identités (réversible) : le compte absorbé pointe vers le compte conservé. */
+  status?: 'ACTIF' | 'FUSIONNE';
+  mergedInto?: string;
 }
+
+export type RegistrationInput = {
+  phone: string; fullName: string; language: LanguageCode; situation: ResidentialSituation; email?: string; kind?: TaxpayerKind;
+};
 
 export { RESIDENTIAL_SITUATIONS };
 
@@ -38,9 +53,9 @@ export class TaxpayerService {
     return `KIN-${core}-${checkChar(core)}`;
   }
 
-  register(input: { phone: string; fullName: string; language: LanguageCode; situation: ResidentialSituation; email?: string }, fixedId?: string): Taxpayer {
+  register(input: RegistrationInput, fixedId?: string): Taxpayer {
     const phone = input.phone.replace(/[\s-]/g, '');
-    if (this.taxpayers.findOne((t) => t.phone === phone)) {
+    if (phone !== '' && this.taxpayers.findOne((t) => t.phone === phone)) {
       // Anti-doublon (§ 9.6) : un numéro, un compte ; la récupération passe par un parcours dédié.
       throw conflict('PHONE_ALREADY_REGISTERED', 'Ce numéro est déjà rattaché à un compte. Utilisez la récupération de compte.');
     }
@@ -56,6 +71,7 @@ export class TaxpayerService {
       verificationLevel: 'N0',
       createdAt: this.clock.now().toISOString(),
       prefs: {},
+      ...(input.kind ? { kind: input.kind } : {}),
     });
     this.audit.append({
       actor: { kind: 'public', id: 'inscription' },
@@ -66,6 +82,54 @@ export class TaxpayerService {
     });
     this.comms.publish('account.registration.received', [taxpayerRecipient(taxpayer)], {}, { entity: 'GOUVERNORAT' });
     return taxpayer;
+  }
+
+  /**
+   * Enrôlement assisté (N0-A, § 9.2 et § 13A) : compte créé par un agent habilité ou un guichet, téléphone facultatif.
+   * Aucun paiement n'est demandé ni reçu par l'agent.
+   */
+  registerAssisted(input: { fullName: string; language: LanguageCode; situation: ResidentialSituation; phone?: string }, actor: AuditActor): Taxpayer {
+    const phone = (input.phone ?? '').replace(/[\s-]/g, '');
+    if (phone !== '' && this.taxpayers.findOne((t) => t.phone === phone)) {
+      throw conflict('PHONE_ALREADY_REGISTERED', 'Ce numéro est déjà rattaché à un compte. Utilisez la récupération de compte.');
+    }
+    const taxpayer = this.taxpayers.insert({
+      id: this.ids.next('TP'), iuc: this.newIuc(), fullName: input.fullName.trim(), phone, language: input.language,
+      situation: input.situation, verificationLevel: 'N0A', createdAt: this.clock.now().toISOString(), prefs: {},
+      kind: 'PERSONNE_PHYSIQUE', assisted: true,
+    });
+    this.audit.append({
+      actor, action: 'account.assisted_enrolment.created', resourceType: 'taxpayer', resourceId: taxpayer.id,
+      details: { language: taxpayer.language, withPhone: phone !== '' },
+    });
+    if (phone !== '') this.comms.publish('account.registration.received', [taxpayerRecipient(taxpayer)], {}, { entity: 'GOUVERNORAT' });
+    return taxpayer;
+  }
+
+  /** Téléphone vérifié par code à usage unique. */
+  markPhoneVerified(id: string): Taxpayer {
+    const t = this.get(id);
+    return this.taxpayers.update({ ...t, phoneVerifiedAt: this.clock.now().toISOString() });
+  }
+
+  /** Changement de niveau de vérification, toujours journalisé et notifié au titulaire (§ 9.2, H.4.1). */
+  setVerificationLevel(id: string, level: VerificationLevel, actor: AuditActor, reason: string): Taxpayer {
+    const t = this.get(id);
+    if (t.verificationLevel === level) return t;
+    const updated = this.taxpayers.update({ ...t, verificationLevel: level });
+    this.audit.append({
+      actor, action: 'account.verification.level_changed', resourceType: 'taxpayer', resourceId: id,
+      details: { from: t.verificationLevel, to: level, reason },
+    });
+    this.comms.publish('account.verification.level_upgraded', [taxpayerRecipient(updated)], {}, { entity: 'GOUVERNORAT' });
+    return updated;
+  }
+
+  /** État de fusion (réversible) : `mergedInto` null ⇒ compte rétabli. */
+  setMergeState(id: string, mergedInto: string | null): Taxpayer {
+    const t = this.get(id);
+    const { mergedInto: _prev, ...rest } = t;
+    return this.taxpayers.update(mergedInto ? { ...rest, status: 'FUSIONNE', mergedInto } : { ...rest, status: 'ACTIF' });
   }
 
   get(id: string): Taxpayer {

@@ -43,6 +43,7 @@ const ROLE_ROUTES: [string[], string[]][] = [
   [['R09', 'R10', 'R11'], ['/terrain']],
   [['R22', 'R23', 'R24', 'R28'], ['/audit', '/tresor']],
   [['R26'], ['/communications', '/audit']],
+  [['R09', 'R17', 'R20', 'R24', 'R29'], ['/ia']],
 ];
 
 /** Entrées de menu des modules d'extension (modules/registry.tsx). */
@@ -56,7 +57,7 @@ export function visibleNav(roles: string[] | undefined): NavItem[] {
   for (const [rs, routes] of ROLE_ROUTES) if (roles.some((r) => rs.includes(r))) routes.forEach((x) => allowed.add(x));
   if (allowed.size === 1) allowed.add('/verifier');
   const core = NAV.filter((n) => allowed.has(n.to));
-  const extra = MODULE_NAV.filter((n) => n.roles!.some((r) => roles.includes(r)));
+  const extra = MODULE_NAV.filter((n) => n.roles!.length === 0 || n.roles!.some((r) => roles.includes(r)));
   return [...core, ...extra];
 }
 

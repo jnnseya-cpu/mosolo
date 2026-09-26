@@ -16,7 +16,9 @@ describe('libellés humains', () => {
 });
 
 describe('navigation par rôle', () => {
-  const routes = (roles: string[]) => visibleNav(roles).map((n) => n.to);
+  // Écrans du socle (les entrées des modules d'extension s'ajoutent après, selon les rôles).
+  const routes = (roles: string[]) => visibleNav(roles).filter((n) => !n.label).map((n) => n.to);
+  const modules = (roles: string[]) => visibleNav(roles).filter((n) => n.label).map((n) => n.to);
   it('contribuable : accueil, inscription, espace, services, vérification', () => {
     expect(routes(['R30'])).toEqual(['/', '/inscription', '/espace', '/services', '/verifier']);
   });
@@ -24,9 +26,15 @@ describe('navigation par rôle', () => {
     expect(routes(['R01'])).toEqual(['/', '/verifier', '/gouverneur', '/ia']);
   });
   it('trésor, terrain, audit', () => {
-    expect(routes(['R17'])).toEqual(['/', '/tresor']);
+    expect(routes(['R17'])).toEqual(['/', '/ia', '/tresor']);
     expect(routes(['R10'])).toEqual(['/', '/terrain']);
     expect(routes(['R22'])).toEqual(['/', '/tresor', '/audit']);
+  });
+  it('modules : entrées publiques pour tous, entrées métier selon le rôle', () => {
+    expect(modules(['R30'])).toEqual(expect.arrayContaining(['/transparence', '/signaler', '/stationnement', '/mes-arrieres']));
+    expect(modules(['R30'])).not.toContain('/recouvrement');
+    expect(modules(['R17'])).toEqual(expect.arrayContaining(['/canaux/points-supervision', '/pilotage/indicateurs']));
+    expect(modules(['R10'])).toEqual(expect.arrayContaining(['/titres/controle', '/canaux/enrolement']));
   });
   it('libellés courts non tronqués', () => {
     const users = [

@@ -28,6 +28,7 @@ async function setupConnectors(connectorEnv: Record<string, string | undefined> 
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
   const app = buildApp({
     clock,
+    plugins: [],
     secrets: { auditHmacKey: 'test-audit-key', providerSecrets: { 'mm-operator-a': 'test-secret-mm-operator-a' }, commsProviderKeys: {} },
     connectorEnv,
     connectorRuntime: { ...(fetch ? { fetch } : {}), logger: (e) => logs.push(e), sleep: async () => {} },

@@ -7,8 +7,9 @@ import { parkingPlugin } from '../src/plugins/parking/plugin.js';
 import { publicitePlugin } from '../src/plugins/publicite/plugin.js';
 import { PUB_DEMO } from '../src/plugins/publicite/seed.js';
 import { callbackBody, PROVIDER_SECRET, signedCallback, type TestEnv } from './helpers.js';
+import type { MosoloPlugin } from '../src/plugins/types.js';
 
-async function setupPub(plugins = [publicitePlugin]): Promise<TestEnv> {
+async function setupPub(plugins: MosoloPlugin<any>[] = [publicitePlugin]): Promise<TestEnv> {
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
   const app = buildApp({
     clock,
@@ -219,7 +220,7 @@ describe('KIN PUB CONTROL — inspection, constat et décision (RW1)', () => {
   });
 
   it('indicateurs agrégés : taux d’autorisation, recettes par m², qualité des inspecteurs (jamais le nombre de sanctions)', async () => {
-    const env = await setupPub([parkingPlugin, publicitePlugin]);
+    const env = await setupPub([parkingPlugin, publicitePlugin] as MosoloPlugin<any>[]);
     expect((await env.req('GET', '/v1/publicite/indicators', 'pb-annonceur')).statusCode).toBe(403);
     const ind = (await env.req('GET', '/v1/publicite/indicators', 'pb-autorite')).json();
     expect(ind.totals).toMatchObject({ devices: 4, authorized: 2, undeclared: 1, declaredPending: 1, authorizedRate: '50.0', inspections: 3, casesOpen: 2, expiringSoon: 1 });

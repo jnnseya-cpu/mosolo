@@ -1,6 +1,7 @@
 /**
  * Écrans des modules d'extension (verticales, fonctions transverses). Chaque entrée ajoute une route et,
- * si `nav` est fourni, une entrée de menu visible des rôles indiqués. Libellés en français (langue de référence).
+ * si `nav` est fourni, une entrée de menu visible des rôles indiqués (`roles: []` = visible de tous).
+ * Libellés en français (langue de référence).
  */
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 
@@ -11,7 +12,92 @@ export interface ModuleRoute {
   nav?: { label: string; short?: string; icon: string; group: 'public' | 'pilotage' | 'operations'; roles: string[] };
 }
 
-export const MODULE_ROUTES: ModuleRoute[] = [];
+const DASH = ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R08', 'R17', 'R18', 'R22', 'R23', 'R24'];
 
-// Évite l'avertissement « import inutilisé » tant qu'aucun module n'est déclaré.
-export const lazyModule = lazy;
+export const MODULE_ROUTES: ModuleRoute[] = [
+  // Socle : connexion
+  { path: '/connexion', element: lazy(() => import('./socle/Login')), nav: { label: 'Connexion', icon: 'lock', group: 'public', roles: [] } },
+
+  // Accès : entités, modules, invitations, mandats, identité, arbitrages, consultation motivée
+  { path: '/acces/entites', element: lazy(() => import('./acces/EntitesModules')), nav: { label: 'Entités et modules', short: 'Entités', icon: 'building', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R05', 'R06', 'R08', 'R13', 'R14', 'R22', 'R23', 'R26', 'R27'] } },
+  { path: '/acces/invitations', element: lazy(() => import('./acces/Invitations')), nav: { label: 'Invitations et comptes', short: 'Accès', icon: 'users', group: 'operations', roles: ['R26', 'R28', 'R08', 'R06', 'R07', 'R09', 'R02', 'R03', 'R12', 'R22', 'R23'] } },
+  { path: '/invitation', element: lazy(() => import('./acces/InvitationAccept')) },
+  { path: '/acces/mandats', element: lazy(() => import('./acces/Mandats')), nav: { label: 'Mes mandataires', short: 'Mandats', icon: 'users', group: 'public', roles: ['R30', 'R31'] } },
+  { path: '/acces/identite', element: lazy(() => import('./acces/Identite')), nav: { label: 'Registre d’identité', short: 'Identité', icon: 'user', group: 'operations', roles: ['R12', 'R11', 'R07', 'R06', 'R09', 'R10'] } },
+  { path: '/acces/arbitrages', element: lazy(() => import('./acces/Arbitrages')), nav: { label: 'Arbitrages entre entités', short: 'Arbitrages', icon: 'scale', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R05', 'R13', 'R14', 'R06', 'R07', 'R08', 'R11', 'R22', 'R23'] } },
+  { path: '/acces/consultation', element: lazy(() => import('./acces/Consultation')), nav: { label: 'Consultation motivée', short: 'Motif', icon: 'lock', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R12', 'R20', 'R21', 'R22', 'R23', 'R24', 'R28'] } },
+
+  // Fiscal : biens, déclarations, exonérations, quitus, baux, carte
+  { path: '/fiscal/biens', element: lazy(() => import('./fiscal/MesBiens')), nav: { label: 'Biens et relations', short: 'Biens', icon: 'building', group: 'public', roles: ['R30', 'R31', 'R06', 'R07', 'R09', 'R10', 'R11', 'R12', 'R22'] } },
+  { path: '/fiscal/declarations', element: lazy(() => import('./fiscal/Declarations')), nav: { label: 'Déclarations', short: 'Déclarer', icon: 'file', group: 'public', roles: ['R30', 'R31', 'R07', 'R11', 'R12'] } },
+  { path: '/fiscal/exonerations', element: lazy(() => import('./fiscal/Exonerations')), nav: { label: 'Exonérations', short: 'Exonérations', icon: 'scale', group: 'operations', roles: ['R30', 'R31', 'R06', 'R07', 'R11', 'R12', 'R13', 'R14', 'R22', 'R24'] } },
+  { path: '/fiscal/quitus', element: lazy(() => import('./fiscal/Quitus')), nav: { label: 'Quitus fiscal', short: 'Quitus', icon: 'shieldCheck', group: 'public', roles: ['R30', 'R31', 'R06', 'R07', 'R12', 'R37'] } },
+  { path: '/fiscal/baux', element: lazy(() => import('./fiscal/AttestationsBail')) },
+  { path: '/fiscal/carte', element: lazy(() => import('./fiscal/Carte')), nav: { label: 'Carte fiscale', short: 'Carte', icon: 'pin', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R22'] } },
+  { path: '/fiscal/verifier', element: lazy(() => import('./fiscal/Verifier')) },
+  { path: '/fiscal/verifier/:type', element: lazy(() => import('./fiscal/Verifier')) },
+  { path: '/fiscal/verifier/:type/:code', element: lazy(() => import('./fiscal/Verifier')) },
+
+  // Recouvrement
+  { path: '/mes-arrieres', element: lazy(() => import('./recouvrement/MyArrears')), nav: { label: 'Mes arriérés et échéances', short: 'Arriérés', icon: 'clock', group: 'public', roles: ['R30', 'R31'] } },
+  { path: '/recouvrement', element: lazy(() => import('./recouvrement/RecoveryQueue')), nav: { label: 'Recouvrement', icon: 'scale', group: 'operations', roles: ['R06', 'R07', 'R11', 'R20', 'R21', 'R22', 'R23'] } },
+  { path: '/recouvrement/avis/:id', element: lazy(() => import('./recouvrement/NoticeView')) },
+
+  // Canaux : USSD/SVI, points de paiement, enrôlement assisté, carte MOSOLO
+  { path: '/canaux/ussd', element: lazy(() => import('./canaux/UssdSimulator')), nav: { label: 'USSD et SVI', short: 'USSD', icon: 'keypad', group: 'public', roles: [] } },
+  { path: '/points-de-paiement', element: lazy(() => import('./canaux/PaymentPointsPublic')), nav: { label: 'Où payer ?', short: 'Payer', icon: 'store', group: 'public', roles: [] } },
+  { path: '/canaux/verifier-carte', element: lazy(() => import('./canaux/CardVerify')) },
+  { path: '/canaux/enrolement', element: lazy(() => import('./canaux/AssistedEnrolment')), nav: { label: 'Enrôlement assisté', short: 'Enrôler', icon: 'user', group: 'operations', roles: ['R09', 'R10', 'R12'] } },
+  { path: '/canaux/carte/:number', element: lazy(() => import('./canaux/CardPrint')) },
+  { path: '/canaux/point-agree', element: lazy(() => import('./canaux/PointConsole')), nav: { label: 'Console du point agréé', short: 'Encaisser', icon: 'cash', group: 'operations', roles: ['R32'] } },
+  { path: '/canaux/points-supervision', element: lazy(() => import('./canaux/PointsSupervision')), nav: { label: 'Points agréés (Trésor)', short: 'Points', icon: 'store', group: 'pilotage', roles: ['R17', 'R18', 'R22', 'R24'] } },
+
+  // Titres, RakaPay, pass wewa
+  { path: '/titres/controle', element: lazy(() => import('./titres/Controle')), nav: { label: 'Contrôle des titres', short: 'Contrôle', icon: 'qr', group: 'operations', roles: ['R10', 'R11', 'R35'] } },
+  { path: '/rakapay/cooperative', element: lazy(() => import('./rakapay/Cooperative')), nav: { label: 'Espace coopérative wewa', short: 'Coopérative', icon: 'users', group: 'operations', roles: ['R30', 'R06', 'R07'] } },
+  { path: '/rakapay/pilotage', element: lazy(() => import('./rakapay/Pilotage')), nav: { label: 'Pilotage RakaPay', short: 'RakaPay', icon: 'chart', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R22', 'R23', 'R24', 'R36'] } },
+
+  // Stationnement (ParkSmart)
+  { path: '/stationnement', element: lazy(() => import('./parking/ParkingDriver')), nav: { label: 'Stationnement', icon: 'parking', group: 'public', roles: ['R30', 'R31'] } },
+  { path: '/stationnement/controle', element: lazy(() => import('./parking/ParkingControl')), nav: { label: 'Contrôle du stationnement', short: 'Stationnement', icon: 'car', group: 'operations', roles: ['R11', 'R09'] } },
+  { path: '/stationnement/regie', element: lazy(() => import('./parking/ParkingRegie')), nav: { label: 'Régie du stationnement', short: 'Zones', icon: 'parking', group: 'operations', roles: ['R06', 'R07'] } },
+  { path: '/stationnement/tableau-de-bord', element: lazy(() => import('./parking/ParkingDashboard')), nav: { label: 'Tableau de bord stationnement', short: 'Parking', icon: 'chart', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R09', 'R22', 'R23'] } },
+
+  // Publicité (KIN PUB CONTROL)
+  { path: '/publicite', element: lazy(() => import('./publicite/AdvertiserSpace')), nav: { label: 'Mes dispositifs publicitaires', short: 'Publicité', icon: 'megaphone', group: 'public', roles: ['R30', 'R31'] } },
+  { path: '/publicite/inspection', element: lazy(() => import('./publicite/AdInspector')), nav: { label: 'Inspection publicitaire', short: 'Inspection', icon: 'camera', group: 'operations', roles: ['R11', 'R09', 'R06', 'R07'] } },
+  { path: '/publicite/regie', element: lazy(() => import('./publicite/AdRegie')), nav: { label: 'Autorisations publicité', short: 'Autorisations', icon: 'file', group: 'operations', roles: ['R06', 'R07'] } },
+  { path: '/publicite/tableau-de-bord', element: lazy(() => import('./publicite/AdDashboard')), nav: { label: 'Tableau de bord publicité', short: 'Publicité', icon: 'chart', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R09', 'R22', 'R23'] } },
+  { path: '/publicite/verifier', element: lazy(() => import('./publicite/AdVerify')) },
+
+  // Verticales (console, plaques NFIU, CALCU)
+  { path: '/verticales/console', element: lazy(() => import('./verticales/AgentConsole')), nav: { label: 'Console des verticales', short: 'Verticales', icon: 'table', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R12', 'R22', 'R24'] } },
+  { path: '/verifier-plaque', element: lazy(() => import('./verticales/PlateVerify')) },
+  { path: '/verifier-plaque/:code', element: lazy(() => import('./verticales/PlateVerify')) },
+  { path: '/controle/calcu', element: lazy(() => import('./verticales/CalcuConsole')), nav: { label: 'CALCU — contrôle de la dépense', short: 'CALCU', icon: 'bank', group: 'pilotage', roles: ['R01', 'R05', 'R08', 'R15', 'R17', 'R22', 'R23'] } },
+
+  // Terrain : supervision, sous-traitants, badges
+  { path: '/terrain/supervision', element: lazy(() => import('./terrain/Supervision')), nav: { label: 'Supervision terrain', short: 'Supervision', icon: 'gauge', group: 'operations', roles: ['R06', 'R07', 'R09', 'R11', 'R22', 'R23', 'R24', 'R35'] } },
+  { path: '/terrain/sous-traitants', element: lazy(() => import('./terrain/Subcontractors')), nav: { label: 'Sous-traitants et équipes', short: 'Sous-traitants', icon: 'users', group: 'operations', roles: ['R06', 'R07', 'R08', 'R09', 'R11', 'R17', 'R22', 'R23', 'R24', 'R35'] } },
+  { path: '/verifier-agent', element: lazy(() => import('./terrain/VerifyAgent')), nav: { label: 'Vérifier un agent', short: 'Agent', icon: 'shieldCheck', group: 'public', roles: [] } },
+  { path: '/verifier-agent/:code', element: lazy(() => import('./terrain/VerifyAgent')) },
+
+  // Intégrité : signalement, enquêtes, incidents, données, accès
+  { path: '/signaler', element: lazy(() => import('./integrite/Signalement')), nav: { label: 'Signaler un abus', short: 'Signaler', icon: 'megaphone', group: 'public', roles: [] } },
+  { path: '/integrite/enquetes', element: lazy(() => import('./integrite/ConsoleEnquete')), nav: { label: 'Enquêtes anti-fraude', short: 'Enquêtes', icon: 'shieldCheck', group: 'operations', roles: ['R24', 'R22', 'R06', 'R21', 'R28'] } },
+  { path: '/integrite/controles-mystere', element: lazy(() => import('./integrite/ControlesMystere')), nav: { label: 'Contrôles mystère', short: 'Mystère', icon: 'check', group: 'operations', roles: ['R22', 'R24'] } },
+  { path: '/integrite/incidents', element: lazy(() => import('./integrite/Incidents')), nav: { label: 'Incidents de sécurité', short: 'Incidents', icon: 'alert', group: 'operations', roles: ['R28', 'R27', 'R26', 'R25', 'R22'] } },
+  { path: '/integrite/donnees', element: lazy(() => import('./integrite/EspaceDonnees')), nav: { label: 'Protection des données', short: 'Données', icon: 'lock', group: 'operations', roles: ['R25', 'R22', 'R23', 'R30'] } },
+  { path: '/integrite/revue-acces', element: lazy(() => import('./integrite/RevueAcces')), nav: { label: 'Revue des accès', short: 'Accès', icon: 'users', group: 'operations', roles: ['R28', 'R08', 'R22', 'R25'] } },
+
+  // Pilotage : tableaux par profil, indicateurs, piste d'audit, transparence
+  { path: '/pilotage/tableaux', element: lazy(() => import('./pilotage/Tableaux')), nav: { label: 'Tableaux par profil', short: 'Tableaux', icon: 'grid', group: 'pilotage', roles: DASH } },
+  { path: '/pilotage/indicateurs', element: lazy(() => import('./pilotage/Indicateurs')), nav: { label: 'Indicateurs', short: 'KPI', icon: 'gauge', group: 'pilotage', roles: DASH } },
+  { path: '/pilotage/piste-audit', element: lazy(() => import('./pilotage/PisteAudit')), nav: { label: 'Piste d’audit par dossier', short: 'Piste', icon: 'history', group: 'operations', roles: ['R22', 'R23', 'R24'] } },
+  { path: '/transparence', element: lazy(() => import('./pilotage/Transparence')), nav: { label: 'Transparence publique', short: 'Transparence', icon: 'globe', group: 'public', roles: [] } },
+
+  // IA : liens directs
+  { path: '/ia/autonomie', element: lazy(() => import('./ia/AutonomyPage')) },
+  { path: '/ia/memoire', element: lazy(() => import('./ia/MemoryPage')) },
+  { path: '/ia/journal', element: lazy(() => import('./ia/JournalPage')), nav: { label: 'Journal IA', short: 'Journal IA', icon: 'history', group: 'pilotage', roles: ['R22', 'R23', 'R25', 'R29'] } },
+];

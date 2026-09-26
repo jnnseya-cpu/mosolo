@@ -16,8 +16,11 @@ export interface TestEnv {
 
 export async function setup(overrides: Partial<Secrets> = {}): Promise<TestEnv> {
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
+  // Tests du socle : sans modules d'extension (leurs données de démonstration changeraient les comptages).
+  // L'application complète est couverte par test/integration.test.ts et par les tests de chaque module.
   const app = buildApp({
     clock,
+    plugins: [],
     secrets: {
       auditHmacKey: 'test-audit-key',
       providerSecrets: { 'mm-operator-a': PROVIDER_SECRET },
