@@ -32,8 +32,16 @@ const FISCAL_LINKS: { to: string; icon: string; title: string; text: string }[] 
   { to: '/fiscal/carte', icon: 'pin', title: 'Carte de mes biens', text: 'Situation fiscale et vérification, en couleurs.' },
 ];
 
+/** Agrégateurs candidats (canaux Monnaie mobile et QR) : le règlement va toujours au compte public du coffre. */
+const PROVIDERS: { id: '' | 'bitripay' | 'koda'; label: string; hint: string }[] = [
+  { id: '', label: 'Opérateur direct', hint: 'Référence à saisir dans votre application ou par USSD' },
+  { id: 'bitripay', label: 'BitriPay', hint: 'Page de paiement hébergée et QR BitriPay' },
+  { id: 'koda', label: 'KODA', hint: 'Page de paiement KODA (Orange Money, M-Pesa)' },
+];
+
 const CHANNELS: { id: string; icon: string; key: UIKey }[] = [
   { id: 'MOBILE_MONEY', icon: 'phone', key: 'pay.channel.MOBILE_MONEY' },
+  { id: 'QR', icon: 'qr', key: 'pay.channel.QR' },
   { id: 'BANK', icon: 'bank', key: 'pay.channel.BANK' },
   { id: 'CARD', icon: 'card', key: 'pay.channel.CARD' },
   { id: 'USSD', icon: 'keypad', key: 'pay.channel.USSD' },
@@ -104,6 +112,8 @@ function Explanation({ id }: { id: string }) {
 function PayFlow({ ob }: { ob: Obligation }) {
   const { tr, currency, fmtDate } = useApp();
   const [channel, setChannel] = useState('MOBILE_MONEY');
+  const [provider, setProvider] = useState<'' | 'bitripay' | 'koda'>('');
+  const providerAllowed = channel === 'MOBILE_MONEY' || channel === 'QR';
   const [idem] = useState(newIdempotencyKey);
   const [busy, setBusy] = useState(false);
   const [order, setOrder] = useState<PaymentOrder | null>(null);
@@ -116,7 +126,7 @@ function PayFlow({ ob }: { ob: Obligation }) {
     setBusy(true); setErr(null);
     try {
       const r = await api<PaymentOrder>(`/v1/obligations/${encodeURIComponent(ob.id)}/payment-orders`, {
-        method: 'POST', idempotencyKey: idem, body: { channel, ...(display ? { displayCurrency: display } : {}) },
+        method: 'POST', idempotencyKey: idem, body: { channel, ...(display ? { displayCurrency: display } : {}), ...(providerAllowed && provider ? { provider } : {}) },
       });
       setOrder(r);
     } catch (x) {
@@ -154,6 +164,20 @@ function PayFlow({ ob }: { ob: Obligation }) {
               ))}
             </div>
           </fieldset>
+          {providerAllowed && (
+            <fieldset className="field">
+              <legend className="label">Passerelle de paiement</legend>
+              <div className="choice-grid">
+                {PROVIDERS.map((p) => (
+                  <label key={p.id || 'direct'} className={`choice ${provider === p.id ? 'checked' : ''}`}>
+                    <input type="radio" name="provider" value={p.id} checked={provider === p.id} onChange={() => setProvider(p.id)} />
+                    <span><strong>{p.label}</strong><br /><span className="small muted">{p.hint}</span></span>
+                  </label>
+                ))}
+              </div>
+              <span className="hint">BitriPay et KODA sont des prestataires candidats : ils règlent le compte public de la Ville, aucun frais n’est prélevé sur votre paiement.</span>
+            </fieldset>
+          )}
           <p className="small muted">{tr('pay.idempotency')} <span className="mono">{idem.slice(0, 8)}…</span></p>
           {err && <p className="notice notice-err" role="alert">{err}</p>}
           <button type="submit" className="btn btn-primary btn-block" disabled={busy}>{busy ? tr('common.sending') : tr('pay.getReference')}</button>
@@ -169,6 +193,21 @@ function PayFlow({ ob }: { ob: Obligation }) {
             {order.expiresAt && <div><dt>{tr('pay.expires')}</dt><dd>{fmtDate(order.expiresAt, true)}</dd></div>}
             <div><dt>{tr('pay.status')}</dt><dd><StatusBadge tone={PAYMENT_TONE[order.status] ?? 'neutral'} label={tr(`payment.status.${order.status}` as UIKey)} /></dd></div>
           </dl>
+          {order.provider && (
+            <div className="provider-box">
+              <p className="label">Payer via {order.provider === 'bitripay' ? 'BitriPay' : 'KODA'} {order.sandbox && <StatusBadge tone="warning" label="Bac à sable" />}</p>
+              <div className="provider-row">
+                {(order.qrPayload || order.checkoutUrl) && <QrCode value={order.qrPayload ?? order.checkoutUrl!} size={132} alt={`Code QR de paiement ${order.provider}`} />}
+                <div className="min0 stack-sm">
+                  <p className="small">Intention <span className="mono">{order.providerIntentId}</span></p>
+                  {order.checkoutUrl
+                    ? <a className="btn btn-primary btn-sm" href={order.checkoutUrl} target="_blank" rel="noreferrer">Ouvrir la page de paiement <Icon name="external" size={14} /></a>
+                    : <p className="small muted">Bac à sable local : aucune page réelle n’est ouverte ; la confirmation signée est simulée par le Trésor.</p>}
+                  <p className="small muted">La quittance n’est émise qu’à réception de la confirmation signée du prestataire — jamais sur capture d’écran ou SMS.</p>
+                </div>
+              </div>
+            </div>
+          )}
           {ussd.length > 0 && (
             <div>
               <h3 className="h-sub">{tr('pay.ussdTitle')}</h3>

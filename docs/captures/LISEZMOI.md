@@ -36,3 +36,13 @@ Régénération : `tools/presentation/build-deck.mjs` (voir l'en-tête du script
 ## Partie 4 — Modules construits (écrans 32 à 52)
 
 Captures de l'application complète (socle et 14 modules d'extension) sur données de démonstration réelles du serveur, chacune avec le profil qui la voit dans son travail : centre de commandement sur données réelles, indicateurs, transparence publique, pass wewa (conducteur fictif), contrôle des titres, stationnement, publicité, biens et relations, quitus, arriérés et échéancier, recouvrement, USSD et SVI, point de paiement agréé, supervision du terrain, signalement, enquêtes, IA, entités et modules, Trésor, CALCU, connexion. Liste et textes : `tools/presentation/modules.json`.
+
+## Partie 5 — Galerie : vérification publique, BitriPay et KODA, verticales (usagers et agents)
+
+Dossier `galerie/` (JPEG, téléphone 390 px et ordinateur 1440 px) et PDF `KINSHASA_MOSOLO_Galerie_Verification_Prestataires_Verticales.pdf` (112 pages titrées).
+
+- `verification-publique/` (9) : plaques de biens en situation verte, orange et rouge (badge de situation fiscale, aucune mesure automatique), plaque NFIU, étal, certificat d'événement, quittance, badge d'agent, panneau publicitaire.
+- `prestataires/` (7) : le contribuable choisit BitriPay ou KODA et obtient sa référence et son intention (bac à sable local) ; au Trésor, la console des prestataires, la confirmation par webhook signé (simulation autorisée uniquement en bac à sable de démonstration) et le journal des webhooks. Un prestataire ne règle que le compte bénéficiaire de l'obligation (un ordre DGTK n'est pas accepté sur le compte DGIPK).
+- `verticales-usagers/` (23) et `verticales-agents/` (17) : chaque écran capturé avec le profil qui l'utilise.
+
+Régénération : `tools/captures/` (serveur `MOSOLO_RATE_LIMIT=off`, frontend en aperçu sur le port 4173 ; `gallery.cjs` lit au lancement les codes de plaque, qui changent à chaque démarrage).

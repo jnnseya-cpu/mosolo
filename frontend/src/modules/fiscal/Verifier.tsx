@@ -3,7 +3,8 @@
  * Divulgation minimale : jamais de nom, d'adresse ni de montant. La couleur de situation fiscale d'un bien est affichée
  * (le Cahier des exigences prévaut, décision de la Ville) avec sa légende générique, sans détail des obligations.
  */
-import { MapStatusChip } from '../../components/MapStatusChip';
+import { StatusBadge } from '../../components/StatusBadge';
+const SITUATION_TONE = { green: 'good', amber: 'warning', red: 'critical', grey: 'neutral', blue: 'info' } as const;
 import type { MapStatusColor } from '@mosolo/shared';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -97,7 +98,7 @@ export default function Verifier() {
                   {str('category') && <div><dt>Nature</dt><dd>{str('category')}{res.registered === true ? ' — enregistré' : ''}</dd></div>}
                   {str('commune') && <div><dt>Commune</dt><dd>{str('commune')}</dd></div>}
                   {str('quartier') && <div><dt>Quartier</dt><dd>{str('quartier')}</dd></div>}
-                  {situation && <div><dt>Situation fiscale</dt><dd><MapStatusChip status={situation.color} /> <span className="small">{situation.label}</span></dd></div>}
+                  {situation && <div><dt>Situation fiscale</dt><dd><StatusBadge tone={SITUATION_TONE[situation.color]} label={situation.label} /></dd></div>}
                   {str('unitIgf') && <div><dt>Unité</dt><dd className="mono">{str('unitIgf')}</dd></div>}
                   {str('taxpayerRef') && <div><dt>Contribuable</dt><dd className="mono">{str('taxpayerRef')} <span className="small muted">(masqué)</span></dd></div>}
                   {str('validUntil') && <div><dt>Valide jusqu’au</dt><dd>{fmtDate(str('validUntil')!)}</dd></div>}

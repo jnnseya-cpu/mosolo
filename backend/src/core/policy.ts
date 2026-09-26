@@ -12,7 +12,7 @@ export type Action =
   | 'rule.read' | 'rule.create' | 'rule.approve'
   | 'assessment.simulate' | 'assessment.liquidate'
   | 'obligation.read' | 'obligation.modify'
-  | 'payment.create' | 'payment.modify' | 'payment.evidence'
+  | 'payment.create' | 'payment.modify' | 'payment.evidence' | 'provider.read' | 'provider.simulate'
   | 'settlement.import' | 'reconciliation.read' | 'ledger.read' | 'ledger.reverse'
   | 'beneficiary.read' | 'beneficiary.propose' | 'beneficiary.approve'
   | 'audit.read' | 'audit.modify'
@@ -94,6 +94,10 @@ const MATRIX: Record<Action, Partial<Record<RoleCode, Grant>>> = {
   'payment.modify': {},
   // Relais de vérification capture/SMS chez le prestataire : pièce de dossier (litige, exception), jamais une quittance.
   'payment.evidence': { R17: always, R18: always, R20: always },
+  // Console des prestataires connectés : configuration masquée et journal des webhooks.
+  'provider.read': { R17: always, R18: always, R22: always, R26: always, R27: always },
+  // Simulation d'une confirmation signée : BAC À SABLE LOCAL et mode démonstration uniquement (jamais en production).
+  'provider.simulate': { R17: always, R26: always },
   'settlement.import': { R17: always },
   'reconciliation.read': { R17: always, R18: always, R22: always },
   'ledger.read': { R17: always, R22: always, R23: always },

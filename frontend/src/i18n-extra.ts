@@ -257,6 +257,7 @@ export const EXTRA_FR = {
   'pay.channel.CARD': 'Carte',
   'pay.channel.USSD': 'USSD (*…#)',
   'pay.channel.AGENT_POINT': 'Point de paiement agréé',
+  'pay.channel.QR': 'Code QR',
   'pay.idempotency': 'Clé d’idempotence (évite tout double paiement) :',
   'pay.getReference': 'Obtenir ma référence de paiement',
   'pay.reused': 'Une référence de paiement active existe déjà pour cette obligation : la voici.',

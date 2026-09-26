@@ -363,3 +363,37 @@ describe('BitriPay : comptes connectés, attente prestataire, résolution', () =
     expect(() => buildApp({ connectorEnv: { BITRIPAY_ACCOUNT_ID: 'compte-ville' } })).toThrow(/BITRIPAY_ACCOUNT_ID/);
   });
 });
+
+describe('Console des prestataires et simulation du bac à sable', () => {
+  it('console : configuration masquée, statistiques, webhooks ; réservée au Trésor et à l’exploitation', async () => {
+    const env = await setupConnectors();
+    const order = (await createProviderOrder(env, 'bitripay', 'QR')).json();
+    expect((await env.req('GET', '/v1/providers/connectors', 'u-contribuable')).statusCode).toBe(403);
+    const sim = await env.req('POST', '/v1/providers/bitripay/sandbox-simulate', 'u-tresor', { paymentReference: order.paymentReference, event: 'succeeded' });
+    expect(sim.statusCode).toBe(200);
+    expect(sim.json().results[0]).toMatchObject({ status: 'CONFIRME', receiptStatus: 'PROVISOIRE' });
+    const settled = await env.req('POST', '/v1/providers/bitripay/sandbox-simulate', 'u-tresor', { paymentReference: order.paymentReference, event: 'settled' });
+    expect(settled.json().results[0].outcome).toBe('SETTLEMENT_ANNOUNCED');
+    expect(env.app.ctx.payments.byReference(order.paymentReference)!.status).toBe('CONFIRME');
+    const c = (await env.req('GET', '/v1/providers/connectors', 'u-tresor')).json();
+    expect(c.connectors.map((x: { id: string }) => x.id).sort()).toEqual(['bitripay', 'koda']);
+    expect(JSON.stringify(c.connectors)).not.toContain(BITRIPAY_DEMO_WEBHOOK_SECRET);
+    expect(c.stats.find((s: { id: string }) => s.id === 'bitripay')).toMatchObject({ orders: 1, confirmed: 1, webhooks: 2 });
+    expect(c.events[0]).toMatchObject({ provider: 'bitripay', outcome: 'SETTLEMENT_ANNOUNCED' });
+    expect(c.settlementAnnouncements).toHaveLength(1);
+  });
+
+  it('simulation refusée hors bac à sable local, et à un rôle non habilité', async () => {
+    const { fetch } = mockFetch(() => ({ status: 200, body: { id: 'pi_live', checkout_url: 'https://pay.bitripay.com/pi_live', qr_payload: 'BTRP|pi_live' } }));
+    const env = await setupConnectors({ BITRIPAY_API_KEY: 'sk_live_SECRET00112233', BITRIPAY_WEBHOOK_SECRET: 'whsec_live' }, fetch);
+    const order = (await createProviderOrder(env, 'bitripay', 'QR')).json();
+    const res = await env.req('POST', '/v1/providers/bitripay/sandbox-simulate', 'u-tresor', { paymentReference: order.paymentReference, event: 'succeeded' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('SIMULATION_FORBIDDEN');
+    expect((await env.req('POST', '/v1/providers/koda/sandbox-simulate', 'u-contribuable', { paymentReference: order.paymentReference, event: 'succeeded' })).statusCode).toBe(403);
+    const k = await setupConnectors();
+    const ko = (await createProviderOrder(k, 'koda')).json();
+    const kr = await k.req('POST', '/v1/providers/koda/sandbox-simulate', 'u-tresor', { paymentReference: ko.paymentReference, event: 'succeeded' });
+    expect(kr.json().results[0]).toMatchObject({ status: 'CONFIRME' });
+  });
+});

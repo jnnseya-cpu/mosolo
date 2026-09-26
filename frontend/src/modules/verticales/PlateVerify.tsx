@@ -2,7 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PageHead } from '../../components/Shell';
 import { Icon } from '../../components/Icon';
-import { MapStatusChip } from '../../components/MapStatusChip';
+import { StatusBadge } from '../../components/StatusBadge';
+const SITUATION_TONE = { green: 'good', amber: 'warning', red: 'critical', grey: 'neutral', blue: 'info' } as const;
 import type { MapStatusColor } from '@mosolo/shared';
 import { ErrorState, Loading } from '../../components/States';
 import { useApp } from '../../context';
@@ -73,7 +74,7 @@ export default function PlateVerify() {
                 <div><dt>Commune</dt><dd>{plate.commune}</dd></div>
                 <div><dt>Quartier</dt><dd>{plate.quartier}</dd></div>
                 <div><dt>Objet enregistré</dt><dd>{plate.enregistre ? 'Oui' : 'Non'}</dd></div>
-                {plate.situation && <div><dt>Situation fiscale</dt><dd><MapStatusChip status={plate.situation.color} /> <span className="small">{plate.situation.label}</span></dd></div>}
+                {plate.situation && <div><dt>Situation fiscale</dt><dd><StatusBadge tone={SITUATION_TONE[plate.situation.color]} label={plate.situation.label} /></dd></div>}
               </dl>
             </div>
           </div>

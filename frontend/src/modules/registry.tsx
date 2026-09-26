@@ -96,6 +96,9 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/pilotage/piste-audit', element: lazy(() => import('./pilotage/PisteAudit')), nav: { label: 'Piste d’audit par dossier', short: 'Piste', icon: 'history', group: 'operations', roles: ['R22', 'R23', 'R24'] } },
   { path: '/transparence', element: lazy(() => import('./pilotage/Transparence')), nav: { label: 'Transparence publique', short: 'Transparence', icon: 'globe', group: 'public', roles: [] } },
 
+  // Paiements : prestataires connectés (BitriPay, KODA)
+  { path: '/tresor/prestataires', element: lazy(() => import('./prestataires/Prestataires')), nav: { label: 'Prestataires connectés', short: 'Prestataires', icon: 'phone', group: 'operations', roles: ['R17', 'R18', 'R22', 'R26', 'R27'] } },
+
   // IA : liens directs
   { path: '/ia/autonomie', element: lazy(() => import('./ia/AutonomyPage')) },
   { path: '/ia/memoire', element: lazy(() => import('./ia/MemoryPage')) },
