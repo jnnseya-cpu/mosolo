@@ -45,6 +45,10 @@ describe('Preuves — résolveur universel (tout code, tout canal, heure serveur
       // Jamais de nom de contribuable ni d'adresse dans la réponse publique.
       expect(JSON.stringify(r)).not.toMatch(/Mbuyi|Kalala/);
     }
+    // Contenu de QR scanné : lien de vérification (quel que soit le domaine) → même résultat que le code nu.
+    const cert = ext.verticales.certificates.all()[0].code;
+    const viaLink = (await get(`/v1/public/preuves?c=${encodeURIComponent(`https://mosolo.kinshasa.cd/preuve/${cert}/imprimer`)}`)).json();
+    expect(viaLink).toMatchObject({ found: true, kind: 'CERTIFICAT', code: cert });
     const unknown = (await get('/v1/public/preuves/ZZZZ-0000')).json();
     expect(unknown).toMatchObject({ found: false, kind: 'INCONNU', state: 'INCONNU' });
   });

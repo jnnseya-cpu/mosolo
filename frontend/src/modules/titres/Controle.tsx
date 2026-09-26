@@ -3,7 +3,7 @@
  * réponse minimale VALIDE / EXPIRÉ / INVALIDE (couleur + icône + texte + son), constat si négatif — jamais d'amende,
  * jamais d'encaissement. Mode hors ligne : paquet signé (clé publique, révocations, plaques), file locale, lot signé.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { PageHead } from '../../components/Shell';
 import { Icon } from '../../components/Icon';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
@@ -16,6 +16,7 @@ import { api, describeError, safeGet, safeSet } from '../../lib/api';
 import { hmacSha256Hex, uid } from '../../lib/crypto';
 import { playSignal, type ControlView } from './common';
 import './titres.css';
+import { QrScanner } from '../../components/QrScanner';
 
 type Mode = 'qr' | 'plate' | 'vest';
 type Scope = '81' | 'tous';
@@ -60,36 +61,6 @@ async function verifyStaticOffline(token: string, pem: string): Promise<boolean 
   } catch {
     return null; // Ed25519 non pris en charge par ce navigateur : reconfirmation au retour du réseau.
   }
-}
-
-function Scanner({ onCode, onClose }: { onCode: (c: string) => void; onClose: () => void }) {
-  const video = useRef<HTMLVideoElement>(null);
-  const [err, setErr] = useState<string | null>(null);
-  useEffect(() => {
-    let stream: MediaStream | null = null; let stop = false; let timer = 0;
-    const Detector = window.BarcodeDetector;
-    if (!Detector || !navigator.mediaDevices?.getUserMedia) { setErr('La lecture par caméra n’est pas disponible sur ce navigateur : collez le contenu du QR ou saisissez la plaque.'); return; }
-    const det = new Detector({ formats: ['qr_code'] });
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then((s) => {
-      stream = s;
-      if (!video.current) return;
-      video.current.srcObject = s;
-      void video.current.play();
-      const tick = async () => {
-        if (stop || !video.current) return;
-        try { const c = (await det.detect(video.current))[0]; if (c?.rawValue) { onCode(c.rawValue.trim()); return; } } catch { /* image pas prête */ }
-        timer = window.setTimeout(() => void tick(), 300);
-      };
-      void tick();
-    }).catch(() => setErr('Accès à la caméra refusé.'));
-    return () => { stop = true; clearTimeout(timer); stream?.getTracks().forEach((t) => t.stop()); };
-  }, [onCode]);
-  return (
-    <div className="scanner">
-      {err ? <p className="notice notice-err">{err}</p> : <video ref={video} className="scanner-video" muted playsInline aria-label="Lecture du QR en cours" />}
-      <button type="button" className="btn btn-secondary" onClick={onClose}><Icon name="close" size={18} /> Arrêter la lecture</button>
-    </div>
-  );
 }
 
 function ResultCard({ r }: { r: ControlView }) {
@@ -285,7 +256,7 @@ export default function Controle() {
                 <div className="field">
                   <label className="label" htmlFor="tt-val">{mode === 'vest' ? 'Contenu du QR du gilet ou numéro de gilet' : 'Contenu du QR ou code court'}</label>
                   <textarea id="tt-val" className="tt-token-input" value={value} onChange={(e) => setValue(e.target.value)} placeholder={mode === 'vest' ? 'W-KAL-0001 ou MT1.…' : 'MD1.… (téléphone), MT1.… (papier, autocollant), WEW…'} rows={3} />
-                  {scan ? <Scanner onCode={onCode} onClose={() => setScan(false)} /> : <button type="button" className="btn btn-secondary" onClick={() => setScan(true)}><Icon name="camera" size={18} /> Lire avec la caméra</button>}
+                  {scan ? <QrScanner onResult={(raw) => { setScan(false); onCode(raw); }} onClose={() => setScan(false)} /> : <button type="button" className="btn btn-secondary" onClick={() => setScan(true)}><Icon name="camera" size={18} /> Lire avec la caméra</button>}
                 </div>
               )}
               <div className="tt-inline-fields">

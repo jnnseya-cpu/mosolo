@@ -11,6 +11,8 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { API_URL, api, serverNow } from '../../lib/api';
 import { BLOCKING, proofPrintUrl, type ProofResult } from './shared';
+import { scanTarget } from './scan';
+import { QrScanner } from '../../components/QrScanner';
 import './preuves.css';
 
 export default function ProofVerify() {
@@ -21,6 +23,7 @@ export default function ProofVerify() {
   const [input, setInput] = useState(code);
   const [res, setRes] = useState<ProofResult | null>(null);
   const [err, setErr] = useState<unknown>(null);
+  const [scan, setScan] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = async (c: string) => {
@@ -41,7 +44,7 @@ export default function ProofVerify() {
   return (
     <div className="page pv-page">
       <PageHead eyebrow="Vérification publique" title="Vérifier une preuve"
-        lead="Ticket, place de stationnement ou de marché, pass wewa, certificat, autorisation, quitus, quittance, badge : saisissez le code imprimé sous le QR ou scannez-le avec l’appareil photo." />
+        lead="Ticket, place de stationnement ou de marché, pass wewa, certificat, autorisation, quitus, quittance, badge : scannez le QR code avec la caméra, prenez-le en photo, ou saisissez le code imprimé dessous." />
       <ExampleNotice />
       <form className="card pv-form" onSubmit={submit}>
         <label htmlFor="pv-code">Code de la preuve</label>
@@ -50,6 +53,9 @@ export default function ProofVerify() {
           <button className="btn btn-primary" disabled={busy || !input.trim()}><Icon name="shieldCheck" size={16} /> Vérifier</button>
         </div>
         <p className="small muted">Sans smartphone : USSD <b>*[code court À CONFIGURER]#</b>, SMS <b>V</b> + code, WhatsApp <b>MENU</b>, ou la <a href={`${API_URL}/l`}>version légère</a> (sans application, faible débit).</p>
+        {scan
+          ? <QrScanner onResult={(raw) => { setScan(false); nav(scanTarget(raw)); }} onClose={() => setScan(false)} />
+          : <button type="button" className="btn btn-secondary pv-scan" onClick={() => setScan(true)}><Icon name="qr" size={18} /> Scanner un QR code</button>}
       </form>
 
       {busy && <Loading />}

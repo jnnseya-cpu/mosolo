@@ -827,3 +827,16 @@ input[type='file'] { font-size: 13.5px; max-width: 100%; }
 .vc-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--vc); margin-left: 4px; }
 .vc-dot.vc-VERT { --vc: var(--good); } .vc-dot.vc-AMBRE { --vc: #c98700; } .vc-dot.vc-ROUGE { --vc: var(--critical); }
 @media (prefers-reduced-motion: reduce) { .vc-bar > i { transition: none; } }
+
+/* ── Lecteur de QR universel (caméra en direct, détecteur natif ou jsQR ; photo en secours) ── */
+.qrs { display: grid; gap: 10px; }
+.qrs-view { position: relative; width: 100%; max-width: 420px; aspect-ratio: 1 / 1; border-radius: 14px; overflow: hidden; background: #0b0f1d; justify-self: center; }
+.qrs-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.qrs-frame { position: absolute; inset: 16%; pointer-events: none; }
+.qrs-frame i { position: absolute; width: 28px; height: 28px; border: 4px solid #fff; }
+.qrs-frame i:nth-child(1) { top: 0; left: 0; border-right: 0; border-bottom: 0; border-top-left-radius: 8px; }
+.qrs-frame i:nth-child(2) { top: 0; right: 0; border-left: 0; border-bottom: 0; border-top-right-radius: 8px; }
+.qrs-frame i:nth-child(3) { bottom: 0; left: 0; border-right: 0; border-top: 0; border-bottom-left-radius: 8px; }
+.qrs-frame i:nth-child(4) { bottom: 0; right: 0; border-left: 0; border-top: 0; border-bottom-right-radius: 8px; }
+.qrs-hint { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; color: #fff; font-size: 13.5px; font-weight: 600; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); }
+.qrs-actions { display: flex; flex-wrap: wrap; gap: 8px; }

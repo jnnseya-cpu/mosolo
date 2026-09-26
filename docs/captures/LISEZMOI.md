@@ -60,3 +60,12 @@ Règle de couleur unique : **vert** tant qu'il reste au moins 50 % de validité,
 - **Comptes à rebours** : stationnement, pass wewa et quitus.
 
 Les pages 1 à 36 du PDF de la galerie reprennent ces écrans. Régénération : `tools/captures/preuves.cjs`. Le serveur est redémarré entre deux appareils, car le limiteur anti-énumération bloque les vérifications répétées.
+
+
+Écrans 16 à 19 de `preuves-canaux/telephone/` : scanner un QR code.
+- 16 : bouton « Scanner un QR code ».
+- 17 : caméra en direct.
+- 18 : ticket reconnu après le scan.
+- 19 : secours par photo du QR.
+
+Régénération : `tools/captures/scanqr.cjs` (caméra simulée par un fichier Y4M qui filme la preuve imprimée).

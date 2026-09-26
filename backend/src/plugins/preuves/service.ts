@@ -8,7 +8,7 @@
  * - Validité : règle unique 50 % / 1 % (shared/validity.ts), toujours à l'heure du SERVEUR.
  * - Chaque vérification passe par le limiteur anti-énumération du module « canaux » et est journalisée.
  */
-import { formatValidityDuration } from '@mosolo/shared';
+import { extractProofCode, formatValidityDuration } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import { validityView, type ValidityView } from '../../core/validity.js';
 import { ext } from '../types.js';
@@ -80,7 +80,8 @@ export class PreuvesService {
 
   /** Vérification universelle ; `key` identifie l'appelant pour le limiteur (adresse, numéro d'appel). */
   resolve(rawCode: string, key: string, channel: 'WEB' | 'LITE' | 'SMS' | 'WHATSAPP' | 'USSD' | 'SVI' | 'IMPRIME'): ProofResult {
-    const code = rawCode.trim();
+    // Contenu de QR scanné ou lien collé (SMS, WhatsApp, page légère) : on en extrait le code.
+    const code = extractProofCode(rawCode);
     this.canaux.limiter.admit(key, `PREUVE-${channel}`);
     const r = this.lookup(code);
     this.canaux.limiter.record(key, `PREUVE-${channel}`, code.slice(0, 40), r.kind, r.state, !r.found);

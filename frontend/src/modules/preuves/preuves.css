@@ -108,3 +108,5 @@
 .pv-howto { display: grid; gap: 10px; margin-top: 16px; }
 .pv-howto-grid { display: grid; gap: 10px; }
 @media (min-width: 900px) { .pv-howto-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.pv-scan { justify-self: start; }

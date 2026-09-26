@@ -7,3 +7,4 @@ export * from './events.js';
 export * from './ai.js';
 export * from './i18n/index.js';
 export * from './validity.js';
+export * from './proofs.js';

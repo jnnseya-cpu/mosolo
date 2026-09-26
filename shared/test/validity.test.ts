@@ -31,3 +31,17 @@ describe('règle de couleur de validité 50 % / 1 %', () => {
     expect(validityText(readValidity(F, U, at(1)))).toMatch(/^✓ VALIDE/);
   });
 });
+
+describe('contenu de QR → code de preuve', async () => {
+  const { extractProofCode } = await import('../src/proofs.js');
+  it.each([
+    ['https://mosolo.kinshasa.cd/preuve/PKT4K7M2QX', 'PKT4K7M2QX'],
+    ['https://mosolo.kinshasa.cd/preuve/PKT4K7M2QX/imprimer', 'PKT4K7M2QX'],
+    ['https://mosolo.kinshasa.cd/l/v?c=EVT-2026-00001-W', 'EVT-2026-00001-W'],
+    ['https://mosolo.kinshasa.cd/fiscal/verifier/quitus/6C97H2ZK7?s=abc', '6C97H2ZK7'],
+    ['https://mosolo.kinshasa.cd/publicite/verifier?plaque=SGt8tqIfOsPFdP_k', 'SGt8tqIfOsPFdP_k'],
+    ['MOSOLO1|Q26KIN0000000303|abcdef|DUPLICATA-1', 'Q26KIN0000000303'],
+    ['MT1.eyJ9.sig', 'MT1.eyJ9.sig'],
+    ['  AG-7K4M2Q-X ', 'AG-7K4M2Q-X'],
+  ])('%s', (raw, code) => { expect(extractProofCode(raw)).toBe(code); });
+});

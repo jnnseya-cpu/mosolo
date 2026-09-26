@@ -14,6 +14,8 @@ PC={'01-verifier-comment-lire':'Vérifier une preuve — comment lire la couleur
 '08a-whatsapp-consentement':'WhatsApp — consentement explicite avant tout message','08b-whatsapp-verification':'WhatsApp — vérification d’un ticket par son code','08c-whatsapp-comment-payer':'WhatsApp — comment payer, sans aucun lien de paiement',
 '09-sms-telephone-basique':'SMS « V + code » — téléphone basique, sans Internet','10-version-legere-accueil':'Version légère /l — sans JavaScript, moins de 10 Ko','11-version-legere-resultat-ambre':'Version légère — résultat ambre avec barre en caractères',
 '12-version-legere-imprimable':'Version légère — version imprimable avec QR','13-stationnement-compte-a-rebours':'Stationnement — compte à rebours de la place payée','14-pass-wewa-compte-a-rebours':'Pass wewa — compte à rebours et impression','15-quitus-compte-a-rebours':'Quitus fiscal — compte à rebours et impression'}
+PC.update({'16-bouton-scanner':'Vérifier une preuve — bouton « Scanner un QR code »','17-camera-en-direct':'Scanner — caméra en direct (détecteur du navigateur ou jsQR)',
+'18-resultat-apres-scan':'Scanner — ticket reconnu dès que le QR imprimé est dans le cadre','19-resultat-apres-photo':'Scanner — secours par photo du QR (iPhone, page hors HTTPS, caméra refusée)'})
 for k,v in PC.items(): titles[('preuves-canaux',k)]=v
 SEC={'preuves-canaux':'Preuves et canaux sans application','verification-publique':'Vérification publique','prestataires':'BitriPay et KODA','verticales-usagers':'Verticales — usagers','verticales-agents':'Verticales — agents'}
 try: F=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',34); f2=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',24)

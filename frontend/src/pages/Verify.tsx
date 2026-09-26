@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { PublicReceiptCheck } from '@mosolo/shared';
 import { useApp } from '../context';
@@ -11,6 +11,7 @@ import type { UIKey } from '../lib/i18n';
 import { revenueCategoryLabel } from '../lib/labels';
 import type { PublicReceiptResult } from '../lib/types';
 import '../modules/tresor/tresor.css';
+import { QrScanner } from '../components/QrScanner';
 
 /** Statuts publics étendus (§ 19.2) : contrepassée et remboursée s'ajoutent au vocabulaire du socle. */
 type PublicStatus = PublicReceiptCheck | 'REVERSED' | 'REFUNDED';
@@ -71,41 +72,6 @@ export function extractCode(raw: string): string {
   }
 }
 
-function Scanner({ onCode, onClose }: { onCode: (c: string) => void; onClose: () => void }) {
-  const { tr } = useApp();
-  const video = useRef<HTMLVideoElement>(null);
-  const [err, setErr] = useState<string | null>(null);
-  useEffect(() => {
-    let stream: MediaStream | null = null; let stop = false; let timer = 0;
-    const Detector = window.BarcodeDetector;
-    if (!Detector || !navigator.mediaDevices?.getUserMedia) { setErr(tr('verify.scanUnsupported')); return; }
-    const det = new Detector({ formats: ['qr_code'] });
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then((s) => {
-      stream = s;
-      if (!video.current) return;
-      video.current.srcObject = s;
-      void video.current.play();
-      const tick = async () => {
-        if (stop || !video.current) return;
-        try {
-          const codes = await det.detect(video.current);
-          const first = codes[0];
-          if (first?.rawValue) { onCode(first.rawValue.trim()); return; }
-        } catch { /* image pas prête */ }
-        timer = window.setTimeout(() => void tick(), 300);
-      };
-      void tick();
-    }).catch(() => setErr(tr('verify.cameraDenied')));
-    return () => { stop = true; clearTimeout(timer); stream?.getTracks().forEach((t) => t.stop()); };
-  }, [onCode, tr]);
-  return (
-    <div className="scanner">
-      {err ? <p className="notice notice-err">{err}</p> : <video ref={video} className="scanner-video" muted playsInline aria-label={tr('verify.scanning')} />}
-      <button type="button" className="btn btn-secondary" onClick={onClose}><Icon name="close" size={18} /> {tr('verify.stopScan')}</button>
-    </div>
-  );
-}
-
 export default function Verify() {
   const { tr, fmtDate, lang } = useApp();
   const params = useParams();
@@ -119,7 +85,6 @@ export default function Verify() {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [scan, setScan] = useState(false);
-  const canScan = typeof window !== 'undefined' && !!window.BarcodeDetector;
 
   const check = useCallback(async (c: string, duplicateNo?: number) => {
     const parsed = parseScan(c);
@@ -167,11 +132,9 @@ export default function Verify() {
               <button type="submit" className="btn btn-primary" disabled={busy || !code.trim()}>{tr('verify.button')}</button>
             </div>
           </form>
-          {canScan ? (
-            scan ? <Scanner onCode={onScan} onClose={() => setScan(false)} /> : (
-              <button type="button" className="btn btn-secondary btn-block" onClick={() => setScan(true)}><Icon name="camera" size={18} /> {tr('verify.scan')}</button>
-            )
-          ) : <p className="small muted">{tr('verify.scanUnsupported')}</p>}
+          {scan ? <QrScanner onResult={onScan} onClose={() => setScan(false)} /> : (
+            <button type="button" className="btn btn-secondary btn-block" onClick={() => setScan(true)}><Icon name="camera" size={18} /> {tr('verify.scan')}</button>
+          )}
 
           <div aria-live="polite" className="verify-out">
             {busy && <p className="muted">{tr('common.loading')}</p>}

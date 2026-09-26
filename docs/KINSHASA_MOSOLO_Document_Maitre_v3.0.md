@@ -7330,6 +7330,27 @@ L’heure de référence est **celle du serveur**. Chaque réponse porte l’en-
 | Pages légères `/l` | KaiOS, Opera Mini, 2G/EDGE, forfaits de quelques Mo | Vérifier, où payer, comment payer, signaler (anonyme) ; version imprimable avec QR | **Aucun JavaScript**, aucune police ni image externe, moins de 10 Ko par page, barre de validité en caractères (lisible sur écran monochrome) |
 | Papier imprimé | Sans téléphone ; guichet, point agréé, affichage | A6 à afficher ; ticket thermique 80 mm ou 58 mm | Voir ci-dessous |
 
+**Vérifier en scannant le QR code.** Sur la page « Vérifier une preuve », au guichet de quittance et sur l'écran de contrôle des agents, le bouton « Scanner un QR code » ouvre la caméra arrière. Il fonctionne sur (presque) tous les téléphones :
+
+- **Détecteur natif** du navigateur quand il existe (Chrome sur Android).
+- **Sinon, décodage en JavaScript** (jsQR, 47 Ko compressés, chargé seulement à l'ouverture du lecteur) : iPhone et Safari, Firefox, anciens Android.
+- **Secours universel « Prendre une photo du QR »** : l'appareil photo du téléphone prend l'image, décodée sur place. Utile quand la caméra en direct est refusée ou indisponible (page hors HTTPS).
+- **Aucune image n'est envoyée au serveur** : seul le texte lu du QR l'est.
+
+Le contenu lu est interprété de la même façon partout (`shared/proofs.ts`) :
+
+- lien de vérification de la preuve, quel que soit le domaine imprimé ;
+- charge signée d'une quittance, duplicata compris ;
+- jeton signé d'un titre ou d'un gilet ;
+- code nu.
+
+Un lien collé dans un SMS, WhatsApp ou la version légère est aussi accepté. Un QR de plaque, de quitus, d'agent, de support publicitaire ou de carte ouvre directement sa page de vérification, signature comprise.
+
+Essai réel dans Chromium sans détecteur natif (donc avec jsQR) :
+
+- **caméra simulée** filmant la preuve imprimée : ticket reconnu environ 0,2 s après l'apparition du QR ;
+- **photo** de la preuve A6, inclinée et floue : ticket reconnu.
+
 La preuve imprimée est marquée et vérifiable :
 - **Marquage** : logo officiel de la Ville inchangé, bandeau aux couleurs nationales, fond de sécurité (guilloche) et micro-texte du code.
 - **Vérification** : QR vers la page de vérification (lisible par tout appareil photo et par le terminal de contrôle), code court et dates en gros caractères.
