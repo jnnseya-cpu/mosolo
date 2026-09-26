@@ -99,7 +99,7 @@ export const fr = {
   'ladder.assessed': 'Liquidé',
   'ladder.due': 'Exigible',
   'ladder.overdue': 'En retard',
-  'ladder.disputed': 'Contesté',
+  'ladder.recorded': 'Comptabilisé',
   'ladder.initiated': 'Paiement initié',
   'ladder.confirmed': 'Paiement confirmé',
   'ladder.settled': 'Réglé sur le compte public',

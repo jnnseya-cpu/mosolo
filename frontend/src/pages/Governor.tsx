@@ -21,7 +21,7 @@ import { COMMUNE_GRID, DEMO_ACTIONS, DEMO_GOVERNOR_RAW } from '../demo/governor'
 
 type Disp = 'CDF' | 'USD';
 const LADDER_GROUP: Record<string, number> = {
-  potential: 0, verified_base: 0, assessed: 1, due: 1, overdue: 1, disputed: 1, initiated: 2, confirmed: 2, settled: 3, reconciled: 3, available: 3,
+  potential: 0, verified_base: 0, assessed: 1, due: 1, overdue: 1, initiated: 2, confirmed: 2, settled: 3, reconciled: 3, recorded: 3, available: 3,
 };
 
 async function loadDashboard(): Promise<{ d: GovView; fallback: boolean }> {

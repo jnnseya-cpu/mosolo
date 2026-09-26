@@ -66,11 +66,11 @@ export const LADDER_EXAMPLE: Record<RevenueLadderLevel, bigint> = {
   assessed: 191_500n * MILLION,
   due: 151_200n * MILLION,
   overdue: 38_400n * MILLION,
-  disputed: 6_150n * MILLION,
   initiated: 4_480n * MILLION,
   confirmed: 112_300n * MILLION,
   settled: 108_050n * MILLION,
   reconciled: 103_700n * MILLION,
+  recorded: 101_900n * MILLION,
   available: 98_200n * MILLION,
 };
 

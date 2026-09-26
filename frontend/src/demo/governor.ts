@@ -58,8 +58,8 @@ export const DEMO_GOVERNOR_RAW = {
     { label: 'Vignette et taxes véhicules', collected: md(0.87) }, { label: 'Taxes et droits administratifs', collected: md(0.63) },
   ],
   ladder: ([
-    ['potential', 820], ['verified_base', 410], ['assessed', 300], ['due', 240], ['overdue', 90], ['disputed', 12],
-    ['initiated', 4.5], ['confirmed', 148], ['settled', 140], ['reconciled', 136], ['available', 120],
+    ['potential', 820], ['verified_base', 410], ['assessed', 300], ['due', 240], ['overdue', 90],
+    ['initiated', 4.5], ['confirmed', 148], ['settled', 140], ['reconciled', 136], ['recorded', 133], ['available', 120],
   ] as [string, number][]).map(([level, v]) => ({ level, amount: md(v) })),
   trend: ['2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02'].map((month, i) => ({
     month, collected: md([7.9, 8.15, 9.8, 8.4, 9.1, 10.1, 9.3, 9.05, 9.7, 11.95, 12.2, 13.45][i]!), target: md([9, 9, 10.5, 9.5, 10, 11, 10, 10, 10.5, 11.5, 11, 11][i]!),

@@ -56,10 +56,14 @@ export type ReceiptStatus = 'PROVISOIRE' | 'DEFINITIVE' | 'ANNULEE' | 'REMPLACEE
 /** Résultat de vérification publique (§ 19.2) */
 export type PublicReceiptCheck = 'VALID' | 'PENDING' | 'CANCELLED' | 'REPLACED' | 'FRAUD_SUSPECTED' | 'UNKNOWN';
 
-/** Échelle unifiée de la recette (§ 26.1) */
+/**
+ * Échelle unifiée de la recette (§ 26.1, Cahier v2 : onze états) : potentiel estimé, assiette vérifiée, liquidé,
+ * exigible, en retard, paiement initié, confirmé, réglé en compte public, rapproché, comptabilisé, disponible.
+ * Les niveaux ne s'additionnent jamais entre eux. Le montant contesté est un indicateur séparé, hors échelle.
+ */
 export const REVENUE_LADDER = [
-  'potential', 'verified_base', 'assessed', 'due', 'overdue', 'disputed',
-  'initiated', 'confirmed', 'settled', 'reconciled', 'available',
+  'potential', 'verified_base', 'assessed', 'due', 'overdue',
+  'initiated', 'confirmed', 'settled', 'reconciled', 'recorded', 'available',
 ] as const;
 export type RevenueLadderLevel = (typeof REVENUE_LADDER)[number];
 
