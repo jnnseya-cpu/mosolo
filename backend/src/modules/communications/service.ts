@@ -15,7 +15,7 @@ import {
   InAppProvider, PROVIDER_ENV_KEYS, QueuedExternalProvider, SandboxProvider,
   type ChannelProvider, type DeliveryStatus, type ProviderMode,
 } from './providers.js';
-import { renderText } from './templates.js';
+import { fillPlaceholders, renderText } from './templates.js';
 
 export interface RecipientPrefs {
   optedOut?: boolean;
@@ -101,7 +101,7 @@ export class CommunicationService {
       for (const channel of channels) {
         const provider = this.providers.get(channel)!;
         const res = provider.send({
-          channel, recipientId: r.id, eventCode, subject: event.objet, body, entity, lang: r.lang, mandatory: event.obligatoire,
+          channel, recipientId: r.id, eventCode, subject: fillPlaceholders(event.objet, vars), body, entity, lang: r.lang, mandatory: event.obligatoire,
         });
         out.push(this.log(event, r, channel, res.status, provider.name, provider.mode, entity, contentHash));
       }

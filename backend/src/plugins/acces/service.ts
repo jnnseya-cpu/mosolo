@@ -687,8 +687,7 @@ export class AccesService {
     if (!u) return;
     const clash = hasIncompatibility(roles);
     if (clash) throw forbidden('ROLE_INCOMPATIBILITY', `Cumul interdit des rôles ${clash[0]} et ${clash[1]} (§ 12.5).`);
-    // Annuaire de démonstration : seul ce module modifie les rôles des comptes qu'il gère (voir rapport de lot).
-    (u as { roles: RoleCode[] }).roles = [...roles];
+    this.ctx.users.setRoles(userId, roles);
   }
 
   accountView(a: WorkAccount) {
@@ -1523,7 +1522,7 @@ export class AccesService {
     const active = !!this.mandates.findOne((m) => m.mandataireUserId === mandataireUserId && m.mandantTaxpayerId === taxpayerId && m.status === 'ACTIF');
     const set = new Set(u.mandants ?? []);
     if (active) set.add(taxpayerId); else set.delete(taxpayerId);
-    u.mandants = [...set];
+    this.ctx.users.setMandants(mandataireUserId, [...set]);
   }
 
   mandateView(m: Mandate) {

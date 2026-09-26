@@ -27,8 +27,13 @@ function esc(s: string): string {
 }
 
 /** Corps texte court (SMS, push, USSD) : jamais de lien de paiement (§ 11.4.4). */
+/** Remplace les variables {{nom}} de l'objet (ex. code à usage unique) ; une variable absente reste visible, jamais inventée. */
+export function fillPlaceholders(text: string, vars: Record<string, string>): string {
+  return text.replace(/\{\{(\w+)\}\}/g, (m, k: string) => (vars[k] !== undefined ? String(vars[k]) : m));
+}
+
 export function renderText(event: CommunicationEvent, vars: Record<string, string>): string {
-  const parts = [event.objet];
+  const parts = [fillPlaceholders(event.objet, vars)];
   if (vars.reference) parts.push(`Réf. ${vars.reference}`);
   if (vars.amount) parts.push(vars.amount);
   parts.push('Détail : espace MOSOLO ou code USSD officiel.');

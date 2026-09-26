@@ -40,3 +40,19 @@ describe('Intégration : tous les modules chargés', () => {
     expect(r.json().obligations.every((o: { amount: unknown }) => o.amount === null)).toBe(true);
   });
 });
+
+describe('Garde de liquidation (socle + module accès)', () => {
+  it('jamais de double perception : seconde liquidation annuelle refusée ; une autre entité est bloquée et un arbitrage s’ouvre', async () => {
+    const { app } = await full();
+    const inject = (user: string, body: unknown) => app.inject({ method: 'POST', url: '/v1/assessments/calculate', headers: { 'x-demo-user': user, 'content-type': 'application/json' }, payload: JSON.stringify(body) });
+    const rule = app.ctx.rules.rules.find((r) => r.code === DEMO.demoRuleCode)[0]!;
+    const dup = await inject('u-controleur', { ruleId: rule.id, taxpayerId: DEMO.taxpayerId, objectId: DEMO.parcelId, inputs: {}, simulate: false });
+    expect(dup.statusCode).toBe(409);
+    expect(dup.json().code).toBe('DUPLICATE_OBLIGATION');
+    // Contrôleur d'une autre entité (commune) sur un autre objet du même contribuable : première revendication acceptée.
+    const ok = await inject('u-controleur', { ruleId: rule.id, taxpayerId: DEMO.taxpayerId, objectId: DEMO.unitId, inputs: {}, simulate: false });
+    expect(ok.statusCode).toBe(201);
+    const other = await inject('acces-u-controleur-limete', { ruleId: rule.id, taxpayerId: DEMO.taxpayerId, objectId: DEMO.unitId, inputs: {}, simulate: false });
+    expect([403, 409]).toContain(other.statusCode);
+  });
+});

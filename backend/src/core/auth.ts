@@ -88,6 +88,26 @@ export class UserDirectory {
   withRole(role: RoleCode): User[] {
     return this.all().filter((u) => u.roles.includes(role));
   }
+
+  /** Remplace les rôles d'un compte (rôles connus, sans cumul incompatible § 12.5). Le journal est tenu par l'appelant. */
+  setRoles(id: string, roles: RoleCode[]): User {
+    const u = this.users.get(id);
+    if (!u) throw new Error(`Utilisateur inconnu : ${id}`);
+    for (const r of roles) if (!(r in ROLES)) throw new Error(`Rôle inconnu : ${r}`);
+    const clash = hasIncompatibility(roles);
+    if (clash) throw forbidden('ROLE_INCOMPATIBILITY', `Cumul interdit des rôles ${clash[0]} (${ROLES[clash[0]]}) et ${clash[1]} (${ROLES[clash[1]]}).`, { roles: clash });
+    // Modification en place : les sessions et requêtes en cours voient immédiatement le nouvel état.
+    (u as { roles: RoleCode[] }).roles = [...roles];
+    return u;
+  }
+
+  /** Contribuables pour lesquels un mandataire agit (mandats actifs). */
+  setMandants(id: string, taxpayerIds: string[]): User {
+    const u = this.users.get(id);
+    if (!u) throw new Error(`Utilisateur inconnu : ${id}`);
+    u.mandants = [...taxpayerIds];
+    return u;
+  }
 }
 
 declare module 'fastify' {

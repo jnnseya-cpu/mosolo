@@ -219,7 +219,7 @@ describe('Réclamations — délais, pièces, historique, effet suspensif', () =
     const env = await setupRecovery();
     env.app.ctx.users.add({ id: 'rec-liq-decideur', name: 'Liquidateur et décideur (test)', roles: ['R11', 'R21'], entity: 'DGIPK' });
     const rule = env.app.ctx.rules.rules.find((r) => r.code === DEMO.demoRuleCode)[0]!;
-    const res = await env.req('POST', '/v1/assessments/calculate', 'rec-liq-decideur', { ruleId: rule.id, taxpayerId: DEMO.taxpayerId, objectId: DEMO.parcelId, inputs: {}, simulate: false });
+    const res = await env.req('POST', '/v1/assessments/calculate', 'rec-liq-decideur', { ruleId: rule.id, taxpayerId: DEMO.taxpayerId, objectId: DEMO.unitId, inputs: {}, simulate: false });
     const obl = res.json().obligation.id;
     const a = (await env.req('POST', '/v1/appeals', 'u-contribuable', { obligationId: obl, grounds: 'Double imposition du même bien.', type: 'DOUBLE_IMPOSITION' })).json();
     await env.req('POST', `/v1/appeals/${a.id}/instruct`, 'u-contentieux', { proposal: 'ACCEPTEE', analysis: 'Doublon confirmé.' });

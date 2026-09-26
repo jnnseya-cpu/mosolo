@@ -4,6 +4,7 @@
  */
 import type { AppContext } from '../../context.js';
 import { sha256Hex } from '../../core/crypto.js';
+import { conflict } from '../../core/errors.js';
 import { DEMO } from '../../seed.js';
 import { definePlugin } from '../types.js';
 import type { EntityKind } from './model.js';
@@ -164,7 +165,20 @@ export const accesPlugin = definePlugin<AccesService>({
   name: 'acces',
   create: (ctx) => {
     registerAccesPolicies();
-    return new AccesService(ctx);
+    const svc = new AccesService(ctx);
+    // Garde commune de liquidation : tout fait générateur connu n'est revendiqué que par une seule entité (§ 10A.3),
+    // y compris par la route du socle POST /v1/assessments/calculate. Seconde revendication ⇒ 409 + arbitrage ouvert.
+    ctx.assessment.addLiquidationGuard(({ user, rule, objectId, at }) => {
+      const factCode = svc.ruleFacts.get(rule.code);
+      if (!factCode) return;
+      const r = svc.claim(user, { objectId, factCode, period: at.toISOString().slice(0, 4), ruleCode: rule.code, basis: `Liquidation ${rule.code}` });
+      if (r.blocked) {
+        throw conflict('CLAIM_BLOCKED', 'Fait générateur déjà revendiqué par une autre entité : aucune obligation n’est créée, un dossier d’arbitrage est ouvert.', {
+          claimId: r.claim.id, arbitrationId: r.claim.arbitrationId,
+        });
+      }
+    });
+    return svc;
   },
   seed: (ctx, svc) => seedDemo(ctx, svc),
   routes: (app, ctx, svc) => registerAccesRoutes(app, ctx, svc),

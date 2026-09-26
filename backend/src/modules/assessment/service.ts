@@ -7,7 +7,7 @@ import { isRuleExecutable, Money, type MoneyJSON, type ObligationStatus, type Re
 import type { AuditLog } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { DAY_MS, isoDate, type Clock } from '../../core/clock.js';
-import { notFound, unprocessable } from '../../core/errors.js';
+import { notFound, unprocessable, conflict } from '../../core/errors.js';
 import { authorize } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import type { CommunicationService } from '../communications/service.js';
@@ -128,7 +128,17 @@ export interface CalculateInput {
 
 export const PAYABLE_STATUSES: ObligationStatus[] = ['EMISE', 'EXIGIBLE', 'EN_RETARD', 'PARTIELLEMENT_PAYEE'];
 
+/** Garde appelée avant toute liquidation réelle ; lève une erreur pour l'empêcher. */
+export type LiquidationGuard = (ctx: { user: User; rule: { id: string; code: string; administeringEntity: string; periodicity: string }; objectId: string; taxpayerId: string; at: Date }) => void;
+
 export class AssessmentService {
+  private readonly liquidationGuards: LiquidationGuard[] = [];
+
+  /** Enregistre une garde de liquidation (modules d'extension). */
+  addLiquidationGuard(g: LiquidationGuard): void {
+    this.liquidationGuards.push(g);
+  }
+
   readonly obligations = new InMemoryRepository<Obligation>();
   private readonly ids = new IdGenerator();
   private readonly adjusters: AssessmentAdjuster[] = [];
@@ -178,6 +188,20 @@ export class AssessmentService {
         details: { reason: exec.reason, status: rule.status, taxpayerId: taxpayer.id, objectId: object.id },
       });
       throw unprocessable('RULE_NOT_EXECUTABLE', `Règle ${rule.code} v${rule.version} non exécutable : ${exec.reason}.`, { ruleStatus: rule.status, reason: exec.reason });
+    }
+    if (!input.simulate) {
+      // Jamais de double perception (§ 10A.3) : une règle annuelle ne liquide qu'une obligation par objet et par exercice.
+      // Les déclarations périodiques portent leur propre contrôle de période (module fiscal).
+      if (rule.periodicity === 'ANNUELLE' && !source) {
+        const year = String(now.getUTCFullYear());
+        const dup = this.obligations.findOne((o) => o.objectId === object.id && o.ruleCode === rule.code && o.status !== 'ANNULEE' && o.createdAt.startsWith(year));
+        if (dup) {
+          this.audit.append({ actor, action: 'assessment.liquidation.refused', resourceType: 'rule', resourceId: rule.id, outcome: 'DENIED', details: { reason: 'DUPLICATE_OBLIGATION', objectId: object.id, existing: dup.id } });
+          throw conflict('DUPLICATE_OBLIGATION', `Une obligation ${rule.code} existe déjà pour cet objet et l'exercice ${year} (${dup.id}) : jamais de double perception.`, { obligationId: dup.id });
+        }
+      }
+      // Gardes des modules d'extension (ex. revendication d'un fait générateur par une seule entité).
+      for (const guard of this.liquidationGuards) guard({ user, rule, objectId: object.id, taxpayerId: taxpayer.id, at: now });
     }
     const evaluation = this.rules.evaluate(rule, input.inputs, object.localityRank);
     const gross = Money.of(evaluation.value, rule.currency, rule.rounding);

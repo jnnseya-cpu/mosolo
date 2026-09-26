@@ -64,10 +64,14 @@ describe('§ 20.3 — attribution territoriale : commune du fait générateur', 
     expect(rectified.attribution).toEqual(ob.attribution);
     expect(rectified.attribution.commune).toBe('Limete');
 
-    ctx.objects.objects.update({ ...obj, commune: '' });
+    // Nouvel objet dont la commune n'est pas établie (une seule obligation annuelle par objet : jamais de double perception).
+    const unlocated = ctx.objects.create(ctx.users.get('u-contribuable')!, {
+      category: 'PARCELLE', commune: 'Masina', quartier: 'Sans Fil', localityRank: 2, lat: -4.385, lon: 15.39, attributes: {},
+    });
+    ctx.objects.objects.update({ ...ctx.objects.get(unlocated.id), commune: '' });
     const rule = ctx.rules.rules.find((r) => r.code === DEMO.demoRuleCode)[0]!;
     const { obligation } = ctx.assessment.calculate(ctx.users.get('u-controleur')!, {
-      ruleId: rule.id, taxpayerId: DEMO.taxpayerId, objectId: obj.id, inputs: {}, simulate: false,
+      ruleId: rule.id, taxpayerId: DEMO.taxpayerId, objectId: unlocated.id, inputs: {}, simulate: false,
     });
     expect(obligation!.attribution).toMatchObject({ commune: null, basis: 'NON_LOCALISE' });
   });
