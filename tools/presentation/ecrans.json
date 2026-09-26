@@ -60,7 +60,7 @@
     "public": "Régies, administration de la plateforme",
     "message": "Un seul moteur envoie tous les messages, dans la bonne langue et sur le bon canal, avec preuve de délivrance.",
     "points": [
-      "239 événements en 23 catégories ; 126 avis obligatoires",
+      "255 événements en 23 catégories ; 135 avis obligatoires",
       "Courriel, SMS, application, USSD, serveur vocal, courrier",
       "Aperçu et envoi de test de chaque modèle avant diffusion"
     ]

@@ -39,8 +39,8 @@ describe('Devises', () => {
 });
 
 describe('Catalogue des événements', () => {
-  it('contient 239 événements uniques en 23 catégories', () => {
-    expect(EVENTS.length).toBe(239);
+  it('contient 255 événements uniques en 23 catégories', () => {
+    expect(EVENTS.length).toBe(255);
     expect(EVENT_CATEGORIES.length).toBe(23);
     expect(new Set(EVENTS.map((e) => e.code)).size).toBe(EVENTS.length);
   });

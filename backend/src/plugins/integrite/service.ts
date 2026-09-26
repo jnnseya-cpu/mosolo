@@ -916,7 +916,7 @@ export class IntegriteService {
     });
     this.kit.audit(p, 'integrite.incident.declared', 'incident', i.id, { severity: i.severity, category: i.category, personalData: i.personalDataImpacted });
     const rssi = this.ctx.users.withRole('R28').map(userRecipient);
-    this.ctx.comms.publish('fraud.alert.raised', rssi, { reference: i.id, score: i.severity.toLowerCase() }, { entity: 'PLATEFORME' });
+    this.ctx.comms.publish('incident.declared', rssi, { reference: i.id, gravite: i.severity.toLowerCase() }, { entity: 'PLATEFORME' });
     return this.incidentView(i);
   }
 
@@ -963,7 +963,7 @@ export class IntegriteService {
     const i = this.getIncident(id);
     let deliveries = 0;
     if (input.target === 'DPO') {
-      deliveries = this.ctx.comms.publish('fraud.alert.raised', this.ctx.users.withRole('R25').map(userRecipient), { reference: i.id, score: i.severity.toLowerCase() }, { entity: 'PLATEFORME' }).length;
+      deliveries = this.ctx.comms.publish('incident.declared', this.ctx.users.withRole('R25').map(userRecipient), { reference: i.id, gravite: i.severity.toLowerCase() }, { entity: 'PLATEFORME' }).length;
     } else if (input.target === 'PERSONNES_CONCERNEES') {
       if (!i.personalDataImpacted) throw conflict('NO_PERSONAL_DATA', 'Incident sans atteinte déclarée aux données personnelles.');
       const recips = i.affectedTaxpayerIds.map((t) => this.ctx.taxpayers.taxpayers.get(t)).filter((t) => !!t).map((t) => taxpayerRecipient(t!));

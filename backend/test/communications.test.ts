@@ -3,18 +3,18 @@ import { taxpayerRecipient } from '../src/modules/identity/recipients.js';
 import { DEMO, setup } from './helpers.js';
 
 describe('Communications', () => {
-  it('synthèse : catalogue 239, 23 catégories, 126 avis obligatoires, couverture par canal', async () => {
+  it('synthèse : catalogue 255, 23 catégories, 135 avis obligatoires, couverture par canal', async () => {
     const env = await setup();
     const res = await env.req('GET', '/v1/communications/overview', 'u-admin-entite');
     expect(res.statusCode).toBe(200);
     const o = res.json();
-    expect(o).toMatchObject({ catalogue: 239, categories: 23, mandatory: 126, channelsTotal: 8, channelsWired: 1 });
+    expect(o).toMatchObject({ catalogue: 255, categories: 23, mandatory: 135, channelsTotal: 8, channelsWired: 1 });
     expect(o.coverage.email).toBeGreaterThan(0);
     expect(o.attempted).toBeGreaterThanOrEqual(o.delivered);
     expect(o.recent.length).toBeGreaterThan(0);
     expect(o.recent[0].recipientMasked).toMatch(/\*\*\*/);
     const events = (await env.req('GET', '/v1/communications/events?mandatory=true', 'u-admin-entite')).json();
-    expect(events.total).toBe(126);
+    expect(events.total).toBe(135);
     expect((await env.req('GET', '/v1/communications/overview', 'u-contribuable')).statusCode).toBe(403);
   });
 

@@ -8,7 +8,7 @@ describe('Socle', () => {
     const meta = (await env.req('GET', '/v1/meta')).json();
     expect(meta.primaryCurrency).toBe('CDF');
     expect(meta.currencies[0]).toMatchObject({ code: 'CDF', flag: '🇨🇩' });
-    expect(meta.catalogue).toEqual({ events: 239, categories: 23, mandatory: 126 });
+    expect(meta.catalogue).toEqual({ events: 255, categories: 23, mandatory: 135 });
     expect(meta.communes).toHaveLength(24);
     const users = (await env.req('GET', '/v1/demo/users')).json();
     for (const role of ['R01', 'R05', 'R06', 'R13', 'R14', 'R15', 'R16', 'R17', 'R19', 'R21', 'R22', 'R26', 'R10', 'R30']) {

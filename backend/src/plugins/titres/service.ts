@@ -867,7 +867,9 @@ export class TitresService {
       resourceType: 'credential', resourceId: c.id, details: { from: c.state, to: state, reason },
     });
     const holder = c.holderTaxpayerId ? this.ctx.taxpayers.taxpayers.get(c.holderTaxpayerId) : undefined;
-    if (holder && state !== 'CONSOMME') this.ctx.comms.publish('permit.suspended', [taxpayerRecipient(holder)], { reference: c.number, titre: c.number }, { entity: c.entity });
+    if (holder && state !== 'CONSOMME' && state !== 'EMIS') {
+      this.ctx.comms.publish(state === 'SUSPENDU' ? 'credential.suspended' : 'credential.revoked', [taxpayerRecipient(holder)], { reference: c.number, titre: c.number }, { entity: c.entity });
+    }
     return updated;
   }
 

@@ -1249,7 +1249,7 @@ components:
         catalogue:
           type: object
           properties:
-            events: { type: integer, examples: [239] }
+            events: { type: integer, examples: [255] }
             categories: { type: integer, examples: [23] }
             mandatory: { type: integer, examples: [126] }
         communes: { type: array, items: { type: string }, minItems: 24, maxItems: 24 }
@@ -2008,7 +2008,7 @@ components:
       type: object
       required: [catalogue, categories, mandatory, delivered, attempted, channelsWired, coverage, recent]
       properties:
-        catalogue: { type: integer, examples: [239] }
+        catalogue: { type: integer, examples: [255] }
         categories: { type: integer, examples: [23] }
         mandatory: { type: integer, examples: [126] }
         delivered: { type: integer }

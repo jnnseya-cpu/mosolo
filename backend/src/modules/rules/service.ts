@@ -400,7 +400,7 @@ export class RuleService {
     });
     this.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'rule.abrogated', resourceType: 'rule', resourceId: id, details: { date: input.date, instrumentId: input.instrumentId, reason: input.reason, immediate } });
     const notify = [...this.users.withRole('R13'), ...this.users.withRole('R06')];
-    this.comms.publish('legal.change.public_notice', notify.map(userRecipient), { reference: rule.code }, { entity: rule.administeringEntity });
+    this.comms.publish('rule.abrogated', notify.map(userRecipient), { reference: rule.code, date: input.date }, { entity: rule.administeringEntity });
     return this.get(id);
   }
 

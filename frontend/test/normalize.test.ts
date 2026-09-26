@@ -28,8 +28,8 @@ describe('normalisation des réponses API', () => {
     expect(v.ladder).toHaveLength(11);
   });
   it('lit la synthèse des communications (nombres à plat, channels[])', () => {
-    const o = normalizeComms({ catalogue: 239, categories: 23, mandatory: 126, delivered: 11, attempted: 28, channelsWired: 1, coverage: { email: 192 }, channels: [{ channel: 'in-app', wired: true, sent: 4 }] }, DEMO_COMMS);
-    expect(o.catalogue).toEqual({ events: 239, categories: 23, mandatory: 126 });
+    const o = normalizeComms({ catalogue: 255, categories: 23, mandatory: 135, delivered: 11, attempted: 28, channelsWired: 1, coverage: { email: 192 }, channels: [{ channel: 'in-app', wired: true, sent: 4 }] }, DEMO_COMMS);
+    expect(o.catalogue).toEqual({ events: 255, categories: 23, mandatory: 135 });
     expect(o.delivered).toEqual({ delivered: 11, attempted: 28 });
     expect(o.connectedChannels).toEqual(['in-app']);
     expect(o.coverage.find((c) => c.channel === 'email')?.events).toBe(192);

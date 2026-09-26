@@ -10,7 +10,7 @@ flowchart LR
     M[Montants exacts<br/>Money]
     C[Devises<br/>CDF principale + drapeaux]
     L[Langues<br/>fr · ln · sw · kg · lua · en]
-    E[Catalogue<br/>239 événements]
+    E[Catalogue<br/>255 événements]
     R[Fiches de règles<br/>+ exécutabilité]
     D[États, rôles,<br/>incompatibilités]
     A[Format de sortie IA]
@@ -89,7 +89,7 @@ flowchart LR
 | `/espace` | Espace contribuable | Objets et statuts cartographiques, obligations et explication du calcul, paiement par référence, quittances, réclamation |
 | `/verifier` | Vérification publique de quittance | Résultat minimal, lecture QR si l'appareil le permet |
 | `/gouverneur` | Centre de commandement | Tuiles, communes, catégories, échelle de la recette, campagne, scénarios, alertes, recommandations |
-| `/communications` | Console des communications | Catalogue de 239 événements, couverture par canal, aperçu de courriel à la charte, envoi de test, délivrances |
+| `/communications` | Console des communications | Catalogue de 255 événements, couverture par canal, aperçu de courriel à la charte, envoi de test, délivrances |
 | `/registre` | Registre juridique | Fiches de règles, statuts, circuit des quatre approbations |
 | `/tresor` | Trésor et rapprochement | Exceptions, équilibre du grand livre, relevés, coffre des bénéficiaires |
 | `/terrain` | Agent de terrain | Missions, capture hors ligne (GPS, photo hachée), synchronisation signée |
