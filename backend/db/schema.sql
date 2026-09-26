@@ -3,6 +3,7 @@
 -- Le socle s'exécute avec des dépôts en mémoire (backend/src/core/repository.ts) ;
 -- un adaptateur PostgreSQL implémentera les mêmes interfaces Repository<T> / AppendOnlyRepository<T>
 -- sur ce schéma. Montants : NUMERIC exact + code ISO 4217 (jamais de flottant).
+-- Étape transitoire en service : instantané JSONB par dépôt (db/migrations, DATABASE_URL, voir db/README.md).
 -- =====================================================================================
 
 CREATE SCHEMA IF NOT EXISTS mosolo;

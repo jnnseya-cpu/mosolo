@@ -236,9 +236,7 @@ export class PersistenceRuntime {
  * demandé : `AuditLog.restore(records)` (voir rapport du lot « socle »).
  */
 export function restoreAuditLog(audit: AuditLog, records: AuditRecord[]): void {
-  const raw = audit.unsafeRawStorageForTamperTests();
-  raw.splice(0, raw.length, ...records.map((r) => structuredClone(r)));
-  (audit as unknown as { anchoredHead: string }).anchoredHead = records.at(-1)?.hash ?? '0'.repeat(64);
+  audit.restore(records);
 }
 
 // ---------------------------------------------------------------------------------------------------------------

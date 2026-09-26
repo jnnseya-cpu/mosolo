@@ -2,9 +2,10 @@ import { REQUIRED_APPROVALS } from '@mosolo/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../../context.js';
-import { requireUser } from '../../core/auth.js';
+import { requireUser, requireAcr, ACR } from '../../core/auth.js';
 import { currencySchema, decimalString, isoDateString, parse } from '../../core/http.js';
 import { authorize } from '../../core/policy.js';
+import { recalculationsFor } from './recalculation.js';
 import type { RuleInput } from './service.js';
 
 const REVENUE_CATEGORIES = [
@@ -38,7 +39,20 @@ const ruleSchema = z.object({
   appealPath: z.string().min(1),
   sourceVerification: z.enum(['OFFICIEL_CERTIFIE', 'PRESSE', 'DOCUMENT_DE_TRAVAIL', 'AUCUNE']),
   changeReason: z.string().optional(),
+  /** Acte autorisant expressément la rétroactivité (exigé pour une nouvelle version à effet antérieur à sa publication). */
+  retroactivity: z.object({
+    instrumentId: z.string().min(1),
+    article: z.string().trim().min(1).max(200),
+    justification: z.string().trim().min(10).max(2000),
+  }).strict().optional(),
 }).strict();
+
+const motive = z.string().trim().min(10, 'motif d’au moins 10 caractères').max(2000);
+const suspendSchema = z.object({ reason: motive, authority: z.string().trim().min(3).max(200), instrumentRef: z.string().optional() }).strict();
+const liftSchema = z.object({ reason: motive }).strict();
+const abrogateSchema = z.object({ date: isoDateString, instrumentId: z.string().min(1), reason: motive }).strict();
+const instrumentAbrogateSchema = z.object({ date: isoDateString, abrogatedBy: z.string().min(1), reason: motive }).strict();
+const recalcDecisionSchema = z.object({ decision: z.enum(['APPLIQUER', 'REJETER']), reason: motive }).strict();
 
 const approveSchema = z.object({ role: z.enum(REQUIRED_APPROVALS as [string, ...string[]]) }).strict();
 
@@ -69,6 +83,65 @@ export function registerRuleRoutes(app: FastifyInstance, ctx: AppContext): void 
   app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/approve', async (req) => {
     const user = requireUser(req);
     const { role } = parse(approveSchema, req.body);
+    requireAcr(user, ACR.MFA); // DG-09 : visa d'une règle = acte sensible
     return ctx.rules.approve(user, req.params.id, role as (typeof REQUIRED_APPROVALS)[number]);
+  });
+
+  // ── Cycle de vie complémentaire : suspension, abrogation, versions ──
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/suspend', async (req) => {
+    const user = requireUser(req);
+    authorize(user, 'rules:suspend');
+    return ctx.rules.suspend(user, req.params.id, parse(suspendSchema, req.body));
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/lift-suspension', async (req) => {
+    const user = requireUser(req);
+    authorize(user, 'rules:suspend');
+    return ctx.rules.liftSuspension(user, req.params.id, parse(liftSchema, req.body));
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/abrogate', async (req) => {
+    const user = requireUser(req);
+    authorize(user, 'rules:abrogate');
+    const input = parse(abrogateSchema, req.body);
+    const rule = ctx.rules.abrogate(user, req.params.id, input);
+    // Abrogation à date passée : les obligations émises depuis sont signalées pour examen (jamais annulées d'office).
+    const obligationsToReview = ctx.assessment.obligations
+      .find((o) => o.ruleId === rule.id && o.createdAt.slice(0, 10) >= input.date && o.status !== 'ANNULEE')
+      .map((o) => ({ id: o.id, status: o.status, issuedOn: o.createdAt.slice(0, 10), amount: o.amount }));
+    return { rule, obligationsToReview };
+  });
+
+  app.get<{ Params: { id: string } }>('/v1/legal-rules/:id/versions', async (req) => {
+    authorize(requireUser(req), 'rule.read');
+    const versions = ctx.rules.versions(req.params.id);
+    return { code: versions[0]?.code, versions };
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/legal-instruments/:id/abrogate', async (req) => {
+    const user = requireUser(req);
+    authorize(user, 'rules:instrument.abrogate');
+    return ctx.rules.abrogateInstrument(user, req.params.id, parse(instrumentAbrogateSchema, req.body));
+  });
+
+  // ── Recalcul contrôlé : simulation d'impact → décision motivée → obligations rectificatives ──
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/impact-simulations', async (req, reply) => {
+    const user = requireUser(req);
+    return reply.code(201).send(recalculationsFor(ctx).simulate(user, req.params.id));
+  });
+
+  app.get<{ Querystring: { ruleId?: string } }>('/v1/recalculations', async (req) => {
+    authorize(requireUser(req), 'rules:recalc.simulate');
+    return recalculationsFor(ctx).list(req.query.ruleId);
+  });
+
+  app.get<{ Params: { id: string } }>('/v1/recalculations/:id', async (req) => {
+    authorize(requireUser(req), 'rules:recalc.simulate');
+    return recalculationsFor(ctx).get(req.params.id);
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/recalculations/:id/decide', async (req) => {
+    const user = requireUser(req);
+    return recalculationsFor(ctx).decide(user, req.params.id, parse(recalcDecisionSchema, req.body));
   });
 }

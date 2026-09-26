@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../../context.js';
-import { requireUser } from '../../core/auth.js';
+import { requireUser, requireAcr, ACR } from '../../core/auth.js';
 import { ApiError } from '../../core/errors.js';
 import { isoDateString, moneySchema, parse } from '../../core/http.js';
 import { authorize } from '../../core/policy.js';
@@ -43,6 +43,7 @@ export function registerTreasuryRoutes(app: FastifyInstance, ctx: AppContext): v
   app.post<{ Params: { id: string } }>('/v1/ledger/entries/:id/reversals', async (req, reply) => {
     const user = requireUser(req);
     authorize(user, 'ledger.reverse');
+    requireAcr(user, ACR.MFA); // DG-09
     const { reason } = parse(reversalSchema, req.body);
     return reply.code(201).send(ctx.ledger.reverse(req.params.id, reason, { kind: 'user', id: user.id, roles: user.roles }));
   });

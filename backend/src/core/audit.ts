@@ -133,6 +133,16 @@ export class AuditLog {
    * une altération directe « en base » par un initié technique (AC-AUD-01).
    * Aucune route HTTP n'y donne accès.
    */
+  /**
+   * Rechargement depuis le stockage persistant (redémarrage) : remplace le contenu par les enregistrements lus
+   * et fixe l'ancrage de tête sur le dernier. N'est appelé qu'au démarrage, avant toute écriture ; la chaîne est
+   * ensuite contrôlée par `verify()` (une chaîne altérée est détectée, jamais « réparée »).
+   */
+  restore(records: AuditRecord[]): void {
+    this.records.splice(0, this.records.length, ...records.map((r) => structuredClone(r)));
+    this.anchoredHead = records.at(-1)?.hash ?? GENESIS_HASH;
+  }
+
   unsafeRawStorageForTamperTests(): AuditRecord[] {
     return this.records;
   }

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../../context.js';
-import { requireUser } from '../../core/auth.js';
+import { requireUser, requireAcr, ACR } from '../../core/auth.js';
 import { parse } from '../../core/http.js';
 import { authorize } from '../../core/policy.js';
 
@@ -31,6 +31,7 @@ export function registerVaultRoutes(app: FastifyInstance, ctx: AppContext): void
   app.post<{ Params: { id: string } }>('/v1/beneficiary-accounts/change-requests/:id/approve', async (req) => {
     const user = requireUser(req);
     authorize(user, 'beneficiary.approve');
+    requireAcr(user, ACR.MFA); // DG-09 : authentification renforcée (levée en mode démonstration)
     const { outOfBandVerified } = parse(approveSchema, req.body);
     return ctx.vault.maskedRequest(ctx.vault.approve(user, req.params.id, outOfBandVerified));
   });

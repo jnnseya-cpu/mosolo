@@ -1,3 +1,5 @@
+import { isDemoMode } from '../../core/auth.js';
+import { getActivePersistence } from '../../persistence/runtime.js';
 import { CURRENCIES, CURRENCY_CODES, EVENT_CATEGORIES, EVENTS, LANGUAGES, PRIMARY_CURRENCY, REFERENCE_LANGUAGE, completeness, LANGUAGE_CODES, ROLES } from '@mosolo/shared';
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '../../context.js';
@@ -21,7 +23,7 @@ export function registerSystemRoutes(app: FastifyInstance, ctx: AppContext): voi
     communes: COMMUNES,
     entities: Object.values(ENTITIES).map(({ code, name, shortName }) => ({ code, name, shortName })),
     roles: ROLES,
-    demo: { auth: 'x-demo-user', storage: 'in-memory', ai: 'deterministic-rules', fxSource: 'BCC (démo)' },
+    demo: { auth: isDemoMode() ? 'x-demo-user + OIDC local' : 'OIDC local (jetons porteurs)', storage: getActivePersistence() ? 'postgresql' : 'in-memory', ai: 'deterministic-rules', fxSource: 'BCC (démo)' },
     receiptVerificationKey: { algorithm: 'Ed25519', publicKeyPem: ctx.receipts.publicKeyPem() },
   }));
 

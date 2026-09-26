@@ -50,6 +50,14 @@ export async function api<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json', 'Accept-Language': getApiLang(), ...opts.headers };
   const user = getDemoUser();
   if (user) headers['x-demo-user'] = user;
+  // Session réelle (écran Connexion) : le jeton porteur prévaut côté serveur sur le sélecteur de démonstration.
+  const sess = safeGet('mosolo.session');
+  if (sess) {
+    try {
+      const s = JSON.parse(sess) as { accessToken?: string; session?: { expiresAt?: string } };
+      if (s.accessToken && s.session?.expiresAt && new Date(s.session.expiresAt) > new Date()) headers.Authorization = `Bearer ${s.accessToken}`;
+    } catch { /* session illisible : ignorée */ }
+  }
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
   if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
   let res: Response;

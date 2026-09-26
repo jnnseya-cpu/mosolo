@@ -70,7 +70,8 @@ describe('Socle', () => {
     });
     expect(o.trace).toMatchObject({ ruleVersion: 1, nonOpposable: false, executable: true, legalInstrumentIds: ['demo-instrument-001'] });
     const list = (await env.req('GET', '/v1/obligations', 'u-contribuable')).json();
-    expect(list).toHaveLength(1);
+    // Les modules de verticales sèment d'autres obligations fictives ; l'obligation du socle reste présente.
+    expect(list.some((x: { ruleCode?: string }) => x.ruleCode === 'DEMO-IF-BATI')).toBe(true);
   });
 
   it('liquidation déterministe d’une règle certifiée avec entrées décimales', async () => {
