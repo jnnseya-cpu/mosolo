@@ -18,7 +18,7 @@ export interface FiscalObject {
 
 export interface Obligation {
   id: string; label?: string; ruleCode?: string; ruleId?: string; period?: string; amount: MoneyJSON;
-  indicativeAmount?: MoneyJSON; dueDate?: string; status: ObligationStatus | string; objectId?: string;
+  indicativeAmount?: MoneyJSON | { amount: MoneyJSON; rate?: string }; dueDate?: string; status: ObligationStatus | string; objectId?: string;
 }
 
 export interface Receipt {
@@ -34,13 +34,14 @@ export interface TaxpayerProfile {
 export interface ObligationExplanation {
   rule?: { id?: string; code?: string; label?: string; version?: number } | string;
   ruleCode?: string; ruleVersion?: number | string; version?: number | string;
-  legalBasis?: string[] | string; formula?: string; inputs?: Record<string, unknown>;
+  legalBasis?: (string | { id?: string; title?: string; status?: string })[] | string; articles?: string[]; formula?: string;
+  inputs?: Record<string, unknown>; base?: Record<string, unknown>; rates?: Record<string, unknown>;
   amount?: MoneyJSON; dueDate?: string; appealPath?: string; trace?: unknown;
 }
 export interface ObligationDetail extends Obligation { explanation?: ObligationExplanation }
 
 export interface PaymentOrder {
-  paymentReference: string; amount: MoneyJSON; indicativeAmount?: MoneyJSON; beneficiaryAlias?: string;
+  paymentReference: string; amount: MoneyJSON; indicativeAmount?: MoneyJSON | { amount: MoneyJSON; rate?: string } | null; beneficiaryAlias?: string;
   expiresAt?: string; status: PaymentStatus | string; ussdInstructions?: string | string[];
 }
 
@@ -48,8 +49,9 @@ export interface RegistrationResult { taxpayerId: string; iuc: string; verificat
 export interface RegistrationInput { phone: string; fullName: string; language: LanguageCode; situation: ResidentialSituation | '' }
 
 export interface PublicReceiptResult {
-  status: PublicReceiptCheck; amount?: MoneyJSON; date?: string; paidAt?: string; category?: string; revenueCategory?: string;
-  beneficiary?: string; administration?: string; taxpayerRefLast4?: string; replacedBy?: string; reason?: string;
+  status: PublicReceiptCheck; message?: string; amount?: MoneyJSON; date?: string; paidAt?: string; paidOn?: string; category?: string; revenueCategory?: string;
+  beneficiary?: string; administration?: string; beneficiaryAdministration?: string; taxpayerRefLast4?: string; taxpayerRefSuffix?: string;
+  replacedBy?: string; reason?: string; settlementStatus?: string; verifiedAt?: string;
 }
 
 export interface DraftSaveResult { version: number; savedAt: string; changeSummary?: string }
@@ -100,12 +102,13 @@ export interface ReconciliationException {
 export interface LedgerBalance { balanced: boolean; debit?: MoneyJSON | MoneyJSON[]; credit?: MoneyJSON | MoneyJSON[]; byCurrency?: Record<string, { debit: string; credit: string }> }
 
 export interface VaultChangeRequest {
-  id: string; accountAlias: string; newAccount?: string; reason?: string; status: string; approvals?: { userId: string; at: string }[];
-  effectiveAt?: string; createdAt?: string;
+  id: string; alias: string; proposed?: { bankName?: string; accountNumber?: string; holderName?: string }; reason?: string;
+  status: 'EN_ATTENTE_APPROBATION' | 'EN_REFROIDISSEMENT' | 'EFFECTIF' | string; approvals?: { userId: string; at: string }[];
+  requestedBy?: string; requestedAt?: string; coolingEndsAt?: string; effectiveAt?: string;
 }
 
-export interface AuditVerify { ok: boolean; length: number; brokenAt?: number }
+export interface AuditVerify { ok: boolean; length: number; brokenAt?: number; reason?: string; headHash?: string; verifiedAt?: string }
 export interface AuditEvent { id?: string; seq?: number; at?: string; timestamp?: string; actor?: string; action?: string; type?: string; subject?: string; hash?: string; prevHash?: string }
 
-export interface FieldSyncResult { accepted?: (string | { id: string })[]; conflicts?: ({ id: string; reason?: string } | string)[]; batchId?: string }
+export interface FieldSyncResult { batchId?: string; accepted?: string[]; rejected?: { opId: string; reason: string }[]; conflicts?: { id: string; objectId?: string; field?: string }[]; replayed?: boolean }
 export type { Channel, Severity };
