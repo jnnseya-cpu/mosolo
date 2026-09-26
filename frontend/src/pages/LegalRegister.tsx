@@ -1,5 +1,5 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
-import { REQUIRED_APPROVALS, SAMPLE_RULES, CURRENCIES, type Approval, type RuleSheet } from '@mosolo/shared';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { REQUIRED_APPROVALS, SAMPLE_RULES, CURRENCIES, type Approval, type MoneyJSON, type RuleSheet } from '@mosolo/shared';
 import { useApp } from '../context';
 import { useApi } from '../hooks/useApi';
 import { useAutosave } from '../hooks/useAutosave';
@@ -10,11 +10,42 @@ import { StatusBadge, type Tone } from '../components/StatusBadge';
 import { AutosaveBar } from '../components/VersionHistory';
 import { ErrorState, ExampleNotice, Loading } from '../components/States';
 import { Icon } from '../components/Icon';
+import { MoneyText } from '../components/MoneyText';
 import { api, asList, describeError, NetworkError } from '../lib/api';
 import type { UIKey } from '../lib/i18n';
 import { periodicityLabel, revenueCategoryLabel } from '../lib/labels';
+import '../modules/recouvrement/recouvrement.css';
 
-type Rule = RuleSheet & { sample?: boolean; demo?: boolean; createdAt?: string; publishedAt?: string; activatedAt?: string };
+interface HistoryEntry { at: string; action: string; by: string; status: string; detail?: string }
+interface Suspension { reason: string; authority: string; instrumentRef?: string; by: string; at: string; previousStatus: string; liftedAt?: string; liftReason?: string }
+type Rule = RuleSheet & {
+  sample?: boolean; demo?: boolean; createdAt?: string; publishedAt?: string; activatedAt?: string;
+  suspension?: Suspension; pastSuspensions?: Suspension[];
+  abrogation?: { date: string; instrumentId: string; reason: string; by: string; at: string };
+  retroactivity?: { instrumentId: string; article: string; justification: string };
+  supersededBy?: string; history?: HistoryEntry[];
+};
+interface Instrument { id: string; title: string; status: string; demo?: boolean; abrogatedOn?: string }
+interface RecalcLine {
+  obligationId: string; taxpayerId: string; fromVersion: number; obligationStatus: string; issuedOn: string; oldAmount: MoneyJSON;
+  newAmount?: MoneyJSON; delta?: MoneyJSON; direction?: 'FAVORABLE' | 'DEFAVORABLE' | 'NEUTRE'; treatment: 'A_APPLIQUER' | 'EXCLUE'; reason?: string;
+}
+interface Recalculation {
+  id: string; ruleId: string; toVersion: number; simulatedBy: string; simulatedAt: string; status: 'SIMULEE' | 'APPLIQUEE' | 'REJETEE';
+  nonOpposable: boolean; retroactivityAuthorized: boolean; lines: RecalcLine[];
+  totals: { examined: number; toApply: number; excluded: number; favorable: number; defavorable: number; deltaToApply: MoneyJSON | null };
+  decision?: { decision: string; reason: string; by: string; at: string; applied: { from: string; to: string }[]; skipped: { obligationId: string; reason: string }[] };
+}
+
+const HISTORY_LABEL: Record<string, string> = {
+  'rule.created': 'Fiche créée', 'rule.approved.redacteur': 'Visa de rédaction', 'rule.approved.verificateur_juridique': 'Visa juridique',
+  'rule.approved.validateur_financier': 'Visa financier', 'rule.approved.autorite_publication': 'Publication', 'rule.activated': 'Entrée en vigueur',
+  'rule.suspended': 'Suspension', 'rule.suspension.lifted': 'Levée de la suspension', 'rule.abrogated': 'Abrogation',
+  'rule.abrogation.scheduled': 'Abrogation programmée', 'rule.abrogated.effective': 'Abrogation effective', 'rule.superseded': 'Remplacée par une nouvelle version',
+  'rule.expired': 'Expiration',
+};
+const SIMULATE_ROLES = ['R13', 'R14', 'R15', 'R16', 'R06', 'R07', 'R11', 'R22'];
+const errText = (x: unknown) => { const d = describeError(x); return d.message + (d.code ? ` (${d.code})` : ''); };
 
 const STATUS_TONE: Record<string, Tone> = {
   A_VERIFIER: 'critical', BROUILLON: 'neutral', REVUE_JURIDIQUE: 'info', REVUE_FINANCIERE: 'info', APPROUVEE: 'info', PUBLIEE: 'warning',
@@ -89,8 +120,178 @@ function ApprovalTimeline({ rule, onDone }: { rule: Rule; onDone: () => void }) 
   );
 }
 
-function RuleDetail({ rule, onChanged }: { rule: Rule; onChanged: () => void }) {
-  const { tr, fmtDate, lang } = useApp();
+function Feedback({ msg }: { msg: { ok: boolean; text: string } | null }) {
+  if (!msg) return null;
+  return <p role={msg.ok ? 'status' : 'alert'} className={msg.ok ? 'notice notice-ok' : 'notice notice-err'}>{msg.text}</p>;
+}
+
+/** Suspension motivée, levée, abrogation datée (autorité de publication R16). */
+function RuleLifecycle({ rule, instruments, onChanged }: { rule: Rule; instruments: Instrument[]; onChanged: () => void }) {
+  const { fmtDate, user } = useApp();
+  const canAct = !!user?.roles.includes('R16');
+  const [mode, setMode] = useState<'none' | 'suspend' | 'lift' | 'abrogate'>('none');
+  const [reason, setReason] = useState('');
+  const [authority, setAuthority] = useState('Ministre provincial des Finances');
+  const inForce = instruments.filter((i) => i.status === 'EN_VIGUEUR' || i.status === 'MODIFIE');
+  const [instrumentId, setInstrumentId] = useState(inForce[0]?.id ?? '');
+  const [date, setDate] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [review, setReview] = useState<{ id: string; status: string; issuedOn: string }[] | null>(null);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true); setMsg(null);
+    const base = `/v1/legal-rules/${encodeURIComponent(rule.id)}`;
+    try {
+      if (mode === 'suspend') await api(`${base}/suspend`, { method: 'POST', body: { reason, authority } });
+      else if (mode === 'lift') await api(`${base}/lift-suspension`, { method: 'POST', body: { reason } });
+      else {
+        const r = await api<{ obligationsToReview: { id: string; status: string; issuedOn: string }[] }>(`${base}/abrogate`, { method: 'POST', body: { date, instrumentId, reason } });
+        setReview(r.obligationsToReview);
+      }
+      setMsg({ ok: true, text: mode === 'suspend' ? 'Règle suspendue : aucune liquidation tant que dure la suspension.' : mode === 'lift' ? 'Suspension levée.' : 'Abrogation enregistrée : aucune liquidation à compter de la date.' });
+      setMode('none'); setReason('');
+      onChanged();
+    } catch (x) { setMsg({ ok: false, text: errText(x) }); } finally { setBusy(false); }
+  }
+  const canSuspend = rule.status === 'ACTIVE' || rule.status === 'PUBLIEE';
+  const canAbrogate = ['APPROUVEE', 'PUBLIEE', 'ACTIVE', 'SUSPENDUE'].includes(rule.status) && !rule.abrogation;
+  return (
+    <div className="stack">
+      {rule.suspension && (
+        <div className="callout callout-warn"><Icon name="ban" size={18} /><div><p className="row-title">Suspendue le {fmtDate(rule.suspension.at, true)}</p><p className="small">{rule.suspension.authority} — {rule.suspension.reason}</p></div></div>
+      )}
+      {rule.abrogation && (
+        <div className="callout callout-danger"><Icon name="x" size={18} /><div><p className="row-title">Abrogation au {fmtDate(rule.abrogation.date)}</p><p className="small">Instrument abrogatoire <span className="mono">{rule.abrogation.instrumentId}</span> — {rule.abrogation.reason}</p></div></div>
+      )}
+      {rule.retroactivity && (
+        <div className="callout callout-info"><Icon name="history" size={18} /><p className="small">Rétroactivité autorisée par <span className="mono">{rule.retroactivity.instrumentId}</span>, {rule.retroactivity.article} — {rule.retroactivity.justification}</p></div>
+      )}
+      {!!rule.pastSuspensions?.length && <p className="small muted">{rule.pastSuspensions.length} suspension(s) antérieure(s) levée(s).</p>}
+      {canAct ? (
+        <div className="btn-row">
+          {canSuspend && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMode('suspend')}><Icon name="ban" size={14} /> Suspendre</button>}
+          {rule.status === 'SUSPENDUE' && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMode('lift')}><Icon name="refresh" size={14} /> Lever la suspension</button>}
+          {canAbrogate && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMode('abrogate')}><Icon name="x" size={14} /> Abroger</button>}
+        </div>
+      ) : <p className="small muted">Suspension et abrogation : autorité de publication (R16), sur décision motivée.</p>}
+      {mode !== 'none' && (
+        <form className="form" onSubmit={(e) => void submit(e)}>
+          {mode === 'suspend' && (
+            <div className="field"><label className="label" htmlFor="lc-auth">Autorité qui suspend</label><input id="lc-auth" value={authority} onChange={(e) => setAuthority(e.target.value)} required /></div>
+          )}
+          {mode === 'abrogate' && (
+            <div className="field-row">
+              <div className="field"><label className="label" htmlFor="lc-date">Date d’abrogation</label><input id="lc-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></div>
+              <div className="field">
+                <label className="label" htmlFor="lc-inst">Instrument abrogatoire (en vigueur)</label>
+                <select id="lc-inst" value={instrumentId} onChange={(e) => setInstrumentId(e.target.value)}>
+                  {inForce.map((i) => <option key={i.id} value={i.id}>{i.demo ? '[FICTIF] ' : ''}{i.title}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+          <div className="field"><label className="label" htmlFor="lc-reason">Motif</label><textarea id="lc-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} required minLength={10} /></div>
+          <div className="btn-row">
+            <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>Confirmer</button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setMode('none')}>Annuler</button>
+          </div>
+        </form>
+      )}
+      <Feedback msg={msg} />
+      {review && review.length > 0 && (
+        <div className="callout callout-warn"><Icon name="alert" size={18} /><div><p className="row-title">Obligations émises depuis la date d’abrogation — à examiner (aucune annulation d’office)</p><ul className="plain-list small">{review.map((o) => <li key={o.id} className="mono">{o.id} · {o.status} · {o.issuedOn}</li>)}</ul></div></div>
+      )}
+    </div>
+  );
+}
+
+/** Historique des versions d'un même code, chacune avec son journal (ajout seul). */
+function RuleVersions({ rule }: { rule: Rule }) {
+  const { fmtDate } = useApp();
+  const q = useApi(() => api<{ code: string; versions: Rule[] }>(`/v1/legal-rules/${encodeURIComponent(rule.id)}/versions`), [rule.id, rule.status]);
+  if (q.loading) return <Loading />;
+  if (q.error !== null) return <ErrorState error={q.error} onRetry={q.reload} />;
+  return (
+    <div className="stack">
+      {(q.data?.versions ?? []).map((v) => (
+        <details key={v.id} open={v.id === rule.id} className="lr-version">
+          <summary className="row-between">
+            <span><span className="mono">v{v.version}</span> · {fmtDate(v.effectiveFrom)}{v.effectiveTo ? ` → ${fmtDate(v.effectiveTo)}` : ''}{v.changeReason ? <span className="muted small"> — {v.changeReason}</span> : null}</span>
+            <RuleStatusBadge status={v.status} />
+          </summary>
+          <ol className="plain-list small lr-history">
+            {(v.history ?? []).map((h) => (
+              <li key={h.at + h.action}><span className="muted">{fmtDate(h.at, true)}</span> — {HISTORY_LABEL[h.action] ?? h.action} <span className="muted">({h.by})</span>{h.detail ? ` : ${h.detail}` : ''}</li>
+            ))}
+            {!v.history?.length && <li className="muted">Fiche modèle : historique antérieur au registre.</li>}
+          </ol>
+        </details>
+      ))}
+    </div>
+  );
+}
+
+/** Simulation d'impact d'une nouvelle version, puis décision motivée de la régie (R06, personne distincte). */
+function ImpactSimulation({ rule }: { rule: Rule }) {
+  const { fmtDate, user } = useApp();
+  const roles = user?.roles ?? [];
+  const canSimulate = roles.some((r) => SIMULATE_ROLES.includes(r));
+  const canDecide = roles.includes('R06');
+  const q = useApi(canSimulate ? () => api<Recalculation[]>(`/v1/recalculations?ruleId=${encodeURIComponent(rule.id)}`) : null, [rule.id, user?.id]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [reason, setReason] = useState('');
+  async function act(fn: () => Promise<unknown>, ok: string) {
+    setBusy(true); setMsg(null);
+    try { await fn(); setMsg({ ok: true, text: ok }); q.reload(); } catch (x) { setMsg({ ok: false, text: errText(x) }); } finally { setBusy(false); }
+  }
+  if (!rule.supersedesVersionId) return <p className="small muted">Première version : aucune obligation antérieure à recalculer.</p>;
+  if (!canSimulate) return <p className="small muted">Simulation réservée aux juristes, validateurs, régie et audit.</p>;
+  const last = q.data?.[0];
+  return (
+    <div className="stack">
+      <p className="small muted">Simulation sans effet sur les obligations. Aucune obligation émise avant la date d’effet n’est touchée ; aucune hausse n’est appliquée sans acte autorisant la rétroactivité. L’application exige une décision motivée d’une personne distincte, par obligation rectificative (l’originale est conservée).</p>
+      <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => void act(() => api(`/v1/legal-rules/${encodeURIComponent(rule.id)}/impact-simulations`, { method: 'POST' }), 'Simulation enregistrée.')}>
+        <Icon name="analysis" size={14} /> Simuler l’impact
+      </button>
+      <Feedback msg={msg} />
+      {last && (
+        <div className="stack">
+          <div className="row-between"><span className="mono small">{last.id}</span><StatusBadge tone={last.status === 'APPLIQUEE' ? 'good' : last.status === 'REJETEE' ? 'neutral' : 'info'} label={last.status === 'SIMULEE' ? 'Simulée — non opposable' : last.status === 'APPLIQUEE' ? 'Appliquée' : 'Rejetée'} /></div>
+          <p className="small">{last.totals.examined} obligation(s) examinée(s) · {last.totals.toApply} à rectifier · {last.totals.excluded} exclue(s) · {last.totals.favorable} favorable(s) · {last.totals.defavorable} défavorable(s){last.totals.deltaToApply ? <> · écart total <MoneyText money={last.totals.deltaToApply} showIndicative={false} /></> : null}</p>
+          {last.lines.length > 0 && (
+            <DataTable
+              caption="Obligations touchées"
+              rows={last.lines}
+              rowKey={(l) => l.obligationId}
+              columns={[
+                { key: 'o', label: 'Obligation', primary: true, render: (l) => <span className="mono small">{l.obligationId}</span> },
+                { key: 'old', label: 'Ancien', num: true, render: (l) => <MoneyText money={l.oldAmount} showIndicative={false} /> },
+                { key: 'new', label: 'Nouveau', num: true, render: (l) => (l.newAmount ? <MoneyText money={l.newAmount} showIndicative={false} /> : '—') },
+                { key: 't', label: 'Traitement', render: (l) => <span className="small"><StatusBadge tone={l.treatment === 'A_APPLIQUER' ? 'info' : 'neutral'} label={l.treatment === 'A_APPLIQUER' ? 'À rectifier' : 'Exclue'} />{l.reason ? <span className="muted"> {l.reason}</span> : null}</span> },
+              ]}
+            />
+          )}
+          {last.decision && <p className="small">Décision de {last.decision.by} le {fmtDate(last.decision.at, true)} : {last.decision.reason} — {last.decision.applied.length} obligation(s) rectifiée(s).</p>}
+          {last.status === 'SIMULEE' && canDecide && (
+            <form className="form" onSubmit={(e) => { e.preventDefault(); }}>
+              <div className="field"><label className="label" htmlFor="rc-dec">Motivation de la décision</label><textarea id="rc-dec" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} minLength={10} /></div>
+              <div className="btn-row">
+                <button type="button" className="btn btn-primary btn-sm" disabled={busy || reason.trim().length < 10} onClick={() => void act(() => api(`/v1/recalculations/${encodeURIComponent(last.id)}/decide`, { method: 'POST', body: { decision: 'APPLIQUER', reason } }), 'Recalcul appliqué par obligations rectificatives.')}>Appliquer</button>
+                <button type="button" className="btn btn-secondary btn-sm" disabled={busy || reason.trim().length < 10} onClick={() => void act(() => api(`/v1/recalculations/${encodeURIComponent(last.id)}/decide`, { method: 'POST', body: { decision: 'REJETER', reason } }), 'Recalcul rejeté (motif tracé).')}>Rejeter</button>
+              </div>
+            </form>
+          )}
+          {last.status === 'SIMULEE' && !canDecide && <p className="small muted">Décision : direction de la régie (R06), distincte de l’auteur de la simulation.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RuleDetail({ rule, instruments, onChanged, onNewVersion }: { rule: Rule; instruments: Instrument[]; onChanged: () => void; onNewVersion: (r: Rule) => void }) {
+  const { tr, fmtDate, lang, user } = useApp();
   const rows: [UIKey, ReactNode][] = [
     ['rules.f.code', <span className="mono">{rule.code} · v{rule.version}</span>],
     ['rules.f.category', revenueCategoryLabel(lang, rule.revenueCategory)],
@@ -121,6 +322,19 @@ function RuleDetail({ rule, onChanged }: { rule: Rule; onChanged: () => void }) 
       <dl className="kv kv-dense">{rows.map(([k, v]) => <div key={k}><dt>{tr(k)}</dt><dd>{v}</dd></div>)}</dl>
       <h3 className="h-sub">{tr('rules.approvals')}</h3>
       <ApprovalTimeline rule={rule} onDone={onChanged} />
+      {!rule.sample || rule.status !== 'A_VERIFIER' ? (
+        <>
+          <h3 className="h-sub">Cycle de vie : suspension, abrogation</h3>
+          <RuleLifecycle rule={rule} instruments={instruments} onChanged={onChanged} />
+        </>
+      ) : null}
+      <h3 className="h-sub">Versions et historique</h3>
+      <RuleVersions rule={rule} />
+      {user?.roles.includes('R13') && (
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => onNewVersion(rule)}><Icon name="replace" size={14} /> Préparer une nouvelle version</button>
+      )}
+      <h3 className="h-sub">Simulation d’impact et recalcul contrôlé</h3>
+      <ImpactSimulation rule={rule} />
     </div>
   );
 }
@@ -130,17 +344,35 @@ interface NewRule {
   administeringEntity: string; taxableEvent: string; liableParty: string; baseDefinition: string; formula: string; rateTable: string;
   currency: string; rounding: string; periodicity: string; dueRule: string; effectiveFrom: string; beneficiaryAccountAlias: string;
   appealPath: string; sourceVerification: string; changeReason: string;
+  retroInstrumentId: string; retroArticle: string; retroJustification: string;
 }
 const EMPTY: NewRule = {
   code: '', label: '', revenueCategory: 'IMPOT_PROVINCIAL', legalInstrumentIds: '', articles: '', competentAuthority: 'Ministère provincial des Finances',
   administeringEntity: 'DGIPK', taxableEvent: '', liableParty: '', baseDefinition: '', formula: '', rateTable: '', currency: 'CDF', rounding: 'HALF_UP',
   periodicity: 'ANNUELLE', dueRule: '', effectiveFrom: '', beneficiaryAccountAlias: 'KIN-DGIPK-RECETTES-01', appealPath: '', sourceVerification: 'AUCUNE', changeReason: '',
+  retroInstrumentId: '', retroArticle: '', retroJustification: '',
 };
 
-function NewRuleForm({ onCreated }: { onCreated: () => void }) {
+/** Pré-remplissage d'une nouvelle version à partir de la version en vigueur. */
+function draftFrom(r: Rule): NewRule {
+  return {
+    ...EMPTY, code: r.code, label: r.label, revenueCategory: r.revenueCategory, legalInstrumentIds: r.legalInstrumentIds.join(', '),
+    articles: r.articles.join(', '), competentAuthority: r.competentAuthority, administeringEntity: r.administeringEntity,
+    taxableEvent: r.taxableEvent, liableParty: r.liableParty, baseDefinition: r.baseDefinition, formula: r.formula,
+    rateTable: Object.entries(r.rateTable).map(([k, v]) => `${k} = ${v}`).join('\n'), currency: r.currency, rounding: r.rounding,
+    periodicity: r.periodicity, dueRule: r.dueRule, effectiveFrom: '', beneficiaryAccountAlias: r.beneficiaryAccountAlias,
+    appealPath: r.appealPath, sourceVerification: r.sourceVerification, changeReason: '',
+  };
+}
+
+function NewRuleForm({ onCreated, initial }: { onCreated: () => void; initial?: NewRule | null }) {
   const { tr, lang } = useApp();
   const draft = useAutosave<NewRule>('legal-rule-new', EMPTY);
   const v = draft.value;
+  const { setValue } = draft;
+  // Pré-remplissage uniquement quand une nouvelle version est demandée (pas à chaque rendu).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (initial) setValue(initial); }, [initial]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const set = (k: keyof NewRule) => (e: { target: { value: string } }) => draft.setValue((p) => ({ ...p, [k]: e.target.value }));
@@ -160,10 +392,14 @@ function NewRuleForm({ onCreated }: { onCreated: () => void }) {
     try {
       await api('/v1/legal-rules', {
         method: 'POST',
-        body: {
-          ...v, legalInstrumentIds: split(v.legalInstrumentIds), articles: split(v.articles), rateTable, exemptions: [], penalties: [],
-          changeReason: v.changeReason || undefined,
-        },
+        body: (() => {
+          const { retroInstrumentId, retroArticle, retroJustification, ...rest } = v;
+          return {
+            ...rest, legalInstrumentIds: split(v.legalInstrumentIds), articles: split(v.articles), rateTable, exemptions: [], penalties: [],
+            changeReason: v.changeReason || undefined,
+            ...(retroInstrumentId ? { retroactivity: { instrumentId: retroInstrumentId, article: retroArticle, justification: retroJustification } } : {}),
+          };
+        })(),
       });
       setMsg({ ok: true, text: tr('rules.created') });
       draft.reset();
@@ -214,6 +450,15 @@ function NewRuleForm({ onCreated }: { onCreated: () => void }) {
         </select>
       </div>
       {text('changeReason', 'rules.f.changeReason')}
+      <fieldset className="field lr-retro">
+        <legend className="label">Rétroactivité (facultatif)</legend>
+        <span className="hint">Une nouvelle version dont la date d’effet précède sa publication n’est publiable que si un acte en vigueur l’autorise expressément.</span>
+        <div className="field-row">
+          <div className="field"><label className="label" htmlFor="nr-retro-inst">Instrument autorisant</label><input id="nr-retro-inst" className="mono" value={v.retroInstrumentId} onChange={set('retroInstrumentId')} /></div>
+          <div className="field"><label className="label" htmlFor="nr-retro-art">Article</label><input id="nr-retro-art" value={v.retroArticle} onChange={set('retroArticle')} /></div>
+        </div>
+        <div className="field"><label className="label" htmlFor="nr-retro-just">Justification</label><textarea id="nr-retro-just" rows={2} value={v.retroJustification} onChange={set('retroJustification')} /></div>
+      </fieldset>
       <AutosaveBar draft={draft} />
       {msg && <p role={msg.ok ? 'status' : 'alert'} className={msg.ok ? 'notice notice-ok' : 'notice notice-err'}>{msg.text}</p>}
       <button type="submit" className="btn btn-primary btn-block" disabled={busy}>{tr('rules.create')}</button>
@@ -224,8 +469,10 @@ function NewRuleForm({ onCreated }: { onCreated: () => void }) {
 export default function LegalRegister() {
   const { tr, user } = useApp();
   const q = useApi(loadRules, [user?.id]);
+  const inst = useApi(() => api<Instrument[]>('/v1/legal-instruments').catch(() => [] as Instrument[]), [user?.id]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [initial, setInitial] = useState<NewRule | null>(null);
   const rules = q.data?.rules ?? [];
   const open = rules.find((r) => r.id === openId) ?? null;
   return (
@@ -247,15 +494,16 @@ export default function LegalRegister() {
             { key: 'cur', label: tr('rules.f.currency'), render: (r) => <span className="nowrap-cell">{CURRENCIES[r.currency]?.flag ?? ''}&nbsp;{r.currency}</span> },
             { key: 'status', label: tr('space.col.status'), render: (r) => <RuleStatusBadge status={r.status} /> },
             { key: 'appr', label: tr('rules.approvals'), num: true, render: (r) => `${r.approvals.length} / 4` },
+            { key: 'eff', label: 'Effet', render: (r) => <span className="small nowrap-cell">{r.abrogation ? `abrogée au ${r.abrogation.date}` : r.suspension ? 'suspendue' : r.effectiveFrom}</span> },
             { key: 'act', label: tr('space.col.actions'), render: (r) => <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpenId(r.id)}>{tr('rules.open')} <Icon name="chevronRight" size={16} /></button> },
           ]}
         />
       )}
       <Drawer open={!!open} title={open ? `${open.code} — ${open.label}` : ''} onClose={() => setOpenId(null)}>
-        {open && <RuleDetail rule={open} onChanged={q.reload} />}
+        {open && <RuleDetail rule={open} instruments={inst.data ?? []} onChanged={q.reload} onNewVersion={(r) => { setInitial(draftFrom(r)); setOpenId(null); setCreating(true); }} />}
       </Drawer>
-      <Drawer open={creating} title={tr('rules.new')} onClose={() => setCreating(false)}>
-        <NewRuleForm onCreated={() => { q.reload(); }} />
+      <Drawer open={creating} title={initial ? `Nouvelle version — ${initial.code}` : tr('rules.new')} onClose={() => { setCreating(false); setInitial(null); }}>
+        <NewRuleForm initial={initial} onCreated={() => { q.reload(); }} />
       </Drawer>
     </div>
   );
