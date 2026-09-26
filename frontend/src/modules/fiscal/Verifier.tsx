@@ -1,7 +1,10 @@
 /**
  * Vérification publique (sans connexion) : plaque / QR d'un bien, quitus fiscal, attestation de bail.
- * Divulgation minimale : jamais de nom, d'adresse, de montant ni de situation de paiement d'un bien identifiable.
+ * Divulgation minimale : jamais de nom, d'adresse ni de montant. La couleur de situation fiscale d'un bien est affichée
+ * (le Cahier des exigences prévaut, décision de la Ville) avec sa légende générique, sans détail des obligations.
  */
+import { MapStatusChip } from '../../components/MapStatusChip';
+import type { MapStatusColor } from '@mosolo/shared';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context';
@@ -59,6 +62,7 @@ export default function Verifier() {
   }
   const v = res ? VERDICT[res.result] ?? VERDICT.INCONNU! : null;
   const str = (k: string) => (typeof res?.[k] === 'string' ? (res[k] as string) : null);
+  const situation = res && typeof res.situation === 'object' && res.situation !== null ? (res.situation as { color: MapStatusColor; label: string }) : null;
 
   return (
     <div className="page page-flush">
@@ -93,6 +97,7 @@ export default function Verifier() {
                   {str('category') && <div><dt>Nature</dt><dd>{str('category')}{res.registered === true ? ' — enregistré' : ''}</dd></div>}
                   {str('commune') && <div><dt>Commune</dt><dd>{str('commune')}</dd></div>}
                   {str('quartier') && <div><dt>Quartier</dt><dd>{str('quartier')}</dd></div>}
+                  {situation && <div><dt>Situation fiscale</dt><dd><MapStatusChip status={situation.color} /> <span className="small">{situation.label}</span></dd></div>}
                   {str('unitIgf') && <div><dt>Unité</dt><dd className="mono">{str('unitIgf')}</dd></div>}
                   {str('taxpayerRef') && <div><dt>Contribuable</dt><dd className="mono">{str('taxpayerRef')} <span className="small muted">(masqué)</span></dd></div>}
                   {str('validUntil') && <div><dt>Valide jusqu’au</dt><dd>{fmtDate(str('validUntil')!)}</dd></div>}
@@ -103,7 +108,7 @@ export default function Verifier() {
               </div>
             )}
           </div>
-          <p className="small muted verify-privacy"><Icon name="lock" size={14} /> Aucune donnée personnelle, aucun montant et aucune situation de paiement ne sont affichés publiquement. Chaque vérification est journalisée.</p>
+          <p className="small muted verify-privacy"><Icon name="lock" size={14} /> Aucune donnée personnelle ni aucun montant ne sont affichés publiquement ; seule la couleur de situation d’un bien l’est. Une couleur rouge n’entraîne aucune mesure automatique. Chaque vérification est journalisée.</p>
         </div>
       </CoverSplit>
     </div>

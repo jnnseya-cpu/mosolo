@@ -712,7 +712,7 @@ La v3.0 (§ 16.8) prévoit une plaque par bâtiment. Le dossier source NFIU (Num
 |---|---|---|
 | Plaque | Plaque officielle normalisée et visible : NFIU (= code territorial lisible de l'IGF, § 17.3), QR signé, code court, commune, quartier, logo de la Ville ; identité fiscale permanente du bien | Pose [ACTE REQUIS J27] pour l'obligation ; pose administrative possible avant |
 | Scan par un agent habilité | Identifiant, localisation, statut d'occupation (occupé par le propriétaire / mis en bail), couleur de situation IF et IRL, dernier constat ; **aucun montant modifiable, aucune négociation, aucune estimation manuelle** | Conforme § 15.1 |
-| Scan public | **Uniquement** « plaque authentique, bâtiment enregistré, commune, quartier » (§ 16.8) — le statut « payé / non payé » n'est pas affiché publiquement pour un bâtiment identifiable (ARB-76, P14) | v3.0 prévaut sur la source (« statut minimal ») |
+| Scan public | « Plaque authentique, bâtiment enregistré, commune, quartier » et **couleur de situation fiscale** avec légende générique, sans nom, adresse précise ni montant (§ 16.8) | **La source prévaut** (décision de la Ville, ARB-76 révisé) |
 | Propriétaire | Application et portail : statut, loyer déclaré, obligations, paiement ; **sans smartphone** : paiement en banque ou au guichet sur présentation du NFIU, rattachement automatique à l'obligation | Module 79 |
 | Rapports | **Rapports journaliers automatiques** d'activité des agents (plaques posées, scans, constats) au superviseur | Module 79 |
 | Restriction de location | Interdiction de mettre en bail une maison non immatriculée | [ACTE REQUIS J27] ; **non appliquée par le système avant l'acte** (ARB-16) |
@@ -2334,7 +2334,7 @@ Les arbitrages ARB-01 à ARB-55 reprennent, dans l'ordre, les contradictions et 
 | ARB-73 | Cibles des indicateurs à 18 mois | > 80 % couverture ; > 90 % électronique | ≥ 90 % couverture des quartiers pilotes ; > 80 % électronique | § H.2.4 |
 | ARB-74 | Entités et routes de répartition (`RevenueShareKey`, `/v1/repartition/ordres`, réserve agents) | Prévues | Remplacées par `AllocationRule` et `/v1/legal-shares:calculate` ; aucune instruction de virement | § H.16.3–H.16.4 |
 | ARB-75 | Noms des scénarios | Prudent, attendu, transformationnel | Conservateur, attendu, transformationnel (ambitieux) | § 38.3 |
-| ARB-76 | Scan public de la plaque fiscale immobilière | « Statut minimal » incluant payé / non payé | Authenticité, enregistrement, commune, quartier uniquement | P14 (§ 16.8) |
+| ARB-76 | Scan public de la plaque fiscale immobilière | « Statut minimal » incluant la situation (vert, orange, rouge, gris) | **Révisé par décision de la Ville : la source prévaut.** Authenticité, enregistrement, commune, quartier et couleur de situation avec légende générique ; ni nom, ni adresse précise, ni montant ; aucune mesure automatique | P14 (§ 16.8) |
 | ARB-77 | Cinq piliers (DG) vs sept piliers (NE, C) | — | Sept piliers, tous couverts (§ H.2.1) | Exhaustivité |
 
 ## H.30 Matrice de traçabilité

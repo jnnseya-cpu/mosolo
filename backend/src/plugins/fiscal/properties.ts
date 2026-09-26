@@ -163,10 +163,13 @@ export class PropertyService {
       quartier: obj.quartier,
       registered: obj.status === 'VALIDE',
       plateStatus: plate.status,
+      // Décision de la Ville (le Cahier des exigences prévaut sur l'arbitrage ARB-76) : la couleur de situation fiscale
+      // est affichée au public. Elle reste minimale : couleur et légende générique, sans nom, sans montant, sans motif détaillé.
+      situation: result === 'AUTHENTIQUE' ? (() => { const s = situationOf(this.d, obj); return { color: s.color, label: s.label }; })() : null,
       message: result === 'REMPLACEE'
         ? 'Plaque remplacée : seule la nouvelle plaque de ce bien fait foi.'
         : 'Plaque authentique — bien enregistré au cadastre fiscal de la Ville-Province.',
-      notice: 'Vérification publique minimale : aucune donnée personnelle ni situation de paiement n’est affichée (§ 16.8).',
+      notice: 'Vérification publique : couleur de situation fiscale du bien (vert, orange, rouge, gris), sans nom, sans montant ni détail des obligations. Une couleur rouge n’entraîne aucune mesure automatique (§ 16.8).',
     };
   }
 

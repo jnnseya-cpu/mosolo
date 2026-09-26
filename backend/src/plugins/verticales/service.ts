@@ -765,6 +765,8 @@ export class VerticalesService {
     return {
       code: p.code, authentique, type: PLATE_LABEL[p.kind], statut: p.status === 'POSEE' ? 'EN_SERVICE' : 'REMPLACEE',
       enregistre: true, commune: p.commune, quartier: p.quartier,
+      // Le Cahier des exigences prévaut (décision de la Ville) : couleur de situation publique, sans nom, montant ni date de paiement.
+      ...(authentique && p.status === 'POSEE' ? (() => { const sit = this.objectSituation(p.objectId); return { situation: { color: sit.color, label: sit.label } }; })() : {}),
       message: p.status === 'POSEE' ? 'Plaque authentique, objet enregistré.' : 'Plaque remplacée : elle n’est plus en service.',
     };
   }

@@ -90,8 +90,10 @@ describe('Fiscal — hiérarchie SIG, identifiant géofiscal et QR par bien', ()
     const raw = JSON.stringify(body);
     expect(raw).not.toContain('Mbuyi');
     expect(raw).not.toContain('TP-DEMO');
-    expect(body.situation).toBeUndefined();
-    expect(raw).not.toMatch(/amount|montant|150/);
+    // Le Cahier prévaut (décision de la Ville) : couleur de situation publique, sans nom, montant ni motif détaillé.
+    expect(body.situation).toMatchObject({ color: expect.stringMatching(/^(green|amber|red|grey|blue)$/), label: expect.any(String) });
+    expect(Object.keys(body.situation).sort()).toEqual(['color', 'label']);
+    expect(raw).not.toMatch(/"amount"|150\.00/);
 
     const forged = (await env.req('GET', `/v1/public/fiscal/plates/${plate.shortCode}?s=${'0'.repeat(24)}`)).json();
     expect(forged.result).toBe('SIGNATURE_INVALIDE');

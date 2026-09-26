@@ -1713,7 +1713,7 @@ Par avenue, quartier et commune : nombre estimé de parcelles, bâtiments et uni
 
 ## 16.8 Plaque fiscale immobilière
 
-Chaque bâtiment reçoit une plaque normalisée portant l'identifiant géofiscal, un QR signé et un code court. Scan par un agent habilité : identifiant, statut d'occupation déclaré, couleur de situation. Scan public : **uniquement** « plaque authentique, bâtiment enregistré, commune, quartier ». Rendre la plaque obligatoire et interdire la mise en location d'un bien non immatriculé exige un acte [ACTE REQUIS].
+Chaque bâtiment reçoit une plaque normalisée portant l'identifiant géofiscal, un QR signé et un code court. Scan par un agent habilité : identifiant, statut d'occupation déclaré, couleur de situation. Scan public : « plaque authentique, bâtiment enregistré, commune, quartier » **et couleur de situation fiscale** (vert régularisé, orange partiel ou échéance proche, rouge en retard après vérification, gris non enregistré), avec sa légende générique — jamais le nom du propriétaire, l'adresse précise, un montant ou le détail des obligations. Une couleur rouge n'entraîne aucune mesure automatique : elle signale un dossier à traiter par une personne habilitée. *Décision de la Ville (26 septembre 2026) : le Cahier des exigences prévaut sur l'arbitrage ARB-76 de la version précédente, qui masquait la couleur au public.* Rendre la plaque obligatoire et interdire la mise en location d'un bien non immatriculé exige un acte [ACTE REQUIS].
 
 ## 16.9 Campagne locative prioritaire
 
@@ -4666,7 +4666,7 @@ La v3.0 (§ 16.8) prévoit une plaque par bâtiment. Le dossier source NFIU (Num
 |---|---|---|
 | Plaque | Plaque officielle normalisée et visible : NFIU (= code territorial lisible de l'IGF, § 17.3), QR signé, code court, commune, quartier, logo de la Ville ; identité fiscale permanente du bien | Pose [ACTE REQUIS J27] pour l'obligation ; pose administrative possible avant |
 | Scan par un agent habilité | Identifiant, localisation, statut d'occupation (occupé par le propriétaire / mis en bail), couleur de situation IF et IRL, dernier constat ; **aucun montant modifiable, aucune négociation, aucune estimation manuelle** | Conforme § 15.1 |
-| Scan public | **Uniquement** « plaque authentique, bâtiment enregistré, commune, quartier » (§ 16.8) — le statut « payé / non payé » n'est pas affiché publiquement pour un bâtiment identifiable (ARB-76, P14) | v3.0 prévaut sur la source (« statut minimal ») |
+| Scan public | « Plaque authentique, bâtiment enregistré, commune, quartier » et **couleur de situation fiscale** avec légende générique, sans nom, adresse précise ni montant (§ 16.8) | **La source prévaut** (décision de la Ville, ARB-76 révisé) |
 | Propriétaire | Application et portail : statut, loyer déclaré, obligations, paiement ; **sans smartphone** : paiement en banque ou au guichet sur présentation du NFIU, rattachement automatique à l'obligation | Module 79 |
 | Rapports | **Rapports journaliers automatiques** d'activité des agents (plaques posées, scans, constats) au superviseur | Module 79 |
 | Restriction de location | Interdiction de mettre en bail une maison non immatriculée | [ACTE REQUIS J27] ; **non appliquée par le système avant l'acte** (ARB-16) |
@@ -6288,7 +6288,7 @@ Les arbitrages ARB-01 à ARB-55 reprennent, dans l'ordre, les contradictions et 
 | ARB-73 | Cibles des indicateurs à 18 mois | > 80 % couverture ; > 90 % électronique | ≥ 90 % couverture des quartiers pilotes ; > 80 % électronique | § H.2.4 |
 | ARB-74 | Entités et routes de répartition (`RevenueShareKey`, `/v1/repartition/ordres`, réserve agents) | Prévues | Remplacées par `AllocationRule` et `/v1/legal-shares:calculate` ; aucune instruction de virement | § H.16.3–H.16.4 |
 | ARB-75 | Noms des scénarios | Prudent, attendu, transformationnel | Conservateur, attendu, transformationnel (ambitieux) | § 38.3 |
-| ARB-76 | Scan public de la plaque fiscale immobilière | « Statut minimal » incluant payé / non payé | Authenticité, enregistrement, commune, quartier uniquement | P14 (§ 16.8) |
+| ARB-76 | Scan public de la plaque fiscale immobilière | « Statut minimal » incluant la situation (vert, orange, rouge, gris) | **Révisé par décision de la Ville : la source prévaut.** Authenticité, enregistrement, commune, quartier et couleur de situation avec légende générique ; ni nom, ni adresse précise, ni montant ; aucune mesure automatique | P14 (§ 16.8) |
 | ARB-77 | Cinq piliers (DG) vs sept piliers (NE, C) | — | Sept piliers, tous couverts (§ H.2.1) | Exhaustivité |
 
 ## H.30 Matrice de traçabilité
@@ -7011,7 +7011,7 @@ Le **quitus fiscal numérique** n'est délivré que si aucune obligation exigibl
 | Fonction | Garde-fou principal | Route clé |
 |---|---|---|
 | IGF et QR par bien | Validation par une personne distincte ; IGF jamais réattribué | `POST /v1/fiscal/objects/:id/validate` |
-| Scan public de plaque | Authenticité, commune, quartier seulement (ARB-76) | `GET /v1/public/fiscal/plates/:code` |
+| Scan public de plaque | Authenticité, commune, quartier et couleur de situation avec légende générique ; ni nom ni montant (le Cahier prévaut, ARB-76 révisé) | `GET /v1/public/fiscal/plates/:code` |
 | Relations | Pièce obligatoire ; N2 pour forte valeur ; conflit > 100 % | `POST /v1/fiscal/relationships` |
 | Déclaration pré-remplie | Règle ACTIVE sinon simulation non opposable ; anti-double facturation | `POST /v1/fiscal/declarations` |
 | Exonérations / remises | Base légale du registre ; 2 validations distinctes ; jamais l'IA ; pas de rétroactivité sans décision | `POST /v1/fiscal/exemptions/:id/decision` |

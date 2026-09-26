@@ -259,11 +259,15 @@ describe('verticales — événements : certificat QR, billetterie, contrôle', 
 });
 
 describe('verticales — plaques NFIU', () => {
-  it('vérification publique minimale : ni nom, ni adresse, ni situation de paiement', async () => {
+  it('vérification publique : ni nom, ni adresse, ni montant ; couleur de situation (le Cahier prévaut)', async () => {
     const env = await setupVx();
     const plate = (env.app.ctx.ext.verticales as VerticalesService).plates.findOne((p) => p.kind === 'NFIU')!;
     const pub = (await env.req('GET', `/v1/public/verticales/plates/${plate.code}`)).json();
-    expect(pub).toEqual({ code: plate.code, authentique: true, type: 'Plaque fiscale immobilière (NFIU)', statut: 'EN_SERVICE', enregistre: true, commune: 'Limete', quartier: 'Kingabwa', message: 'Plaque authentique, objet enregistré.' });
+    expect(pub).toEqual({
+      code: plate.code, authentique: true, type: 'Plaque fiscale immobilière (NFIU)', statut: 'EN_SERVICE', enregistre: true, commune: 'Limete', quartier: 'Kingabwa',
+      situation: { color: expect.stringMatching(/^(green|amber|red|grey)$/), label: expect.any(String) }, message: 'Plaque authentique, objet enregistré.',
+    });
+    expect(JSON.stringify(pub)).not.toMatch(/Mbuyi|TP-DEMO|"amount"|lastPayment/);
     expect((await env.req('GET', '/v1/public/verticales/plates/KIN-LMT-999999-Z')).json().authentique).toBe(false);
   });
 

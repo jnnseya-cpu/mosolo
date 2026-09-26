@@ -2,12 +2,14 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PageHead } from '../../components/Shell';
 import { Icon } from '../../components/Icon';
+import { MapStatusChip } from '../../components/MapStatusChip';
+import type { MapStatusColor } from '@mosolo/shared';
 import { ErrorState, Loading } from '../../components/States';
 import { useApp } from '../../context';
 import { api } from '../../lib/api';
 import './verticales.css';
 
-interface PlateResult { code: string; authentique: boolean; type?: string; statut?: string; enregistre?: boolean; commune?: string; quartier?: string; message?: string }
+interface PlateResult { code: string; authentique: boolean; type?: string; statut?: string; enregistre?: boolean; commune?: string; quartier?: string; message?: string; situation?: { color: MapStatusColor; label: string } }
 interface CertResult { code: string; authentique: boolean; type?: string; verticale?: string; commune?: string | null; validFrom?: string; validUntil?: string | null; statut?: string; message?: string }
 
 /** Extrait le code d'un contenu de QR (URL …/verifier-plaque/CODE) ou d'une saisie. */
@@ -19,7 +21,8 @@ const extract = (raw: string) => {
 
 /**
  * Vérification publique d'une plaque (NFIU, étal, site, embarcation, chantier) ou d'un titre (autorisation, quitus).
- * Minimisation : aucune donnée nominative, aucune adresse précise, jamais la situation de paiement d'un bien identifiable.
+ * Minimisation : aucune donnée nominative, aucune adresse précise, aucun montant. La couleur de situation fiscale est
+ * affichée (le Cahier des exigences prévaut, décision de la Ville), avec sa légende générique.
  */
 export default function PlateVerify() {
   const { code: param } = useParams();
@@ -50,7 +53,7 @@ export default function PlateVerify() {
     <div className="page">
       <div className="vxv-wrap">
         <PageHead eyebrow="Vérification publique" title="Vérifier une plaque ou un titre"
-          lead="Scannez le QR ou saisissez le code imprimé. La réponse ne contient aucune donnée personnelle ni situation de paiement." />
+          lead="Scannez le QR ou saisissez le code imprimé. La réponse ne contient aucune donnée personnelle ni aucun montant ; seule la couleur de situation du bien est indiquée." />
         <form className="verify-form" onSubmit={submit}>
           <label className="label" htmlFor="vxv-code">Code de la plaque ou du titre</label>
           <div className="input-row">
@@ -70,6 +73,7 @@ export default function PlateVerify() {
                 <div><dt>Commune</dt><dd>{plate.commune}</dd></div>
                 <div><dt>Quartier</dt><dd>{plate.quartier}</dd></div>
                 <div><dt>Objet enregistré</dt><dd>{plate.enregistre ? 'Oui' : 'Non'}</dd></div>
+                {plate.situation && <div><dt>Situation fiscale</dt><dd><MapStatusChip status={plate.situation.color} /> <span className="small">{plate.situation.label}</span></dd></div>}
               </dl>
             </div>
           </div>
@@ -97,7 +101,7 @@ export default function PlateVerify() {
             </div>
           </div>
         )}
-        <p className="verify-privacy small muted"><Icon name="lock" size={14} /> Vérification minimale (§ 16.8) : authenticité, commune, quartier ou validité — jamais le nom du propriétaire, ni l’adresse précise, ni la situation « payé / non payé ».</p>
+        <p className="verify-privacy small muted"><Icon name="lock" size={14} /> Vérification minimale (§ 16.8) : authenticité, commune, quartier ou validité — couleur de situation fiscale — jamais le nom du propriétaire, ni l’adresse précise, ni aucun montant. Une couleur rouge n’entraîne aucune mesure automatique.</p>
       </div>
     </div>
   );

@@ -151,7 +151,7 @@ Le **quitus fiscal numérique** n'est délivré que si aucune obligation exigibl
 | Fonction | Garde-fou principal | Route clé |
 |---|---|---|
 | IGF et QR par bien | Validation par une personne distincte ; IGF jamais réattribué | `POST /v1/fiscal/objects/:id/validate` |
-| Scan public de plaque | Authenticité, commune, quartier seulement (ARB-76) | `GET /v1/public/fiscal/plates/:code` |
+| Scan public de plaque | Authenticité, commune, quartier et couleur de situation avec légende générique ; ni nom ni montant (le Cahier prévaut, ARB-76 révisé) | `GET /v1/public/fiscal/plates/:code` |
 | Relations | Pièce obligatoire ; N2 pour forte valeur ; conflit > 100 % | `POST /v1/fiscal/relationships` |
 | Déclaration pré-remplie | Règle ACTIVE sinon simulation non opposable ; anti-double facturation | `POST /v1/fiscal/declarations` |
 | Exonérations / remises | Base légale du registre ; 2 validations distinctes ; jamais l'IA ; pas de rétroactivité sans décision | `POST /v1/fiscal/exemptions/:id/decision` |
