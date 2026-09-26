@@ -177,7 +177,10 @@ export class TreasuryService {
     });
     this.payments.settleAndReconcile(order.id, entry.id);
     const receipt = this.receipts.finalize(order.id);
-    const obligation = this.assessment.setStatus(order.obligationId, 'SOLDEE');
+    // Échéancier : l'obligation n'est soldée que lorsque le cumul payé atteint son montant.
+    const ob = this.assessment.get(order.obligationId);
+    const fully = this.payments.paidOn(ob.id).compare(Money.fromJSON(ob.amount)) >= 0;
+    const obligation = this.assessment.setStatus(order.obligationId, fully ? 'SOLDEE' : 'PARTIELLEMENT_PAYEE');
     this.audit.append({ actor: opts.actor, action: 'reconciliation.matched', resourceType: 'payment_order', resourceId: order.id, details: { ...opts.details, receipt: receipt.number, ledgerEntryId: entry.id } });
     this.comms.publish('receipt.finalized', [taxpayerRecipient(this.taxpayers.get(order.taxpayerId))], { reference: receipt.number }, { entity: obligation.entity });
     return { paymentReference: order.paymentReference, receiptNumber: receipt.number, obligationId: obligation.id, amount: order.amount, ledgerEntryId: entry.id };

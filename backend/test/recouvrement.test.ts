@@ -3,7 +3,8 @@ import { buildApp } from '../src/app.js';
 import { ManualClock } from '../src/core/clock.js';
 import { authorize } from '../src/core/policy.js';
 import { recouvrementPlugin, RecoveryService } from '../src/plugins/recouvrement/plugin.js';
-import { DEMO, publishCertifiedRule, type TestEnv } from './helpers.js';
+import { callbackBody, DEMO, publishCertifiedRule, signedCallback, type TestEnv } from './helpers.js';
+import { randomUUID } from 'node:crypto';
 
 const TENANT = DEMO.tenantTaxpayerId;
 const HASH_A = 'a'.repeat(64);
@@ -409,6 +410,31 @@ describe('Parcours gradué : rappel → avis → mise en demeure → mesure prop
 });
 
 describe('Échéanciers', () => {
+  it('paiement par échéance : montant lu dans le plan, obligation partiellement payée jusqu’au solde, jamais de trop-perçu', async () => {
+    const env = await setupRecovery();
+    const obl = tenantArrear(env);
+    const planId = (await env.req('POST', '/v1/recouvrement/echeanciers', 'u-locataire', { obligationId: obl, installments: 3, reason: 'Revenus irréguliers' })).json().id;
+    await env.req('POST', `/v1/recouvrement/echeanciers/${planId}/decision`, 'u-contentieux', { granted: true, motivation: 'Difficulté réelle, échéancier proportionné' });
+    const pay = async () => {
+      const o = await env.req('POST', `/v1/obligations/${obl}/payment-orders`, 'u-locataire', { channel: 'MOBILE_MONEY', installmentPlanId: planId }, { 'idempotency-key': randomUUID() });
+      expect(o.statusCode).toBe(201);
+      const cb = await signedCallback(env, callbackBody(env, o.json().paymentReference, o.json().amount));
+      expect(cb.json().status).toBe('CONFIRME');
+      const st = await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+        statementId: `REL-${randomUUID()}`, lines: [{ accountAlias: env.app.ctx.assessment.get(obl).beneficiaryAccountAlias, amount: o.json().amount, valueDate: '2026-09-26', paymentReference: o.json().paymentReference }],
+      });
+      expect(st.statusCode).toBe(201);
+      return o.json().amount.amount as string;
+    };
+    expect(await pay()).toBe('16.66');
+    expect(env.app.ctx.assessment.get(obl).status).toBe('PARTIELLEMENT_PAYEE');
+    expect(await pay()).toBe('16.66');
+    expect(await pay()).toBe('16.68');
+    expect(env.app.ctx.assessment.get(obl).status).toBe('SOLDEE');
+    const again = await env.req('POST', `/v1/obligations/${obl}/payment-orders`, 'u-locataire', { channel: 'MOBILE_MONEY', installmentPlanId: planId }, { 'idempotency-key': randomUUID() });
+    expect(again.statusCode).toBe(422);
+  });
+
   it('demande → accord motivé (échéances exactes) → aucune mesure pendant l’échéancier → défaillance constatée par une personne', async () => {
     const env = await setupRecovery();
     const obl = tenantArrear(env);

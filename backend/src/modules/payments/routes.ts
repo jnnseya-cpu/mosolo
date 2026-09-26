@@ -13,6 +13,8 @@ const orderSchema = z.object({
   displayCurrency: currencySchema.optional(),
   /** Prestataire connecté (canaux MOBILE_MONEY et QR uniquement). */
   provider: z.enum(CONNECTOR_IDS).optional(),
+  /** Échéancier accordé : l'ordre porte le montant de la prochaine échéance (lu dans le plan, jamais saisi). */
+  installmentPlanId: z.string().min(1).max(64).optional(),
 }).strict();
 
 // Aucune image n'est reçue : seule l'empreinte de la capture et/ou le code SMS présenté.

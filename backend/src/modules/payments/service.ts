@@ -59,6 +59,8 @@ export interface PaymentOrder {
   settledAt?: string;
   reconciledAt?: string;
   ledgerEntryIds: string[];
+  /** Échéancier accordé dont cet ordre paie une échéance (module recouvrement). */
+  installmentPlanId?: string;
   /** Copie du rattachement territorial de l'obligation (§ 20.3) : la recette compte pour cette commune. */
   attribution?: TerritorialAttribution;
 }
@@ -275,15 +277,37 @@ export class PaymentService {
   }
 
   /** Contrôles et préparation d'un ordre (sans l'enregistrer). */
-  private prepareOrder(user: User, obligationId: string, input: { channel: PaymentChannel; displayCurrency?: CurrencyCode }) {
+  /** Montant de la prochaine échéance d'un échéancier accordé (module recouvrement) ; jamais saisi par le client. */
+  private installmentResolver?: (obligationId: string, planId: string) => MoneyJSON;
+
+  setInstallmentResolver(fn: (obligationId: string, planId: string) => MoneyJSON): void {
+    this.installmentResolver = fn;
+  }
+
+  /** Montant déjà payé (confirmé, réglé ou rapproché) sur une obligation, par devise de l'obligation. */
+  paidOn(obligationId: string): Money {
+    const ob = this.assessment.get(obligationId);
+    return this.orders
+      .find((o) => o.obligationId === obligationId && ['CONFIRME', 'REGLE', 'RAPPROCHE'].includes(o.status))
+      .reduce((m, o) => m.add(Money.fromJSON(o.amount)), Money.zero(ob.amount.currency));
+  }
+
+  private prepareOrder(user: User, obligationId: string, input: { channel: PaymentChannel; displayCurrency?: CurrencyCode; installmentPlanId?: string }) {
     const obligation = this.assessment.get(obligationId);
     authorize(user, 'payment.create', { taxpayerId: obligation.taxpayerId });
     if (!PAYABLE_STATUSES.includes(obligation.status)) {
       throw unprocessable('OBLIGATION_NOT_PAYABLE', `Obligation au statut ${obligation.status} : paiement impossible.`);
     }
     const now = this.clock.now();
+    let amount: MoneyJSON = obligation.amount;
+    if (input.installmentPlanId) {
+      if (!this.installmentResolver) throw unprocessable('INSTALLMENT_PLANS_UNAVAILABLE', 'Aucun échéancier ne peut être payé : module de recouvrement non chargé.');
+      amount = this.installmentResolver(obligationId, input.installmentPlanId);
+    }
+    const remaining = Money.fromJSON(obligation.amount).subtract(this.paidOn(obligationId));
+    if (Money.fromJSON(amount).compare(remaining) > 0) amount = remaining.toJSON();
     for (const o of this.orders.find((x) => x.obligationId === obligationId)) {
-      if (['CONFIRME', 'REGLE', 'RAPPROCHE'].includes(o.status)) {
+      if (['CONFIRME', 'REGLE', 'RAPPROCHE'].includes(o.status) && !(input.installmentPlanId && !remaining.isZero() && !remaining.isNegative())) {
         throw unprocessable('OBLIGATION_ALREADY_PAID', `Un paiement confirmé existe déjà (${o.paymentReference}).`);
       }
       if (o.status === 'INITIE' && new Date(o.expiresAt) > now) {
@@ -297,10 +321,11 @@ export class PaymentService {
       obligationId,
       taxpayerId: obligation.taxpayerId,
       channel: input.channel,
-      // Montant = solde de l'obligation, jamais saisi par le client.
-      amount: obligation.amount,
+      // Montant = solde de l'obligation (ou échéance de l'échéancier accordé), jamais saisi par le client.
+      amount,
+      ...(input.installmentPlanId ? { installmentPlanId: input.installmentPlanId } : {}),
       attribution: obligation.attribution,
-      indicativeAmount: this.indicative(obligation.amount, input.displayCurrency),
+      indicativeAmount: this.indicative(amount, input.displayCurrency),
       beneficiaryAlias,
       expiresAt: new Date(now.getTime() + REFERENCE_VALIDITY_HOURS * HOUR_MS).toISOString(),
       status: 'INITIE',
@@ -325,7 +350,7 @@ export class PaymentService {
   }
 
   /** Création d'un ordre de paiement (l'idempotence est appliquée par la route). */
-  createOrder(user: User, obligationId: string, input: { channel: PaymentChannel; displayCurrency?: CurrencyCode }): PaymentOrder {
+  createOrder(user: User, obligationId: string, input: { channel: PaymentChannel; displayCurrency?: CurrencyCode; installmentPlanId?: string }): PaymentOrder {
     const { obligation, draft } = this.prepareOrder(user, obligationId, input);
     return this.commitOrder(user, draft, obligation.entity);
   }
@@ -339,7 +364,7 @@ export class PaymentService {
   async createOrderWithProvider(
     user: User,
     obligationId: string,
-    input: { channel: PaymentChannel; displayCurrency?: CurrencyCode; provider?: ConnectorId },
+    input: { channel: PaymentChannel; displayCurrency?: CurrencyCode; provider?: ConnectorId; installmentPlanId?: string },
   ): Promise<PaymentOrder> {
     if (!input.provider) return this.createOrder(user, obligationId, input);
     const connector = this.connectors.get(input.provider);
