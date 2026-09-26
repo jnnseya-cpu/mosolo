@@ -637,7 +637,7 @@ sequenceDiagram
 | Embarcation | Identifiant, QR ou numéro | Propriétaire, départ, destination, historique, obligations | Constat ; titre d'embarquement consommé |
 | Maison ou parcelle | Plaque fiscale immobilière (§ H.9.1) | Statut occupé propriétaire / loué ; situation IF et IRL par couleur ; dernier constat | Constat ; **aucun montant détaillé** (§ 15.1) |
 | Support publicitaire | Plaque QR, OCR des références | Autorisation, échéance, exploitant | Dossier de constat (§ H.27.6) |
-| Moto-taxi | Gilet, autocollant ou plaque | Statut du pass, conducteur vérifié, validité | Constat ; wewa en vert = rien à payer (§ H.27.17) |
+| Moto-taxi | Gilet, autocollant ou plaque | Statut du pass, conducteur vérifié, validité | Constat ; wewa en vert = rien à payer (§ H.27.16.1) |
 
 **Géolocalisation de chaque action.** Toute opération éloignée du point enregistré est signalée (par exemple : « opération effectuée à 430 mètres du point enregistré — vérification requise ») ; la **tolérance GPS est paramétrée par commune** ; une opération hors zone justifiée n'est pas rejetée automatiquement, elle est revue. Temps de réponse du contrôle par plaque : **< 3 secondes en ligne** ; statut minimal hors ligne ; chaque consultation journalisée.
 
@@ -939,7 +939,7 @@ Seuils ambre **indicatifs**, fixés définitivement par la fiche de configuratio
 | Stationnement (14, 75) | Ticket horaire, journalier, hebdomadaire, mensuel ; abonnement | Heure à mois | 15 min (horaire) ; 2 h (journalier) ; 1 jour (hebdo) ; 3 jours (mensuel) | Titre lié à la plaque | QR dynamique, SMS, ticket imprimé |
 | Véhicules (11) | Vignette, taxe de circulation | Exercice | 30 jours | Vignette autocollante QR + plaque | SMS, quittance |
 | Autorisations de transport (12) | Taxi, bus, moto-taxi | Mois, année | 7 jours | Autocollant QR + carte conducteur | Plaque |
-| Moto-taxis wewa (81) | Pass professionnel | Jour, semaine, mois | 2 h / 1 jour / 3 jours | Gilet numéroté QR + autocollant QR (plaque + conducteur) | USSD, SMS, carte conducteur |
+| RakaPay — pass wewa (76, 81) | Pass professionnel | Jour, semaine, mois | 2 h / 1 jour / 3 jours | Gilet numéroté QR + autocollant QR (plaque + conducteur) | USSD, SMS, carte conducteur |
 | Marchés, domaine public (20) | Droit d'étal, d'occupation | Jour, semaine, mois | Fin de journée / 1 jour / 3 jours | Plaque QR de l'étal + carte commerçant | SMS, reçu |
 | Patente, débits de boissons (10) | Certificat d'exploitation | Exercice | 30 jours | QR sur devanture | — |
 | Publicité, antennes (15, 16) | Autorisation | Exercice | 30 jours | Plaque QR sur panneau ou site | Identifiant géofiscal |
@@ -1596,7 +1596,7 @@ Format du § 41. Chaque critère est un **test automatisé** ; les critères mar
 | E33 AVIA | Connecteurs, IFA, rapprochement mensuel | 62, 78 | R3–R4 | R4 (après J23) |
 | E34 Plaque fiscale immobilière | Plaques, scan, rapports journaliers | 79 | R1–R2 | R2 (pose des plaques dès R0 dans les quartiers échantillons) |
 | E35 CALCU | Comptes publics, passerelle, correspondance | 80 | R3–R4 | R4 (après J26) |
-| E36 Pass wewa | Registre, pass, coopératives, contrôle protecteur | 81 | R1–R2 | R3 (enregistrement gratuit possible dès R2 si concertation) |
+| E36 Pass wewa (extension de RakaPay) | Registre, pass, coopératives, contrôle protecteur | 81 | R1–R2 | R3 (enregistrement gratuit possible dès R2 si concertation) |
 
 ### H.22.2 Récits complémentaires
 
@@ -1618,7 +1618,7 @@ Format du § 41. Chaque critère est un **test automatisé** ; les critères mar
 | US-26 | En tant qu'agent portuaire, je vois « DÉJÀ UTILISÉ » sur un titre d'embarquement déjà consommé | AC-TIT-03 |
 | US-27 | En tant qu'entité, je configure mon service par une fiche, sans modification du socle | AC-ENT-02 |
 | US-28 | En tant que conducteur de wewa, je paie mon pass par USSD et mon statut passe au vert immédiatement | AC-WEW-01 |
-| US-29 | En tant que passager, je scanne le gilet du conducteur pour vérifier son pass | § H.27.17 |
+| US-29 | En tant que passager, je scanne le gilet du conducteur pour vérifier son pass | § H.27.16.1 |
 | US-30 | En tant que coopérative, je paie en groupe et chaque pass est activé individuellement | AC-WEW-02 |
 | US-31 | En tant que contrôleur publicitaire, je constitue un dossier de constat sans pouvoir sanctionner | AC-PUB-01 |
 | US-32 | En tant que propriétaire sans smartphone, je paie à la banque avec mon numéro de plaque fiscale | § H.9.1 |
@@ -2051,7 +2051,7 @@ La règle proposée par le dossier source — « billet sans IFA = non validable
 | Prérequis juridiques | Régime du domaine ; Loi PPP n° 18/016 (G21, G32) |
 | Release | SF : R3–R4 → v3.0 : R3–R4 |
 
-### H.27.16 Billetterie urbaine multi-opérateurs (socle RakaPay)
+### H.27.16 Billetterie urbaine multi-opérateurs RakaPay — y compris le pass des moto-taxis (wewa)
 
 | Rubrique | Contenu |
 |---|---|
@@ -2079,7 +2079,9 @@ La règle proposée par le dossier source — « billet sans IFA = non validable
 
 **Modèle économique ouvert** : des opérateurs privés (parkings privés, événements, espaces commerciaux, transporteurs privés) peuvent vendre leurs tickets ; **les ventes non publiques sont réglées directement à l'opérateur privé** ; les recettes publiques suivent exclusivement le circuit des comptes publics ; les **deux circuits sont séparés comptablement** et visibles. Une éventuelle redevance d'usage de la plateforme par les opérateurs privés est **une recette de la Province** fixée par acte et publiée, jamais une commission perçue par le prestataire technique (ARB-08) [ACTE REQUIS J25].
 
-### H.27.17 Moto-taxis — pass professionnel wewa
+#### H.27.16.1 Pass professionnel des moto-taxis (wewa) — composante de RakaPay
+
+Le pass wewa **fait partie intégrante de RakaPay** : c'est un ticket RakaPay à durée (jour, semaine, mois), premier cas d'usage de la billetterie, vendu, payé, contrôlé et rapproché par les mêmes fonctions que tous les autres tickets RakaPay (modules 76, 70, 71). Le module 81 n'est pas une verticale distincte : c'est l'extension de RakaPay qui porte le registre des motos, des conducteurs, des stations et des coopératives.
 
 | Rubrique | Contenu |
 |---|---|
@@ -2215,7 +2217,7 @@ Synthèse normative de la Spécification fonctionnelle v1.2, réécrite selon la
 | 78 | Hub de réconciliation aérienne | Données aériennes | Connecteurs BSP, GDS, DCS ; portail des agences ; IFA ; rapprochement | Mesures contraignantes seulement après arrêté | Passagers tracés ; écart de reversement | R3–R4 → R4 |
 | 79 | Plaque fiscale immobilière | Identité visible du bien | Plaque NFIU + QR ; statut d'occupation ; situation (agent habilité) ; paiement sans smartphone ; rapports journaliers | Montants non modifiables par l'agent ; scan public minimal | Maisons immatriculées ; conformité IF/IRL | R1–R2 → R2 |
 | 80 | CALCU | Contrôle de la dépense | Registre des comptes publics ; passerelle bancaire ; justificatifs ; score vert/ambre/rouge ; rapports numérotés | Ne bloque aucun paiement ; secret bancaire ; gel seulement par l'organe de contrôle selon la loi | Transactions vertes ; montants récupérés | R3–R4 → R4 |
-| 81 | Pass moto-taxis wewa | Identifier et libérer les wewa | Registre motos, conducteurs, stations ; pass non transférable ; gilet et autocollant QR ; paiement individuel ou groupé ; vérification passager ; espace coopérative ; période de grâce | Aucune espèce sur la route ; tarif fixé par l'acte ; wewa en vert = rien à payer ; aucune immobilisation algorithmique | Wewa enregistrés ; conformité ; paiement numérique ; plaintes | R1–R2 → R3 |
+| 81 | Pass moto-taxis wewa — extension de la billetterie RakaPay (module 76) | Identifier et libérer les wewa | Registre motos, conducteurs, stations ; pass non transférable ; gilet et autocollant QR ; paiement individuel ou groupé ; vérification passager ; espace coopérative ; période de grâce | Aucune espèce sur la route ; tarif fixé par l'acte ; wewa en vert = rien à payer ; aucune immobilisation algorithmique | Wewa enregistrés ; conformité ; paiement numérique ; plaintes | R1–R2 → R3 |
 
 **Intégrations clés (rappel de la Spécification)** : registre NIF (DGI) et RCCM sous convention (1) ; import de l'existant (2) ; opérateurs télécoms (6, 64) ; cadastre foncier et imagerie sous licence (8) ; énergie, eau, employeurs sous protocole (9) ; immatriculations et assurances (11) ; brasseries (17) ; banques, opérateurs de monnaie mobile, agrégateur agréé (28, 29) ; IATA/BSP, GDS, DCS, RVA, DGM (78) ; banques pour CALCU (80).
 
@@ -2276,7 +2278,7 @@ Les arbitrages ARB-01 à ARB-55 reprennent, dans l'ordre, les contradictions et 
 
 | ID | Incohérence | Position v3.0 | Justification |
 |---|---|---|---|
-| ARB-30 | Illustration wewa : « 100 000 wewa = 15 Md FC (≈ 6,5 M) … ≈ 33 M$ à 50 % » | Corrigée : 100 000 → ≈ 6,5 M USD ; 1 million → ≈ 65 M USD à conformité totale, ≈ 33 M USD à 50 % ; [EXEMPLE] [À VÉRIFIER] (§ H.27.17) | Arithmétique ; Annexe D du Cahier |
+| ARB-30 | Illustration wewa : « 100 000 wewa = 15 Md FC (≈ 6,5 M) … ≈ 33 M$ à 50 % » | Corrigée : 100 000 → ≈ 6,5 M USD ; 1 million → ≈ 65 M USD à conformité totale, ≈ 33 M USD à 50 % ; [EXEMPLE] [À VÉRIFIER] (§ H.27.16.1) | Arithmétique ; Annexe D du Cahier |
 | ARB-31 | Deux taux de change (2 859,2 budget 2025 ; 2 267,75 BCC 22/09/2026) | Taux désigné par la règle certifiée (module 89) ; tout scénario indique son taux | § 11.6, § 38.3 |
 | ARB-32 | 16 ou 17 verticales ; compositions divergentes | 17 verticales, composition réconciliée (§ H.5.3) | Exhaustivité |
 | ARB-33 | 11 états vs « six états » vs liste de six niveaux | Échelle v3.0 à 11 niveaux, seule référence ; vues agrégées autorisées | § 26.1 |
@@ -2363,7 +2365,7 @@ Les arbitrages ARB-01 à ARB-55 reprennent, dans l'ordre, les contradictions et 
 | § 11B | KIN PUB CONTROL | G09 (§ 8.2) | H.27.6 |
 | § 11C | KIN-AVIA FISCUS | § 11.3 (AVIA) | H.27.12 |
 | § 11D.1–11D.7 | Billetterie RakaPay | — | H.27.16 |
-| § 11D.8 | Pass wewa | § 13.8 | H.27.17 |
+| § 11D.8 | Pass wewa (composante RakaPay) | § 11.3, § 13.8 | H.27.16.1 |
 | § 12, § 12.1–12.3 | Rôles, contrôles, Constitution financière | § 12.1–12.6 | — |
 | § 12.4–12.5 | Rôles assistés, impossibilités, accès privilégiés | § 12.5 | H.6.1, H.6.2 |
 | § 12A | Invitations en cascade | § 12.7 | H.6.3 à H.6.9 |

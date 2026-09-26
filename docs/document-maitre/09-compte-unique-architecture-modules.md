@@ -274,12 +274,12 @@ L'analyse des processus, des risques et des documents de travail fait apparaîtr
 | 73 | Répartition légale des recettes | Calcul des parts légalement dues aux entités (province, ETD, etc.) sur recettes rapprochées ; aucun partage non fondé sur un texte | R3 |
 | 74 | Invitations et gestion des accès | Accès des agents publics uniquement sur invitation en cascade ; inscription publique réservée aux contribuables | R1 |
 | 75 | Stationnement intelligent | Zones, sessions, tarification réglementée, contrôle par plaque | R2 |
-| 76 | Billetterie urbaine multi-opérateurs | Droits d'accès à durée pour usages payants | R3 |
+| 76 | Billetterie urbaine multi-opérateurs (RakaPay) | Droits d'accès à durée pour usages payants ; inclut le pass des moto-taxis (module 81) | R3 |
 | 77 | Publicité extérieure augmentée | Registre et carte des supports, lecture optique, dossiers de constat | R2 |
 | 78 | Hub de réconciliation aérienne | Connecteurs de données aériennes, sous validation juridique | R4 |
 | 79 | Plaque fiscale immobilière | Plaque et QR par bâtiment, statut minimal au scan public | R2 |
 | 80 | Contrôle de la dépense publique | Registre des comptes publics, justificatifs, correspondance ; pour l'organe de contrôle compétent | R4 |
-| 81 | Pass professionnel des moto-taxis | Identification des motos et conducteurs, pass légal, fin des prélèvements informels | R3 |
+| 81 | Pass professionnel des moto-taxis (wewa) — **extension de la billetterie RakaPay** (module 76) | Registre des motos, conducteurs, stations et coopératives ; pass wewa vendu, payé et contrôlé comme un ticket RakaPay ; fin des prélèvements informels | R3 |
 | **82** | **Quitus fiscal numérique** | Délivrance instantanée, vérification par QR et API, révocation ; conditionnalité des services selon les textes | R1 |
 | **83** | **Échéanciers et plans de paiement** | Paiement fractionné lorsque la loi le permet ; suivi des défauts | R2 |
 | **84** | **Remboursements et restitutions** | Circuit distinct, quatre yeux, plafonds, rapprochement ; seule voie de sortie de fonds autorisée | R1 |
@@ -304,7 +304,8 @@ Les modules sectoriels sont regroupés en verticales qui partagent toutes le mê
 | MOSOLO Property | 7, 8, 9, 79 | Distinguer propriété déclarée, observée, vérifiée, contestée |
 | MOSOLO Rental | 9 | Distinguer taux de l'impôt et taux de retenue ; preuve avant liquidation |
 | MOSOLO Business | 10, 17, 56 | L'existence d'une activité ne vaut pas assujettissement |
-| MOSOLO Mobility | 11, 12, 13, 25, 81 | Coordination avec le pouvoir central (immatriculation) |
+| MOSOLO Mobility | 11, 12, 13, 25 | Coordination avec le pouvoir central (immatriculation) |
+| MOSOLO Billetterie RakaPay | 76, 70, 71, **81 (pass wewa)** | Le pass des moto-taxis fait partie de RakaPay : même moteur de tickets, mêmes paiements, mêmes contrôles ; tarif fixé par acte |
 | MOSOLO Parking | 14, 75 | Acte de zonage et barème requis |
 | MOSOLO Advertising | 15, 77 | Constat humain, pas de sanction automatique |
 | MOSOLO Telecom | 16 | Contentieux possible sur l'assiette ; dialogue avec les opérateurs |

@@ -209,7 +209,7 @@ Inscription par le représentant légal (N3 : RCCM, NIF, mandat), création de l
 | Profil | Objet principal | Titre ou obligation | Canal privilégié |
 |---|---|---|---|
 | Transporteur | Véhicule, ligne | Autorisation de transport ; embarquement | Application, USSD |
-| Moto-taxi | Moto, conducteur | Pass professionnel (après acte) | USSD, coopérative |
+| Moto-taxi (wewa) | Moto, conducteur | Pass wewa RakaPay — jour, semaine, mois (après acte) | USSD, coopérative |
 | Commerçant de marché | Étal | Titre journalier à mensuel | USSD, carte MOSOLO |
 | Annonceur | Support | Autorisation annuelle | Portail |
 | Organisateur d'événements | Événement | Autorisation + déclaration de billetterie | Portail |
