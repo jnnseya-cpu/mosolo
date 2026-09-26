@@ -1,17 +1,20 @@
-import { CURRENCIES, CURRENCY_CODES, LANGUAGES, LANGUAGE_CODES, ROLES, isCurrencyCode, isLanguageCode } from '@mosolo/shared';
+import { CURRENCIES, CURRENCY_CODES, LANGUAGES, LANGUAGE_CODES, isCurrencyCode, isLanguageCode, type LanguageCode } from '@mosolo/shared';
+import { useApp } from '../context';
+import { hasKey, isDraftLanguage, tr } from '../lib/i18n';
 import type { DemoUser } from '../lib/types';
 
-/** Libellé court d'un utilisateur de démo : le rôle (« Gouverneur », « Contribuable »…), nom complet en infobulle. */
-export function shortLabel(u: DemoUser, all: DemoUser[]): string {
-  const role = u.roles[0];
-  const base = role && role in ROLES ? ROLES[role as keyof typeof ROLES] : u.name;
-  const same = all.filter((x) => x.roles[0] === role);
+/** Libellé court d'un utilisateur de démo (« Agent de terrain », « DG DGIPK »…), nom complet en infobulle. */
+export function shortLabel(u: DemoUser, all: DemoUser[], lang: LanguageCode = 'fr'): string {
+  const role = u.roles[0] ?? '';
+  const key = `roleShort.${role}`;
+  const base = hasKey(key) ? tr(lang, key, { entity: u.entity ?? '' }).trim() : u.name;
+  const same = all.filter((x) => (x.roles[0] ?? '') === role);
   if (same.length <= 1) return base;
-  const n = u.name.replace(/\s*\((démo|contribuable fictif|locataire fictive)\)\s*/i, '').trim();
-  return `${base} · ${n.length > 22 ? n.slice(0, 21) + '…' : n}`;
+  if (role === 'R30' || role === 'R31') return `${base} · ${u.name.replace(/\s*\(.*\)\s*$/, '')}`;
+  const terr = u.territory?.[0];
+  if (terr && same.filter((x) => x.territory?.[0] === terr).length === 1) return `${base} · ${terr}`;
+  return `${base} n° ${same.indexOf(u) + 1}`;
 }
-import { useApp } from '../context';
-import { isDraftLanguage } from '../lib/i18n';
 
 /** Sélecteur de langue : noms natifs uniquement, jamais de drapeau (une langue n'est pas un pays). */
 export function LanguageSelector({ id = 'lang-select' }: { id?: string }) {
@@ -52,14 +55,14 @@ export function CurrencySelector({ id = 'currency-select' }: { id?: string }) {
 
 /** Utilisateur de démonstration (en-tête x-demo-user). */
 export function DemoUserSelector({ id = 'user-select' }: { id?: string }) {
-  const { users, usersError, user, setUserId, tr } = useApp();
+  const { users, usersError, user, setUserId, tr: t, lang } = useApp();
   return (
     <div className="ctl">
-      <label htmlFor={id} className="ctl-label">{tr('header.demoUser')}</label>
-      <select id={id} value={user?.id ?? ''} title={user ? `${user.name} — ${user.roles.join(', ')}` : undefined} disabled={users.length === 0} onChange={(e) => setUserId(e.target.value)}>
-        {users.length === 0 && <option value="">{usersError ? tr('header.usersUnavailable') : tr('common.loading')}</option>}
+      <label htmlFor={id} className="ctl-label">{t('header.demoUser')}</label>
+      <select id={id} className="user-select" value={user?.id ?? ''} title={user ? `${user.name} — ${user.roles.join(', ')}` : undefined} disabled={users.length === 0} onChange={(e) => setUserId(e.target.value)}>
+        {users.length === 0 && <option value="">{usersError ? t('header.usersUnavailable') : t('common.loading')}</option>}
         {users.map((u) => (
-          <option key={u.id} value={u.id} title={`${u.name} — ${u.roles.join(', ')}${u.entity ? ` · ${u.entity}` : ''}`}>{shortLabel(u, users)}</option>
+          <option key={u.id} value={u.id} title={`${u.name} — ${u.roles.join(', ')}${u.entity ? ` · ${u.entity}` : ''}`}>{shortLabel(u, users, lang)}</option>
         ))}
       </select>
     </div>

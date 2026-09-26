@@ -9,7 +9,7 @@ import type {
   CommunicationEvent, ResidentialSituation,
 } from '@mosolo/shared';
 
-export interface DemoUser { id: string; name: string; roles: string[]; entity?: string; taxpayerId?: string }
+export interface DemoUser { id: string; name: string; roles: string[]; entity?: string; taxpayerId?: string; territory?: string[] }
 
 export interface FiscalObject {
   id: string; category: string; label?: string; commune?: string; quartier?: string; localityRank?: number;

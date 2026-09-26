@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { CHANNELS, EVENTS, EVENT_CATEGORIES, LANGUAGES, LANGUAGE_CODES, type Channel, type CommunicationEvent, type Severity } from '@mosolo/shared';
+import { CHANNELS, EVENTS, getEvent, EVENT_CATEGORIES, LANGUAGES, LANGUAGE_CODES, type Channel, type CommunicationEvent, type Severity } from '@mosolo/shared';
 import { useApp } from '../context';
 import { useApi } from '../hooks/useApi';
 import { PageHead } from '../components/Shell';
@@ -51,7 +51,8 @@ function DeliveryRow({ d }: { d: Delivery }) {
         <StatusBadge tone={st.tone} label={tr(st.key)} />
         <time className="small muted nowrap delivery-time" dateTime={d.at ?? d.createdAt}>{fmtDate(d.at ?? d.createdAt, true)}</time>
       </div>
-      <p className="mono small row-title truncate" title={d.eventCode}>{d.eventCode}</p>
+      <p className="row-title">{getEvent(d.eventCode)?.libelle ?? d.eventCode}</p>
+      <p className="mono small muted truncate" title={d.eventCode}>{d.eventCode}</p>
       <p className="small muted truncate">{d.provider ?? '—'}{d.recipient ? ` · ${d.recipient}` : ''}</p>
     </li>
   );
@@ -128,9 +129,9 @@ export default function Communications() {
         <div><dt>{tr('comms.catalogue')}</dt><dd>{nf(o.catalogue.events)}</dd></div>
         <div><dt>{tr('comms.categories')}</dt><dd>{nf(o.catalogue.categories)}</dd></div>
         <div><dt>{tr('comms.mandatory')}</dt><dd>{nf(o.catalogue.mandatory)}<span className="stat-note">{tr('comms.mandatoryHint')}</span></dd></div>
-        <div><dt>{tr('comms.delivered')}</dt><dd>{nf(o.delivered.delivered)}<span className="stat-of"> / {nf(o.delivered.attempted)}</span></dd></div>
-        <div><dt>{tr('comms.channels')}</dt><dd>{connected}<span className="stat-of"> / {CHANNELS.length}</span>
-          {Array.isArray(o.connectedChannels) && <span className="stat-note">{o.connectedChannels.map((c) => tr(`channel.short.${c}` as UIKey)).join(' · ')}</span>}</dd></div>
+        <div><dt>{tr('comms.processed')}</dt><dd>{nf(o.delivered.attempted)}<span className="stat-note">{tr('comms.processedNote', { d: nf(o.delivered.delivered), s: nf(Math.max(0, o.delivered.attempted - o.delivered.delivered)) })}</span></dd></div>
+        <div><dt>{tr('comms.production')}</dt><dd>{connected}<span className="stat-of"> / {CHANNELS.length}</span>
+          <span className="stat-note">{tr('comms.productionNote', { n: CHANNELS.length - connected })}</span></dd></div>
       </dl>
 
       <div className="dash-grid">

@@ -13,6 +13,8 @@ import { MapStatusChip } from '../components/MapStatusChip';
 import { AutosaveBar } from '../components/VersionHistory';
 import { EmptyState, ErrorState, Loading } from '../components/States';
 import { Icon } from '../components/Icon';
+import { QrCode } from '../components/QrCode';
+import { categoryLabel, levelLabel } from '../lib/labels';
 import { api, ApiError, describeError, newIdempotencyKey, safeGet } from '../lib/api';
 import { OBLIGATION_TONE, PAYMENT_TONE, RECEIPT_TONE, obligationKey } from '../lib/status';
 import type { UIKey } from '../lib/i18n';
@@ -214,7 +216,7 @@ function ContestForm({ ob }: { ob: Obligation }) {
 type Panel = { kind: 'explain' | 'pay' | 'contest'; ob: Obligation } | null;
 
 export default function TaxpayerSpace() {
-  const { tr, user, users, setUserId, fmtDate } = useApp();
+  const { tr, user, users, setUserId, fmtDate, lang } = useApp();
   const isTaxpayer = !!user?.roles.some((r) => r === 'R30' || r === 'R31');
   const demoTaxpayer = users.find((u) => u.roles.includes('R30'));
   const taxpayerId = (isTaxpayer ? user?.taxpayerId ?? user?.id : null) ?? safeGet('mosolo.taxpayerId') ?? demoTaxpayer?.taxpayerId ?? demoTaxpayer?.id ?? null;
@@ -229,12 +231,12 @@ export default function TaxpayerSpace() {
 
   return (
     <div className="page">
-      <PageHead eyebrow={tr('nav.taxpayer')} title={p ? tr('taxpayer.welcome', { name: p.fullName ?? p.name ?? '' }) : tr('nav.taxpayer')}
+      <PageHead eyebrow={tr('nav.taxpayer')} title={p && (p.fullName ?? p.name) ? tr('space.title', { name: p.fullName ?? p.name ?? '' }) : tr('nav.taxpayer')}
         lead={tr('space.lead')}>
         {p && (
           <dl className="head-facts">
             {p.iuc && <div><dt>{tr('reg.iuc')}</dt><dd className="mono">{p.iuc}</dd></div>}
-            {p.verificationLevel && <div><dt>{tr('reg.level')}</dt><dd>{p.verificationLevel}</dd></div>}
+            {p.verificationLevel && <div><dt>{tr('reg.level')}</dt><dd>{levelLabel(lang, p.verificationLevel)}</dd></div>}
           </dl>
         )}
       </PageHead>
@@ -285,7 +287,7 @@ export default function TaxpayerSpace() {
                 {p.objects!.map((o) => (
                   <li key={o.id} className="list-row">
                     <div>
-                      <p className="row-title">{o.label ?? o.category}</p>
+                      <p className="row-title">{o.label ?? categoryLabel(lang, o.category)}</p>
                       <p className="small muted">{[o.commune, o.quartier].filter(Boolean).join(' · ')}{o.localityRank ? ` · ${tr('space.rank', { n: o.localityRank })}` : ''} · <span className="mono">{o.identifier ?? o.id}</span></p>
                     </div>
                     <div className="row-side">
@@ -304,13 +306,23 @@ export default function TaxpayerSpace() {
               <ul className="list-rows">
                 {p.receipts!.map((r: Receipt) => {
                   const st = RECEIPT_TONE[r.status] ?? { tone: 'neutral' as const, key: 'receipt.provisional' as UIKey };
-                  const qrText = r.qrPayload ?? r.qr ?? `${window.location.origin}/verifier/${r.code}`;
+                  const verifyUrl = `${window.location.origin}/verifier/${encodeURIComponent(r.code)}`;
+                  const tech = r.qrPayload ?? r.qr;
                   return (
-                    <li key={r.id} className="list-row">
+                    <li key={r.id} className="list-row receipt-row">
+                      <figure className="receipt-qr">
+                        <QrCode value={verifyUrl} alt={tr('receipt.qrAlt', { code: r.code })} />
+                        <figcaption className="mono small">{r.code}</figcaption>
+                      </figure>
                       <div className="min0">
-                        <p className="row-title mono">{r.number ?? r.code}</p>
+                        <p className="row-title">{r.number ?? r.code}</p>
                         <p className="small muted">{fmtDate(r.issuedAt, true)}{r.category ? ` · ${r.category}` : ''}</p>
-                        <p className="qr-text mono small" title={tr('space.qrText')}><Icon name="qr" size={14} /> {qrText}</p>
+                        {tech && (
+                          <details className="tech">
+                            <summary className="small">{tr('receipt.tech')}</summary>
+                            <p className="mono small hash">{tech}</p>
+                          </details>
+                        )}
                       </div>
                       <div className="row-side">
                         {r.amount && <MoneyText money={r.amount} />}

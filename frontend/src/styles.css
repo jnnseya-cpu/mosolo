@@ -160,6 +160,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; font-variant-num
   .hdr-controls { display: flex !important; width: auto; order: 0; padding: 0; align-items: flex-end; }
   .hdr-controls .ctl { width: auto; }
   .hdr-controls select { width: auto; max-width: 240px; min-height: 36px; }
+  .hdr-controls select.user-select { max-width: none; min-width: 200px; }
   .hdr-settings { display: none !important; }
   .ctl-label { font-size: 10px; }
 }
@@ -697,3 +698,15 @@ input[type='file'] { font-size: 13.5px; max-width: 100%; }
 .money-indicative { font-size: 12px; color: var(--ink-3); }
 
 @media (max-width: 719px) { .badge { white-space: normal; max-width: 100%; } }
+.receipt-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; column-gap: 16px; }
+.receipt-row .row-side { grid-column: 1 / -1; justify-content: flex-start; }
+@media (min-width: 720px) { .receipt-row { grid-template-columns: auto minmax(0, 1fr) auto; } .receipt-row .row-side { grid-column: auto; justify-content: flex-end; } }
+.receipt-qr { display: grid; justify-items: center; gap: 4px; }
+.receipt-qr figcaption { color: var(--ink-2); letter-spacing: 0.04em; }
+.qr-box { background: #fff; border: 1px solid var(--line); border-radius: 4px; padding: 4px; image-rendering: pixelated; }
+.tech { margin-top: 8px; }
+.tech summary { cursor: pointer; color: var(--ink-3); min-height: 32px; display: inline-flex; align-items: center; }
+.tech p { margin-top: 4px; color: var(--ink-3); }
+.nowrap-cell { white-space: nowrap; }
+.nature { display: inline-block; margin-left: 8px; font-size: 11px; font-weight: 500; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--ink-2); background: var(--surface-2); vertical-align: middle; }
+.account-code { display: block; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }

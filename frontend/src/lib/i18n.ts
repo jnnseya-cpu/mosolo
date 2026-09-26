@@ -21,6 +21,11 @@ export function tr(lang: LanguageCode, key: UIKey, vars: Record<string, string |
   return raw.replace(/\{\{(\w+)\}\}/g, (_, k: string) => (k in vars ? String(vars[k]) : `{{${k}}}`));
 }
 
+/** Vrai si la clé existe (partagée ou propre au frontend). */
+export function hasKey(key: string): key is UIKey {
+  return isSharedKey(key) || key in EXTRA_FR;
+}
+
 export function isDraftLanguage(lang: LanguageCode): boolean {
   return LANGUAGES[lang].status === 'brouillon';
 }

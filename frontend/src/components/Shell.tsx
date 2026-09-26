@@ -26,7 +26,30 @@ export const NAV: NavItem[] = [
 const GROUPS: { id: NavItem['group']; key: UIKey }[] = [
   { id: 'public', key: 'nav.group.public' }, { id: 'pilotage', key: 'nav.group.pilotage' }, { id: 'operations', key: 'nav.group.operations' },
 ];
-const BOTTOM = ['/', '/espace', '/verifier', '/gouverneur'];
+const SHORT: Record<string, UIKey> = {
+  '/gouverneur': 'nav.governorShort', '/verifier': 'nav.verifyShort', '/registre': 'nav.rulesShort', '/tresor': 'nav.treasuryShort',
+  '/communications': 'nav.commsShort', '/ia': 'nav.aiShort', '/inscription': 'nav.register',
+};
+
+/** Sections visibles selon les rôles (les routes restent accessibles par URL). */
+const ROLE_ROUTES: [string[], string[]][] = [
+  [['R30', 'R31'], ['/inscription', '/espace', '/verifier']],
+  [['R01', 'R02', 'R03', 'R04', 'R05'], ['/gouverneur', '/ia', '/verifier']],
+  [['R06', 'R07', 'R08'], ['/communications', '/registre', '/ia']],
+  [['R13', 'R14', 'R15', 'R16'], ['/registre']],
+  [['R17', 'R18', 'R19'], ['/tresor']],
+  [['R09', 'R10', 'R11'], ['/terrain']],
+  [['R22', 'R23', 'R24', 'R28'], ['/audit', '/tresor']],
+  [['R26'], ['/communications', '/audit']],
+];
+
+export function visibleNav(roles: string[] | undefined): NavItem[] {
+  if (!roles) return NAV; // utilisateurs inconnus (hors ligne) : tout afficher
+  const allowed = new Set<string>(['/']);
+  for (const [rs, routes] of ROLE_ROUTES) if (roles.some((r) => rs.includes(r))) routes.forEach((x) => allowed.add(x));
+  if (allowed.size === 1) allowed.add('/verifier');
+  return NAV.filter((n) => allowed.has(n.to));
+}
 
 export function OfflineBanner() {
   const online = useOnline();
@@ -96,14 +119,15 @@ function Header() {
 }
 
 function Sidebar() {
-  const { tr } = useApp();
+  const { tr, user } = useApp();
+  const items = visibleNav(user?.roles);
   return (
     <nav className="sidebar" aria-label={tr('nav.main')}>
-      {GROUPS.map((g) => (
+      {GROUPS.filter((g) => items.some((n) => n.group === g.id)).map((g) => (
         <div className="side-group" key={g.id}>
           <p className="side-label">{tr(g.key)}</p>
           <ul>
-            {NAV.filter((n) => n.group === g.id).map((n) => (
+            {items.filter((n) => n.group === g.id).map((n) => (
               <li key={n.to}>
                 <NavLink to={n.to} end={n.to === '/'} className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`}>
                   <Icon name={n.icon} size={18} /> <span>{tr(n.key)}</span>
@@ -119,31 +143,36 @@ function Sidebar() {
 }
 
 function BottomNav() {
-  const { tr } = useApp();
+  const { tr, user } = useApp();
+  const items = visibleNav(user?.roles);
+  const hasMore = items.length > 5;
+  const bottom = hasMore ? items.slice(0, 4) : items;
   const [more, setMore] = useState(false);
   const loc = useLocation();
   useEffect(() => setMore(false), [loc.pathname]);
   return (
     <>
-      <nav className="bottom-nav" aria-label={tr('nav.main')}>
-        {NAV.filter((n) => BOTTOM.includes(n.to)).map((n) => (
+      <nav className="bottom-nav" aria-label={tr('nav.main')} style={{ gridTemplateColumns: `repeat(${bottom.length + (hasMore ? 1 : 0)}, 1fr)` }}>
+        {bottom.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.to === '/'} className={({ isActive }) => `bn-link ${isActive ? 'active' : ''}`}>
             <Icon name={n.icon} size={22} />
-            <span>{tr(n.key === 'nav.governor' ? 'nav.governorShort' : n.key === 'nav.verify' ? 'nav.verifyShort' : n.key)}</span>
+            <span>{tr(SHORT[n.to] ?? n.key)}</span>
           </NavLink>
         ))}
-        <button type="button" className={`bn-link ${more ? 'active' : ''}`} aria-expanded={more} aria-controls="more-sheet" onClick={() => setMore((v) => !v)}>
-          <Icon name="menu" size={22} /><span>{tr('nav.more')}</span>
-        </button>
+        {hasMore && (
+          <button type="button" className={`bn-link ${more ? 'active' : ''}`} aria-expanded={more} aria-controls="more-sheet" onClick={() => setMore((v) => !v)}>
+            <Icon name="menu" size={22} /><span>{tr('nav.more')}</span>
+          </button>
+        )}
       </nav>
       {more && (
         <div className="sheet-backdrop" onClick={() => setMore(false)}>
           <div className="sheet" id="more-sheet" role="dialog" aria-modal="true" aria-label={tr('nav.more')} onClick={(e) => e.stopPropagation()}>
-            {GROUPS.map((g) => (
+            {GROUPS.filter((g) => items.some((n) => n.group === g.id)).map((g) => (
               <div key={g.id} className="sheet-group">
                 <p className="side-label">{tr(g.key)}</p>
                 <ul>
-                  {NAV.filter((n) => n.group === g.id).map((n) => (
+                  {items.filter((n) => n.group === g.id).map((n) => (
                     <li key={n.to}>
                       <NavLink to={n.to} end={n.to === '/'} className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`}>
                         <Icon name={n.icon} size={18} /> <span>{tr(n.key)}</span>

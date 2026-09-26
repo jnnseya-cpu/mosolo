@@ -7,11 +7,12 @@ import { ErrorState, Loading } from '../components/States';
 import { Icon } from '../components/Icon';
 import { api, asList } from '../lib/api';
 import type { AuditEvent, AuditVerify } from '../lib/types';
+import { auditActionLabel } from '../lib/labels';
 
 type Ev = Omit<AuditEvent, 'actor'> & { resourceType?: string; resourceId?: string; outcome?: string; actor?: string | { id?: string; kind?: string } };
 
 export default function Audit() {
-  const { tr, fmtDate, user } = useApp();
+  const { tr, fmtDate, user, lang } = useApp();
   const v = useApi(() => api<AuditVerify>('/v1/audit/verify'), [user?.id]);
   const ev = useApi(async () => asList<Ev>(await api<unknown>('/v1/audit/events'), 'events', 'records'), [user?.id]);
   const events = (ev.data ?? []).slice().reverse();
@@ -48,7 +49,7 @@ export default function Audit() {
               { key: 'seq', label: '#', num: true, render: (e) => <span className="mono">{e.seq ?? '—'}</span> },
               { key: 'at', label: tr('audit.at'), render: (e) => fmtDate(e.at ?? e.timestamp, true) },
               { key: 'actor', label: tr('audit.actor'), render: (e) => <span className="mono small">{actor(e)}</span> },
-              { key: 'action', label: tr('audit.action'), primary: true, render: (e) => <span className="mono">{e.action ?? e.type}</span> },
+              { key: 'action', label: tr('audit.action'), primary: true, render: (e) => <><span className="row-title">{auditActionLabel(lang, e.action ?? e.type ?? '')}</span><span className="account-code">{e.action ?? e.type}</span></> },
               { key: 'res', label: tr('audit.resource'), render: (e) => <span className="small">{[e.resourceType, e.resourceId ?? e.subject].filter(Boolean).join(' · ') || '—'}</span> },
               { key: 'hash', label: tr('audit.hash'), render: (e) => <span className="mono small hash">{e.hash ? `${e.hash.slice(0, 12)}…` : '—'}</span> },
             ]} />

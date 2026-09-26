@@ -14,6 +14,7 @@ import { EmptyState, ErrorState, Loading } from '../components/States';
 import { Icon } from '../components/Icon';
 import { api, asList, describeError, safeGet, safeSet } from '../lib/api';
 import type { UIKey } from '../lib/i18n';
+import { ledgerLabel } from '../lib/labels';
 import type { ReconciliationException, VaultChangeRequest } from '../lib/types';
 
 interface Balance {
@@ -28,6 +29,9 @@ interface StatementResult { statementId?: string; lines?: number; matched?: { pa
 
 const today = () => new Date().toISOString().slice(0, 10);
 const newLine = (): Line => ({ accountAlias: 'KIN-DGIPK-RECETTES-01', amount: '', currency: 'USD', valueDate: today(), paymentReference: '' });
+/** Solde présenté en valeur absolue avec sa nature (jamais de montant négatif affiché). */
+const absMoney = (m: MoneyJSON): MoneyJSON => ({ ...m, amount: m.amount.replace(/^-/, '') });
+const natureKey = (m: MoneyJSON) => (/^-/.test(m.amount) ? 'ledger.creditor' : /^0+(\.0+)?$/.test(m.amount) ? 'ledger.nil' : 'ledger.debtor') as 'ledger.creditor';
 const VAULT_KEY = 'mosolo.vaultRequests';
 const VAULT_TONE: Record<string, Tone> = { EN_ATTENTE_APPROBATION: 'warning', EN_REFROIDISSEMENT: 'info', EFFECTIF: 'good' };
 
@@ -220,7 +224,7 @@ export default function Treasury() {
               {(bal.data.accounts?.length ?? 0) > 0 && (
                 <ul className="list-rows compact-rows">
                   {bal.data.accounts!.map((a) => (
-                    <li key={`${a.account}-${a.currency}`} className="list-row"><div className="min0"><p className="row-title">{a.label ?? a.account}</p><p className="small mono muted">{a.account}</p></div><div className="row-side"><MoneyText money={a.balance} showIndicative={false} /></div></li>
+                    <li key={`${a.account}-${a.currency}`} className="list-row"><div className="min0"><p className="row-title">{ledgerLabel(lang, a.account)}</p><span className="account-code">{a.account}</span></div><div className="row-side"><MoneyText money={absMoney(a.balance)} showIndicative={false} /><span className="nature">{tr(natureKey(a.balance))}</span></div></li>
                   ))}
                 </ul>
               )}

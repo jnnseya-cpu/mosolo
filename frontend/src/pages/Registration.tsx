@@ -9,6 +9,7 @@ import { Icon } from '../components/Icon';
 import { StatusBadge } from '../components/StatusBadge';
 import { api, describeError, safeSet } from '../lib/api';
 import { isDraftLanguage, type UIKey } from '../lib/i18n';
+import { levelLabel } from '../lib/labels';
 import type { RegistrationInput, RegistrationResult } from '../lib/types';
 
 const PHONE_RE = /^\+?243\s?[0-9 ]{9,12}$|^0[0-9 ]{9,11}$/;
@@ -63,7 +64,7 @@ export default function Registration() {
               <dl className="kv">
                 <div><dt>{tr('reg.iuc')}</dt><dd className="mono">{result.iuc}</dd></div>
                 <div><dt>{tr('reg.taxpayerId')}</dt><dd className="mono">{result.taxpayerId}</dd></div>
-                <div><dt>{tr('reg.level')}</dt><dd>{result.verificationLevel} — {tr(`level.${result.verificationLevel}` as UIKey)}</dd></div>
+                <div><dt>{tr('reg.level')}</dt><dd>{levelLabel(lang, result.verificationLevel)}</dd></div>
               </dl>
               <p className="small muted">{tr('reg.next')}</p>
               <Link className="btn btn-primary" to="/espace">{tr('home.cta.space')}</Link>

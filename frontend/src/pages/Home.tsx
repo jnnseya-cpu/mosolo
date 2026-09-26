@@ -4,7 +4,7 @@ import { EVENTS, EVENT_CATEGORIES } from '@mosolo/shared';
 import { useApp } from '../context';
 import { CityNight } from '../components/CityNight';
 import { Icon } from '../components/Icon';
-import { InstallButton, NAV } from '../components/Shell';
+import { InstallButton, visibleNav } from '../components/Shell';
 import { MakerMark, Tricolour } from '../components/Brand';
 import type { UIKey } from '../lib/i18n';
 
@@ -76,10 +76,10 @@ function ChainTimeline() {
 }
 
 export default function Home() {
-  const { tr, lang } = useApp();
+  const { tr, lang, user } = useApp();
   const mandatory = EVENTS.filter((e) => e.obligatoire).length;
   const nf = (n: number) => n.toLocaleString(lang === 'en' ? 'en-GB' : 'fr-FR');
-  const areas = NAV.filter((n) => n.to !== '/');
+  const areas = visibleNav(user?.roles).filter((n) => n.to !== '/');
   return (
     <div className="landing">
       {/* 1. Ouverture institutionnelle : visuel officiel, non modifié, logo jamais recadré */}

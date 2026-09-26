@@ -241,9 +241,9 @@ export default function LegalRegister() {
           rows={rules}
           rowKey={(r) => r.id}
           columns={[
-            { key: 'code', label: tr('rules.f.code'), primary: true, render: (r) => <><span className="mono">{r.code}</span> <span className="muted small">v{r.version}</span></> },
+            { key: 'code', label: tr('rules.f.code'), primary: true, render: (r) => <span className="nowrap-cell"><span className="mono">{r.code}</span> <span className="muted small">v{r.version}</span></span> },
             { key: 'label', label: tr('rules.f.label'), render: (r) => r.label },
-            { key: 'cur', label: tr('rules.f.currency'), render: (r) => `${CURRENCIES[r.currency]?.flag ?? ''} ${r.currency}` },
+            { key: 'cur', label: tr('rules.f.currency'), render: (r) => <span className="nowrap-cell">{CURRENCIES[r.currency]?.flag ?? ''}&nbsp;{r.currency}</span> },
             { key: 'status', label: tr('space.col.status'), render: (r) => <RuleStatusBadge status={r.status} /> },
             { key: 'appr', label: tr('rules.approvals'), num: true, render: (r) => `${r.approvals.length} / 4` },
             { key: 'act', label: tr('space.col.actions'), render: (r) => <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpenId(r.id)}>{tr('rules.open')} <Icon name="chevronRight" size={16} /></button> },
