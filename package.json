@@ -1,0 +1,16 @@
+{
+  "name": "kinshasa-mosolo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "KINSHASA MOSOLO — système d'exploitation souverain des recettes de la Ville Province de Kinshasa (socle logiciel)",
+  "workspaces": ["shared", "backend", "frontend"],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "dev:backend": "npm run dev -w backend",
+    "dev:frontend": "npm run dev -w frontend",
+    "gen": "python3 tools/gen_evenements.py && python3 tools/gen_graphiques.py"
+  },
+  "engines": { "node": ">=20" }
+}

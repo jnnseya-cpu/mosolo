@@ -1,0 +1,4106 @@
+{
+ "version": 1,
+ "categories": [
+  {
+   "code": "identite",
+   "libelle": "Identité et compte"
+  },
+  {
+   "code": "securite",
+   "libelle": "Connexion et sécurité"
+  },
+  {
+   "code": "mandats",
+   "libelle": "Mandats et représentants"
+  },
+  {
+   "code": "objets",
+   "libelle": "Objets fiscaux et recensement"
+  },
+  {
+   "code": "locatif",
+   "libelle": "Foncier et locatif"
+  },
+  {
+   "code": "obligations",
+   "libelle": "Déclarations et liquidation"
+  },
+  {
+   "code": "paiements",
+   "libelle": "Paiements"
+  },
+  {
+   "code": "quittances",
+   "libelle": "Quittances et quitus"
+  },
+  {
+   "code": "titres",
+   "libelle": "Titres, autorisations et droits d'accès"
+  },
+  {
+   "code": "recouvrement",
+   "libelle": "Recouvrement et arriérés"
+  },
+  {
+   "code": "terrain",
+   "libelle": "Missions et contrôle terrain"
+  },
+  {
+   "code": "recours",
+   "libelle": "Réclamations et recours"
+  },
+  {
+   "code": "approbations",
+   "libelle": "Approbations et workflows (maker-checker)"
+  },
+  {
+   "code": "juridique",
+   "libelle": "Registre juridique et règles"
+  },
+  {
+   "code": "tresor",
+   "libelle": "Trésor, règlement et rapprochement"
+  },
+  {
+   "code": "fraude",
+   "libelle": "Anti-fraude et audit"
+  },
+  {
+   "code": "ia",
+   "libelle": "Agents d'intelligence artificielle"
+  },
+  {
+   "code": "pilotage",
+   "libelle": "Pilotage et tableaux de bord"
+  },
+  {
+   "code": "acces",
+   "libelle": "Invitations et accès des agents publics"
+  },
+  {
+   "code": "apprentissage",
+   "libelle": "Apprentissage et certification"
+  },
+  {
+   "code": "plateforme",
+   "libelle": "Plateforme et continuité"
+  },
+  {
+   "code": "donnees",
+   "libelle": "Données personnelles et consentement"
+  },
+  {
+   "code": "partenaires",
+   "libelle": "Partenaires, contrats et points de paiement"
+  }
+ ],
+ "evenements": [
+  {
+   "code": "account.registration.requested",
+   "categorie": "identite",
+   "libelle": "Inscription demandée",
+   "objet": "Bienvenue sur KINSHASA MOSOLO — confirmez votre compte",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.registration.received",
+   "categorie": "identite",
+   "libelle": "Inscription reçue",
+   "objet": "Nous avons bien reçu votre inscription",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.phone_verification_required",
+   "categorie": "identite",
+   "libelle": "Vérification du téléphone requise",
+   "objet": "Votre code de vérification MOSOLO",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "sms",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.email_verification_required",
+   "categorie": "identite",
+   "libelle": "Vérification du courriel requise",
+   "objet": "Confirmez votre adresse électronique",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.verification.level_upgraded",
+   "categorie": "identite",
+   "libelle": "Niveau de vérification relevé",
+   "objet": "Votre compte est désormais au niveau {{niveau}}",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.verification.failed",
+   "categorie": "identite",
+   "libelle": "Vérification non aboutie",
+   "objet": "La vérification de votre identité n'a pas abouti",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.verification.documents_requested",
+   "categorie": "identite",
+   "libelle": "Pièces demandées",
+   "objet": "Pièces nécessaires pour vérifier votre compte",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "ussd"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.verification.expired",
+   "categorie": "identite",
+   "libelle": "Vérification expirée",
+   "objet": "Votre lien de vérification a expiré",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.registration.abandoned",
+   "categorie": "identite",
+   "libelle": "Inscription inachevée",
+   "objet": "Terminez votre inscription MOSOLO",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.duplicate_suspected",
+   "categorie": "identite",
+   "libelle": "Doublon possible détecté",
+   "objet": "Un compte similaire existe peut-être",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.merge.proposed",
+   "categorie": "identite",
+   "libelle": "Rapprochement de comptes proposé",
+   "objet": "Rapprochement de comptes à confirmer",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.merge.completed",
+   "categorie": "identite",
+   "libelle": "Comptes rapprochés",
+   "objet": "Vos comptes ont été rapprochés",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.contact.changed",
+   "categorie": "identite",
+   "libelle": "Coordonnées modifiées",
+   "objet": "Vos coordonnées ont été modifiées",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.mosolo_card.issued",
+   "categorie": "identite",
+   "libelle": "Carte MOSOLO délivrée",
+   "objet": "Votre carte MOSOLO est prête",
+   "gravite": "success",
+   "canaux_defaut": [
+    "in-app",
+    "sms",
+    "svi"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.mosolo_card.revoked",
+   "categorie": "identite",
+   "libelle": "Carte MOSOLO révoquée",
+   "objet": "Votre carte MOSOLO a été révoquée",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "in-app",
+    "sms",
+    "svi"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.suspended",
+   "categorie": "identite",
+   "libelle": "Compte suspendu",
+   "objet": "Votre compte a été suspendu — motif et recours",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.reactivated",
+   "categorie": "identite",
+   "libelle": "Compte réactivé",
+   "objet": "Votre compte est réactivé",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "account.closed",
+   "categorie": "identite",
+   "libelle": "Compte clôturé",
+   "objet": "Votre compte a été clôturé",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "auth.login.success",
+   "categorie": "securite",
+   "libelle": "Connexion réussie",
+   "objet": "Nouvelle connexion à votre compte",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "auth.login.failed",
+   "categorie": "securite",
+   "libelle": "Échec de connexion",
+   "objet": "Tentative de connexion échouée",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "auth.login.suspicious",
+   "categorie": "securite",
+   "libelle": "Connexion suspecte",
+   "objet": "Connexion inhabituelle détectée",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "auth.device.new",
+   "categorie": "securite",
+   "libelle": "Nouvel appareil",
+   "objet": "Un nouvel appareil s'est connecté",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "auth.device.revoked",
+   "categorie": "securite",
+   "libelle": "Appareil révoqué",
+   "objet": "Un appareil a été révoqué",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "auth.otp_code",
+   "categorie": "securite",
+   "libelle": "Code à usage unique",
+   "objet": "Votre code MOSOLO : {{code}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "sms",
+    "svi"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "auth.recovery.requested",
+   "categorie": "securite",
+   "libelle": "Récupération de compte demandée",
+   "objet": "Demande de récupération de votre compte",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "auth.recovery.completed",
+   "categorie": "securite",
+   "libelle": "Récupération effectuée",
+   "objet": "Votre accès a été rétabli",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "auth.password.changed",
+   "categorie": "securite",
+   "libelle": "Mot de passe modifié",
+   "objet": "Votre mot de passe a été modifié",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "auth.mfa.enabled",
+   "categorie": "securite",
+   "libelle": "Double authentification activée",
+   "objet": "Double authentification activée",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "auth.mfa.disabled",
+   "categorie": "securite",
+   "libelle": "Double authentification désactivée",
+   "objet": "Double authentification désactivée",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "auth.passkey.registered",
+   "categorie": "securite",
+   "libelle": "Clé d'accès enregistrée",
+   "objet": "Nouvelle clé d'accès enregistrée",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "auth.account.locked",
+   "categorie": "securite",
+   "libelle": "Compte verrouillé",
+   "objet": "Votre compte a été verrouillé",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "auth.session.revoked",
+   "categorie": "securite",
+   "libelle": "Session fermée",
+   "objet": "Une session a été fermée",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "auth.privileged_access.granted",
+   "categorie": "securite",
+   "libelle": "Accès privilégié accordé",
+   "objet": "Accès privilégié temporaire accordé jusqu'à {{fin}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "auth.privileged_access.expired",
+   "categorie": "securite",
+   "libelle": "Accès privilégié expiré",
+   "objet": "Votre accès privilégié a expiré",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "auth.break_glass.used",
+   "categorie": "securite",
+   "libelle": "Accès d'urgence utilisé",
+   "objet": "Accès « bris de glace » utilisé — revue requise",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "mandate.requested",
+   "categorie": "mandats",
+   "libelle": "Mandat demandé",
+   "objet": "{{mandataire}} demande à vous représenter",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "mandate.granted",
+   "categorie": "mandats",
+   "libelle": "Mandat accordé",
+   "objet": "Mandat accordé à {{mandataire}}",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "mandate.revoked",
+   "categorie": "mandats",
+   "libelle": "Mandat révoqué",
+   "objet": "Mandat révoqué",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "mandate.expiring",
+   "categorie": "mandats",
+   "libelle": "Mandat bientôt expiré",
+   "objet": "Votre mandat expire le {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "mandate.action_performed",
+   "categorie": "mandats",
+   "libelle": "Action d'un mandataire",
+   "objet": "{{mandataire}} a effectué une action sur votre compte",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "object.declared",
+   "categorie": "objets",
+   "libelle": "Bien ou activité déclaré",
+   "objet": "Déclaration enregistrée : {{objet}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "object.provisional.created",
+   "categorie": "objets",
+   "libelle": "Objet recensé",
+   "objet": "Un bien vous concernant a été recensé : {{objet}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "ussd"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "object.link.requested",
+   "categorie": "objets",
+   "libelle": "Rattachement demandé",
+   "objet": "Demande de rattachement de {{objet}} reçue",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "object.link.approved",
+   "categorie": "objets",
+   "libelle": "Rattachement validé",
+   "objet": "{{objet}} est rattaché à votre compte",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "object.link.rejected",
+   "categorie": "objets",
+   "libelle": "Rattachement refusé",
+   "objet": "Rattachement de {{objet}} refusé — motif et recours",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "object.ownership.conflict",
+   "categorie": "objets",
+   "libelle": "Conflit de propriété",
+   "objet": "Un conflit concerne {{objet}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "object.characteristics.changed",
+   "categorie": "objets",
+   "libelle": "Caractéristiques modifiées",
+   "objet": "Les caractéristiques de {{objet}} ont été mises à jour",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "object.plate.issued",
+   "categorie": "objets",
+   "libelle": "Plaque fiscale délivrée",
+   "objet": "La plaque fiscale de {{objet}} est disponible",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app",
+    "sms",
+    "ussd"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "object.field_visit.scheduled",
+   "categorie": "objets",
+   "libelle": "Visite de vérification prévue",
+   "objet": "Visite de vérification prévue le {{date}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app",
+    "sms",
+    "ussd"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "object.field_visit.done",
+   "categorie": "objets",
+   "libelle": "Visite effectuée",
+   "objet": "Compte rendu de visite pour {{objet}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "lease.declared",
+   "categorie": "locatif",
+   "libelle": "Bail déclaré",
+   "objet": "Bail enregistré pour {{unite}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "lease.declared_by_tenant",
+   "categorie": "locatif",
+   "libelle": "Bail déclaré par un locataire",
+   "objet": "Un bail portant sur votre bien a été déclaré",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "lease.expiring",
+   "categorie": "locatif",
+   "libelle": "Bail arrivant à échéance",
+   "objet": "Le bail de {{unite}} expire le {{date}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "lease.ended",
+   "categorie": "locatif",
+   "libelle": "Fin de bail",
+   "objet": "Fin de bail enregistrée pour {{unite}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "rental.withholding.due",
+   "categorie": "locatif",
+   "libelle": "Retenue sur loyer à reverser",
+   "objet": "Retenue de {{montant}} à reverser avant le {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "rental.withholding.certificate",
+   "categorie": "locatif",
+   "libelle": "Attestation de retenue",
+   "objet": "Attestation de retenue disponible",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "rental.withholding.credited",
+   "categorie": "locatif",
+   "libelle": "Retenue imputée",
+   "objet": "Une retenue a été imputée sur votre impôt",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "rental.occupancy.inconsistency",
+   "categorie": "locatif",
+   "libelle": "Incohérence d'occupation",
+   "objet": "Vérification demandée pour {{objet}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "property.reclassification.proposed",
+   "categorie": "locatif",
+   "libelle": "Requalification proposée",
+   "objet": "Proposition de requalification de {{objet}} — vos observations",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "declaration.prefilled_ready",
+   "categorie": "obligations",
+   "libelle": "Déclaration pré-remplie prête",
+   "objet": "Votre déclaration {{exercice}} est prête",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "push",
+    "ussd"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "declaration.due_soon",
+   "categorie": "obligations",
+   "libelle": "Échéance de déclaration proche",
+   "objet": "Déclaration à déposer avant le {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "push",
+    "ussd",
+    "svi"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "declaration.submitted",
+   "categorie": "obligations",
+   "libelle": "Déclaration déposée",
+   "objet": "Déclaration déposée — accusé de réception",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "declaration.late",
+   "categorie": "obligations",
+   "libelle": "Déclaration en retard",
+   "objet": "Déclaration non déposée à l'échéance",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "ussd"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "declaration.deadline_extended",
+   "categorie": "obligations",
+   "libelle": "Échéance prorogée",
+   "objet": "L'échéance est prorogée au {{date}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "push",
+    "ussd",
+    "svi"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "assessment.issued",
+   "categorie": "obligations",
+   "libelle": "Avis d'imposition émis",
+   "objet": "Avis {{reference}} : {{montant}} dû avant le {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "ussd",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "assessment.explained",
+   "categorie": "obligations",
+   "libelle": "Explication du calcul",
+   "objet": "Comment votre montant a été calculé",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "assessment.rectified",
+   "categorie": "obligations",
+   "libelle": "Avis rectificatif",
+   "objet": "Avis rectificatif {{reference}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "assessment.cancelled",
+   "categorie": "obligations",
+   "libelle": "Avis annulé",
+   "objet": "Avis {{reference}} annulé — motif",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "obligation.due_soon",
+   "categorie": "obligations",
+   "libelle": "Échéance de paiement proche",
+   "objet": "{{montant}} à payer avant le {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "push",
+    "ussd",
+    "svi"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "obligation.due_today",
+   "categorie": "obligations",
+   "libelle": "Échéance aujourd'hui",
+   "objet": "Dernier jour pour payer {{reference}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "sms",
+    "push",
+    "ussd",
+    "svi"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "obligation.overdue",
+   "categorie": "obligations",
+   "libelle": "Obligation en retard",
+   "objet": "{{reference}} est en retard",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "ussd"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "exemption.requested",
+   "categorie": "obligations",
+   "libelle": "Exonération demandée",
+   "objet": "Demande d'exonération reçue",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "exemption.granted",
+   "categorie": "obligations",
+   "libelle": "Exonération accordée",
+   "objet": "Exonération accordée jusqu'au {{date}}",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "exemption.refused",
+   "categorie": "obligations",
+   "libelle": "Exonération refusée",
+   "objet": "Exonération refusée — motif et recours",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "exemption.expiring",
+   "categorie": "obligations",
+   "libelle": "Exonération bientôt expirée",
+   "objet": "Votre exonération expire le {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "installment_plan.granted",
+   "categorie": "obligations",
+   "libelle": "Échéancier accordé",
+   "objet": "Échéancier accordé : {{n}} versements",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "installment_plan.installment_due",
+   "categorie": "obligations",
+   "libelle": "Versement d'échéancier dû",
+   "objet": "Versement {{i}}/{{n}} dû le {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "sms",
+    "push",
+    "ussd"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "installment_plan.defaulted",
+   "categorie": "obligations",
+   "libelle": "Échéancier non respecté",
+   "objet": "Échéancier non respecté — conséquences",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "payment.reference.issued",
+   "categorie": "paiements",
+   "libelle": "Référence de paiement émise",
+   "objet": "Référence {{ref_paiement}} : {{montant}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app",
+    "sms",
+    "ussd"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "payment.initiated",
+   "categorie": "paiements",
+   "libelle": "Paiement initié",
+   "objet": "Paiement en cours de traitement",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "payment.confirmed",
+   "categorie": "paiements",
+   "libelle": "Paiement confirmé",
+   "objet": "Paiement de {{montant}} confirmé par {{canal}}",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "payment.failed",
+   "categorie": "paiements",
+   "libelle": "Paiement échoué",
+   "objet": "Votre paiement n'a pas abouti",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "in-app",
+    "sms",
+    "push"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "payment.duplicate_detected",
+   "categorie": "paiements",
+   "libelle": "Paiement en double détecté",
+   "objet": "Paiement en double détecté — remboursement ou imputation",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "payment.reversed",
+   "categorie": "paiements",
+   "libelle": "Paiement contrepassé",
+   "objet": "Paiement {{ref_paiement}} contrepassé",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "payment.disputed",
+   "categorie": "paiements",
+   "libelle": "Paiement contesté",
+   "objet": "Contestation de paiement enregistrée",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "payment.partial",
+   "categorie": "paiements",
+   "libelle": "Paiement partiel",
+   "objet": "Paiement partiel reçu — reste {{solde}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "payment.currency_converted",
+   "categorie": "paiements",
+   "libelle": "Conversion de devise appliquée",
+   "objet": "Paiement en {{devise_paiement}} converti au taux officiel du {{date}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "refund.requested",
+   "categorie": "paiements",
+   "libelle": "Remboursement demandé",
+   "objet": "Demande de remboursement reçue",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "refund.approved",
+   "categorie": "paiements",
+   "libelle": "Remboursement approuvé",
+   "objet": "Remboursement de {{montant}} approuvé",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "refund.paid",
+   "categorie": "paiements",
+   "libelle": "Remboursement versé",
+   "objet": "Remboursement de {{montant}} versé",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "refund.refused",
+   "categorie": "paiements",
+   "libelle": "Remboursement refusé",
+   "objet": "Remboursement refusé — motif et recours",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "payment_point.cash_receipt",
+   "categorie": "paiements",
+   "libelle": "Encaissement au point agréé",
+   "objet": "Reçu provisoire {{ref_paiement}} — quittance à suivre",
+   "gravite": "info",
+   "canaux_defaut": [
+    "sms",
+    "ussd"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "receipt.issued_provisional",
+   "categorie": "quittances",
+   "libelle": "Quittance provisoire émise",
+   "objet": "Quittance {{numero}} — en attente de règlement",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "ussd"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "receipt.finalized",
+   "categorie": "quittances",
+   "libelle": "Quittance définitive",
+   "objet": "Quittance {{numero}} définitive",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "receipt.cancelled",
+   "categorie": "quittances",
+   "libelle": "Quittance annulée",
+   "objet": "Quittance {{numero}} annulée — motif",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "receipt.replaced",
+   "categorie": "quittances",
+   "libelle": "Quittance remplacée",
+   "objet": "Quittance {{numero}} remplacée par {{nouveau_numero}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "receipt.verification.fraud_suspected",
+   "categorie": "quittances",
+   "libelle": "Vérification : fraude suspectée",
+   "objet": "Une quittance à votre nom a été signalée",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "clearance.issued",
+   "categorie": "quittances",
+   "libelle": "Quitus fiscal délivré",
+   "objet": "Votre quitus fiscal est disponible",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "clearance.expiring",
+   "categorie": "quittances",
+   "libelle": "Quitus bientôt expiré",
+   "objet": "Votre quitus expire le {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "clearance.revoked",
+   "categorie": "quittances",
+   "libelle": "Quitus suspendu",
+   "objet": "Votre quitus est suspendu — motif",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "clearance.verified_by_service",
+   "categorie": "quittances",
+   "libelle": "Quitus vérifié par un service",
+   "objet": "Votre quitus a été vérifié par {{service}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "permit.application.received",
+   "categorie": "titres",
+   "libelle": "Demande d'autorisation reçue",
+   "objet": "Demande {{titre}} reçue",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "permit.issued",
+   "categorie": "titres",
+   "libelle": "Autorisation délivrée",
+   "objet": "{{titre}} délivré, valable jusqu'au {{date}}",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "ussd"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "permit.refused",
+   "categorie": "titres",
+   "libelle": "Autorisation refusée",
+   "objet": "{{titre}} refusé — motif et recours",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "permit.expiring",
+   "categorie": "titres",
+   "libelle": "Titre bientôt expiré",
+   "objet": "{{titre}} expire le {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "push",
+    "ussd"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "permit.expired",
+   "categorie": "titres",
+   "libelle": "Titre expiré",
+   "objet": "{{titre}} a expiré",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "in-app",
+    "sms",
+    "push",
+    "ussd"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "permit.renewed",
+   "categorie": "titres",
+   "libelle": "Titre renouvelé",
+   "objet": "{{titre}} renouvelé",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "permit.suspended",
+   "categorie": "titres",
+   "libelle": "Titre suspendu",
+   "objet": "{{titre}} suspendu — motif et recours",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "ticket.purchased",
+   "categorie": "titres",
+   "libelle": "Ticket acheté",
+   "objet": "Ticket {{titre}} valable jusqu'à {{heure}}",
+   "gravite": "success",
+   "canaux_defaut": [
+    "in-app",
+    "sms",
+    "push",
+    "ussd"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "ticket.expiring",
+   "categorie": "titres",
+   "libelle": "Ticket bientôt expiré",
+   "objet": "Votre ticket expire dans {{minutes}} min",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "sms",
+    "push"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "ticket.extended",
+   "categorie": "titres",
+   "libelle": "Ticket prolongé",
+   "objet": "Ticket prolongé jusqu'à {{heure}}",
+   "gravite": "success",
+   "canaux_defaut": [
+    "sms",
+    "push"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "parking.violation.recorded",
+   "categorie": "titres",
+   "libelle": "Constat de stationnement",
+   "objet": "Constat {{reference}} — paiement ou contestation",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "ussd"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "recovery.reminder.1",
+   "categorie": "recouvrement",
+   "libelle": "Première relance",
+   "objet": "Rappel amiable : {{reference}} impayé",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "ussd",
+    "svi"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "recovery.reminder.2",
+   "categorie": "recouvrement",
+   "libelle": "Deuxième relance",
+   "objet": "Second rappel : {{reference}} impayé",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "ussd",
+    "svi"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "recovery.formal_notice",
+   "categorie": "recouvrement",
+   "libelle": "Mise en demeure",
+   "objet": "Mise en demeure {{reference}}",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "ussd",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "recovery.enforcement.proposed",
+   "categorie": "recouvrement",
+   "libelle": "Mesure d'exécution envisagée",
+   "objet": "Mesure d'exécution envisagée — vos droits",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "recovery.enforcement.decided",
+   "categorie": "recouvrement",
+   "libelle": "Mesure d'exécution décidée",
+   "objet": "Décision de mesure d'exécution {{reference}}",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "recovery.enforcement.lifted",
+   "categorie": "recouvrement",
+   "libelle": "Mesure levée",
+   "objet": "Mesure {{reference}} levée",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "recovery.regularisation_campaign",
+   "categorie": "recouvrement",
+   "libelle": "Campagne de régularisation",
+   "objet": "Régularisez votre situation avant le {{date}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "push",
+    "ussd",
+    "svi"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "recovery.arrears_statement",
+   "categorie": "recouvrement",
+   "libelle": "Relevé d'arriérés",
+   "objet": "Votre relevé d'arriérés",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "ussd"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "mission.assigned",
+   "categorie": "terrain",
+   "libelle": "Mission assignée",
+   "objet": "Mission {{mission}} assignée",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "mission.updated",
+   "categorie": "terrain",
+   "libelle": "Mission modifiée",
+   "objet": "Mission {{mission}} modifiée",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "mission.expiring_offline_data",
+   "categorie": "terrain",
+   "libelle": "Données hors ligne bientôt expirées",
+   "objet": "Synchronisez avant {{heure}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "mission.sync.completed",
+   "categorie": "terrain",
+   "libelle": "Synchronisation terminée",
+   "objet": "{{n}} constats synchronisés",
+   "gravite": "success",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "mission.sync.conflict",
+   "categorie": "terrain",
+   "libelle": "Conflit de synchronisation",
+   "objet": "Conflit sur {{objet}} — arbitrage requis",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "mission.geofence.breach",
+   "categorie": "terrain",
+   "libelle": "Sortie de zone",
+   "objet": "Constat hors zone de mission",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "inspection.qa.rejected",
+   "categorie": "terrain",
+   "libelle": "Constat rejeté en contrôle qualité",
+   "objet": "Constat {{reference}} rejeté — motif",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "inspection.report.issued",
+   "categorie": "terrain",
+   "libelle": "Procès-verbal émis",
+   "objet": "Procès-verbal {{reference}} — vos observations",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "device.lost_reported",
+   "categorie": "terrain",
+   "libelle": "Terminal déclaré perdu",
+   "objet": "Terminal {{appareil}} révoqué et effacé",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "appeal.submitted",
+   "categorie": "recours",
+   "libelle": "Réclamation déposée",
+   "objet": "Réclamation {{reference}} — accusé de réception",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "appeal.info_requested",
+   "categorie": "recours",
+   "libelle": "Complément demandé",
+   "objet": "Pièces complémentaires demandées",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "ussd"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "appeal.deadline_approaching",
+   "categorie": "recours",
+   "libelle": "Délai de décision proche",
+   "objet": "Décision attendue avant le {{date}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "appeal.decided",
+   "categorie": "recours",
+   "libelle": "Décision rendue",
+   "objet": "Décision sur votre réclamation {{reference}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "appeal.escalated",
+   "categorie": "recours",
+   "libelle": "Recours transmis",
+   "objet": "Votre recours a été transmis à {{autorite}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "appeal.sla_breach",
+   "categorie": "recours",
+   "libelle": "Délai légal dépassé",
+   "objet": "Réclamation {{reference}} hors délai",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "approval.requested",
+   "categorie": "approbations",
+   "libelle": "Approbation demandée",
+   "objet": "Approbation requise : {{objet}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "approval.reminder",
+   "categorie": "approbations",
+   "libelle": "Relance d'approbation",
+   "objet": "Rappel : approbation en attente pour {{objet}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "approval.approved",
+   "categorie": "approbations",
+   "libelle": "Approuvé",
+   "objet": "{{objet}} approuvé",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "approval.rejected",
+   "categorie": "approbations",
+   "libelle": "Rejeté",
+   "objet": "{{objet}} rejeté",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "approval.returned",
+   "categorie": "approbations",
+   "libelle": "Renvoyé pour correction",
+   "objet": "{{objet}} renvoyé pour correction",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "approval.escalated",
+   "categorie": "approbations",
+   "libelle": "Approbation escaladée",
+   "objet": "Approbation escaladée : {{objet}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "approval.sla_breach",
+   "categorie": "approbations",
+   "libelle": "Délai d'approbation dépassé",
+   "objet": "Délai dépassé : {{objet}}",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "approval.self_approval_blocked",
+   "categorie": "approbations",
+   "libelle": "Auto-approbation bloquée",
+   "objet": "Tentative d'auto-approbation bloquée",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "beneficiary.change.proposed",
+   "categorie": "approbations",
+   "libelle": "Changement de compte bénéficiaire proposé",
+   "objet": "Proposition de changement de compte public — quorum requis",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "beneficiary.change.cooling_off",
+   "categorie": "approbations",
+   "libelle": "Délai de refroidissement en cours",
+   "objet": "Changement de compte public effectif le {{date}} sauf opposition",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "beneficiary.change.effective",
+   "categorie": "approbations",
+   "libelle": "Changement de compte bénéficiaire effectif",
+   "objet": "Compte public modifié",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "beneficiary.change.blocked",
+   "categorie": "approbations",
+   "libelle": "Changement de compte bloqué",
+   "objet": "Changement de compte public bloqué",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "rule.draft.submitted",
+   "categorie": "juridique",
+   "libelle": "Règle soumise",
+   "objet": "Règle {{regle}} soumise à revue",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "rule.legal_review.done",
+   "categorie": "juridique",
+   "libelle": "Visa juridique",
+   "objet": "Visa juridique : {{regle}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "rule.financial_review.done",
+   "categorie": "juridique",
+   "libelle": "Visa financier",
+   "objet": "Visa financier : {{regle}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "rule.published",
+   "categorie": "juridique",
+   "libelle": "Règle publiée",
+   "objet": "Règle {{regle}} publiée, effet au {{date}}",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "rule.activated",
+   "categorie": "juridique",
+   "libelle": "Règle active",
+   "objet": "Règle {{regle}} active",
+   "gravite": "success",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "rule.expiring",
+   "categorie": "juridique",
+   "libelle": "Règle bientôt expirée",
+   "objet": "Règle {{regle}} expire le {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "rule.suspended",
+   "categorie": "juridique",
+   "libelle": "Règle suspendue",
+   "objet": "Règle {{regle}} suspendue",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "rule.conflict.detected",
+   "categorie": "juridique",
+   "libelle": "Conflit de règles",
+   "objet": "Double revendication d'un fait générateur",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "legal.instrument.abrogated",
+   "categorie": "juridique",
+   "libelle": "Texte abrogé",
+   "objet": "Le texte {{texte}} est abrogé — règles impactées",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "legal.change.public_notice",
+   "categorie": "juridique",
+   "libelle": "Information réglementaire",
+   "objet": "Changement de règle vous concernant",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "ussd"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "settlement.received",
+   "categorie": "tresor",
+   "libelle": "Règlement reçu",
+   "objet": "Relevé {{banque}} du {{date}} intégré",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "settlement.delayed",
+   "categorie": "tresor",
+   "libelle": "Règlement en retard",
+   "objet": "Règlement {{canal}} en retard de {{heures}} h",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "reconciliation.daily_completed",
+   "categorie": "tresor",
+   "libelle": "Rapprochement journalier terminé",
+   "objet": "Rapprochement du {{date}} : {{taux}} %",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "reconciliation.exception.opened",
+   "categorie": "tresor",
+   "libelle": "Exception de rapprochement",
+   "objet": "Exception {{reference}} ouverte",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "reconciliation.exception.aged",
+   "categorie": "tresor",
+   "libelle": "Exception ancienne",
+   "objet": "Exception {{reference}} ouverte depuis {{jours}} j",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "ledger.day_closed",
+   "categorie": "tresor",
+   "libelle": "Journée comptable clôturée",
+   "objet": "Clôture du {{date}} signée",
+   "gravite": "success",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "ledger.imbalance",
+   "categorie": "tresor",
+   "libelle": "Déséquilibre du grand livre",
+   "objet": "Déséquilibre détecté",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "fx.rate.published",
+   "categorie": "tresor",
+   "libelle": "Taux de change officiel intégré",
+   "objet": "Taux officiel du {{date}} intégré",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "fx.rate.missing",
+   "categorie": "tresor",
+   "libelle": "Taux de change manquant",
+   "objet": "Taux officiel du {{date}} absent",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "fraud.alert.raised",
+   "categorie": "fraude",
+   "libelle": "Alerte de fraude",
+   "objet": "Alerte {{reference}} — score {{score}}",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "fraud.case.opened",
+   "categorie": "fraude",
+   "libelle": "Dossier d'enquête ouvert",
+   "objet": "Enquête {{reference}} ouverte",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "fraud.case.closed",
+   "categorie": "fraude",
+   "libelle": "Dossier d'enquête clos",
+   "objet": "Enquête {{reference}} close",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "fraud.exemption_concentration",
+   "categorie": "fraude",
+   "libelle": "Concentration d'exonérations",
+   "objet": "Concentration anormale d'exonérations",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "fraud.cancellation_spike",
+   "categorie": "fraude",
+   "libelle": "Pic d'annulations",
+   "objet": "Pic d'annulations sur {{perimetre}}",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "fraud.fake_agent_reported",
+   "categorie": "fraude",
+   "libelle": "Faux agent signalé",
+   "objet": "Signalement de faux agent à {{lieu}}",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "fraud.cash_request_reported",
+   "categorie": "fraude",
+   "libelle": "Demande d'espèces signalée",
+   "objet": "Signalement de demande d'espèces",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "audit.log.integrity_failure",
+   "categorie": "fraude",
+   "libelle": "Rupture de la chaîne d'audit",
+   "objet": "Rupture d'intégrité du journal",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "audit.policy_violation",
+   "categorie": "fraude",
+   "libelle": "Violation de politique",
+   "objet": "Violation de politique détectée",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "audit.access_review.due",
+   "categorie": "fraude",
+   "libelle": "Revue d'accès due",
+   "objet": "Revue trimestrielle des accès à réaliser",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "whistleblower.report.received",
+   "categorie": "fraude",
+   "libelle": "Signalement reçu",
+   "objet": "Votre signalement {{reference}} est enregistré",
+   "gravite": "info",
+   "canaux_defaut": [
+    "sms",
+    "ussd",
+    "svi"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "ai.insight_generated",
+   "categorie": "ia",
+   "libelle": "Analyse produite",
+   "objet": "Nouvelle analyse de {{agent}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "ai.recommendation_available",
+   "categorie": "ia",
+   "libelle": "Recommandation disponible",
+   "objet": "Recommandation à examiner",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "ai.opportunity_identified",
+   "categorie": "ia",
+   "libelle": "Gisement identifié",
+   "objet": "Gisement de recettes identifié",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "ai.risk_detected",
+   "categorie": "ia",
+   "libelle": "Risque détecté",
+   "objet": "Alerte de risque",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "ai.forecast.updated",
+   "categorie": "ia",
+   "libelle": "Prévision mise à jour",
+   "objet": "Prévision {{periode}} mise à jour",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "ai.human_intervention_required",
+   "categorie": "ia",
+   "libelle": "Décision humaine requise",
+   "objet": "Action requise : {{objet}}",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "ai.model.drift_detected",
+   "categorie": "ia",
+   "libelle": "Dérive de modèle",
+   "objet": "Dérive détectée sur {{modele}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "ai.model.rollback",
+   "categorie": "ia",
+   "libelle": "Retour arrière de modèle",
+   "objet": "Modèle {{modele}} rétabli en version {{version}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "ai.workflow_failed",
+   "categorie": "ia",
+   "libelle": "Traitement IA échoué",
+   "objet": "Traitement {{objet}} échoué",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "report.generated",
+   "categorie": "pilotage",
+   "libelle": "Rapport produit",
+   "objet": "Rapport disponible : {{rapport}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "report.scheduled_ready",
+   "categorie": "pilotage",
+   "libelle": "Rapport périodique prêt",
+   "objet": "Votre rapport {{periode}} est prêt",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "kpi.threshold_breached",
+   "categorie": "pilotage",
+   "libelle": "Seuil d'indicateur franchi",
+   "objet": "Alerte indicateur : {{kpi}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "kpi.recovered",
+   "categorie": "pilotage",
+   "libelle": "Indicateur rétabli",
+   "objet": "Indicateur rétabli : {{kpi}}",
+   "gravite": "success",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "executive.alert",
+   "categorie": "pilotage",
+   "libelle": "Alerte exécutive",
+   "objet": "Alerte exécutive : {{objet}}",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "executive.daily_brief",
+   "categorie": "pilotage",
+   "libelle": "Note quotidienne",
+   "objet": "Note quotidienne des recettes du {{date}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "decision.follow_up_due",
+   "categorie": "pilotage",
+   "libelle": "Suivi de décision",
+   "objet": "Décision {{reference}} : échéance de mise en œuvre",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "transparency.published",
+   "categorie": "pilotage",
+   "libelle": "Publication de transparence",
+   "objet": "Tableau de transparence {{periode}} publié",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "invitation.sent",
+   "categorie": "acces",
+   "libelle": "Invitation envoyée",
+   "objet": "{{acteur}} vous invite à rejoindre {{entite}} sur MOSOLO",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "invitation.reminder",
+   "categorie": "acces",
+   "libelle": "Rappel d'invitation",
+   "objet": "Rappel : invitation à {{entite}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "invitation.accepted",
+   "categorie": "acces",
+   "libelle": "Invitation acceptée",
+   "objet": "{{nom}} a accepté votre invitation",
+   "gravite": "success",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "invitation.declined",
+   "categorie": "acces",
+   "libelle": "Invitation déclinée",
+   "objet": "{{nom}} a décliné l'invitation",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "invitation.expired",
+   "categorie": "acces",
+   "libelle": "Invitation expirée",
+   "objet": "Votre invitation a expiré",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "role.assigned",
+   "categorie": "acces",
+   "libelle": "Rôle attribué",
+   "objet": "Rôle {{role}} attribué jusqu'au {{date}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "role.removed",
+   "categorie": "acces",
+   "libelle": "Rôle retiré",
+   "objet": "Rôle {{role}} retiré",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "delegation.granted",
+   "categorie": "acces",
+   "libelle": "Délégation accordée",
+   "objet": "Délégation de {{delegant}} jusqu'au {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "delegation.expired",
+   "categorie": "acces",
+   "libelle": "Délégation expirée",
+   "objet": "Délégation expirée",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "access.expiring",
+   "categorie": "acces",
+   "libelle": "Accès bientôt expiré",
+   "objet": "Votre accès expire le {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "access.suspended_inactivity",
+   "categorie": "acces",
+   "libelle": "Accès suspendu (inactivité)",
+   "objet": "Accès suspendu après 60 jours d'inactivité",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "conflict_of_interest.detected",
+   "categorie": "acces",
+   "libelle": "Conflit d'intérêts détecté",
+   "objet": "Dossier réaffecté pour conflit d'intérêts",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "entity.space.activated",
+   "categorie": "acces",
+   "libelle": "Espace d'entité activé",
+   "objet": "L'espace {{entite}} est actif",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "entity.module.attached",
+   "categorie": "acces",
+   "libelle": "Module rattaché",
+   "objet": "Module {{module}} rattaché à {{entite}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "training.assigned",
+   "categorie": "apprentissage",
+   "libelle": "Formation assignée",
+   "objet": "Formation assignée : {{formation}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "training.due_soon",
+   "categorie": "apprentissage",
+   "libelle": "Formation à terminer",
+   "objet": "Terminez {{formation}} avant le {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "training.completed",
+   "categorie": "apprentissage",
+   "libelle": "Formation terminée",
+   "objet": "Formation terminée : {{formation}}",
+   "gravite": "success",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "certification.achieved",
+   "categorie": "apprentissage",
+   "libelle": "Certification obtenue",
+   "objet": "Certification obtenue : {{certification}}",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "certification.expiring",
+   "categorie": "apprentissage",
+   "libelle": "Certification bientôt expirée",
+   "objet": "Recyclage requis avant le {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "procedure.changed",
+   "categorie": "apprentissage",
+   "libelle": "Procédure modifiée",
+   "objet": "La procédure {{procedure}} a changé",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "taxpayer.guide.available",
+   "categorie": "apprentissage",
+   "libelle": "Guide pratique disponible",
+   "objet": "Guide : {{sujet}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app",
+    "ussd"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "system.maintenance_scheduled",
+   "categorie": "plateforme",
+   "libelle": "Maintenance programmée",
+   "objet": "Maintenance le {{date}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "system.maintenance_emergency",
+   "categorie": "plateforme",
+   "libelle": "Maintenance d'urgence",
+   "objet": "Maintenance d'urgence en cours",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "system.outage",
+   "categorie": "plateforme",
+   "libelle": "Interruption de service",
+   "objet": "Interruption de service — solutions de repli",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "system.service_restored",
+   "categorie": "plateforme",
+   "libelle": "Service rétabli",
+   "objet": "Service rétabli",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "system.channel_degraded",
+   "categorie": "plateforme",
+   "libelle": "Canal dégradé",
+   "objet": "Canal {{canal}} dégradé — utilisez {{alternative}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C",
+    "G"
+   ]
+  },
+  {
+   "code": "system.deadline_protection",
+   "categorie": "plateforme",
+   "libelle": "Protection d'échéance",
+   "objet": "Échéance prorogée en raison d'une interruption",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "ussd"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "release.deployed",
+   "categorie": "plateforme",
+   "libelle": "Version déployée",
+   "objet": "Version {{version}} déployée",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "backup.restore_test.failed",
+   "categorie": "plateforme",
+   "libelle": "Test de restauration échoué",
+   "objet": "Test de restauration échoué",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "privacy.consent_request",
+   "categorie": "donnees",
+   "libelle": "Demande de consentement",
+   "objet": "Nous avons besoin de votre accord",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "privacy.consent_updated",
+   "categorie": "donnees",
+   "libelle": "Consentement mis à jour",
+   "objet": "Vos préférences ont été mises à jour",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "privacy.access_request.received",
+   "categorie": "donnees",
+   "libelle": "Demande d'accès reçue",
+   "objet": "Votre demande d'accès à vos données est enregistrée",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "privacy.data_export_ready",
+   "categorie": "donnees",
+   "libelle": "Export de données prêt",
+   "objet": "Votre export de données est prêt",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "privacy.rectification.done",
+   "categorie": "donnees",
+   "libelle": "Rectification effectuée",
+   "objet": "Vos données ont été rectifiées",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "privacy.data_shared_with_partner",
+   "categorie": "donnees",
+   "libelle": "Partage de données",
+   "objet": "Vos données ont été communiquées à {{destinataire}} ({{base_legale}})",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "privacy.breach_notification",
+   "categorie": "donnees",
+   "libelle": "Violation de données",
+   "objet": "Information sur un incident de données",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "partner.api_key.expiring",
+   "categorie": "partenaires",
+   "libelle": "Clé d'API bientôt expirée",
+   "objet": "Clé d'API {{partenaire}} expire le {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "X"
+   ]
+  },
+  {
+   "code": "partner.callback.signature_invalid",
+   "categorie": "partenaires",
+   "libelle": "Signature de rappel invalide",
+   "objet": "Rappel rejeté : signature invalide",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G",
+    "X"
+   ]
+  },
+  {
+   "code": "partner.sla_breach",
+   "categorie": "partenaires",
+   "libelle": "Engagement de service non tenu",
+   "objet": "SLA non respecté par {{partenaire}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "payment_point.accredited",
+   "categorie": "partenaires",
+   "libelle": "Point de paiement agréé",
+   "objet": "Point {{point}} agréé",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "X"
+   ]
+  },
+  {
+   "code": "payment_point.settlement_overdue",
+   "categorie": "partenaires",
+   "libelle": "Reversement en retard",
+   "objet": "Reversement du point {{point}} en retard",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G",
+    "X"
+   ]
+  },
+  {
+   "code": "payment_point.suspended",
+   "categorie": "partenaires",
+   "libelle": "Point de paiement suspendu",
+   "objet": "Point {{point}} suspendu",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "X"
+   ]
+  },
+  {
+   "code": "contract.expiring",
+   "categorie": "partenaires",
+   "libelle": "Contrat bientôt échu",
+   "objet": "Contrat {{contrat}} échu le {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "subcontractor.agent.accredited",
+   "categorie": "partenaires",
+   "libelle": "Agent accrédité",
+   "objet": "Agent {{agent}} accrédité",
+   "gravite": "success",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "X"
+   ]
+  },
+  {
+   "code": "subcontractor.agent.revoked",
+   "categorie": "partenaires",
+   "libelle": "Accréditation révoquée",
+   "objet": "Accréditation de {{agent}} révoquée",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "X"
+   ]
+  }
+ ]
+}

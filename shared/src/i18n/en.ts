@@ -1,0 +1,27 @@
+import type { MessageKey } from './fr.js';
+/** English — draft, to be validated. Informational translation; the French version prevails. */
+export const en: Partial<Record<MessageKey, string>> = {
+  'app.motto': 'One city, one taxpayer, one record, one receipt.',
+  'app.tagline': 'Every taxpayer identified, every activity located, every obligation lawfully calculated, every payment verifiable and every public franc traceable.',
+  'nav.home': 'Home', 'nav.taxpayer': 'My account', 'nav.verify': 'Verify a receipt', 'nav.governor': 'Command centre',
+  'nav.communications': 'Communications', 'nav.rules': 'Legal register', 'nav.treasury': 'Treasury & reconciliation',
+  'common.language': 'Language', 'common.currency': 'Display currency', 'common.save': 'Save', 'common.submit': 'Submit',
+  'common.cancel': 'Cancel', 'common.loading': 'Loading…', 'common.error': 'Something went wrong.',
+  'common.example': 'EXAMPLE — illustrative values, not binding',
+  'autosave.saved': 'Saved at {{time}}', 'autosave.saving': 'Saving…', 'autosave.offline': 'Offline — saved on this device', 'autosave.error': 'Save failed — retrying',
+  'ai.panel.title': 'AI insight', 'ai.situation': 'Situation', 'ai.insight': 'Insight', 'ai.risk': 'Risk', 'ai.recommendation': 'Recommendation',
+  'ai.nextAction': 'Next action', 'ai.owner': 'Owner', 'ai.deadline': 'Deadline', 'ai.confidence': 'Confidence level',
+  'ai.confidence.high': 'High', 'ai.confidence.medium': 'Medium', 'ai.confidence.low': 'Low',
+  'ai.disclaimer': 'Prepared with AI assistance — no effect until validated by an authorised officer.', 'ai.accept': 'Accept', 'ai.reject': 'Reject',
+  'taxpayer.welcome': 'Welcome, {{name}}', 'taxpayer.objects': 'My properties and activities', 'taxpayer.obligations': 'My obligations',
+  'taxpayer.receipts': 'My receipts', 'taxpayer.explain': 'How this amount is calculated', 'taxpayer.pay': 'Pay', 'taxpayer.contest': 'Dispute',
+  'taxpayer.dueDate': 'Due date', 'taxpayer.legalBasis': 'Legal basis', 'taxpayer.ruleVersion': 'Rule version', 'taxpayer.formula': 'Formula',
+  'taxpayer.appealPath': 'Appeal route', 'taxpayer.register': 'Create my account', 'taxpayer.phone': 'Phone number', 'taxpayer.fullName': 'Full name',
+  'verify.title': 'Verify a receipt', 'verify.prompt': 'Enter the receipt code or scan its QR code.', 'verify.button': 'Verify',
+  'verify.valid': 'Authentic receipt', 'verify.pending': 'Payment confirmed — settlement in progress', 'verify.cancelled': 'Receipt not valid',
+  'verify.replaced': 'Receipt replaced', 'verify.fraud': 'Cannot verify — contact the revenue authority', 'verify.unknown': 'No matching receipt',
+  'governor.title': 'Governor’s command centre', 'governor.confirmedToday': 'Confirmed today', 'governor.settled': 'Settled in public account',
+  'governor.reconciled': 'Reconciled', 'governor.reconRate': 'Reconciliation rate', 'governor.criticalAlerts': 'Critical alerts',
+  'governor.byCommune': 'Revenue by commune', 'governor.byCategory': 'Revenue by category', 'governor.ladder': 'Revenue ladder',
+  'governor.scenarios': 'Scenarios', 'governor.actions': 'Recommended actions',
+};

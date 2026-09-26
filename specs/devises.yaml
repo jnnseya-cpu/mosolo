@@ -1,0 +1,31 @@
+# Référentiel des devises KINSHASA MOSOLO (module 89).
+# Devise principale : CDF. Chaque devise est affichée avec le drapeau du pays émetteur.
+# Pour une devise commune à plusieurs pays, "drapeau" désigne le drapeau retenu par configuration
+# (union monétaire ou pays de référence) ; il est modifiable sans redéploiement.
+devise_principale: CDF
+source_taux_officiel: "Banque Centrale du Congo — cours indicatif du jour [règle d'application À VÉRIFIER]"
+devises:
+  - {code: CDF, nom: "Franc congolais",        drapeau: "🇨🇩", pays: CD, decimales: 2, role: principale, liquidation: oui, paiement: oui}
+  - {code: USD, nom: "Dollar américain",       drapeau: "🇺🇸", pays: US, decimales: 2, role: legale_secondaire, liquidation: "si la règle l'exige", paiement: oui}
+  - {code: EUR, nom: "Euro",                   drapeau: "🇪🇺", pays: EU, decimales: 2, role: paiement_diaspora, liquidation: non, paiement: "carte / virement, converti"}
+  - {code: GBP, nom: "Livre sterling",         drapeau: "🇬🇧", pays: GB, decimales: 2, role: paiement_diaspora, liquidation: non, paiement: "carte, converti"}
+  - {code: CAD, nom: "Dollar canadien",        drapeau: "🇨🇦", pays: CA, decimales: 2, role: paiement_diaspora, liquidation: non, paiement: "carte, converti"}
+  - {code: CHF, nom: "Franc suisse",           drapeau: "🇨🇭", pays: CH, decimales: 2, role: paiement_diaspora, liquidation: non, paiement: "carte, converti"}
+  - {code: ZAR, nom: "Rand sud-africain",      drapeau: "🇿🇦", pays: ZA, decimales: 2, role: paiement_diaspora, liquidation: non, paiement: "carte, converti"}
+  - {code: XAF, nom: "Franc CFA (CEMAC)",      drapeau: "🇨🇬", pays: CG, decimales: 0, role: affichage, liquidation: non, paiement: non, note: "union monétaire ; drapeau de référence configurable"}
+  - {code: AOA, nom: "Kwanza angolais",        drapeau: "🇦🇴", pays: AO, decimales: 2, role: affichage, liquidation: non, paiement: non}
+  - {code: ZMW, nom: "Kwacha zambien",         drapeau: "🇿🇲", pays: ZM, decimales: 2, role: affichage, liquidation: non, paiement: non}
+  - {code: RWF, nom: "Franc rwandais",         drapeau: "🇷🇼", pays: RW, decimales: 0, role: affichage, liquidation: non, paiement: non}
+  - {code: UGX, nom: "Shilling ougandais",     drapeau: "🇺🇬", pays: UG, decimales: 0, role: affichage, liquidation: non, paiement: non}
+  - {code: KES, nom: "Shilling kényan",        drapeau: "🇰🇪", pays: KE, decimales: 2, role: affichage, liquidation: non, paiement: non}
+  - {code: TZS, nom: "Shilling tanzanien",     drapeau: "🇹🇿", pays: TZ, decimales: 2, role: affichage, liquidation: non, paiement: non}
+  - {code: BIF, nom: "Franc burundais",        drapeau: "🇧🇮", pays: BI, decimales: 0, role: affichage, liquidation: non, paiement: non}
+  - {code: CNY, nom: "Yuan renminbi",          drapeau: "🇨🇳", pays: CN, decimales: 2, role: affichage, liquidation: non, paiement: non}
+  - {code: AED, nom: "Dirham des Émirats",     drapeau: "🇦🇪", pays: AE, decimales: 2, role: affichage, liquidation: non, paiement: non}
+langues:
+  - {code: fr,  nom: "Français",  nom_natif: "Français",  role: reference}
+  - {code: ln,  nom: "Lingala",   nom_natif: "Lingála",   role: nationale}
+  - {code: sw,  nom: "Swahili",   nom_natif: "Kiswahili", role: nationale}
+  - {code: kg,  nom: "Kikongo",   nom_natif: "Kikongo",   role: nationale}
+  - {code: lua, nom: "Tshiluba",  nom_natif: "Tshilubà",  role: nationale}
+  - {code: en,  nom: "Anglais",   nom_natif: "English",   role: diaspora_investisseurs}
