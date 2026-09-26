@@ -1,0 +1,190 @@
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useApp } from '../../context';
+import { useApi } from '../../hooks/useApi';
+import { PageHead } from '../../components/Shell';
+import { DataTable } from '../../components/DataTable';
+import { StatusBadge } from '../../components/StatusBadge';
+import { EmptyState, ErrorState, Loading } from '../../components/States';
+import { Icon } from '../../components/Icon';
+import { api } from '../../lib/api';
+import {
+  DrillChart, ExportButton, FiltersBar, KpiTiles, LadderChart, qs, ScopeLine, Section, SeriesChart, useFmt,
+  type Amounts, type Contested, type DrillResult, type Filters, type Kpi, type LadderLevel, type Scope, type SeriesPoint,
+} from './shared';
+import './pilotage.css';
+
+interface ProfileRef { code: string; label: string; description: string }
+interface Bucket extends Amounts { code: string; label: string; count: number }
+interface DayTiles { today: string; confirmed: Record<'today' | 'yesterday', Amounts>; settled: Record<'today' | 'yesterday', Amounts>; reconciled: Record<'today' | 'yesterday', Amounts> }
+interface ProfileData {
+  profile: string; label: string; description: string; generatedAt: string; scope: Scope; rule: string;
+  ladder: LadderLevel[]; contested: Contested; kpis: Kpi[];
+  tiles?: DayTiles; criticalAlerts?: number;
+  byCommune?: DrillResult; byCategory?: DrillResult; byEntity?: DrillResult; byChannel?: DrillResult; series?: SeriesPoint[];
+  recovery?: { note: string; buckets: Bucket[] };
+  litigation?: { open: number; decided: number; byDecision: { decision: string; count: number }[] };
+  performance?: { note: string; rows: { issuer: string; issuerId: string; issued: number; rectified: number }[] };
+  suspense?: Bucket[];
+  exceptions?: { open: number; byType: { type: string; count: number; over30: number }[] };
+  providers?: { provider: string; confirmed: number; settled: number; reconciled: number; awaiting: number }[];
+  ledger?: { balanced: boolean; entries: number; headHash: string | null };
+  commune?: string | null;
+  objects?: { total: number; validated: number; byCategory: { category: string; count: number }[] };
+  integrity?: { audit: { ok: boolean; length: number; headHash: string; reason?: string }; ledger: { balanced: boolean; entries: number; headHash: string | null } };
+  sensitive?: { code: string; label: string; count: number }[];
+  exports?: { exportId: string; kind: string; format: string; generatedAt: string; sha256: string; generatedBy: { id: string } }[];
+}
+
+function DayFigures({ t }: { t: DayTiles }) {
+  const f = useFmt();
+  const cell = (label: string, x: Record<'today' | 'yesterday', Amounts>) => (
+    <div className="pl-fig">
+      <span>{label} aujourd’hui</span>
+      <strong>{f.amounts(x.today.amounts)}</strong>
+      <span>{x.today.count ?? 0} paiement(s) · veille : {f.amounts(x.yesterday.amounts)}</span>
+    </div>
+  );
+  return <div className="pl-figs">{cell('Confirmé', t.confirmed)}{cell('Réglé', t.settled)}{cell('Rapproché', t.reconciled)}</div>;
+}
+
+function BucketTable({ rows, caption }: { rows: Bucket[]; caption: string }) {
+  const f = useFmt();
+  return (
+    <DataTable caption={caption} rows={rows} rowKey={(r) => r.code}
+      columns={[
+        { key: 'l', label: 'Tranche', render: (r) => r.label, primary: true },
+        { key: 'n', label: 'Nombre', render: (r) => r.count, num: true },
+        { key: 'a', label: 'Montants (devise légale)', render: (r) => f.amounts(r.amounts), num: true },
+        { key: 'c', label: 'Contre-valeur CDF', render: (r) => f.cdf(r.consolidatedCdf), num: true },
+      ]} />
+  );
+}
+
+export default function Tableaux() {
+  const { user } = useApp();
+  const [params, setParams] = useSearchParams();
+  const list = useApi(() => api<{ profiles: ProfileRef[] }>('/v1/pilotage/tableaux'), [user?.id]);
+  const profiles = list.data?.profiles ?? [];
+  const wanted = params.get('profil');
+  const current = profiles.find((p) => p.code === wanted)?.code ?? profiles[0]?.code ?? null;
+  const [filters, setFilters] = useState<Filters>({});
+  useEffect(() => { setFilters({}); }, [user?.id]);
+  const data = useApi<ProfileData>(current ? () => api<ProfileData>(`/v1/pilotage/tableaux/${current}${qs({ ...filters })}`) : null, [current, user?.id, JSON.stringify(filters)]);
+
+  const head = <PageHead eyebrow="Pilotage · données réelles" title="Tableaux de bord par profil" lead="Chaque tableau lit l’échelle unifiée de la recette sur les données du socle, dans le périmètre de votre rôle. Agrégats seulement." />;
+  if (list.loading) return <div className="page page-wide">{head}<Loading /></div>;
+  if (list.error) return <div className="page page-wide">{head}<ErrorState error={list.error} onRetry={list.reload} /></div>;
+  if (!current) return <div className="page page-wide">{head}<EmptyState title="Aucun tableau de pilotage pour votre rôle" icon="lock">Les tableaux sont réservés aux autorités, régies, Trésor, communes et auditeurs. La transparence publique reste ouverte à tous.<p><Link to="/transparence">Consulter la transparence publique</Link></p></EmptyState></div>;
+
+  const d = data.data;
+  const exportParams = { ...filters };
+  return (
+    <div className="page page-wide">
+      {head}
+      <div className="pl-toolbar">
+        <div className="pl-tabs" role="group" aria-label="Profil">
+          {profiles.map((p) => (
+            <button key={p.code} type="button" aria-pressed={p.code === current} onClick={() => { setParams({ profil: p.code }); }}>{p.label}</button>
+          ))}
+        </div>
+        <ExportButton kind="echelle" params={exportParams} label="Exporter l’échelle (signé)" />
+      </div>
+      <FiltersBar value={filters} onChange={setFilters} lock={d?.scope ?? null} />
+      {data.loading && !d ? <Loading /> : data.error ? <ErrorState error={data.error} onRetry={data.reload} /> : d && (
+        <>
+          <ScopeLine scope={d.scope} generatedAt={d.generatedAt} />
+          <p className="small muted">{d.description}</p>
+          <div className="dash-grid">
+            {d.kpis.length > 0 && <div className="span-12"><KpiTiles kpis={d.kpis.filter((k) => k.status !== 'NON_MESURE').slice(0, 8)} /></div>}
+            {d.tiles && <Section title="Encaissement du jour" sub={`Journée du ${d.tiles.today} — comparaison avec la veille`}><DayFigures t={d.tiles} /></Section>}
+            <LadderChart className="span-7" levels={d.ladder} contested={d.contested} />
+            {d.byCommune && <DrillChart className="span-5" drill={d.byCommune} title="Par commune (fait générateur)" />}
+            {d.byCategory && <DrillChart className="span-6" drill={d.byCategory} title="Par catégorie de recette" />}
+            {d.byEntity && <DrillChart className="span-6" drill={d.byEntity} title="Par administration" />}
+            {d.byChannel && <DrillChart className="span-6" drill={d.byChannel} title="Par canal de paiement" levels={['confirmed', 'settled', 'reconciled']} />}
+            {d.series && <SeriesChart className="span-6" months={d.series} />}
+
+            {d.recovery && (
+              <Section title="Recouvrement — obligations en retard" sub={d.recovery.note}><BucketTable rows={d.recovery.buckets} caption="Retards par ancienneté" /></Section>
+            )}
+            {d.litigation && (
+              <Section title="Contentieux" sub="Réclamations sur le périmètre">
+                <div className="pl-figs">
+                  <div className="pl-fig"><span>Ouvertes</span><strong>{d.litigation.open}</strong></div>
+                  <div className="pl-fig"><span>Décidées</span><strong>{d.litigation.decided}</strong></div>
+                  {d.litigation.byDecision.map((b) => <div className="pl-fig" key={b.decision}><span>{b.decision.replace(/_/g, ' ').toLowerCase()}</span><strong>{b.count}</strong></div>)}
+                </div>
+              </Section>
+            )}
+            {d.performance && (
+              <Section title="Performance des services émetteurs" sub={d.performance.note}>
+                <DataTable caption="Performance" rows={d.performance.rows} rowKey={(r) => r.issuerId}
+                  columns={[
+                    { key: 'i', label: 'Service', render: (r) => r.issuer, primary: true },
+                    { key: 'n', label: 'Obligations émises', render: (r) => r.issued, num: true },
+                    { key: 'r', label: 'Rectifications fondées', render: (r) => r.rectified, num: true },
+                  ]} />
+              </Section>
+            )}
+            {d.suspense && <Section title="Suspens : confirmé non rapproché" sub="Par ancienneté de la confirmation prestataire"><BucketTable rows={d.suspense} caption="Suspens par âge" /></Section>}
+            {d.exceptions && (
+              <Section title="Files d’exception" sub={`${d.exceptions.open} exception(s) ouverte(s)`} tools={<Link className="btn btn-ghost btn-sm" to="/tresor"><Icon name="arrowRight" size={16} /> Ouvrir le Trésor</Link>}>
+                {d.exceptions.byType.length === 0 ? <p className="muted">Aucune exception ouverte.</p> : (
+                  <DataTable caption="Exceptions" rows={d.exceptions.byType} rowKey={(r) => r.type}
+                    columns={[{ key: 't', label: 'Type', render: (r) => r.type.replace(/_/g, ' ').toLowerCase(), primary: true }, { key: 'n', label: 'Ouvertes', render: (r) => r.count, num: true }, { key: 'o', label: '> 30 jours', render: (r) => r.over30, num: true }]} />
+                )}
+              </Section>
+            )}
+            {d.providers && (
+              <Section title="Prestataires" sub={d.ledger ? `Grand livre : ${d.ledger.entries} écriture(s), ${d.ledger.balanced ? 'équilibré' : 'DÉSÉQUILIBRÉ'}` : undefined}>
+                {d.providers.length === 0 ? <p className="muted">Aucun paiement confirmé.</p> : (
+                  <DataTable caption="Prestataires" rows={d.providers} rowKey={(r) => r.provider}
+                    columns={[
+                      { key: 'p', label: 'Prestataire', render: (r) => r.provider, primary: true },
+                      { key: 'c', label: 'Confirmés', render: (r) => r.confirmed, num: true },
+                      { key: 's', label: 'Réglés', render: (r) => r.settled, num: true },
+                      { key: 'r', label: 'Rapprochés', render: (r) => r.reconciled, num: true },
+                      { key: 'a', label: 'En attente', render: (r) => r.awaiting > 0 ? <StatusBadge tone="warning" label={String(r.awaiting)} /> : '0', num: true },
+                    ]} />
+                )}
+              </Section>
+            )}
+            {d.objects && (
+              <Section title={`Assiette recensée${d.commune ? ` — ${d.commune}` : ''}`} sub="Objets fiscaux du territoire (fait générateur)">
+                <div className="pl-figs">
+                  <div className="pl-fig"><span>Objets recensés</span><strong>{d.objects.total}</strong></div>
+                  <div className="pl-fig"><span>Objets validés</span><strong>{d.objects.validated}</strong></div>
+                  {d.objects.byCategory.map((c) => <div className="pl-fig" key={c.category}><span>{c.category.replace(/_/g, ' ').toLowerCase()}</span><strong>{c.count}</strong></div>)}
+                </div>
+              </Section>
+            )}
+            {d.integrity && (
+              <Section title="Intégrité des chaînes" sub="Journal d’audit chaîné et grand livre en partie double" tools={<Link className="btn btn-secondary btn-sm" to="/pilotage/piste-audit"><Icon name="history" size={16} /> Piste d’audit par dossier</Link>}>
+                <div className="pl-figs">
+                  <div className="pl-fig"><span>Journal d’audit</span><strong><StatusBadge tone={d.integrity.audit.ok ? 'good' : 'critical'} label={d.integrity.audit.ok ? 'Intègre' : 'Rompu'} /></strong><span>{d.integrity.audit.length} événements · <code className="hash">{d.integrity.audit.headHash.slice(0, 16)}…</code></span></div>
+                  <div className="pl-fig"><span>Grand livre</span><strong><StatusBadge tone={d.integrity.ledger.balanced ? 'good' : 'critical'} label={d.integrity.ledger.balanced ? 'Équilibré' : 'Déséquilibré'} /></strong><span>{d.integrity.ledger.entries} écriture(s)</span></div>
+                  {d.sensitive?.map((s) => <div className="pl-fig" key={s.code}><span>{s.label}</span><strong>{s.count}</strong></div>)}
+                </div>
+              </Section>
+            )}
+            {d.exports && (
+              <Section title="Extractions signées récentes" sub="Chaque export est journalisé avec son empreinte">
+                {d.exports.length === 0 ? <p className="muted">Aucun export.</p> : (
+                  <DataTable caption="Exports" rows={d.exports} rowKey={(r) => `${r.exportId}-${r.format}`}
+                    columns={[
+                      { key: 'k', label: 'Export', render: (r) => `${r.kind} (${r.format})`, primary: true },
+                      { key: 'u', label: 'Par', render: (r) => r.generatedBy.id },
+                      { key: 'h', label: 'SHA-256', render: (r) => <code className="hash">{r.sha256.slice(0, 16)}…</code> },
+                    ]} />
+                )}
+              </Section>
+            )}
+          </div>
+          <p className="small muted">{d.rule}</p>
+        </>
+      )}
+    </div>
+  );
+}
+

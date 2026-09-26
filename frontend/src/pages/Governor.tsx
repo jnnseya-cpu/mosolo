@@ -12,12 +12,35 @@ import { AIInsightPanel } from '../components/AIInsightPanel';
 import { StatusBadge, type Tone } from '../components/StatusBadge';
 import { ErrorState, ExampleNotice, Loading } from '../components/States';
 import { Icon } from '../components/Icon';
-import { api, describeError, NetworkError } from '../lib/api';
+import { api, ApiError, describeError, NetworkError } from '../lib/api';
 import { compact, convertIndicative, plotValue } from '../lib/money';
 import { SEQ_NAVY } from '../lib/palette';
 import { normalizeGovernor, type GovView } from '../lib/normalize';
 import type { UIKey } from '../lib/i18n';
 import { COMMUNE_GRID, DEMO_ACTIONS, DEMO_GOVERNOR_RAW } from '../demo/governor';
+import { Link } from 'react-router-dom';
+import {
+  DrillChart, ExportButton, FiltersBar, LadderChart, qs, ScopeLine, SeriesChart,
+  type Amounts, type Contested, type DrillResult, type Filters, type Kpi, type LadderLevel, type Scope, type SeriesPoint,
+} from '../modules/pilotage/shared';
+import '../modules/pilotage/pilotage.css';
+
+/** Tableau du Gouverneur calculé sur les données RÉELLES du socle (module pilotage). */
+interface LiveGovernor {
+  generatedAt: string; scope: Scope; ladder: LadderLevel[]; contested: Contested; kpis: Kpi[]; criticalAlerts: number;
+  tiles: { today: string; confirmed: Record<'today' | 'yesterday', Amounts>; settled: Record<'today' | 'yesterday', Amounts>; reconciled: Record<'today' | 'yesterday', Amounts> };
+  byCommune: DrillResult; byCategory: DrillResult; byEntity: DrillResult; series: SeriesPoint[];
+}
+
+/** Données réelles ; null si le module de pilotage n'est pas servi (serveur injoignable ou module absent). */
+async function loadLive(filters: Filters): Promise<LiveGovernor | null> {
+  try {
+    return await api<LiveGovernor>(`/v1/pilotage/tableaux/gouverneur${qs({ ...filters })}`);
+  } catch (e) {
+    if (e instanceof NetworkError || (e instanceof ApiError && e.status === 404)) return null;
+    throw e;
+  }
+}
 
 type Disp = 'CDF' | 'USD';
 const LADDER_GROUP: Record<string, number> = {
@@ -72,6 +95,8 @@ export default function Governor() {
       throw e;
     }
   }, [user?.id]);
+  const [filters, setFilters] = useState<Filters>({});
+  const live = useApi(() => loadLive(filters), [user?.id, JSON.stringify(filters)]);
   const [disp, setDisp] = useState<Disp>('CDF');
   const [sort, setSort] = useState<'value' | 'alpha'>('value');
   const [allCommunes, setAllCommunes] = useState(false);
@@ -122,6 +147,10 @@ export default function Governor() {
   const alertTone: Tone = t.criticalAlerts > 0 ? 'critical' : 'good';
   const pct = (a?: MoneyJSON, b?: MoneyJSON) => (a && b && plotValue(b) ? Math.round((plotValue(a) / plotValue(b)) * 100) : 0);
   const scenColors = [cat[0]!, cat[1]!, cat[2]!];
+  const L = live.data ?? null;
+  const cdfOf = (a?: Amounts) => (a?.consolidatedCdf ? bigMoney(a.consolidatedCdf) : '—');
+  const liveRecon = L?.kpis.find((k) => k.code === 'RAPPROCHEMENT_J1');
+  const liveReconTone: Tone = !liveRecon || liveRecon.value === null ? 'neutral' : liveRecon.status === 'ATTEINTE' ? 'good' : Number(liveRecon.value) >= 90 ? 'warning' : 'critical';
 
   return (
     <div className="page page-wide">
@@ -139,19 +168,54 @@ export default function Governor() {
         {usdRate ? ` · ${tr('gov.rate', { rate: formatMoney({ amount: Number(usdRate).toFixed(2), currency: 'CDF' }, { locale: loc }), date: rateDate })}` : ''}
         {d.exchange?.source ? ` · ${d.exchange.source}` : rates?.source ? ` · ${rates.source}` : ''}
       </p>
-      {ex && <ExampleNotice text={fallback ? tr('gov.fallback') : tr('common.example')} />}
+      {L ? (
+        <>
+          <FiltersBar value={filters} onChange={setFilters} lock={L.scope} />
+          <div className="pl-toolbar">
+            <ScopeLine scope={L.scope} generatedAt={L.generatedAt} />
+            <span className="pl-export">
+              <Link className="btn btn-ghost btn-sm" to="/pilotage/indicateurs"><Icon name="gauge" size={16} /> Indicateurs</Link>
+              <Link className="btn btn-ghost btn-sm" to="/pilotage/tableaux"><Icon name="grid" size={16} /> Tableaux par profil</Link>
+              <ExportButton kind="echelle" params={{ ...filters }} label="Rapport signé" />
+            </span>
+          </div>
+          <div className="kpi-row">
+            <Tile label={tr('governor.confirmedToday')} value={cdfOf(L.tiles.confirmed.today)} sub={`Veille : ${cdfOf(L.tiles.confirmed.yesterday)} · ${L.tiles.confirmed.today.count ?? 0} paiement(s)`} />
+            <Tile label={tr('governor.settled')} value={cdfOf(L.tiles.settled.today)} sub={`Veille : ${cdfOf(L.tiles.settled.yesterday)}`} />
+            <Tile label={tr('governor.reconciled')} value={cdfOf(L.tiles.reconciled.today)} sub={`Veille : ${cdfOf(L.tiles.reconciled.yesterday)}`} />
+            <Tile label={tr('governor.reconRate')} value={liveRecon?.value != null ? `${Number(liveRecon.value).toLocaleString(nloc)} %` : '—'}
+              tone={liveReconTone} toneLabel={liveRecon?.value == null ? 'Pas encore calculable' : liveRecon.status === 'ATTEINTE' ? tr('gov.onTarget') : tr('gov.belowTarget')} sub={liveRecon?.targetLabel ?? ''} />
+            <Tile label={tr('governor.criticalAlerts')} value={String(L.criticalAlerts)} tone={L.criticalAlerts > 0 ? 'critical' : 'good'} toneLabel={tr(L.criticalAlerts > 0 ? 'gov.toHandle' : 'gov.noAlert')} />
+          </div>
+          <div className="dash-grid" style={{ marginBottom: 24 }}>
+            <LadderChart className="span-7" levels={L.ladder} contested={L.contested} />
+            <DrillChart className="span-5" drill={L.byCommune} title="Par commune (fait générateur)" subtitle="Liquidé, confirmé et rapproché — contre-valeur indicative CDF" />
+            <DrillChart className="span-6" drill={L.byCategory} title={tr('governor.byCategory')} />
+            <SeriesChart className="span-6" months={L.series} />
+            <DrillChart className="span-12" drill={L.byEntity} title="Par régie et administration" levels={['assessed', 'overdue', 'confirmed', 'reconciled']} />
+          </div>
+          <h2 className="section-title">Illustrations en attente de mesure</h2>
+          <ExampleNotice text="EXEMPLE — les blocs ci-dessous (conformité, cible, scénarios, alertes illustratives) attendent le modèle de potentiel, la cible budgétaire et les scénarios validés : valeurs illustratives, non opposables." />
+        </>
+      ) : (
+        <>
+          {ex && <ExampleNotice text={fallback ? tr('gov.fallback') : tr('common.example')} />}
 
-      <div className="kpi-row">
-        <Tile label={tr('governor.confirmedToday')} value={bigMoney(t.confirmedToday)} sub={t.delta ? tr('gov.vsYesterday', { n: /%/.test(t.delta) ? t.delta : `${t.delta.replace('.', ',')} %` }) : undefined} />
-        <Tile label={tr('governor.settled')} value={bigMoney(t.settled)} sub={tr('gov.ofConfirmed', { n: pct(t.settled, t.confirmedToday) })} />
-        <Tile label={tr('governor.reconciled')} value={bigMoney(t.reconciled)} sub={tr('gov.ofSettled', { n: pct(t.reconciled, t.settled) })} />
-        <Tile label={tr('governor.reconRate')} value={rate !== undefined ? `${rate.toLocaleString(nloc)} %` : '—'}
-          tone={reconTone} toneLabel={tr(reconTone === 'good' ? 'gov.onTarget' : 'gov.belowTarget')} sub={tr('gov.target', { n: t.reconTarget })} />
-        <Tile label={tr('governor.criticalAlerts')} value={String(t.criticalAlerts)} tone={alertTone} toneLabel={tr(alertTone === 'good' ? 'gov.noAlert' : 'gov.toHandle')} />
-      </div>
+          <div className="kpi-row">
+            <Tile label={tr('governor.confirmedToday')} value={bigMoney(t.confirmedToday)} sub={t.delta ? tr('gov.vsYesterday', { n: /%/.test(t.delta) ? t.delta : `${t.delta.replace('.', ',')} %` }) : undefined} />
+            <Tile label={tr('governor.settled')} value={bigMoney(t.settled)} sub={tr('gov.ofConfirmed', { n: pct(t.settled, t.confirmedToday) })} />
+            <Tile label={tr('governor.reconciled')} value={bigMoney(t.reconciled)} sub={tr('gov.ofSettled', { n: pct(t.reconciled, t.settled) })} />
+            <Tile label={tr('governor.reconRate')} value={rate !== undefined ? `${rate.toLocaleString(nloc)} %` : '—'}
+              tone={reconTone} toneLabel={tr(reconTone === 'good' ? 'gov.onTarget' : 'gov.belowTarget')} sub={tr('gov.target', { n: t.reconTarget })} />
+            <Tile label={tr('governor.criticalAlerts')} value={String(t.criticalAlerts)} tone={alertTone} toneLabel={tr(alertTone === 'good' ? 'gov.noAlert' : 'gov.toHandle')} />
+          </div>
+
+          {live.error ? <p className="small err" role="alert">Données réelles indisponibles : {describeError(live.error).message}</p> : null}
+        </>
+      )}
 
       <div className="dash-grid">
-        <ChartCard className="span-7" title={tr('governor.byCommune')} subtitle={tr('gov.communeSub', { unit })} example={ex}
+        {!L && <ChartCard className="span-7" title={tr('governor.byCommune')} subtitle={tr('gov.communeSub', { unit })} example={ex}
           height={Math.max(260, shownCommunes.length * 28 + 30)}
           table={{ columns: [tr('gov.commune'), `${tr('explain.amount')} (${disp})`, tr('gov.compliance')], rows: communes.map((c) => [c.name, formatMoney(dispMoney(c.money), { locale: loc }), c.compliance !== undefined ? `${c.compliance.toLocaleString(nloc)} %` : '—']) }}
           actions={
@@ -177,9 +241,9 @@ export default function Governor() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        </ChartCard>
+        </ChartCard>}
 
-        <ChartCard className="span-5" title={tr('governor.byCategory')} subtitle={tr('gov.shareSub')} example={ex} height={240}
+        {!L && <ChartCard className="span-5" title={tr('governor.byCategory')} subtitle={tr('gov.shareSub')} example={ex} height={240}
           legend={<Legend items={cats.map((c, i) => ({ label: `${c.name} · ${Math.round((c.value / catTotal) * 100)} %`, color: cat[Math.min(i, 7)]! }))} />}
           table={{ columns: [tr('gov.category'), `${tr('explain.amount')} (${disp})`, tr('gov.share')], rows: cats.map((c) => [c.name, formatMoney(dispMoney(c.money), { locale: loc }), `${Math.round((c.value / catTotal) * 100)} %`]) }}>
           <ResponsiveContainer width="100%" height="100%">
@@ -191,9 +255,9 @@ export default function Governor() {
               <Tooltip content={<ChartTooltip format={fmtC} />} />
             </PieChart>
           </ResponsiveContainer>
-        </ChartCard>
+        </ChartCard>}
 
-        <ChartCard className="span-7" title={tr('governor.ladder')} subtitle={tr('gov.ladderSub', { unit })} example={ex} height={ladder.length * 28 + 30}
+        {!L && <ChartCard className="span-7" title={tr('governor.ladder')} subtitle={tr('gov.ladderSub', { unit })} example={ex} height={ladder.length * 28 + 30}
           legend={<Legend items={groupNames.map((g, i) => ({ label: g, color: cat[i]! }))} />}
           table={{ columns: [tr('gov.level'), `${tr('explain.amount')} (${disp})`], rows: d.ladder.map((l) => [tr(`ladder.${l.level}` as UIKey), formatMoney(dispMoney(l.amount), { locale: loc })]) }}>
           <ResponsiveContainer width="100%" height="100%">
@@ -209,7 +273,7 @@ export default function Governor() {
             </BarChart>
           </ResponsiveContainer>
           <p className="small muted chart-note">{tr('gov.ladderNote')}</p>
-        </ChartCard>
+        </ChartCard>}
 
         <section className="panel span-5" aria-labelledby="heat-title">
           <header className="panel-head">
