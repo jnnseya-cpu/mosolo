@@ -6,6 +6,8 @@
 export const EXTRA_FR = {
   // Navigation et en-tête
   'nav.register': 'Inscription',
+  'nav.services': 'Services de la Ville',
+  'nav.servicesShort': 'Services',
   'nav.field': 'Terrain',
   'nav.audit': 'Audit',
   'nav.ai': 'Recommandations',

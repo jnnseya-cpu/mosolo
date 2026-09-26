@@ -14,6 +14,7 @@ export const NAV: NavItem[] = [
   { to: '/', key: 'nav.home', icon: 'home', group: 'public' },
   { to: '/inscription', key: 'nav.register', icon: 'user', group: 'public' },
   { to: '/espace', key: 'nav.taxpayer', icon: 'file', group: 'public' },
+  { to: '/services', key: 'nav.services', icon: 'grid', group: 'public' },
   { to: '/verifier', key: 'nav.verify', icon: 'shieldCheck', group: 'public' },
   { to: '/gouverneur', key: 'nav.governor', icon: 'gauge', group: 'pilotage' },
   { to: '/communications', key: 'nav.communications', icon: 'message', group: 'pilotage' },
@@ -28,12 +29,12 @@ const GROUPS: { id: NavItem['group']; key: UIKey }[] = [
 ];
 const SHORT: Record<string, UIKey> = {
   '/gouverneur': 'nav.governorShort', '/verifier': 'nav.verifyShort', '/registre': 'nav.rulesShort', '/tresor': 'nav.treasuryShort',
-  '/communications': 'nav.commsShort', '/ia': 'nav.aiShort', '/inscription': 'nav.register',
+  '/communications': 'nav.commsShort', '/services': 'nav.servicesShort', '/ia': 'nav.aiShort', '/inscription': 'nav.register',
 };
 
 /** Sections visibles selon les rôles (les routes restent accessibles par URL). */
 const ROLE_ROUTES: [string[], string[]][] = [
-  [['R30', 'R31'], ['/inscription', '/espace', '/verifier']],
+  [['R30', 'R31'], ['/inscription', '/espace', '/services', '/verifier']],
   [['R01', 'R02', 'R03', 'R04', 'R05'], ['/gouverneur', '/ia', '/verifier']],
   [['R06', 'R07', 'R08'], ['/communications', '/registre', '/ia']],
   [['R13', 'R14', 'R15', 'R16'], ['/registre']],

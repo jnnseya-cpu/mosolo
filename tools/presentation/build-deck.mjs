@@ -25,6 +25,7 @@ if (!capDir || !outDir) {
 mkdirSync(outDir, { recursive: true });
 
 const ecrans = JSON.parse(readFileSync(join(HERE, 'ecrans.json'), 'utf8'));
+const services = JSON.parse(readFileSync(join(HERE, 'services.json'), 'utf8'));
 const url = (p) => pathToFileURL(p).href;
 const font = (f) => url(join(ROOT, 'node_modules/@fontsource', f));
 const COVER = url(join(ROOT, 'docs/assets/couverture-ville-de-kinshasa.png'));
@@ -100,6 +101,15 @@ h2 { font-family: Fraunces, serif; font-weight: 600; font-size: 54px; line-heigh
 .side ul { list-style: none; }
 .side li { font-size: 18px; line-height: 1.45; color: var(--ink2); padding: 14px 0; border-top: 1px solid var(--line); }
 /* Conclusion */
+/* Services : deux écrans d'ordinateur par diapositive */
+.duo { position: absolute; left: 96px; right: 96px; top: 150px; display: grid; grid-template-columns: 1fr 1fr; gap: 56px; }
+.duo .browser { position: static; width: auto; }
+.duo .cap { margin-top: 28px; }
+.duo .cap .num { font-size: 44px; line-height: 1; }
+.duo .cap h3 { font-family: Fraunces, serif; font-size: 32px; font-weight: 600; margin: 10px 0 6px; line-height: 1.1; }
+.duo .cap .aud { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--ink2); font-weight: 600; margin-bottom: 12px; }
+.duo .cap p { font-size: 19px; line-height: 1.45; padding-left: 16px; border-left: 3px solid var(--navy); }
+.duo .cap .pt { font-size: 16px; color: var(--ink2); margin-top: 10px; padding-left: 0; border: 0; }
 .close .cols { position: absolute; left: 96px; right: 96px; top: 250px; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; }
 .close h3 { font-family: Fraunces, serif; font-size: 34px; font-weight: 600; margin-bottom: 20px; }
 .close li { font-size: 21px; line-height: 1.5; padding: 12px 0; border-top: 1px solid var(--line); list-style: none; color: var(--ink2); }
@@ -121,7 +131,7 @@ slides.push((n, t) => `
   <div class="text">
     <div class="eyebrow">Ville Province de Kinshasa · Recettes provinciales</div>
     <h1>KINSHASA MOSOLO<br>Les écrans de la plateforme</h1>
-    <p>Parcours sur téléphone, puis sur ordinateur : ce que voient le contribuable, l'agent de terrain, le Trésor, l'auditeur et le Gouverneur.</p>
+    <p>Parcours sur téléphone, puis sur ordinateur : ce que voient le contribuable, l'agent de terrain, le Trésor, l'auditeur et le Gouverneur ; puis les services de la Ville, dont RakaPay.</p>
     <div class="date">Dossier de présentation au Gouvernement provincial · septembre 2026</div>
   </div>
   ${foot(n, t)}
@@ -175,6 +185,64 @@ for (const e of ecrans) {
     <div class="aud">${esc(e.public)}</div>
     <div class="msg">${esc(e.message)}</div>
     <ul>${e.points.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>
+  </div>
+  ${foot(n, t)}
+</section>`);
+}
+
+slides.push((n, t) => `
+<section class="slide divider"><div class="tri"><i></i><i></i><i></i></div>
+  <div class="inner">
+    <div class="eyebrow">Partie 3</div>
+    <h1>Services de la Ville</h1>
+    <p>Les espaces citoyens des seize verticales, dont la billetterie RakaPay et le pass des moto-taxis : un seul compte, un seul registre des règles, un seul circuit de paiement vers le compte public. Un service sans acte n'exige aucun paiement.</p>
+  </div>
+  <div class="phones">${services.slice(0, 8).map((e) => `<div class="phone sm"><img src="${shot('telephone', e.id)}"></div>`).join('')}</div>
+  ${foot(n, t, true)}
+</section>`);
+
+for (let i = 0; i < services.length; i += 3) {
+  const group = services.slice(i, i + 3);
+  slides.push((n, t) => `
+<section class="slide"><div class="tri"><i></i><i></i><i></i></div>
+  <div class="head"><span class="eyebrow">Services · sur téléphone</span><h2>Services de la Ville · écrans ${group[0].id.slice(0, 2)} à ${group[group.length - 1].id.slice(0, 2)}</h2></div>
+  <div class="trio">${group.map((e) => `
+    <div class="col">
+      <div class="phone"><img src="${shot('telephone', e.id)}"></div>
+      <div class="txt"><div class="num">${e.id.slice(0, 2)}</div><h3>${esc(e.titre)}</h3><div class="aud">${esc(e.public)}</div><p>${esc(e.message)}</p></div>
+    </div>`).join('')}
+  </div>
+  ${foot(n, t)}
+</section>`);
+}
+
+const SINGLE = new Set(['12-services', '13-rakapay-pass', '16-rakapay-reference']);
+for (const e of services.filter((x) => SINGLE.has(x.id))) {
+  slides.push((n, t) => `
+<section class="slide"><div class="tri"><i></i><i></i><i></i></div>
+  <div class="head"><span class="eyebrow">Services · sur ordinateur</span></div>
+  <div class="browser"><div class="bar"><i></i><i></i><i></i><span>KINSHASA MOSOLO · ${e.route}</span></div><img src="${shot('ordinateur', e.id)}"></div>
+  <div class="side">
+    <div class="num">${e.id.slice(0, 2)}</div>
+    <h2>${esc(e.titre)}</h2>
+    <div class="aud">${esc(e.public)}</div>
+    <div class="msg">${esc(e.message)}</div>
+    <ul>${e.points.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>
+  </div>
+  ${foot(n, t)}
+</section>`);
+}
+const rest = services.filter((x) => !SINGLE.has(x.id));
+for (let i = 0; i < rest.length; i += 2) {
+  const pair = rest.slice(i, i + 2);
+  slides.push((n, t) => `
+<section class="slide"><div class="tri"><i></i><i></i><i></i></div>
+  <div class="head"><span class="eyebrow">Services · sur ordinateur</span></div>
+  <div class="duo">${pair.map((e) => `
+    <div>
+      <div class="browser"><div class="bar"><i></i><i></i><i></i><span>KINSHASA MOSOLO · ${e.route}</span></div><img src="${shot('ordinateur', e.id)}"></div>
+      <div class="cap"><div class="num">${e.id.slice(0, 2)}</div><h3>${esc(e.titre)}</h3><div class="aud">${esc(e.public)}</div><p>${esc(e.message)}</p>${e.points[1] ? `<p class="pt">${esc(e.points[1])}</p>` : ''}</div>
+    </div>`).join('')}
   </div>
   ${foot(n, t)}
 </section>`);

@@ -14,6 +14,8 @@ const Treasury = lazy(() => import('./pages/Treasury'));
 const Field = lazy(() => import('./pages/Field'));
 const Audit = lazy(() => import('./pages/Audit'));
 const AIInbox = lazy(() => import('./pages/AIInbox'));
+const Services = lazy(() => import('./pages/Services'));
+const VerticalSpace = lazy(() => import('./pages/VerticalSpace'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const OfflinePage = lazy(() => import('./pages/Offline'));
 
@@ -25,6 +27,8 @@ export function App() {
           <Route path="/" element={<Home />} />
           <Route path="/inscription" element={<Registration />} />
           <Route path="/espace" element={<TaxpayerSpace />} />
+          <Route path="/services" element={<Services />} />
+          <Route path="/services/:slug" element={<VerticalSpace />} />
           <Route path="/verifier" element={<Verify />} />
           <Route path="/verifier/:code" element={<Verify />} />
           <Route path="/gouverneur" element={<Governor />} />

@@ -17,8 +17,8 @@ describe('libellés humains', () => {
 
 describe('navigation par rôle', () => {
   const routes = (roles: string[]) => visibleNav(roles).map((n) => n.to);
-  it('contribuable : accueil, inscription, espace, vérification', () => {
-    expect(routes(['R30'])).toEqual(['/', '/inscription', '/espace', '/verifier']);
+  it('contribuable : accueil, inscription, espace, services, vérification', () => {
+    expect(routes(['R30'])).toEqual(['/', '/inscription', '/espace', '/services', '/verifier']);
   });
   it('gouverneur : pilotage uniquement', () => {
     expect(routes(['R01'])).toEqual(['/', '/verifier', '/gouverneur', '/ia']);
