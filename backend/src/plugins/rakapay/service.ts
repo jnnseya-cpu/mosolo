@@ -172,8 +172,11 @@ export interface WewaStatus {
   nothingToPay: boolean;
   passNumber?: string;
   credentialId?: string;
+  validFrom?: string;
   validUntil?: string;
   displayStatus?: string;
+  validity?: { band: string; pct: number | null; from: string; until: string };
+  serverTime?: string;
 }
 
 export class RakaPayService {
@@ -379,9 +382,11 @@ export class RakaPayService {
     const best = list[0];
     if (!best) return { color: 'ROUGE', text: 'AUCUN PASS — enregistré, pass à acheter', nothingToPay: false };
     const s = statusAt(best, now);
-    const base = { passNumber: best.number, credentialId: best.id, validUntil: best.validUntil, displayStatus: s.status };
+    const base = { passNumber: best.number, credentialId: best.id, validFrom: best.validFrom, validUntil: best.validUntil, displayStatus: s.status, validity: s.validity, serverTime: s.serverTime };
     if (s.status === 'VALIDE') return { color: 'VERT', text: `EN RÈGLE — ${s.text}`, nothingToPay: true, ...base };
     if (s.status === 'BIENTOT_EXPIRE') return { color: 'AMBRE', text: `EN RÈGLE — ${s.text}`, nothingToPay: true, ...base };
+    // Moins de 21 % de validité restante : encore en règle, affiché en rouge (règle 49 % / 21 %).
+    if (s.status === 'CRITIQUE') return { color: 'ROUGE', text: `EN RÈGLE — ${s.text}`, nothingToPay: true, ...base };
     return { color: 'ROUGE', text: s.text, nothingToPay: false, ...base };
   }
 
@@ -507,7 +512,7 @@ export class RakaPayService {
     const station = moto ? this.stations.get(moto.stationId) : undefined;
     return {
       registered: true, driverVerified: !!driver && driver.status === 'ACTIF', vestNumber: driver?.vestNumber ?? null,
-      pass: status ? { color: status.color, text: status.text, validUntil: status.validUntil ?? null } : null,
+      pass: status ? { color: status.color, text: status.text, validFrom: status.validFrom ?? null, validUntil: status.validUntil ?? null, validity: status.validity ?? null } : null,
       stationCommune: station?.commune ?? null, verifiedAt,
       message: status?.color === 'ROUGE' ? 'Conducteur enregistré ; pass non valide à cette heure.' : 'Conducteur enregistré ; pass en règle.',
     };

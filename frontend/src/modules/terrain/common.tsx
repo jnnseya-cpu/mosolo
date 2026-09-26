@@ -5,6 +5,7 @@ import { Drawer } from '../../components/Drawer';
 import { Icon } from '../../components/Icon';
 import { QrCode } from '../../components/QrCode';
 import { StatusBadge } from '../../components/StatusBadge';
+import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { describeError } from '../../lib/api';
 import { moduleLabel } from './labels';
 import type { Badge } from './types';
@@ -41,6 +42,9 @@ export function BadgeCard({ badge, name, structure }: { badge: Badge; name: stri
           <p className="small muted">Valide du {fmtDate(badge.validFrom)} au {fmtDate(badge.validUntil)}</p>
           <div style={{ marginTop: 6 }}>
             <StatusBadge tone={active ? 'good' : 'critical'} label={active ? 'Actif' : badge.status === 'SUSPENDU' ? 'Suspendu' : 'Révoqué'} />
+          </div>
+          <div style={{ marginTop: 6 }}>
+            <ValidityCountdown compact from={badge.validFrom} until={badge.validUntil} blocked={active ? null : badge.status === 'SUSPENDU' ? 'Suspendu' : 'Révoqué'} label="Habilitation" />
           </div>
         </div>
       </div>

@@ -44,7 +44,7 @@ export interface ObligationDetail extends Obligation { explanation?: ObligationE
 
 export interface PaymentOrder {
   paymentReference: string; amount: MoneyJSON; indicativeAmount?: MoneyJSON | { amount: MoneyJSON; rate?: string } | null; beneficiaryAlias?: string;
-  expiresAt?: string; status: PaymentStatus | string; ussdInstructions?: string | string[];
+  expiresAt?: string; createdAt?: string; status: PaymentStatus | string; ussdInstructions?: string | string[];
   /** Prestataire connecté (BitriPay, KODA) : intention, lien de paiement hébergé, QR du prestataire. */
   provider?: string; providerIntentId?: string; checkoutUrl?: string | null; qrPayload?: string | null; sandbox?: boolean;
 }

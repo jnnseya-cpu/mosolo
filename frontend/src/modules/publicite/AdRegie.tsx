@@ -9,6 +9,7 @@ import { PageHead } from '../../components/Shell';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { StatusBadge } from '../../components/StatusBadge';
+import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { ErrorLine, hasRole, Money, ReasonForm, useAction } from '../parking/shared';
@@ -165,7 +166,7 @@ function Accreditations({ tick, onChange }: { tick: number; onChange: () => void
         <div className="pk-cards">
           {(list.data ?? []).map((a) => (
             <article key={a.id} className="pk-card">
-              <div className="pk-card-head"><div className="min0"><p className="pk-row-title">{a.name}</p><p className="pk-sub">{a.userId} · {a.communes.join(', ')} · du {fmtDate(a.validFrom)} au {fmtDate(a.validUntil)}</p></div>
+              <div className="pk-card-head"><div className="min0"><p className="pk-row-title">{a.name}</p><p className="pk-sub">{a.userId} · {a.communes.join(', ')} · du {fmtDate(a.validFrom)} au {fmtDate(a.validUntil)}</p><ValidityCountdown compact from={a.validFrom} until={a.validUntil} blocked={a.status === 'REVOQUEE' ? 'Révoquée' : null} /></div>
                 <StatusBadge tone={a.valid ? 'good' : 'critical'} label={a.valid ? 'Valide' : a.status === 'REVOQUEE' ? 'Révoquée' : 'Hors validité'} /></div>
               {a.revocation && <p className="small muted">Motif : {a.revocation.reason}</p>}
               {a.status === 'ACTIVE' && <ReasonForm confirmLabel="Révoquer" danger placeholder="Motif de révocation" onSubmit={(reason) => api(`/v1/publicite/accreditations/${encodeURIComponent(a.userId)}/revoke`, { method: 'POST', body: { reason } }).then(onChange)} />}

@@ -12,7 +12,8 @@ import { createHmac } from 'node:crypto';
 import { isRuleExecutable, Money, type MoneyJSON, type PaymentStatus } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
-import { DAY_MS, HOUR_MS, isoDate } from '../../core/clock.js';
+import { DAY_MS, isoDate } from '../../core/clock.js';
+import { validityView, type ValidityView } from '../../core/validity.js';
 import { checkChar, randomSecret, safeEqualHex } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, authorize, evaluate, type Access } from '../../core/policy.js';
@@ -126,8 +127,6 @@ export interface Stall {
 }
 export type TitlePeriod = 'JOUR' | 'SEMAINE' | 'MOIS';
 export const TITLE_DAYS: Record<TitlePeriod, number> = { JOUR: 1, SEMAINE: 7, MOIS: 30 };
-/** Seuil ambre (Annexe H § H.27.8) : fin de journée, 1 jour, 3 jours. */
-const TITLE_AMBER_MS: Record<TitlePeriod, number> = { JOUR: 3 * HOUR_MS, SEMAINE: DAY_MS, MOIS: 3 * DAY_MS };
 export interface StallTitle { id: string; stallId: string; taxpayerId: string; period: TitlePeriod; obligationId: string; requestedBy: string; createdAt: string }
 
 export interface TicketingDeclaration {
@@ -685,7 +684,7 @@ export class VerticalesService {
   }
 
   certificateView(c: Certificate) {
-    return { code: c.code, kind: c.kind, label: c.label, vertical: c.vertical, caseId: c.caseId, objectId: c.objectId ?? null, commune: c.commune, validFrom: c.validFrom, validUntil: c.validUntil ?? null, status: this.certificateStatus(c) };
+    return { code: c.code, kind: c.kind, label: c.label, vertical: c.vertical, caseId: c.caseId, objectId: c.objectId ?? null, commune: c.commune, validFrom: c.validFrom, validUntil: c.validUntil ?? null, status: this.certificateStatus(c), validity: validityView(c.validFrom, c.validUntil ?? null, this.now()) };
   }
 
   certificateStatus(c: Certificate): 'VALIDE' | 'EXPIRE' | 'A_VENIR' | 'REVOQUE' {
@@ -703,7 +702,7 @@ export class VerticalesService {
     const status = this.certificateStatus(c);
     const signatureValide = this.verifySignature(`${c.code}|${c.kind}|${c.validFrom}|${c.validUntil ?? ''}`, c.signature);
     const messages = { VALIDE: 'Titre authentique et en cours de validité.', EXPIRE: 'Titre authentique, validité échue.', A_VENIR: 'Titre authentique, validité non encore ouverte.', REVOQUE: 'Titre révoqué.' };
-    return { code: c.code, authentique: signatureValide, type: c.label, verticale: this.vertical(c.vertical).name, commune: c.commune, validFrom: c.validFrom, validUntil: c.validUntil ?? null, statut: status, message: messages[status] };
+    return { code: c.code, authentique: signatureValide, type: c.label, verticale: this.vertical(c.vertical).name, commune: c.commune, validFrom: c.validFrom, validUntil: c.validUntil ?? null, statut: status, message: messages[status], validity: status === 'REVOQUE' ? null : validityView(c.validFrom, c.validUntil ?? null, this.now()) };
   }
 
   // ------------------------------------------------------------------ plaques (NFIU et objets)
@@ -767,6 +766,13 @@ export class VerticalesService {
       enregistre: true, commune: p.commune, quartier: p.quartier,
       // Le Cahier des exigences prévaut (décision de la Ville) : couleur de situation publique, sans nom, montant ni date de paiement.
       ...(authentique && p.status === 'POSEE' ? (() => { const sit = this.objectSituation(p.objectId); return { situation: { color: sit.color, label: sit.label } }; })() : {}),
+      // Plaque d'étal : validité du titre d'occupation en cours (droit de place), sans nom ni montant.
+      ...(authentique && p.status === 'POSEE' && p.kind === 'ETAL' ? (() => {
+        const stall = this.stalls.findOne((x) => x.objectId === p.objectId);
+        if (!stall) return {};
+        const t = this.currentTitle(stall.id);
+        return { titre: { statut: t.status, label: t.statusLabel, validFrom: t.validFrom ?? null, validUntil: t.validUntil, validity: t.validity ?? null } };
+      })() : {}),
       message: p.status === 'POSEE' ? 'Plaque authentique, objet enregistré.' : 'Plaque remplacée : elle n’est plus en service.',
     };
   }
@@ -874,7 +880,7 @@ export class VerticalesService {
         ...m,
         stalls: stalls.map((s) => ({ id: s.id, row: s.row, number: s.number, category: s.category, surfaceM2: s.surfaceM2, occupied: !!s.holderTaxpayerId, titleStatus: s.holderTaxpayerId ? this.currentTitle(s.id).status : null })),
         occupied: stalls.filter((s) => s.holderTaxpayerId).length,
-        paidOccupied: stalls.filter((s) => s.holderTaxpayerId && ['VERT', 'AMBRE'].includes(this.currentTitle(s.id).status)).length,
+        paidOccupied: stalls.filter((s) => s.holderTaxpayerId && ['VERT', 'AMBRE', 'ROUGE'].includes(this.currentTitle(s.id).status)).length,
       };
     });
   }
@@ -891,26 +897,29 @@ export class VerticalesService {
     });
   }
 
-  /** Statut d'un titre (heure serveur) : GRIS en attente de paiement, VERT, AMBRE (échéance proche), ROUGE (échu). */
+  /**
+   * Statut d'un titre (heure serveur), règle 49 % / 21 % : GRIS en attente de paiement ; VERT (≥ 49 % restant),
+   * AMBRE (21–49 %), ROUGE (< 21 %, encore valable) ; ECHU (validité échue).
+   */
   titleView(t: StallTitle) {
     const o = this.ctx.assessment.obligations.get(t.obligationId);
     const paid = this.ctx.payments.byObligation(t.obligationId).filter((p) => CONFIRMED.includes(p.status) && p.confirmedAt).sort((a, b) => a.confirmedAt!.localeCompare(b.confirmedAt!))[0];
     const base = { id: t.id, period: t.period, days: TITLE_DAYS[t.period], obligationId: t.obligationId, amount: o?.amount ?? null, createdAt: t.createdAt };
-    if (!paid) return { ...base, status: o?.status === 'ANNULEE' ? ('ANNULE' as const) : ('GRIS' as const), statusLabel: 'En attente de paiement', validFrom: null, validUntil: null };
+    if (!paid) return { ...base, status: o?.status === 'ANNULEE' ? ('ANNULE' as const) : ('GRIS' as const), statusLabel: 'En attente de paiement', validFrom: null, validUntil: null, validity: null };
     const from = new Date(paid.confirmedAt!);
     const until = new Date(from.getTime() + TITLE_DAYS[t.period] * DAY_MS);
-    const now = this.now().getTime();
-    const status = now >= until.getTime() ? ('ROUGE' as const) : until.getTime() - now <= TITLE_AMBER_MS[t.period] ? ('AMBRE' as const) : ('VERT' as const);
-    const label = { VERT: 'Valide', AMBRE: 'Expire bientôt', ROUGE: 'Échu' }[status];
-    return { ...base, status, statusLabel: label, validFrom: from.toISOString(), validUntil: until.toISOString() };
+    const validity = validityView(from.toISOString(), until.toISOString(), this.now());
+    const status = validity.band === 'EXPIRE' ? ('ECHU' as const) : validity.band === 'ROUGE' ? ('ROUGE' as const) : validity.band === 'AMBRE' ? ('AMBRE' as const) : ('VERT' as const);
+    const label = { VERT: 'Valide', AMBRE: 'Valide — expire bientôt', ROUGE: 'Valide — expire très bientôt', ECHU: 'Échu' }[status];
+    return { ...base, status, statusLabel: label, validFrom: from.toISOString(), validUntil: until.toISOString(), validity };
   }
 
-  currentTitle(stallId: string): { status: 'VERT' | 'AMBRE' | 'ROUGE' | 'GRIS' | 'AUCUN'; statusLabel: string; validUntil: string | null } {
+  currentTitle(stallId: string): { status: 'VERT' | 'AMBRE' | 'ROUGE' | 'ECHU' | 'GRIS' | 'AUCUN'; statusLabel: string; validFrom?: string | null; validUntil: string | null; validity?: ValidityView | null } {
     const views = this.titles.find((t) => t.stallId === stallId).map((t) => this.titleView(t));
-    const valid = views.filter((v) => v.status === 'VERT' || v.status === 'AMBRE').sort((a, b) => (b.validUntil ?? '').localeCompare(a.validUntil ?? ''))[0];
-    if (valid) return { status: valid.status as 'VERT' | 'AMBRE', statusLabel: valid.statusLabel, validUntil: valid.validUntil };
-    const expired = views.filter((v) => v.status === 'ROUGE').sort((a, b) => (b.validUntil ?? '').localeCompare(a.validUntil ?? ''))[0];
-    if (expired) return { status: 'ROUGE', statusLabel: 'Échu', validUntil: expired.validUntil };
+    const valid = views.filter((v) => v.status === 'VERT' || v.status === 'AMBRE' || v.status === 'ROUGE').sort((a, b) => (b.validUntil ?? '').localeCompare(a.validUntil ?? ''))[0];
+    if (valid) return { status: valid.status as 'VERT' | 'AMBRE' | 'ROUGE', statusLabel: valid.statusLabel, validFrom: valid.validFrom, validUntil: valid.validUntil, validity: valid.validity };
+    const expired = views.filter((v) => v.status === 'ECHU').sort((a, b) => (b.validUntil ?? '').localeCompare(a.validUntil ?? ''))[0];
+    if (expired) return { status: 'ECHU', statusLabel: 'Échu', validFrom: expired.validFrom, validUntil: expired.validUntil, validity: expired.validity };
     if (views.some((v) => v.status === 'GRIS')) return { status: 'GRIS', statusLabel: 'En attente de paiement', validUntil: null };
     return { status: 'AUCUN', statusLabel: 'Aucun titre', validUntil: null };
   }

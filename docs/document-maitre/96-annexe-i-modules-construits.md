@@ -423,7 +423,77 @@ Côté navigateur, l’écran `/ia` offre la boîte de réception (filtres par a
 | Apprentissage continu | Décisions humaines | C | A : note de version candidate | R29 + comité des modèles |
 | Communication | Communications, obligations | B | A : note ; B : relance n° 1 | R06, R07, R08 |
 
-## I.14 Ce qui reste ouvert
+## I.14 Preuves sur tous les canaux : compte à rebours 49 % / 21 %, WhatsApp, SMS, version légère, papier
+
+Tout le monde n’a pas un téléphone Android ou iOS. Le module d’extension `preuves` rend **chaque preuve vérifiable par son code, sur tous les canaux**, avec la même réponse :
+
+- **Application** : page « Vérifier une preuve » (`/preuve`).
+- **WhatsApp** : assistant officiel (compte certifié).
+- **SMS** : « V + code », depuis n’importe quel téléphone.
+- **USSD et serveur vocal** : l’option 3 vérifie désormais tout code.
+- **Pages légères sans JavaScript** (`/l`) : pour KaiOS, Opera Mini et la 2G.
+- **Papier imprimé** : aux couleurs de la Ville.
+
+Les preuves couvertes sont :
+- tickets et places de stationnement (code aléatoire `PKT…`, non séquentiel) ;
+- places d’étal au marché ;
+- pass wewa et tickets RakaPay ;
+- certificats et autorisations des verticales ;
+- supports publicitaires ;
+- quitus et attestations de bail ;
+- badges d’agents ;
+- quittances, reçus de points agréés et cartes MOSOLO ;
+- plaques.
+
+**Règle de couleur unique (décision du maître d’ouvrage).** Toute preuve à durée limitée affiche un compte à rebours dont la couleur dépend de la part de validité restante :
+
+| Part de validité restante | Couleur | Texte | Au contrôle |
+|---|---|---|---|
+| 49 % ou plus | Vert | ✓ VALIDE — encore … | Valable |
+| De 21 % à moins de 49 % | Ambre (orange) | ⚠ VALIDE — expire dans … | Valable |
+| Moins de 21 % | Rouge | ⚠ VALIDE — EXPIRE DANS … | **Valable** (à renouveler) |
+| 0 % | Rouge | ✗ EXPIRÉ DEPUIS … | Non valable |
+| Avant le début | Gris | PAS ENCORE ACTIF | Non valable |
+
+Cette règle remplace les seuils ambre fixés en durée de l’Annexe H (§ H.11.4) et les seuils propres à chaque module. Elle est calculée en un seul endroit (`shared/validity.ts`), côté serveur comme côté client. La couleur n’est jamais seule : icône, texte, barre de progression graduée à 49 % et 21 %, et pourcentage l’accompagnent.
+
+L’heure de référence est **celle du serveur**. Chaque réponse porte l’en-tête `x-mosolo-server-time` : changer l’heure du téléphone ne change rien. Le rouge sous 21 % n’est **pas** une infraction. Le résultat du contrôle reste « VALIDE », et le feu de contrôle du stationnement reste distinct de la couleur d’affichage : aucun constat n’est possible sur un titre encore valable.
+
+| Canal | Pour qui | Ce qu’il fait | Garde-fous |
+|---|---|---|---|
+| Application, `/preuve` | Smartphone | Vérifier tout code ou QR, compte à rebours en direct, « comment lire la couleur » | Réponse minimale : ni nom, ni adresse ; plaque masquée (KN-00••-DM) |
+| WhatsApp (assistant officiel) | Habitants avec WhatsApp, sans l’application | Vérifier un code ; où payer ; comment payer ; rappels ; signaler un faux agent ; français et lingala | **Consentement explicite** (« OUI ») avant tout contenu ; « STOP » le retire. **Aucun lien de paiement** (tout lien est retiré, ARB-64). **Aucun montant** nominatif. Webhook signé `x-hub-signature-256` |
+| SMS « V code », « POINTS commune », « SIGNAL … » | Tout téléphone, sans Internet | Réponse de 320 caractères au plus, sans accents (GSM-7) : couleur, temps restant, fin de validité | Passerelle signée HMAC (`x-mosolo-signature`) ; limiteur anti-énumération par numéro |
+| USSD et serveur vocal (option 3) | Sans données mobiles | Tout code, même réponse | Existant (§ I.9), étendu au résolveur universel |
+| Pages légères `/l` | KaiOS, Opera Mini, 2G/EDGE, forfaits de quelques Mo | Vérifier, où payer, comment payer, signaler (anonyme) ; version imprimable avec QR | **Aucun JavaScript**, aucune police ni image externe, moins de 10 Ko par page, barre de validité en caractères (lisible sur écran monochrome) |
+| Papier imprimé | Sans téléphone ; guichet, point agréé, affichage | A6 à afficher ; ticket thermique 80 mm ou 58 mm | Voir ci-dessous |
+
+La preuve imprimée est marquée et vérifiable :
+- **Marquage** : logo officiel de la Ville inchangé, bandeau aux couleurs nationales, fond de sécurité (guilloche) et micro-texte du code.
+- **Vérification** : QR vers la page de vérification (lisible par tout appareil photo et par le terminal de contrôle), code court et dates en gros caractères.
+- **Échéancier des couleurs** : un papier ne peut pas décompter. Il porte donc les instants de passage : vert jusqu’au …, orange jusqu’au …, rouge jusqu’au …, puis expiré.
+- **État et mentions** : état à l’impression, rappel « aucun agent ne reçoit d’espèces », et mention « DÉMONSTRATION — NON OPPOSABLE » tant que les actes ne sont pas pris.
+- **Aucun nom ni montant** n’est imprimé. **Seule la vérification en ligne fait foi** : la photocopie d’un ticket expiré s’affiche EXPIRÉ.
+
+Routes :
+- `GET /v1/public/preuves/:code` ;
+- `GET /v1/public/preuves?c=` (jetons longs) ;
+- `GET /v1/public/preuves/:code/impression` ;
+- `POST /v1/sms/inbound` ;
+- `GET|POST /v1/whatsapp/webhook` ;
+- `GET /l`, `/l/v`, `/l/imprimer`, `/l/points`, `/l/payer`, `GET|POST /l/signaler`.
+
+Écrans :
+- `/preuve` et `/preuve/:code` ;
+- `/preuve/:code/imprimer` (formats A6, 80 mm, 58 mm) ;
+- `/canaux/whatsapp-sms` (simulateur) ;
+- liens « Imprimer » depuis le stationnement, le pass wewa, les tickets RakaPay, les certificats et le quitus.
+
+Tests :
+- `backend/test/preuves.test.ts` : résolution de chaque type de preuve ; seuils à l’heure serveur ; SMS sans accents et signé en production ; consentement WhatsApp, absence de lien et de montant ; pages sans script de moins de 10 Ko.
+- `frontend/test/validity-countdown.test.tsx` : seuils, dates seules, statut bloquant, contenu de la preuve imprimée.
+
+## I.15 Ce qui reste ouvert
 
 Les points suivants ne relèvent pas du logiciel seul ou attendent un acte, un protocole ou une convention ; ils sont signalés dans les écrans concernés et ne produisent aucun effet financier tant qu’ils ne sont pas levés.
 
@@ -433,7 +503,7 @@ Les points suivants ne relèvent pas du logiciel seul ou attendent un acte, un p
 | Quitus fiscal | Effet bloquant sur les mutations et services | Acte J6 ; le quitus reste informatif jusque-là |
 | Répartition | Parts légales éventuelles entre entités | Lecture de l’OL 18/004 et actes provinciaux ; aucune clé paramétrée |
 | Identité | Clés d’accès FIDO2 (passkeys), récupération de compte | Raccordement WebAuthn ; procédure de récupération validée |
-| Canaux | Passerelles USSD, SMS, SVI et courrier réelles ; code court et numéro vert | Conventions opérateurs (J29) |
+| Canaux | Passerelles USSD, SMS, SVI et courrier réelles ; code court et numéro vert ; compte WhatsApp Business certifié et fournisseur contractualisé ; validation des textes lingala de l’assistant | Conventions opérateurs (J29), contrat du fournisseur WhatsApp, avis de l’autorité de protection des données |
 | Données géographiques | Géométries PostGIS, référentiel officiel des codes de communes, cartographie de la population | Protocoles de données et référentiel arrêté |
 | Partenaires | Connecteurs BSP/GDS et IFA (AVIA), passerelle bancaire réelle (CALCU), immatriculations nationales | Accords et protocoles avec le pouvoir central et les partenaires |
 | Exploitation | Persistance des états encore volatils (idempotence, brouillons serveur, lots terrain, boîtes in-app), clé de signature QR dédiée, secrets TOTP au coffre de secrets | Mise en production (hébergement souverain) |

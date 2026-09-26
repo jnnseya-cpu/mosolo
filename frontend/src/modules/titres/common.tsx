@@ -18,6 +18,7 @@ export interface StatusView {
   text: string;
   remainingSeconds?: number;
   serverTime?: string;
+  validity?: { band: string; pct: number | null; from: string; until: string };
 }
 
 export interface CredentialView {
@@ -78,6 +79,9 @@ export interface ControlView {
   text: string;
   remainingSeconds?: number;
   serverTime: string;
+  validFrom?: string;
+  validUntil?: string;
+  validity?: { band: string; pct: number | null; from: string; until: string };
   module?: string;
   typeLabel?: string;
   prefix?: string;
@@ -91,7 +95,7 @@ export interface ControlView {
 }
 
 export const STATUS_LABEL: Record<string, string> = {
-  PAS_ENCORE_ACTIF: 'Pas encore actif', VALIDE: 'Valide', BIENTOT_EXPIRE: 'Bientôt expiré', EXPIRE: 'Expiré',
+  PAS_ENCORE_ACTIF: 'Pas encore actif', VALIDE: 'Valide', BIENTOT_EXPIRE: 'Bientôt expiré', CRITIQUE: 'Valide — expire très bientôt', EXPIRE: 'Expiré',
   SUSPENDU: 'Suspendu', INVALIDE: 'Invalide', INCONNU: 'Inconnu',
 };
 

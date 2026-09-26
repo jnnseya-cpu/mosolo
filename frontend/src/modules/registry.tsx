@@ -44,6 +44,10 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/recouvrement/avis/:id', element: lazy(() => import('./recouvrement/NoticeView')) },
 
   // Canaux : USSD/SVI, points de paiement, enrôlement assisté, carte MOSOLO
+  { path: '/preuve', element: lazy(() => import('./preuves/ProofVerify')), nav: { label: 'Vérifier une preuve', short: 'Vérifier', icon: 'shieldCheck', group: 'public', roles: [] } },
+  { path: '/preuve/:code', element: lazy(() => import('./preuves/ProofVerify')) },
+  { path: '/preuve/:code/imprimer', element: lazy(() => import('./preuves/ProofPrint')) },
+  { path: '/canaux/whatsapp-sms', element: lazy(() => import('./preuves/WhatsAppSms')), nav: { label: 'WhatsApp et SMS', short: 'WhatsApp', icon: 'message', group: 'public', roles: [] } },
   { path: '/canaux/ussd', element: lazy(() => import('./canaux/UssdSimulator')), nav: { label: 'USSD et SVI', short: 'USSD', icon: 'keypad', group: 'public', roles: [] } },
   { path: '/points-de-paiement', element: lazy(() => import('./canaux/PaymentPointsPublic')), nav: { label: 'Où payer ?', short: 'Payer', icon: 'store', group: 'public', roles: [] } },
   { path: '/canaux/verifier-carte', element: lazy(() => import('./canaux/CardVerify')) },

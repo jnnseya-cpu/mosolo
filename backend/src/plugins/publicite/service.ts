@@ -19,6 +19,7 @@ import { DAY_MS, isoDate } from '../../core/clock.js';
 import { dec, decMul, decToString, divideDecimalStrings } from '../../core/decimal.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, authorize, evaluate } from '../../core/policy.js';
+import { validityView } from '../../core/validity.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
 import { isCommune } from '../../reference/kinshasa.js';
@@ -255,7 +256,7 @@ export class PubliciteService {
     }
     const openCase = this.cases.findOne((c) => c.deviceId === d.id && (c.status === 'CONSTATE' || c.status === 'VERIFIE'));
     return {
-      status, expiringSoon, rights, authorization: auth ? { id: auth.id, reference: auth.reference, validFrom: auth.periodFrom, validUntil: auth.periodTo } : null,
+      status, expiringSoon, rights, authorization: auth ? { id: auth.id, reference: auth.reference, validFrom: auth.periodFrom, validUntil: auth.periodTo, validity: validityView(auth.periodFrom, auth.periodTo, this.now()) } : null,
       openCase: openCase ? { id: openCase.id, reference: openCase.reference, finding: openCase.finding } : null,
       inspections: this.inspections.find((i) => i.deviceId === d.id).length,
     };
@@ -309,7 +310,8 @@ export class PubliciteService {
     const st = this.deviceStatus(d);
     return {
       reference: d.reference, type: d.type, commune: d.commune, surfaceM2: d.surfaceM2, faces: d.faces,
-      status: st.status, authorized: st.status === 'AUTORISE', validUntil: st.authorization?.validUntil ?? null,
+      status: st.status, authorized: st.status === 'AUTORISE', validFrom: st.authorization?.validFrom ?? null, validUntil: st.authorization?.validUntil ?? null,
+      validity: st.authorization && st.status !== 'RETIRE' ? st.authorization.validity : null,
       notice: 'Vérification publique : aucune donnée nominative. Signalement possible auprès de la régie.',
     };
   }
@@ -515,7 +517,7 @@ export class PubliciteService {
   /** Badge vérifiable par les exploitants contre les faux contrôleurs (public). */
   publicBadge(userId: string) {
     const a = this.accreditations.get(userId);
-    return { badge: userId, name: a?.name ?? null, accredited: this.accreditationValid(a), validUntil: a?.validUntil ?? null, communes: a?.communes ?? [], status: a?.status ?? 'INCONNU' };
+    return { badge: userId, name: a?.name ?? null, accredited: this.accreditationValid(a), validFrom: a?.validFrom ?? null, validUntil: a?.validUntil ?? null, validity: a && a.status === 'ACTIVE' ? validityView(a.validFrom, a.validUntil, this.now()) : null, communes: a?.communes ?? [], status: a?.status ?? 'INCONNU' };
   }
 
   // ---------------------------------------------------------------- Inspections et dossiers de constat

@@ -9,6 +9,7 @@ import { PageHead } from '../../components/Shell';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { StatusBadge } from '../../components/StatusBadge';
+import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { DataTable } from '../../components/DataTable';
 import { useApi } from '../../hooks/useApi';
 import { api, newIdempotencyKey } from '../../lib/api';
@@ -17,6 +18,7 @@ import {
   VIOLATION_STATUS, ZONE_STATUS, type ObligationSummary, type Partner, type Reservation, type Session, type Violation, type Zone,
 } from './shared';
 import './parking.css';
+import { PrintProofLink } from '../preuves/PrintLink';
 
 type Tab = 'sessions' | 'start' | 'reservations' | 'violations' | 'partners';
 const DURATIONS = [15, 30, 60, 120, 180, 240];
@@ -117,8 +119,9 @@ function SessionCard({ s, onChange }: { s: Session; onChange: () => void }) {
       {s.status === 'ACTIVE' ? (
         <div>
           <p className="caps-sm muted">Temps restant</p>
-          <p className="pk-countdown">{fmtMinutes(s.remainingMinutes)}</p>
+          {s.startAt && s.paidUntil ? <ValidityCountdown from={s.startAt} until={s.paidUntil} label="Stationnement payé" /> : <p className="pk-countdown">{fmtMinutes(s.remainingMinutes)}</p>}
           <p className="small">Valable jusqu’à {fmtDate(s.paidUntil ?? undefined, true)} · <LightBadge light={s.light} /></p>
+          {s.ticketCode && <p className="small">Ticket <span className="mono">{s.ticketCode}</span> · vérifiable par QR, USSD, SMS et WhatsApp <PrintProofLink code={s.ticketCode} /></p>}
           {s.light === 'AMBRE' && <p className="small">Rappel envoyé : prolongez à distance pour éviter un constat.</p>}
         </div>
       ) : (
@@ -292,7 +295,7 @@ function ReservationsTab({ zones, plates, tick, onChange }: { zones: Zone[]; pla
             {(list.data ?? []).map((r) => (
               <article key={r.id} className="pk-card">
                 <div className="pk-card-head">
-                  <div className="min0"><p className="pk-row-title">{PURPOSE[r.purpose] ?? r.purpose} · {r.places} place(s)</p><p className="pk-sub">{r.zone?.name} · {fmtDate(r.startAt, true)} → {fmtDate(r.endAt, true)}</p></div>
+                  <div className="min0"><p className="pk-row-title">{PURPOSE[r.purpose] ?? r.purpose} · {r.places} place(s)</p><p className="pk-sub">{r.zone?.name} · {fmtDate(r.startAt, true)} → {fmtDate(r.endAt, true)}</p>{r.state === 'CONFIRMEE' && <ValidityCountdown compact from={r.startAt} until={r.endAt} label="Réservation" />}</div>
                   <StatusBadge tone={r.state === 'CONFIRMEE' ? 'good' : r.state === 'REFUSEE' ? 'critical' : r.state === 'DEMANDEE' ? 'neutral' : 'warning'} label={RES_STATE[r.state] ?? r.state} />
                 </div>
                 {r.decision && <p className="small"><strong>Motif de la décision :</strong> {r.decision.reason}</p>}

@@ -54,7 +54,7 @@ export interface CertificateView { code: string; kind: string; label: string; ve
 export interface TitleView { id: string; period: 'JOUR' | 'SEMAINE' | 'MOIS'; days: number; obligationId: string; amount: MoneyJSON | null; status: string; statusLabel: string; validFrom: string | null; validUntil: string | null; createdAt: string }
 export interface StallView {
   id: string; market: string; commune: string; row: string; number: string; category: string; objectId: string | null; plateCode: string | null;
-  current: { status: string; statusLabel: string; validUntil: string | null }; titles: TitleView[];
+  current: { status: string; statusLabel: string; validFrom?: string | null; validUntil: string | null }; titles: TitleView[];
 }
 export interface TicketingView { id: string; eventObjectId: string; ticketsSold: number; source: string; declaredAt: string; obligationId?: string; controls: { observedAttendance: number; gap: number; note: string; at: string }[] }
 
@@ -85,8 +85,12 @@ export const OBLIGATION_TONE: Record<string, 'good' | 'warning' | 'serious' | 'i
 export const CASE_TONE: Record<string, 'good' | 'warning' | 'serious' | 'info' | 'neutral'> = {
   DEPOSE: 'info', EN_INSTRUCTION: 'info', COMPLEMENT_DEMANDE: 'warning', PROPOSE: 'warning', ACCEPTE: 'good', REFUSE: 'serious',
 };
-export const TITLE_TONE: Record<string, 'good' | 'warning' | 'serious' | 'info' | 'neutral'> = {
-  VERT: 'good', AMBRE: 'warning', ROUGE: 'serious', GRIS: 'neutral', AUCUN: 'neutral', ANNULE: 'neutral',
+/** Titres d'étal — règle 49 % / 21 % : VERT, AMBRE, ROUGE (< 21 %, encore valable), ECHU (validité échue). */
+export const TITLE_TONE: Record<string, 'good' | 'warning' | 'serious' | 'critical' | 'info' | 'neutral'> = {
+  VERT: 'good', AMBRE: 'warning', ROUGE: 'critical', ECHU: 'critical', GRIS: 'neutral', AUCUN: 'neutral', ANNULE: 'neutral',
+};
+export const TITLE_LABEL: Record<string, string> = {
+  VERT: 'Valide', AMBRE: 'Valide — expire bientôt', ROUGE: 'Valide — expire très bientôt', ECHU: 'Échu', GRIS: 'En attente de paiement', AUCUN: 'Aucun titre',
 };
 export const PAYMENT_LABEL: Record<string, string> = { INITIE: 'Référence émise', CONFIRME: 'Paiement confirmé', REGLE: 'Réglé au compte public', RAPPROCHE: 'Rapproché' };
 export const RECEIPT_LABEL: Record<string, string> = { PROVISOIRE: 'Provisoire — règlement en cours', DEFINITIVE: 'Définitive — rapprochée', ANNULEE: 'Annulée', REMPLACEE: 'Remplacée', SUSPECTE: 'Vérification en cours' };

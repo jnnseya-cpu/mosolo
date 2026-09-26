@@ -9,6 +9,7 @@ import { PageHead } from '../../components/Shell';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { StatusBadge } from '../../components/StatusBadge';
+import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { DataTable } from '../../components/DataTable';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
@@ -26,7 +27,7 @@ export default function AdInspector() {
   const [tab, setTab] = useState<Tab>(isInspector ? 'control' : 'inventory');
   const [tick, setTick] = useState(0);
   const refresh = () => setTick((n) => n + 1);
-  const badge = useApi(user ? () => api<{ accredited: boolean; validUntil: string | null; communes: string[]; status: string }>(`/v1/publicite/public/badges/${encodeURIComponent(user.id)}`) : null, [user?.id, tick]);
+  const badge = useApi(user ? () => api<{ accredited: boolean; validFrom?: string | null; validUntil: string | null; communes: string[]; status: string }>(`/v1/publicite/public/badges/${encodeURIComponent(user.id)}`) : null, [user?.id, tick]);
   if (!isInspector && !isSupervisor) {
     return (
       <div className="page">
@@ -46,6 +47,7 @@ export default function AdInspector() {
       <PageHead eyebrow="KIN PUB CONTROL · terrain" title="Inspection de la publicité extérieure"
         lead="Le contrôleur collecte des preuves, l’autorité décide, la technologie trace. Un constat ne peut être ni modifié ni supprimé ; aucun encaissement sur le terrain.">
         {isInspector && badge.data && <StatusBadge tone={badge.data.accredited ? 'good' : 'critical'} icon="shieldCheck" label={badge.data.accredited ? `Accrédité·e jusqu’au ${badge.data.validUntil} (${badge.data.communes.join(', ')})` : 'Non accrédité·e : constat impossible'} />}
+        {isInspector && badge.data?.accredited && badge.data.validUntil && <ValidityCountdown compact from={badge.data.validFrom} until={badge.data.validUntil} label="Accréditation" />}
       </PageHead>
       <div className="seg seg-wrap pk-tabs" role="tablist" aria-label="Rubriques">
         {tabs.map(([k, l]) => <button key={k} type="button" role="tab" aria-pressed={tab === k} aria-selected={tab === k} onClick={() => setTab(k)}>{l}</button>)}
@@ -185,7 +187,7 @@ function Inventory({ tick }: { tick: number }) {
             { key: 'loc', label: 'Lieu', render: (d) => `${d.commune} · ${d.address}` },
             { key: 'own', label: 'Exploitant', render: (d) => d.owner?.name ?? (d.presumedOperator ? `présumé : ${d.presumedOperator}` : 'non identifié') },
             { key: 'st', label: 'Situation', render: (d) => <StatusBadge tone={DEVICE_STATUS[d.status].tone} label={DEVICE_STATUS[d.status].label} /> },
-            { key: 'aut', label: 'Échéance', render: (d) => d.authorization ? fmtDate(d.authorization.validUntil) : '—' },
+            { key: 'aut', label: 'Échéance', render: (d) => d.authorization ? <>{fmtDate(d.authorization.validUntil)} <ValidityCountdown compact from={d.authorization.validFrom} until={d.authorization.validUntil} blocked={d.status === 'RETIRE' ? 'Retirée' : null} /></> : '—' },
             { key: 'rights', label: 'Droits', render: (d) => <StatusBadge tone={RIGHTS[d.rights].tone} label={RIGHTS[d.rights].label} /> },
           ]} />
       </section>

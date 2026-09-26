@@ -5,19 +5,21 @@ import { useApi } from '../hooks/useApi';
 import { Icon } from '../components/Icon';
 import { MoneyText } from '../components/MoneyText';
 import { StatusBadge } from '../components/StatusBadge';
+import { ValidityCountdown } from '../components/ValidityCountdown';
 import { MapStatusChip } from '../components/MapStatusChip';
 import { QrCode } from '../components/QrCode';
 import { Drawer } from '../components/Drawer';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../components/States';
-import { api, describeError, newIdempotencyKey } from '../lib/api';
+import { api, describeError, newIdempotencyKey, serverNow } from '../lib/api';
 import { sha256Hex } from '../lib/crypto';
 import {
   CASE_TONE, COMMUNES, fetchSpace, fetchVertical, LEGAL_TONE, OBJ_LABEL, OBJ_MAP, OBLIGATION_LABEL, OBLIGATION_TONE, PAYMENT_LABEL, RECEIPT_LABEL,
-  TITLE_TONE, verifyPath, type AviaDeclaration, type CaseView, type CertificateView, type Procedure, type StallView, type TicketingView,
+  TITLE_LABEL, TITLE_TONE, verifyPath, type AviaDeclaration, type CaseView, type CertificateView, type Procedure, type StallView, type TicketingView,
   type VerticalDetail, type VObject, type VObligation,
 } from '../verticals/catalogue';
 import RakaPay from './RakaPay';
 import '../modules/verticales/verticales.css';
+import { PrintProofLink } from '../modules/preuves/PrintLink';
 
 export { OBLIGATION_TONE as DUE_TONE };
 
@@ -36,11 +38,11 @@ function useAction() {
 function ObligationCard({ o, onChange }: { o: VObligation; onChange: () => void }) {
   const { fmtDate } = useApp();
   const [open, setOpen] = useState(false);
-  const [order, setOrder] = useState<{ paymentReference: string; expiresAt: string } | null>(null);
+  const [order, setOrder] = useState<{ paymentReference: string; expiresAt: string; receivedAt?: string } | null>(null);
   const act = useAction();
   const requestReference = () => act.run(async () => {
     const r = await api<{ paymentReference: string; expiresAt: string }>(`/v1/obligations/${encodeURIComponent(o.id)}/payment-orders`, { method: 'POST', body: { channel: 'MOBILE_MONEY' }, idempotencyKey: newIdempotencyKey() });
-    setOrder(r); onChange();
+    setOrder({ ...r, receivedAt: new Date(serverNow()).toISOString() }); onChange();
   });
   return (
     <li className="vx-due">
@@ -67,6 +69,7 @@ function ObligationCard({ o, onChange }: { o: VObligation; onChange: () => void 
         <div className="callout callout-info">
           <Icon name="phone" size={18} />
           <p>Référence <strong className="mono">{order.paymentReference}</strong> — valable jusqu’au {fmtDate(order.expiresAt, true)}. Payez par Mobile Money, USSD, banque ou point agréé : la quittance est émise à la confirmation signée du prestataire, jamais sur capture d’écran.</p>
+          <ValidityCountdown compact from={order.receivedAt} until={order.expiresAt} label="Référence de paiement" />
         </div>
       )}
       {act.error && <p className="err" role="alert">{act.error}</p>}
@@ -222,7 +225,8 @@ function Stalls({ stalls, onChange }: { stalls: StallView[]; onChange: () => voi
             <div className="min0 vx-grow">
               <p className="row-title">{s.market} — rangée {s.row}, n° {s.number}</p>
               <p className="small muted">{s.category} · {s.commune} · <span className="mono">{s.id}</span></p>
-              <p className="small"><StatusBadge tone={TITLE_TONE[s.current.status] ?? 'neutral'} label={s.current.statusLabel} />{s.current.validUntil ? <span className="muted"> jusqu’au {fmtDate(s.current.validUntil, true)}</span> : null}</p>
+              <p className="small"><StatusBadge tone={TITLE_TONE[s.current.status] ?? 'neutral'} label={s.current.statusLabel ?? TITLE_LABEL[s.current.status]} />{s.current.validUntil ? <span className="muted"> jusqu’au {fmtDate(s.current.validUntil, true)}</span> : null}</p>
+              {s.current.validUntil && <ValidityCountdown compact from={s.current.validFrom} until={s.current.validUntil} label="Titre d’étal" />}
               <p className="hint">Le contrôleur scanne la plaque de l’étal : vous n’avez pas besoin de téléphone. Aucun placier n’encaisse d’espèces.</p>
             </div>
             <div className="row-actions">
@@ -344,7 +348,7 @@ function Certificates({ items }: { items: CertificateView[] }) {
               <figcaption className="mono small">{c.code}</figcaption>
             </figure>
             <div className="min0"><p className="row-title">{c.label}</p><p className="small muted">Du {fmtDate(c.validFrom)}{c.validUntil ? ` au ${fmtDate(c.validUntil)}` : ''}{c.commune ? ` · ${c.commune}` : ''}</p><p className="hint">À afficher sur le lieu : vérifiable par QR, sans donnée personnelle.</p></div>
-            <div className="row-side"><StatusBadge tone={tone[c.status] ?? 'neutral'} label={label[c.status] ?? c.status} /><Link className="btn btn-ghost btn-sm" to={verifyPath(c.code)}>Vérifier</Link></div>
+            <div className="row-side"><StatusBadge tone={tone[c.status] ?? 'neutral'} label={label[c.status] ?? c.status} /><ValidityCountdown compact from={c.validFrom} until={c.validUntil} blocked={c.status === 'REVOQUE' ? 'Révoqué' : null} /><Link className="btn btn-ghost btn-sm" to={verifyPath(c.code)}>Vérifier</Link>{c.status !== 'REVOQUE' && <PrintProofLink code={c.code} />}</div>
           </li>
         ))}
       </ul>

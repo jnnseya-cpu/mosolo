@@ -213,6 +213,7 @@ export function orderView(o: PaymentOrder) {
     amount: o.amount,
     indicativeAmount: o.indicativeAmount,
     beneficiaryAlias: o.beneficiaryAlias,
+    createdAt: o.createdAt,
     expiresAt: o.expiresAt,
     status: o.status,
     channel: o.channel,

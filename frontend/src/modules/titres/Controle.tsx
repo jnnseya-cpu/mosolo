@@ -10,6 +10,8 @@ import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components
 import { StatusBadge } from '../../components/StatusBadge';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
+import { readValidity } from '@mosolo/shared';
+import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { api, describeError, safeGet, safeSet } from '../../lib/api';
 import { hmacSha256Hex, uid } from '../../lib/crypto';
 import { playSignal, type ControlView } from './common';
@@ -109,6 +111,9 @@ function ResultCard({ r }: { r: ControlView }) {
       {r.alreadyUsed && (
         <p className="tt-pay"><Icon name="history" size={20} /> Déjà utilisé le {fmtDate(r.alreadyUsed.at, true)}{r.alreadyUsed.place.label ? ` — ${r.alreadyUsed.place.label}` : ''}.</p>
       )}
+      {(r.validFrom ?? r.validity?.from) && (r.validUntil ?? r.validity?.until) && r.result !== 'INVALIDE' && (
+        <ValidityCountdown from={r.validFrom ?? r.validity?.from} until={r.validUntil ?? r.validity?.until} label="Validité du titre" />
+      )}
       <dl className="kv kv-dense">
         {r.typeLabel && <div><dt>Titre</dt><dd>{r.typeLabel}{r.prefix ? ` · ${r.prefix}` : ''}</dd></div>}
         {r.plate && <div><dt>Plaque</dt><dd className="mono">{r.plate}</dd></div>}
@@ -195,10 +200,13 @@ export default function Controle() {
     } else {
       const from = new Date(found.validFrom).getTime(); const until = new Date(found.validUntil).getTime();
       const left = Math.round((until - now) / 1000);
+      // Règle unique 49 % / 21 %, à l'heure serveur (`now` = heure du paquet signé + temps écoulé).
+      const band = readValidity(found.validFrom, found.validUntil, now).band;
+      const [st, color, icon] = band === 'ROUGE' || band === 'EXPIRE' ? ['CRITIQUE', 'rouge', 'alert'] : band === 'AMBRE' ? ['BIENTOT_EXPIRE', 'ambre', 'alert'] : ['VALIDE', 'vert', 'check'];
       if (now < from) res = { ...base, result: 'INVALIDE', status: 'PAS_ENCORE_ACTIF', color: 'gris', icon: 'clock', text: 'PAS ENCORE ACTIF' };
       else if (now > until + found.toleranceMinutes * 60_000) res = { ...base, result: 'EXPIRE', status: 'EXPIRE', color: 'rouge', icon: 'x', text: 'EXPIRÉ' };
-      else res = { ...base, result: 'VALIDE', status: left < found.amberMinutes * 60 ? 'BIENTOT_EXPIRE' : 'VALIDE', color: left < found.amberMinutes * 60 ? 'ambre' : 'vert', icon: left < found.amberMinutes * 60 ? 'alert' : 'check', text: `VALIDE jusqu’au ${fmtDate(found.validUntil, true)}`, nothingToPay: true, signal: 'COURT', remainingSeconds: left };
-      res = { ...res, ...(found.plate ? { plate: found.plate } : {}), typeLabel: found.number };
+      else res = { ...base, result: 'VALIDE', status: st, color, icon, text: `VALIDE jusqu’au ${fmtDate(found.validUntil, true)}`, nothingToPay: true, signal: 'COURT', remainingSeconds: left };
+      res = { ...res, ...(found.plate ? { plate: found.plate } : {}), typeLabel: found.number, validFrom: found.validFrom, validUntil: found.validUntil };
     }
     if (plate || token) {
       setQueue((q) => [...q, { opId: uid('op'), ...(token ? { token } : { plate: plate! }), controlledAt: new Date(now).toISOString(), place: { ...(place.label ? { label: place.label } : {}), ...(gps ?? {}) }, offlineResult: res.result, note: res.text }]);

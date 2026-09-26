@@ -8,6 +8,7 @@ import { formatMoney } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { PageHead } from '../../components/Shell';
 import { StatusBadge, type Tone } from '../../components/StatusBadge';
+import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { useApi } from '../../hooks/useApi';
@@ -59,7 +60,7 @@ function ExemptionCard({ x, refData, onChanged }: { x: Exemption; refData: Refer
         <div><dt>Motif</dt><dd>{x.grounds}</dd></div>
         <div><dt>Pièces</dt><dd>{x.proofs.map((p) => `${p.type} — ${p.reference}`).join(' ; ')}</dd></div>
         <div><dt>Base légale</dt><dd>{x.legalBasis ? <>{x.legalBasis.title}, {x.legalBasis.article}{x.legalBasis.demo && <span className="tag fs-tag-demo">Instrument fictif</span>}</> : <span className="muted">À établir à l’instruction — aucune exonération sans base légale.</span>}</dd></div>
-        <div><dt>Effet</dt><dd>du {fmtDate(x.validFrom)}{x.validTo ? ` au ${fmtDate(x.validTo)}` : ''}{x.retroactivity && <> — rétroactivité décidée : {x.retroactivity.decisionReference}</>}</dd></div>
+        <div><dt>Effet</dt><dd>du {fmtDate(x.validFrom)}{x.validTo ? ` au ${fmtDate(x.validTo)}` : ''}{x.retroactivity && <> — rétroactivité décidée : {x.retroactivity.decisionReference}</>}{(x.effectiveStatus === 'APPROUVEE' || x.effectiveStatus === 'EXPIREE' || x.effectiveStatus === 'REVOQUEE') && <> <ValidityCountdown compact from={x.validFrom} until={x.validTo} blocked={x.effectiveStatus === 'REVOQUEE' ? 'Révoquée' : null} /></>}</dd></div>
         {x.rectifiedObligationId && <div><dt>Obligation rectifiée</dt><dd className="mono">{x.rectifiedObligationId}</dd></div>}
       </dl>
       <Steps x={x} />

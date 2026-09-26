@@ -6,12 +6,13 @@ import { useApi } from '../../hooks/useApi';
 import { PageHead } from '../../components/Shell';
 import { Icon } from '../../components/Icon';
 import { StatusBadge } from '../../components/StatusBadge';
+import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { MoneyText } from '../../components/MoneyText';
 import { DataTable } from '../../components/DataTable';
 import { Drawer } from '../../components/Drawer';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { api, describeError } from '../../lib/api';
-import { CASE_TONE, fetchCatalogue, OBLIGATION_LABEL, TITLE_TONE, verifyPath, type AviaDeclaration, type CaseView, type VObligation } from '../../verticals/catalogue';
+import { CASE_TONE, fetchCatalogue, OBLIGATION_LABEL, TITLE_LABEL, TITLE_TONE, verifyPath, type AviaDeclaration, type CaseView, type VObligation } from '../../verticals/catalogue';
 import './verticales.css';
 
 type Tab = 'demarches' | 'plaques' | 'avia' | 'telecom' | 'indicateurs';
@@ -196,7 +197,7 @@ interface ScanResult {
   plate: { code: string; label: string; status: string; commune: string; quartier: string };
   access: 'full' | 'minimal'; object: { id: string; category: string; probativeStatus: string };
   occupation: string | null; situation: { color: string; label: string; lastPaymentAt: string | null };
-  stallTitle: { status: string; statusLabel: string; validUntil: string | null } | null; lastFinding: { date: string; result: string } | null;
+  stallTitle: { status: string; statusLabel: string; validFrom?: string | null; validUntil: string | null } | null; lastFinding: { date: string; result: string } | null;
   obligations?: VObligation[]; notice: string;
 }
 
@@ -231,7 +232,7 @@ function PlatesTab() {
               <div><dt>Objet</dt><dd className="mono">{scan.object.id} — {scan.object.category}</dd></div>
               {scan.occupation && <div><dt>Occupation</dt><dd>{scan.occupation === 'MIS_EN_BAIL' ? 'Mis en bail' : 'Occupé par le propriétaire ou non déclaré'}</dd></div>}
               <div><dt>Situation</dt><dd><StatusBadge tone={scan.situation.color === 'green' ? 'good' : scan.situation.color === 'red' ? 'serious' : scan.situation.color === 'amber' ? 'warning' : 'neutral'} label={scan.situation.label} /></dd></div>
-              {scan.stallTitle && <div><dt>Titre d’étal</dt><dd><StatusBadge tone={TITLE_TONE[scan.stallTitle.status] ?? 'neutral'} label={scan.stallTitle.statusLabel} /></dd></div>}
+              {scan.stallTitle && <div><dt>Titre d’étal</dt><dd><StatusBadge tone={TITLE_TONE[scan.stallTitle.status] ?? 'neutral'} label={scan.stallTitle.statusLabel ?? TITLE_LABEL[scan.stallTitle.status]} />{scan.stallTitle.validUntil && <> <ValidityCountdown compact from={scan.stallTitle.validFrom} until={scan.stallTitle.validUntil} /></>}</dd></div>}
               {scan.lastFinding && <div><dt>Dernier constat</dt><dd>{fmtDate(scan.lastFinding.date)} — {scan.lastFinding.result}</dd></div>}
             </dl>
             {scan.obligations && scan.obligations.map((o) => <p key={o.id} className="small">{o.id} — <MoneyText money={o.amount} /> — {OBLIGATION_LABEL[o.status] ?? o.status}</p>)}

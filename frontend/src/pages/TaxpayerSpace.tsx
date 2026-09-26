@@ -9,13 +9,14 @@ import { Drawer } from '../components/Drawer';
 import { DataTable } from '../components/DataTable';
 import { MoneyText } from '../components/MoneyText';
 import { StatusBadge } from '../components/StatusBadge';
+import { ValidityCountdown } from '../components/ValidityCountdown';
 import { MapStatusChip } from '../components/MapStatusChip';
 import { AutosaveBar } from '../components/VersionHistory';
 import { EmptyState, ErrorState, Loading } from '../components/States';
 import { Icon } from '../components/Icon';
 import { QrCode } from '../components/QrCode';
 import { categoryLabel, levelLabel } from '../lib/labels';
-import { api, ApiError, describeError, newIdempotencyKey, safeGet } from '../lib/api';
+import { api, ApiError, describeError, newIdempotencyKey, safeGet, serverNow } from '../lib/api';
 import { OBLIGATION_TONE, PAYMENT_TONE, RECEIPT_TONE, obligationKey } from '../lib/status';
 import type { UIKey } from '../lib/i18n';
 import { asMoney } from '../lib/normalize';
@@ -128,7 +129,7 @@ function PayFlow({ ob }: { ob: Obligation }) {
       const r = await api<PaymentOrder>(`/v1/obligations/${encodeURIComponent(ob.id)}/payment-orders`, {
         method: 'POST', idempotencyKey: idem, body: { channel, ...(display ? { displayCurrency: display } : {}), ...(providerAllowed && provider ? { provider } : {}) },
       });
-      setOrder(r);
+      setOrder({ createdAt: new Date(serverNow()).toISOString(), ...r });
     } catch (x) {
       // Une référence active existe déjà : on la réaffiche au lieu d'une erreur
       if (x instanceof ApiError && x.code === 'ACTIVE_PAYMENT_REFERENCE_EXISTS' && x.body) {
@@ -190,7 +191,7 @@ function PayFlow({ ob }: { ob: Obligation }) {
           <dl className="kv">
             <div><dt>{tr('explain.amount')}</dt><dd><MoneyText money={order.amount} indicative={asMoney(order.indicativeAmount)} /></dd></div>
             {order.beneficiaryAlias && <div><dt>{tr('pay.beneficiary')}</dt><dd className="mono">{order.beneficiaryAlias}</dd></div>}
-            {order.expiresAt && <div><dt>{tr('pay.expires')}</dt><dd>{fmtDate(order.expiresAt, true)}</dd></div>}
+            {order.expiresAt && <div><dt>{tr('pay.expires')}</dt><dd>{fmtDate(order.expiresAt, true)}{order.createdAt && order.status === 'INITIE' && <> <ValidityCountdown compact from={order.createdAt} until={order.expiresAt} label={tr('payment.reference')} /></>}</dd></div>}
             <div><dt>{tr('pay.status')}</dt><dd><StatusBadge tone={PAYMENT_TONE[order.status] ?? 'neutral'} label={tr(`payment.status.${order.status}` as UIKey)} /></dd></div>
           </dl>
           {order.provider && (

@@ -7,6 +7,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context';
 import { CoverSplit } from '../../components/Split';
 import { Icon } from '../../components/Icon';
+import { ValidityCountdown, ValidityLegend } from '../../components/ValidityCountdown';
 import { ErrorState } from '../../components/States';
 import { api, describeError } from '../../lib/api';
 import { BADGE_RESULT, fmtPct, moduleLabel } from './labels';
@@ -128,9 +129,11 @@ export default function VerifyAgent() {
                     <div><dt>Code</dt><dd className="mono">{b.shortCode}</dd></div>
                   </dl>
                 )}
+                {b && <ValidityCountdown from={b.validFrom} until={b.validUntil} blocked={result.result === 'SUSPENDU' ? 'Agent suspendu' : result.result === 'REVOQUE' ? 'Badge révoqué' : null} label="Habilitation" />}
                 {b && !b.hasPhoto && <p className="small muted">Photo non publiée pour ce badge : comparez le nom d’usage avec le badge présenté.</p>}
               </div>
             )}
+            {b && <ValidityLegend />}
             {result && (result.reportable || result.result !== 'VALIDE') && <Report code={result.badge?.shortCode ?? code} />}
             {result?.result === 'VALIDE' && (
               <details className="tr-report">

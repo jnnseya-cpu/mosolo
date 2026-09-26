@@ -15,6 +15,7 @@ import { isoDate } from '../../core/clock.js';
 import { canonicalJson, checkChar, hmacSha256Hex, randomCode, randomSecret, safeEqualHex, sha256Hex } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, authorize } from '../../core/policy.js';
+import { validityView } from '../../core/validity.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { userRecipient } from '../../modules/identity/recipients.js';
 import { distanceM, pct, type LatLon } from './geo.js';
@@ -570,6 +571,7 @@ export class TerrainService {
         communes: badge.communes,
         validFrom: badge.validFrom,
         validUntil: badge.validUntil,
+        validity: active ? validityView(badge.validFrom, badge.validUntil, this.ctx.clock.now()) : null,
         hasPhoto: !!agent.photoRef,
         ...(agent.photoRef && active ? { photoRef: agent.photoRef } : {}),
       },

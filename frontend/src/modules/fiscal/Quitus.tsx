@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../../context';
 import { PageHead } from '../../components/Shell';
 import { StatusBadge, type Tone } from '../../components/StatusBadge';
+import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { useApi } from '../../hooks/useApi';
@@ -15,10 +16,12 @@ import { api, ApiError, describeError } from '../../lib/api';
 import { DemoNote, FiscalTabs, ReasonAction, useViewer, VerifyQr } from './common';
 import type { Clearance, Eligibility } from './types';
 import './fiscal.css';
+import { PrintProofLink } from '../preuves/PrintLink';
 
 export const CLEARANCE_CHECK: Record<string, { label: string; tone: Tone; icon: string }> = {
   VALIDE: { label: 'Valide', tone: 'good', icon: 'check' },
   BIENTOT_EXPIRE: { label: 'Valide — expire bientôt', tone: 'warning', icon: 'clock' },
+  CRITIQUE: { label: 'Valide — expire très bientôt', tone: 'critical', icon: 'alert' },
   EXPIRE: { label: 'Expiré', tone: 'critical', icon: 'x' },
   REVOQUE: { label: 'Révoqué', tone: 'critical', icon: 'ban' },
   SIGNATURE_INVALIDE: { label: 'Signature invalide', tone: 'serious', icon: 'alert' },
@@ -47,8 +50,9 @@ function ClearanceCard({ c, canRevoke, onChanged }: { c: Clearance; canRevoke: b
             <div><dt>Niveau de vérification</dt><dd>{c.verificationLevel}</dd></div>
             {c.revocation && <div><dt>Révocation</dt><dd>{fmtDate(c.revocation.at, true)} — {c.revocation.reason}</dd></div>}
           </dl>
+          <ValidityCountdown from={c.validFrom} until={c.validUntil} blocked={c.check === 'REVOQUE' || c.status === 'REVOQUE' ? 'Quitus révoqué' : null} label="Validité du quitus" />
         </div>
-        <VerifyQr path={c.verifyPath} code={c.shortCodeDisplay} caption={c.number} size={128} />
+        <div className="stack-sm"><VerifyQr path={c.verifyPath} code={c.shortCodeDisplay} caption={c.number} size={128} />{c.status === 'ACTIF' && <PrintProofLink code={c.shortCode} label="Imprimer le quitus" />}</div>
       </div>
       <p className="small muted">{c.notice}</p>
       {canRevoke && c.status === 'ACTIF' && (
@@ -103,7 +107,7 @@ function TaxpayerQuitus() {
 
 function ServiceCheck() {
   const [code, setCode] = useState('');
-  const [res, setRes] = useState<{ valid: boolean; result: string; number?: string; validUntil?: string; taxpayerRef?: string } | null>(null);
+  const [res, setRes] = useState<{ valid: boolean; result: string; number?: string; validFrom?: string; validUntil?: string; taxpayerRef?: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   async function go(e: FormEvent) {
     e.preventDefault(); setErr(null); setRes(null);
@@ -123,6 +127,7 @@ function ServiceCheck() {
           <div className="verdict-icon"><Icon name={st.icon} size={36} /></div>
           <p className="verdict-title">{res.valid ? 'Quitus valide' : 'Quitus non valide'}</p>
           {res.number && <p className="small">{res.number} · jusqu’au {res.validUntil} · contribuable {res.taxpayerRef}</p>}
+          {res.validUntil && res.result !== 'SIGNATURE_INVALIDE' && <ValidityCountdown from={res.validFrom} until={res.validUntil} blocked={res.result === 'REVOQUE' ? 'Quitus révoqué' : null} label="Validité du quitus" />}
         </div>
       )}
     </section>

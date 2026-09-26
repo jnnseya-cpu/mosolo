@@ -428,7 +428,7 @@ export class TitresService {
         this.setState(c, 'REVOQUE', 'Paiement contrepassé ou quittance annulée (ARB-22)', 'systeme-titres');
         continue;
       }
-      if (c.state === 'EMIS' && !c.amberNotifiedAt && statusAt(c, now).status === 'BIENTOT_EXPIRE' && c.holderTaxpayerId) {
+      if (c.state === 'EMIS' && !c.amberNotifiedAt && ['BIENTOT_EXPIRE', 'CRITIQUE'].includes(statusAt(c, now).status) && c.holderTaxpayerId) {
         this.credentials.update({ ...c, amberNotifiedAt: now.toISOString() });
         const tp = this.ctx.taxpayers.taxpayers.get(c.holderTaxpayerId);
         if (tp) this.ctx.comms.publish('ticket.expiring', [taxpayerRecipient(tp)], { titre: c.number, heure: kinshasaTime(c.validUntil), reference: c.number }, { entity: c.entity });
@@ -604,14 +604,17 @@ export class TitresService {
       const c = this.credentials.get(payload.id);
       return c ? { credential: c, method: 'QR_STATIQUE' } : { method: 'QR_STATIQUE', failure: 'Titre inconnu' };
     }
-    const c = this.credentials.findOne((x) => x.shortCode === p.toUpperCase() || x.number === p.toUpperCase());
-    return c ? { credential: c, method: 'CODE_COURT' } : { method: 'CODE_COURT', failure: 'Aucun titre ne correspond' };
+    // QR d'une preuve imprimée : lien de vérification « …/preuve/<code> » (lisible par l'appareil photo de tout téléphone).
+    const fromUrl = /\/preuve\/([^/?#\s]+)/.exec(p)?.[1];
+    const code = (fromUrl ? decodeURIComponent(fromUrl) : p).toUpperCase();
+    const c = this.credentials.findOne((x) => x.shortCode === code || x.number === code);
+    return c ? { credential: c, method: fromUrl ? 'QR_STATIQUE' : 'CODE_COURT' } : { method: 'CODE_COURT', failure: 'Aucun titre ne correspond' };
   }
 
   /** Titres d'une plaque (tous états), les plus favorables d'abord. */
   byPlate(plate: string, module?: string): Credential[] {
     const n = normalizePlate(plate);
-    const rank: Record<DisplayStatus, number> = { VALIDE: 0, BIENTOT_EXPIRE: 1, PAS_ENCORE_ACTIF: 2, SUSPENDU: 3, EXPIRE: 4, INVALIDE: 5 };
+    const rank: Record<DisplayStatus, number> = { VALIDE: 0, BIENTOT_EXPIRE: 1, CRITIQUE: 1, PAS_ENCORE_ACTIF: 2, SUSPENDU: 3, EXPIRE: 4, INVALIDE: 5 };
     const now = this.ctx.clock.now();
     return this.credentials
       .find((c) => !!c.subject.plate && normalizePlate(c.subject.plate) === n && (!module || c.module === module))
@@ -671,7 +674,7 @@ export class TitresService {
           detail: `Titre à usage unique ${c.number} présenté de nouveau${input.offline ? ' (contrôle hors ligne réconcilié)' : ''}.`,
           context: { credentialId: c.id, firstUse: c.firstUse, at }, actor: { kind: 'user', id: user.id, roles: user.roles },
         });
-      } else if (status.status !== 'VALIDE' && status.status !== 'BIENTOT_EXPIRE') {
+      } else if (status.status !== 'VALIDE' && status.status !== 'BIENTOT_EXPIRE' && status.status !== 'CRITIQUE') {
         reason = reason ?? status.text;
       }
     }
@@ -970,7 +973,7 @@ export class TitresService {
       byStatus[s] = (byStatus[s] ?? 0) + 1;
     }
     const ctrls = this.controls.find((e) => !module || e.module === module);
-    const active = (byStatus.VALIDE ?? 0) + (byStatus.BIENTOT_EXPIRE ?? 0);
+    const active = (byStatus.VALIDE ?? 0) + (byStatus.BIENTOT_EXPIRE ?? 0) + (byStatus.CRITIQUE ?? 0);
     const red = ctrls.filter((e) => e.result === 'EXPIRE').length;
     const renewals = creds.filter((c) => c.renewsId).length;
     const amberRenewals = creds.filter((c) => {

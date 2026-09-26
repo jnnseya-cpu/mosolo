@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **555 routes** dans 33 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **570 routes** dans 34 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -11,6 +11,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **555 routes** dans 33
 | extension integrite | 52 |
 | extension parking | 31 |
 | extension pilotage | 15 |
+| extension preuves | 13 |
 | extension publicite | 27 |
 | extension rakapay | 23 |
 | extension recouvrement | 33 |
@@ -31,7 +32,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **555 routes** dans 33
 | module fx | 1 |
 | module identity | 2 |
 | module objects | 2 |
-| module payments | 5 |
+| module payments | 7 |
 | module receipts | 2 |
 | module rules | 14 |
 | module system | 3 |
@@ -333,6 +334,24 @@ Généré depuis le code source (`tools/gen_routes.py`) : **555 routes** dans 33
 | GET | `/v1/public/transparency` |
 | GET | `/v1/public/transparency/:period` |
 | GET | `/v1/tableaux/:profil` |
+
+## Extension preuves
+
+| Méthode | Chemin |
+|---|---|
+| GET | `/l` |
+| GET | `/l/imprimer` |
+| GET | `/l/payer` |
+| GET | `/l/points` |
+| GET | `/l/signaler` |
+| POST | `/l/signaler` |
+| GET | `/l/v` |
+| GET | `/v1/public/preuves` |
+| GET | `/v1/public/preuves/:code` |
+| GET | `/v1/public/preuves/:code/impression` |
+| POST | `/v1/sms/inbound` |
+| GET | `/v1/whatsapp/simulator/:msisdn` |
+| POST | `/v1/whatsapp/webhook` |
 
 ## Extension publicite
 
@@ -705,6 +724,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **555 routes** dans 33
 | POST | `/v1/payment-orders/:reference/provider-verification-evidence` |
 | POST | `/v1/providers/${provider}/webhooks` |
 | POST | `/v1/providers/:provider/callbacks` |
+| POST | `/v1/providers/:provider/sandbox-simulate` |
+| GET | `/v1/providers/connectors` |
 
 ## Module receipts
 

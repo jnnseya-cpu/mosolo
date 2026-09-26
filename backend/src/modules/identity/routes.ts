@@ -49,7 +49,7 @@ export function registerIdentityRoutes(app: FastifyInstance, ctx: AppContext): v
       leases: ctx.objects.leasesOf(tp.id),
       obligations: obligations.map((o) => obligationSummary(o, 'full')),
       paymentOrders: obligations.flatMap((o) => ctx.payments.byObligation(o.id)).map((p) => ({
-        paymentOrderId: p.id, paymentReference: p.paymentReference, obligationId: p.obligationId, status: p.status, amount: p.amount, expiresAt: p.expiresAt,
+        paymentOrderId: p.id, paymentReference: p.paymentReference, obligationId: p.obligationId, status: p.status, amount: p.amount, createdAt: p.createdAt, expiresAt: p.expiresAt,
       })),
       receipts: ctx.receipts.byTaxpayer(tp.id),
       ...(isSelf ? { inbox: ctx.comms.inApp.inbox(tp.id) } : {}),

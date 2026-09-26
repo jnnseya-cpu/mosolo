@@ -14,11 +14,12 @@ import { terrainPlugin } from './terrain/plugin.js';
 import { integritePlugin } from './integrite/plugin.js';
 import { pilotagePlugin } from './pilotage/plugin.js';
 import { iaPlugin } from './ia/plugin.js';
+import { preuvesPlugin } from './preuves/plugin.js';
 import { soclePlugin } from './socle/plugin.js';
 
 /**
  * Ordre : `acces` en tête (garde des revendications, mandats), puis `fiscal` (il branche les exonérations sur la liquidation), `titres` avant `rakapay`,
- * `parking` avant `publicite`, `socle` (authentification, limitation de débit) en dernier.
+ * `parking` avant `publicite`, `preuves` après tous les modules qui émettent des preuves, `socle` (authentification, limitation de débit) en dernier.
  */
 export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   accesPlugin,
@@ -35,5 +36,6 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   integritePlugin,
   pilotagePlugin,
   iaPlugin,
+  preuvesPlugin,
   soclePlugin,
 ];

@@ -13,12 +13,14 @@
  *   Jamais d'amende, de blocage ni de fourrière automatiques (ARB-12) ; surréservation désactivée (ARB-14).
  * - Attribution de chaque recette à la commune de la zone (§ 20.3) via l'objet « occupation de voirie ».
  */
-import { Money, type MoneyJSON } from '@mosolo/shared';
+import { Money, readValidity, type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
 import { HOUR_MS, isoDate } from '../../core/clock.js';
+import { checkChar, randomCode } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, authorize, evaluate, hasAnyGrant } from '../../core/policy.js';
+import { validityView } from '../../core/validity.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
 import { isCommune } from '../../reference/kinshasa.js';
@@ -29,6 +31,13 @@ import {
 /** Surréservation (10 à 15 % du dossier source) : DÉSACTIVÉE jusqu'à validation juridique (ARB-14, J24). */
 export const OVERBOOKING_ENABLED = false;
 /** Rappel « ambre » avant l'expiration d'une session (paramètre de démonstration, fixé par l'acte en production). */
+/** Code de ticket de stationnement : « PKT » + 6 caractères aléatoires + caractère de contrôle. */
+export function newTicketCode(): string {
+  const core = randomCode(6);
+  return `PKT${core}${checkChar(`PKT${core}`)}`;
+}
+
+/** @deprecated la couleur suit désormais la règle 49 % / 21 % (core/validity.ts). */
 export const REMINDER_MINUTES = 10;
 /** Validité d'une référence non payée avant abandon de la demande de session. */
 const UNPAID_ABANDON_MS = 48 * HOUR_MS;
@@ -99,6 +108,8 @@ export interface ParkingSession {
   endedAt?: string;
   endedBy?: string;
   reminderSentAt?: string;
+  /** Code de ticket aléatoire (non séquentiel) : vérification publique, SMS, WhatsApp, impression. */
+  ticketCode?: string;
 }
 
 export type SessionStatus = 'EN_ATTENTE_PAIEMENT' | 'ACTIVE' | 'EXPIREE' | 'TERMINEE' | 'ABANDONNEE';
@@ -168,6 +179,8 @@ export interface ParkingViolation {
 export interface RoadReservation {
   id: string;
   reference: string;
+  /** Code de ticket aléatoire (non séquentiel) pour la vérification publique et l'impression. */
+  ticketCode?: string;
   zoneId: string;
   commune: string;
   taxpayerId: string;
@@ -445,7 +458,7 @@ export class ParkingService {
     const objectId = this.occupationObject(taxpayerId, z);
     const obligation = this.liquidate(this.engine, z, taxpayerId, objectId, input.durationMinutes, 1);
     const session = this.sessions.insert({
-      id: this.ids.next('PKS'), zoneId: z.id, commune: z.commune, plate, payerTaxpayerId: taxpayerId, objectId,
+      id: this.ids.next('PKS'), ticketCode: newTicketCode(), zoneId: z.id, commune: z.commune, plate, payerTaxpayerId: taxpayerId, objectId,
       segments: [{ obligationId: obligation.id, minutes: input.durationMinutes, kind: 'INITIALE', requestedAt: now.toISOString(), requestedBy: user.id }],
       createdAt: now.toISOString(), createdBy: user.id,
     });
@@ -534,7 +547,9 @@ export class ParkingService {
     else if (!paidInitial) status = now.getTime() - new Date(s.createdAt).getTime() > UNPAID_ABANDON_MS ? 'ABANDONNEE' : 'EN_ATTENTE_PAIEMENT';
     else status = paidUntil! > now ? 'ACTIVE' : 'EXPIREE';
     let light: Light = 'ROUGE';
-    if (status === 'ACTIVE') light = paidUntil!.getTime() - now.getTime() <= REMINDER_MINUTES * MINUTE ? 'AMBRE' : 'VERT';
+    // Feu de CONTRÔLE (VERT/AMBRE = titre valable, ROUGE = aucun titre) ; la couleur d'affichage suit la règle 49 % / 21 %
+    // (`validity.band`) : une place encore payée à moins de 21 % s'affiche rouge, mais reste valable au contrôle.
+    if (status === 'ACTIVE') light = readValidity(startAt, paidUntil, now).band === 'VERT' ? 'VERT' : 'AMBRE';
     return { status, light, startAt, paidUntil, pendingSegments, payments: pays };
   }
 
@@ -551,6 +566,8 @@ export class ParkingService {
       light: d.light,
       startAt: d.startAt?.toISOString() ?? null,
       paidUntil: d.paidUntil?.toISOString() ?? null,
+      ticketCode: s.ticketCode ?? null,
+      validity: d.startAt && d.paidUntil ? validityView(d.startAt.toISOString(), d.paidUntil.toISOString(), now) : null,
       remainingMinutes: d.paidUntil && d.status === 'ACTIVE' ? Math.max(0, Math.round((d.paidUntil.getTime() - now.getTime()) / MINUTE)) : 0,
       totalMinutes: s.segments.reduce((a, g) => a + g.minutes, 0),
       total: sumByCurrency(amounts),
@@ -613,7 +630,7 @@ export class ParkingService {
     if (minutes % 15 !== 0 || minutes > 7 * 24 * 60) throw badRequest('INVALID_DURATION', 'Durée : multiple de 15 minutes, 7 jours au plus.');
     if (input.places < 1 || input.places > z.capacity.standard) throw badRequest('INVALID_PLACES', `Nombre de places : 1 à ${z.capacity.standard}.`);
     const r = this.reservations.insert({
-      id: this.ids.next('PKR'), reference: this.ids.next(`RSV-PK-${this.now().getUTCFullYear()}`), zoneId: z.id, commune: z.commune, taxpayerId,
+      id: this.ids.next('PKR'), reference: this.ids.next(`RSV-PK-${this.now().getUTCFullYear()}`), ticketCode: newTicketCode(), zoneId: z.id, commune: z.commune, taxpayerId,
       requestedBy: user.id, requestedAt: this.now().toISOString(), purpose: input.purpose, places: input.places,
       startAt: start.toISOString(), endAt: end.toISOString(), plate: input.plate ? this.plate(input.plate) : null, notes: input.notes ?? '', status: 'DEMANDEE',
     });
@@ -655,6 +672,29 @@ export class ParkingService {
     return this.reservationView(updated);
   }
 
+  /**
+   * Ticket de stationnement (session ou réservation) retrouvé par son code aléatoire — vérification publique minimale :
+   * zone, commune, fenêtre payée, jamais le nom du payeur ni le montant ; la plaque est rendue au résolveur, qui la masque.
+   */
+  ticketByCode(code: string): { kind: 'SESSION' | 'RESERVATION'; zone: string; commune: string; plate: string | null; validFrom: string | null; validUntil: string | null; state: 'ACTIVE' | 'EXPIREE' | 'EN_ATTENTE' | 'TERMINEE' | 'ANNULEE' } | null {
+    const c = code.trim().toUpperCase().replace(/[^0-9A-Z]/g, '');
+    const s = this.sessions.findOne((x) => x.ticketCode === c);
+    if (s) {
+      const d = this.sessionDerived(s, this.now());
+      const z = this.zones.get(s.zoneId);
+      const state = d.status === 'ACTIVE' ? 'ACTIVE' : d.status === 'EXPIREE' ? 'EXPIREE' : d.status === 'TERMINEE' ? 'TERMINEE' : d.status === 'ABANDONNEE' ? 'ANNULEE' : 'EN_ATTENTE';
+      return { kind: 'SESSION', zone: z?.name ?? s.zoneId, commune: s.commune, plate: s.plate, validFrom: d.startAt?.toISOString() ?? null, validUntil: d.paidUntil?.toISOString() ?? null, state };
+    }
+    const r = this.reservations.findOne((x) => x.ticketCode === c);
+    if (r) {
+      const v = this.reservationView(r);
+      const z = this.zones.get(r.zoneId);
+      const state = v.state === 'CONFIRMEE' ? 'ACTIVE' : v.state === 'TERMINEE' ? 'TERMINEE' : v.state === 'REFUSEE' || v.state === 'ANNULEE' ? 'ANNULEE' : 'EN_ATTENTE';
+      return { kind: 'RESERVATION', zone: z?.name ?? r.zoneId, commune: r.commune, plate: r.plate, validFrom: r.startAt, validUntil: r.endAt, state };
+    }
+    return null;
+  }
+
   reservationView(r: RoadReservation) {
     const pay = paymentState(this.ctx, r.obligationId);
     const z = this.zones.get(r.zoneId);
@@ -684,20 +724,20 @@ export class ParkingService {
   // ---------------------------------------------------------------- Contrôle par plaque
 
   /** Titre valide d'une plaque (session payée ou réservation confirmée) — heure du serveur. */
-  private titleFor(plate: string, zoneId: string | null, now: Date): { light: Light; title: ControlCheck['title']; validUntil: string | null; zoneId: string | null } {
-    let best: { light: Light; title: ControlCheck['title']; validUntil: string | null; zoneId: string | null } = { light: 'ROUGE', title: null, validUntil: null, zoneId };
+  private titleFor(plate: string, zoneId: string | null, now: Date): { light: Light; title: ControlCheck['title']; validFrom: string | null; validUntil: string | null; zoneId: string | null } {
+    let best: { light: Light; title: ControlCheck['title']; validFrom: string | null; validUntil: string | null; zoneId: string | null } = { light: 'ROUGE', title: null, validFrom: null, validUntil: null, zoneId };
     for (const s of this.sessions.find((x) => x.plate === plate && (!zoneId || x.zoneId === zoneId))) {
       const d = this.sessionDerived(s, now);
       if (d.status !== 'ACTIVE') continue;
       if (best.light === 'ROUGE' || (best.light === 'AMBRE' && d.light === 'VERT')) {
-        best = { light: d.light, title: 'SESSION', validUntil: d.paidUntil!.toISOString(), zoneId: s.zoneId };
+        best = { light: d.light, title: 'SESSION', validFrom: d.startAt!.toISOString(), validUntil: d.paidUntil!.toISOString(), zoneId: s.zoneId };
       }
     }
     if (best.light !== 'VERT') {
       for (const r of this.reservations.find((x) => x.plate === plate && x.status === 'APPROUVEE' && (!zoneId || x.zoneId === zoneId))) {
         const pay = paymentState(this.ctx, r.obligationId);
         if ((pay.state === 'PAYE' || pay.state === 'RAPPROCHE') && new Date(r.startAt) <= now && new Date(r.endAt) > now) {
-          best = { light: 'VERT', title: 'RESERVATION', validUntil: r.endAt, zoneId: r.zoneId };
+          best = { light: 'VERT', title: 'RESERVATION', validFrom: r.startAt, validUntil: r.endAt, zoneId: r.zoneId };
         }
       }
     }
@@ -722,7 +762,7 @@ export class ParkingService {
     };
     return {
       checkId: check.id, plate, zone: z ? { id: z.id, code: z.code, name: z.name } : null, light: t.light, title: t.title,
-      validUntil: t.validUntil, checkedAt: check.at, guidance: guidance[t.light],
+      validFrom: t.validFrom, validUntil: t.validUntil, validity: t.validUntil ? validityView(t.validFrom, t.validUntil, now) : null, checkedAt: check.at, guidance: guidance[t.light],
     };
   }
 

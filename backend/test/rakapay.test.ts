@@ -83,11 +83,11 @@ describe('Pass wewa — achat individuel', () => {
     expect(c.attribution).toMatchObject({ commune: 'Kalamu', basis: 'STATION_DEPART', sourceId: 'ST-KAL-VICTOIRE' });
     expect(c.subject.driverId).toBeDefined();
     expect(c.holderTaxpayerId).toBe(RK_DEMO.driver2Taxpayer);
-    // Ambre à moins de 2 h, puis rouge (heure serveur).
+    // Règle 49 % / 21 % (heure serveur) : sous 21 % le pass s'affiche rouge mais reste en règle ; échu, rien n'est valable.
     s.clock.advanceHours(23);
-    expect(s.rk.motoStatus(m2).color).toBe('AMBRE');
+    expect(s.rk.motoStatus(m2)).toMatchObject({ color: 'ROUGE', nothingToPay: true, displayStatus: 'CRITIQUE' });
     s.clock.advanceHours(2);
-    expect(s.rk.motoStatus(m2).color).toBe('ROUGE');
+    expect(s.rk.motoStatus(m2)).toMatchObject({ color: 'ROUGE', nothingToPay: false });
   });
 
   it('non transférable : un autre contribuable ne paie pas le pass d’un conducteur ; renouvellement en continuité', async () => {

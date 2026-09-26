@@ -7,6 +7,7 @@ import { formatMoney } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { PageHead } from '../../components/Shell';
 import { StatusBadge } from '../../components/StatusBadge';
+import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { useApi } from '../../hooks/useApi';
@@ -30,6 +31,7 @@ function Attestation({ a }: { a: LeaseAttestationView }) {
           <div><dt>Période</dt><dd>depuis le {fmtDate(a.lease.start)}{a.lease.end ? ` jusqu’au ${fmtDate(a.lease.end)}` : ''}</dd></div>
           <div><dt>Délivrée le</dt><dd>{fmtDate(a.issuedAt, true)}</dd></div>
         </dl>
+        <ValidityCountdown from={a.lease.start} until={a.lease.end} blocked={a.status !== 'VALIDE' ? 'Attestation révoquée' : null} label="Période du bail" />
         <p className="small muted">{a.legalNote}</p>
       </div>
       <VerifyQr path={a.verifyPath} code={a.shortCodeDisplay} caption={a.number} size={112} />

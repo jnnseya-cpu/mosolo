@@ -5,6 +5,7 @@ import { useApp } from '../context';
 import { Icon } from '../components/Icon';
 import { MoneyText } from '../components/MoneyText';
 import { StatusBadge } from '../components/StatusBadge';
+import { ValidityCountdown, ValidityLegend } from '../components/ValidityCountdown';
 import { QrCode } from '../components/QrCode';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../components/States';
 import { useApi } from '../hooks/useApi';
@@ -12,6 +13,7 @@ import { api, describeError, newIdempotencyKey } from '../lib/api';
 import { DynamicQr, ISSUANCE_LABEL, TitleStatus, type CredentialView, type Issuance } from '../modules/titres/common';
 import '../modules/titres/titres.css';
 import '../modules/rakapay/rakapay.css';
+import { PrintProofLink } from '../modules/preuves/PrintLink';
 
 /**
  * Espace citoyen RakaPay (modules 76, 70, 71) et pass des moto-taxis wewa (module 81, composante de RakaPay) — branché sur l'API.
@@ -23,7 +25,7 @@ import '../modules/rakapay/rakapay.css';
 type Tab = 'pass' | 'tickets' | 'history';
 type Duration = 'JOUR' | 'SEMAINE' | 'MOIS';
 interface Price { duration: Duration; amount: MoneyJSON | null; ruleCode: string | null; ruleVersion: number | null; demo: boolean; executable: boolean; reason?: string }
-interface WewaStatus { color: 'VERT' | 'AMBRE' | 'ROUGE'; text: string; nothingToPay: boolean; passNumber?: string; validUntil?: string }
+interface WewaStatus { color: 'VERT' | 'AMBRE' | 'ROUGE'; text: string; nothingToPay: boolean; passNumber?: string; validFrom?: string; validUntil?: string; validity?: { from: string; until: string } | null }
 interface MyWewa {
   registered: boolean;
   driver?: { id: string; displayName: string; vestNumber: string; vestToken: string; cardCode: string; status: string };
@@ -80,7 +82,7 @@ function ReferenceCard({ iss, onRefresh, onReset }: { iss: Issuance; onRefresh: 
             <div><dt>Montant</dt><dd><MoneyText money={p.amount} /> <span className="small muted">règle de démonstration</span></dd></div>
             <div><dt>Bénéficiaire</dt><dd>Compte public des recettes (coffre MOSOLO)</dd></div>
             <div><dt>Recette comptée pour</dt><dd>{p.commune ?? 'Non attribuée'} <span className="small muted">— commune de la station</span></dd></div>
-            <div><dt>Valable jusqu’au</dt><dd>{fmtDate(p.expiresAt, true)}</dd></div>
+            <div><dt>Valable jusqu’au</dt><dd>{fmtDate(p.expiresAt, true)}{p.status === 'EN_ATTENTE' && <> <ValidityCountdown compact from={iss.createdAt} until={p.expiresAt} label="Référence de paiement" /></>}</dd></div>
             <div><dt>Statut</dt><dd><StatusBadge tone={p.status === 'PAYE' ? 'good' : p.status === 'EN_ATTENTE' ? 'warning' : 'neutral'} label={p.status === 'PAYE' ? 'Payé — titre émis' : p.status === 'EN_ATTENTE' ? 'En attente de paiement' : 'Clos — rien n’est dû'} /></dd></div>
           </dl>
         </div>
@@ -103,11 +105,13 @@ function PassCard({ me }: { me: MyWewa }) {
   const { fmtDate } = useApp();
   const s = me.status;
   const tone = s ? WEWA_TONE[s.color] : 'rouge';
+  // Rouge peut signifier « encore en règle, moins de 21 % de validité restante » (nothingToPay).
+  const ok = !!s && (s.color !== 'ROUGE' || s.nothingToPay);
   return (
     <article className={`rk-pass rkx-pass-${tone}`} aria-label="Pass wewa numérique">
       <div className="rk-pass-top">
         <span className="rk-pass-brand"><Icon name="ticket" size={18} /> RakaPay · Pass wewa</span>
-        <span className={`tt-status tt-${tone}`}><Icon name={tone === 'vert' ? 'check' : tone === 'ambre' ? 'alert' : 'x'} size={16} /> {s?.color === 'ROUGE' ? 'PAS EN RÈGLE' : 'EN RÈGLE'}</span>
+        <span className={`tt-status tt-${tone}`}><Icon name={tone === 'vert' ? 'check' : ok ? 'alert' : 'x'} size={16} /> {ok ? 'EN RÈGLE' : 'PAS EN RÈGLE'}</span>
       </div>
       <div className="rk-pass-body">
         <div className="min0">
@@ -117,7 +121,7 @@ function PassCard({ me }: { me: MyWewa }) {
           {me.cooperative && <p className="rk-pass-line">{me.cooperative.name}</p>}
           <p className="rk-pass-valid">{s?.validUntil ? <>Valable jusqu’au <strong>{fmtDate(s.validUntil, true)}</strong></> : s?.text}</p>
         </div>
-        {me.currentPass && s?.color !== 'ROUGE' ? (
+        {me.currentPass && ok ? (
           <div className="rkx-qr-light"><DynamicQr credentialId={me.currentPass.id} size={124} /></div>
         ) : (
           <figure className="rk-pass-qr">
@@ -126,6 +130,10 @@ function PassCard({ me }: { me: MyWewa }) {
           </figure>
         )}
       </div>
+      {(s?.validUntil ?? s?.validity?.until) && (
+        <ValidityCountdown from={s?.validFrom ?? s?.validity?.from} until={s?.validUntil ?? s?.validity?.until} label="Validité du pass" />
+      )}
+      {s?.passNumber && <p className="small">Pass <span className="mono">{s.passNumber}</span> <PrintProofLink code={s.passNumber} label="Imprimer le pass" /></p>}
       <div className="rk-pass-strip" aria-hidden="true"><span /><span /><span /></div>
     </article>
   );
@@ -147,7 +155,7 @@ function BuyPass({ me, onDone }: { me: MyWewa; onDone: () => void }) {
       setIss(await api<Issuance>('/v1/rakapay/wewa/passes', { method: 'POST', body: { motoId: me.moto.id, duration, channel }, idempotencyKey: key }));
     } catch (ex) { setErr(describeError(ex).message); } finally { setBusy(false); }
   }
-  const renew = me.status?.color !== 'ROUGE';
+  const renew = me.status?.color !== 'ROUGE' || !!me.status?.nothingToPay;
   return (
     <section className="panel" aria-labelledby="rk-buy">
       <div className="panel-head">
@@ -207,7 +215,7 @@ function PassTab() {
             {d.passes.map((c) => (
               <li key={c.id} className="list-row">
                 <div className="min0"><p className="row-title mono">{c.number}</p><p className="small muted">{c.typeLabel} · du {fmtDate(c.validFrom, true)} au {fmtDate(c.validUntil, true)}</p></div>
-                <div className="row-side"><TitleStatus status={c.status} compact />{c.receiptNumbers[0] && <Link className="btn btn-ghost btn-sm" to={`/verifier/${c.receiptNumbers[0]}`}>Quittance</Link>}</div>
+                <div className="row-side"><TitleStatus status={c.status} compact />{c.state === 'EMIS' && <ValidityCountdown compact from={c.validFrom} until={c.validUntil} />}{c.state === 'EMIS' && c.shortCode && <PrintProofLink code={c.shortCode} />}{c.receiptNumbers[0] && <Link className="btn btn-ghost btn-sm" to={`/verifier/${c.receiptNumbers[0]}`}>Quittance</Link>}</div>
               </li>
             ))}
           </ul>
@@ -281,7 +289,7 @@ function TicketsTab() {
           {mine.loading ? <Loading /> : mine.error ? <ErrorState error={mine.error} onRetry={mine.reload} /> : !mine.data?.length ? <EmptyState title="Aucun ticket" icon="ticket">Vos tickets apparaissent ici dès la confirmation du paiement.</EmptyState> : (
             <ul className="list-rows">
               {mine.data.map((c) => {
-                const live = c.status.status === 'VALIDE' || c.status.status === 'BIENTOT_EXPIRE' || c.status.status === 'PAS_ENCORE_ACTIF';
+                const live = c.status.status === 'VALIDE' || c.status.status === 'BIENTOT_EXPIRE' || c.status.status === 'CRITIQUE' || c.status.status === 'PAS_ENCORE_ACTIF';
                 return (
                   <li key={c.id} className="list-row rkx-ticket-row">
                     <div className="min0">
@@ -289,6 +297,7 @@ function TicketsTab() {
                       <p className="small muted mono">{c.number} · code {c.shortCode}</p>
                       <p className="small muted">{c.place.label} · jusqu’au {fmtDate(c.validUntil, true)}{c.usesLeft !== undefined ? ` · ${c.usesLeft} usage(s) restant(s)` : ''}</p>
                       <TitleStatus status={c.status} />
+                      {(live || c.status.status === 'EXPIRE') && <ValidityCountdown compact from={c.validFrom} until={c.validUntil} />}
                     </div>
                     {live && <DynamicQr credentialId={c.id} size={120} />}
                   </li>
@@ -388,7 +397,7 @@ function ReportForm() {
 
 function PassengerCheck() {
   const [code, setCode] = useState('');
-  const [res, setRes] = useState<{ registered: boolean; driverVerified?: boolean; pass?: { color: string; text: string } | null; message: string } | null>(null);
+  const [res, setRes] = useState<{ registered: boolean; driverVerified?: boolean; pass?: { color: string; text: string; validFrom?: string | null; validUntil?: string | null; validity?: { from: string; until: string } | null } | null; message: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   async function check(e: FormEvent) {
     e.preventDefault(); setErr(null);
@@ -405,8 +414,12 @@ function PassengerCheck() {
       {err && <p className="notice notice-err" role="alert">{err}</p>}
       {res && (
         <div className="stack-sm" style={{ marginTop: 12 }} role="status">
-          <span className={`tt-status tt-${res.registered ? tone : 'noir'}`}><Icon name={res.registered && tone !== 'rouge' ? 'check' : 'x'} size={16} /> {res.registered ? (res.pass?.text ?? 'Enregistré') : 'Non enregistré'}</span>
+          <span className={`tt-status tt-${res.registered ? tone : 'noir'}`}><Icon name={res.registered && (tone !== 'rouge' || res.pass?.text.startsWith('EN RÈGLE')) ? 'check' : 'x'} size={16} /> {res.registered ? (res.pass?.text ?? 'Enregistré') : 'Non enregistré'}</span>
+          {res.registered && (res.pass?.validUntil ?? res.pass?.validity?.until) && (
+            <ValidityCountdown from={res.pass?.validFrom ?? res.pass?.validity?.from} until={res.pass?.validUntil ?? res.pass?.validity?.until} label="Validité du pass" />
+          )}
           <p className="small">{res.message}</p>
+          <ValidityLegend />
         </div>
       )}
     </section>

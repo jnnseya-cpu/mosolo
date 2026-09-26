@@ -54,7 +54,7 @@ const LANG_ORDER: LanguageCode[] = ['fr', 'ln', 'sw', 'kg', 'lua'];
 const MAIN_OPTIONS: Opt[] = [
   { key: '1', label: 'Mon solde et obligations', voice: 'connaître vos obligations' },
   { key: '2', label: 'Payer', voice: 'obtenir une référence de paiement' },
-  { key: '3', label: 'Vérifier une quittance', voice: 'vérifier une quittance' },
+  { key: '3', label: 'Vérifier un code', voice: 'vérifier un ticket, une place, une quittance ou un badge' },
   { key: '4', label: 'Mes quittances', voice: 'entendre vos dernières quittances' },
   { key: '5', label: 'Points de paiement', voice: 'connaître les points de paiement agréés' },
   { key: '6', label: 'Langue', voice: 'changer de langue' },
@@ -196,7 +196,7 @@ export class ChannelEngine {
       case '2':
         return this.requireAuth(s, 'PAY');
       case '3':
-        return { node: 'VERIFY_INPUT', title: 'Saisissez le code de la quittance ou le code court du reçu', inputHint: 'Saisissez le code sur votre clavier, puis validez.' };
+        return { node: 'VERIFY_INPUT', title: 'Saisissez le code (ticket, place, quittance, reçu, badge)', inputHint: 'Saisissez le code sur votre clavier, puis validez.' };
       case '4':
         return this.requireAuth(s, 'RECEIPTS');
       case '5':

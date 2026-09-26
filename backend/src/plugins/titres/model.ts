@@ -80,7 +80,7 @@ export interface CredentialType {
 }
 
 /** Les six statuts affichés (§ 19A.2, § H.11.2) : couleur + icône + texte, jamais la couleur seule. */
-export const DISPLAY_STATUSES = ['PAS_ENCORE_ACTIF', 'VALIDE', 'BIENTOT_EXPIRE', 'EXPIRE', 'SUSPENDU', 'INVALIDE'] as const;
+export const DISPLAY_STATUSES = ['PAS_ENCORE_ACTIF', 'VALIDE', 'BIENTOT_EXPIRE', 'CRITIQUE', 'EXPIRE', 'SUSPENDU', 'INVALIDE'] as const;
 export type DisplayStatus = (typeof DISPLAY_STATUSES)[number];
 export type StatusColor = 'gris' | 'vert' | 'ambre' | 'rouge' | 'bleu' | 'noir';
 
@@ -88,6 +88,8 @@ export const STATUS_PRESENTATION: Record<DisplayStatus, { color: StatusColor; ic
   PAS_ENCORE_ACTIF: { color: 'gris', icon: 'clock', signal: 'AUCUN' },
   VALIDE: { color: 'vert', icon: 'check', signal: 'COURT' },
   BIENTOT_EXPIRE: { color: 'ambre', icon: 'alert', signal: 'AUCUN' },
+  /** Encore valable, moins de 21 % de validité restante (ou tolérance après l'échéance). */
+  CRITIQUE: { color: 'rouge', icon: 'alert', signal: 'AUCUN' },
   EXPIRE: { color: 'rouge', icon: 'x', signal: 'DISTINCT' },
   SUSPENDU: { color: 'bleu', icon: 'info', signal: 'AUCUN' },
   INVALIDE: { color: 'noir', icon: 'ban', signal: 'DISTINCT' },

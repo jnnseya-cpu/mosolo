@@ -9,6 +9,7 @@ import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components
 import { Icon } from '../../components/Icon';
 import { QrCode } from '../../components/QrCode';
 import { StatusBadge } from '../../components/StatusBadge';
+import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { sha256Hex } from '../../lib/crypto';
@@ -68,7 +69,7 @@ function DeviceList({ items }: { items: Device[] }) {
             <dl className="kv kv-dense min0" style={{ flex: 1 }}>
               <div><dt>Format</dt><dd>{d.widthM} × {d.heightM} m = {d.surfaceM2.replace('.', ',')} m² · {d.faces} face(s)</dd></div>
               <div><dt>Éclairage</dt><dd>{LIGHTING[d.lighting] ?? d.lighting}</dd></div>
-              <div><dt>Autorisation</dt><dd>{d.authorization ? `${d.authorization.reference} · jusqu’au ${fmtDate(d.authorization.validUntil)}` : '—'}</dd></div>
+              <div><dt>Autorisation</dt><dd>{d.authorization ? `${d.authorization.reference} · jusqu’au ${fmtDate(d.authorization.validUntil)}` : '—'}{d.authorization && <> <ValidityCountdown compact from={d.authorization.validFrom} until={d.authorization.validUntil} blocked={d.status === 'RETIRE' ? 'Retirée' : null} label="Autorisation" /></>}</dd></div>
               <div><dt>Droits</dt><dd><StatusBadge tone={RIGHTS[d.rights].tone} label={RIGHTS[d.rights].label} /></dd></div>
             </dl>
             <QrCode value={`${origin}/publicite/verifier?plaque=${encodeURIComponent(d.qrToken)}`} size={92} alt={`Plaque QR du dispositif ${d.reference}`} />
@@ -146,7 +147,7 @@ function Requests({ devices, tick, onChange }: { devices: Device[]; tick: number
           <div className="pk-cards">
             {(list.data ?? []).map((r) => (
               <article key={r.id} className="pk-card">
-                <div className="pk-card-head"><div className="min0"><p className="pk-row-title">{r.reference}</p><p className="pk-sub">{r.device?.reference} · {fmtDate(r.periodFrom)} → {fmtDate(r.periodTo)}</p></div>
+                <div className="pk-card-head"><div className="min0"><p className="pk-row-title">{r.reference}</p><p className="pk-sub">{r.device?.reference} · {fmtDate(r.periodFrom)} → {fmtDate(r.periodTo)}</p>{r.status === 'ACCORDEE' && <ValidityCountdown compact from={r.periodFrom} until={r.periodTo} label="Autorisation" />}</div>
                   <StatusBadge tone={REQUEST_STATUS[r.status].tone} label={REQUEST_STATUS[r.status].label} /></div>
                 <p className="small muted">{r.pieces.length} pièce(s) : {r.pieces.map((p) => PIECE[p.kind] ?? p.kind).join(', ')}</p>
                 {r.history.filter((h) => h.action === 'COMPLEMENT_DEMANDE').slice(-1).map((h) => <p key={h.at} className="small"><strong>Complément demandé :</strong> {h.note}</p>)}

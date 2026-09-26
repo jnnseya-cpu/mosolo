@@ -8,7 +8,8 @@ import { formatMoney, type MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { Icon } from '../../components/Icon';
 import { StatusBadge, type Tone } from '../../components/StatusBadge';
-import { api, describeError, newIdempotencyKey } from '../../lib/api';
+import { ValidityCountdown } from '../../components/ValidityCountdown';
+import { api, describeError, newIdempotencyKey, serverNow } from '../../lib/api';
 import { sha256Hex } from '../../lib/crypto';
 
 export const hasRole = (roles: string[] | undefined, ...want: string[]) => !!roles?.some((r) => want.includes(r));
@@ -32,6 +33,7 @@ export interface Zone {
 export interface ObligationSummary { id: string; amount: MoneyJSON; dueDate: string; status: string; label: string; ruleCode: string; ruleVersion: number; commune: string | null }
 
 export interface Session {
+  ticketCode?: string | null;
   id: string; zone: { id: string; code: string; name: string; commune: string; demo: boolean } | null; plate: string;
   status: 'EN_ATTENTE_PAIEMENT' | 'ACTIVE' | 'EXPIREE' | 'TERMINEE' | 'ABANDONNEE'; light: Light;
   startAt: string | null; paidUntil: string | null; remainingMinutes: number; totalMinutes: number; total: MoneyJSON[];
@@ -161,7 +163,7 @@ export function ErrorLine({ error }: { error: string | null }) {
 /** Obtenir une référence de paiement pour une obligation (circuit commun, clé d'idempotence). */
 export function PayButton({ obligationId, onDone, label = 'Obtenir la référence de paiement' }: { obligationId: string; onDone?: () => void; label?: string }) {
   const [key] = useState(newIdempotencyKey);
-  const [ref, setRef] = useState<{ paymentReference: string; amount: MoneyJSON; expiresAt?: string } | null>(null);
+  const [ref, setRef] = useState<{ paymentReference: string; amount: MoneyJSON; expiresAt?: string; receivedAt?: string } | null>(null);
   const act = useAction();
   const { fmtDate } = useApp();
   if (ref) {
@@ -170,6 +172,7 @@ export function PayButton({ obligationId, onDone, label = 'Obtenir la référenc
         <p className="caps-sm muted">Référence de paiement</p>
         <p className="pk-ref mono">{ref.paymentReference}</p>
         <p className="small">Montant : <Money items={ref.amount} />{ref.expiresAt ? ` · valable jusqu’au ${fmtDate(ref.expiresAt, true)}` : ''}</p>
+        {ref.expiresAt && <ValidityCountdown compact from={ref.receivedAt} until={ref.expiresAt} label="Référence de paiement" />}
         <p className="small muted">Payez par monnaie mobile, banque ou point agréé : la validité démarre à la confirmation signée du prestataire. Aucun agent n’encaisse d’espèces.</p>
       </div>
     );
@@ -177,7 +180,7 @@ export function PayButton({ obligationId, onDone, label = 'Obtenir la référenc
   return (
     <div className="stack-sm">
       <button type="button" className="btn btn-primary btn-sm" disabled={act.busy}
-        onClick={() => void act.run(() => api<{ paymentReference: string; amount: MoneyJSON; expiresAt?: string }>(`/v1/obligations/${encodeURIComponent(obligationId)}/payment-orders`, { method: 'POST', idempotencyKey: key, body: { channel: 'MOBILE_MONEY' } }), (r) => { setRef(r); onDone?.(); })}>
+        onClick={() => void act.run(() => api<{ paymentReference: string; amount: MoneyJSON; expiresAt?: string }>(`/v1/obligations/${encodeURIComponent(obligationId)}/payment-orders`, { method: 'POST', idempotencyKey: key, body: { channel: 'MOBILE_MONEY' } }), (r) => { setRef({ ...r, receivedAt: new Date(serverNow()).toISOString() }); onDone?.(); })}>
         <Icon name="phone" size={16} /> {act.busy ? 'Envoi…' : label}
       </button>
       <ErrorLine error={act.error} />

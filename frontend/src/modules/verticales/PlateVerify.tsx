@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { PageHead } from '../../components/Shell';
 import { Icon } from '../../components/Icon';
 import { StatusBadge } from '../../components/StatusBadge';
+import { ValidityCountdown, ValidityLegend } from '../../components/ValidityCountdown';
 const SITUATION_TONE = { green: 'good', amber: 'warning', red: 'critical', grey: 'neutral', blue: 'info' } as const;
 import type { MapStatusColor } from '@mosolo/shared';
 import { ErrorState, Loading } from '../../components/States';
@@ -10,7 +11,7 @@ import { useApp } from '../../context';
 import { api } from '../../lib/api';
 import './verticales.css';
 
-interface PlateResult { code: string; authentique: boolean; type?: string; statut?: string; enregistre?: boolean; commune?: string; quartier?: string; message?: string; situation?: { color: MapStatusColor; label: string } }
+interface PlateResult { code: string; authentique: boolean; type?: string; statut?: string; enregistre?: boolean; commune?: string; quartier?: string; message?: string; situation?: { color: MapStatusColor; label: string }; titre?: { statut: string; label: string; validFrom?: string | null; validUntil: string | null } }
 interface CertResult { code: string; authentique: boolean; type?: string; verticale?: string; commune?: string | null; validFrom?: string; validUntil?: string | null; statut?: string; message?: string }
 
 /** Extrait le code d'un contenu de QR (URL …/verifier-plaque/CODE) ou d'une saisie. */
@@ -75,8 +76,11 @@ export default function PlateVerify() {
                 <div><dt>Quartier</dt><dd>{plate.quartier}</dd></div>
                 <div><dt>Objet enregistré</dt><dd>{plate.enregistre ? 'Oui' : 'Non'}</dd></div>
                 {plate.situation && <div><dt>Situation fiscale</dt><dd><StatusBadge tone={SITUATION_TONE[plate.situation.color]} label={plate.situation.label} /></dd></div>}
+                {plate.titre && <div><dt>Titre d’étal</dt><dd>{plate.titre.label}</dd></div>}
               </dl>
+              {plate.titre?.validUntil && <ValidityCountdown from={plate.titre.validFrom} until={plate.titre.validUntil} label="Titre d’étal" />}
             </div>
+            {plate.titre?.validUntil && <ValidityLegend />}
           </div>
         )}
         {cert && (
@@ -90,7 +94,9 @@ export default function PlateVerify() {
                 {cert.commune && <div><dt>Commune</dt><dd>{cert.commune}</dd></div>}
                 {cert.validFrom && <div><dt>Validité</dt><dd>du {fmtDate(cert.validFrom)}{cert.validUntil ? ` au ${fmtDate(cert.validUntil)}` : ''}</dd></div>}
               </dl>
+              {cert.validFrom && <ValidityCountdown from={cert.validFrom} until={cert.validUntil} blocked={cert.statut === 'REVOQUE' ? 'Titre révoqué' : null} label="Validité du titre" />}
             </div>
+            <ValidityLegend />
           </div>
         )}
         {unknown && (

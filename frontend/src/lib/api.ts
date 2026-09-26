@@ -19,6 +19,18 @@ export function setDemoUser(id: string | null): void { safeSet(USER_KEY, id); }
 export function getApiLang(): string { return safeGet(LANG_KEY) ?? 'fr'; }
 export function setApiLang(lang: string): void { safeSet(LANG_KEY, lang); }
 
+/**
+ * Écart entre l'horloge du serveur et celle de l'appareil (§ H.11.6 : l'heure du téléphone n'est jamais prise en compte
+ * pour la validité). Mis à jour à chaque réponse ; les comptes à rebours utilisent `serverNow()`.
+ */
+let serverOffsetMs = 0;
+export function noteServerTime(iso: string | null | undefined): void {
+  if (!iso) return;
+  const t = Date.parse(iso);
+  if (!Number.isNaN(t)) serverOffsetMs = t - Date.now();
+}
+export function serverNow(): number { return Date.now() + serverOffsetMs; }
+
 /** Erreur au format RFC 9457 ({ type, title, status, detail, code }). */
 export class ApiError extends Error {
   constructor(
@@ -72,6 +84,7 @@ export async function api<T>(path: string, opts: RequestOpts = {}): Promise<T> {
     if (e instanceof DOMException && e.name === 'AbortError') throw e;
     throw new NetworkError();
   }
+  noteServerTime(res.headers.get('x-mosolo-server-time'));
   const ct = res.headers.get('content-type') ?? '';
   if (!res.ok) {
     let title = res.statusText || `HTTP ${res.status}`; let detail: string | undefined; let code: string | undefined;

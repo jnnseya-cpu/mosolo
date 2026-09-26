@@ -265,7 +265,7 @@ export class PaymentPointService {
     const obligation = this.ctx.assessment.get(order.obligationId);
     const tp = this.ctx.taxpayers.get(order.taxpayerId);
     return {
-      paymentReference: order.paymentReference, amount: order.amount, amountEditable: false as const, expiresAt: order.expiresAt,
+      paymentReference: order.paymentReference, amount: order.amount, amountEditable: false as const, createdAt: order.createdAt, expiresAt: order.expiresAt,
       status: order.status, revenue: obligation.ruleCode, revenueLabel: obligation.label, administration: obligation.entity,
       dueDate: obligation.dueDate, taxpayerRefSuffix: `…${refSuffix(tp.iuc)}`, holderInitials: initials(tp.fullName),
     };
@@ -293,7 +293,7 @@ export class PaymentPointService {
         const active = this.ctx.payments.byObligation(o.id).find((x) => x.status === 'INITIE' && new Date(x.expiresAt) > now);
         return {
           obligationId: o.id, revenue: o.ruleCode, label: o.label, amount: o.amount, dueDate: o.dueDate, entity: o.entity,
-          activeReference: active?.paymentReference ?? null, activeReferenceExpiresAt: active?.expiresAt ?? null,
+          activeReference: active?.paymentReference ?? null, activeReferenceCreatedAt: active?.createdAt ?? null, activeReferenceExpiresAt: active?.expiresAt ?? null,
         };
       });
   }

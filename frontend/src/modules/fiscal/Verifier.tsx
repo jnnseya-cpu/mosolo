@@ -4,6 +4,7 @@
  * (le Cahier des exigences prévaut, décision de la Ville) avec sa légende générique, sans détail des obligations.
  */
 import { StatusBadge } from '../../components/StatusBadge';
+import { ValidityCountdown, ValidityLegend } from '../../components/ValidityCountdown';
 const SITUATION_TONE = { green: 'good', amber: 'warning', red: 'critical', grey: 'neutral', blue: 'info' } as const;
 import type { MapStatusColor } from '@mosolo/shared';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
@@ -27,6 +28,7 @@ const VERDICT: Record<string, { tone: string; icon: string; title: string }> = {
   AUTHENTIQUE: { tone: 'good', icon: 'check', title: 'Plaque authentique' },
   VALIDE: { tone: 'good', icon: 'check', title: 'Document valide' },
   BIENTOT_EXPIRE: { tone: 'warning', icon: 'clock', title: 'Valide — expire bientôt' },
+  CRITIQUE: { tone: 'critical', icon: 'alert', title: 'Valide — expire très bientôt' },
   EXPIRE: { tone: 'critical', icon: 'x', title: 'Expiré' },
   REVOQUE: { tone: 'critical', icon: 'ban', title: 'Révoqué' },
   REVOQUEE: { tone: 'critical', icon: 'ban', title: 'Révoquée' },
@@ -103,11 +105,19 @@ export default function Verifier() {
                   {str('taxpayerRef') && <div><dt>Contribuable</dt><dd className="mono">{str('taxpayerRef')} <span className="small muted">(masqué)</span></dd></div>}
                   {str('validUntil') && <div><dt>Valide jusqu’au</dt><dd>{fmtDate(str('validUntil')!)}</dd></div>}
                   {str('leaseStart') && <div><dt>Bail depuis</dt><dd>{fmtDate(str('leaseStart')!)}</dd></div>}
+                  {str('leaseEnd') && <div><dt>Bail jusqu’au</dt><dd>{fmtDate(str('leaseEnd')!)}</dd></div>}
                   <div><dt>Vérifié le</dt><dd>{fmtDate(res.checkedAt, true)}</dd></div>
                 </dl>
+                {kind === 'quitus' && str('validUntil') && res.result !== 'SIGNATURE_INVALIDE' && (
+                  <ValidityCountdown from={str('validFrom')} until={str('validUntil')} blocked={res.result === 'REVOQUE' ? 'Quitus révoqué' : null} label="Validité du quitus" />
+                )}
+                {kind === 'bail' && str('leaseStart') && (
+                  <ValidityCountdown from={str('leaseStart')} until={str('leaseEnd')} blocked={res.result === 'REVOQUEE' ? 'Attestation révoquée' : null} label="Période du bail" />
+                )}
                 {str('notice') && <p className="small muted">{str('notice')}</p>}
               </div>
             )}
+            {res && kind !== 'bien' && (str('validUntil') || str('leaseStart')) && <ValidityLegend />}
           </div>
           <p className="small muted verify-privacy"><Icon name="lock" size={14} /> Aucune donnée personnelle ni aucun montant ne sont affichés publiquement ; seule la couleur de situation d’un bien l’est. Une couleur rouge n’entraîne aucune mesure automatique. Chaque vérification est journalisée.</p>
         </div>

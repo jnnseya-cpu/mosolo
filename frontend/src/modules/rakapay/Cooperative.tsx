@@ -10,6 +10,7 @@ import { PageHead } from '../../components/Shell';
 import { Icon } from '../../components/Icon';
 import { MoneyText } from '../../components/MoneyText';
 import { StatusBadge } from '../../components/StatusBadge';
+import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
@@ -23,7 +24,7 @@ interface CoopSummary { id: string; code: string; name: string; commune: string;
 interface Member {
   motoId: string; plate: string; orderNumber: string; station: { id: string; name: string; commune: string } | null;
   driver: { id: string; displayName: string; vestNumber: string; hasAccount: boolean } | null;
-  status: { color: 'VERT' | 'AMBRE' | 'ROUGE'; text: string; validUntil?: string };
+  status: { color: 'VERT' | 'AMBRE' | 'ROUGE'; text: string; nothingToPay?: boolean; validFrom?: string; validUntil?: string };
 }
 interface CoopView {
   cooperative: { id: string; code: string; name: string; status: string; commune: string; decisions: { decision: string; motif: string; by: string; at: string }[]; demo: boolean };
@@ -171,7 +172,8 @@ export default function Cooperative() {
                         <div className="min0">
                           <p className="row-title mono">{m.plate}</p>
                           <p className="small muted">{m.driver ? `${m.driver.displayName} · gilet ${m.driver.vestNumber}` : 'Aucun conducteur affecté'} · {m.station?.name ?? '—'}</p>
-                          <span className={`tt-status tt-status-sm tt-${TONE[m.status.color]}`}><Icon name={m.status.color === 'ROUGE' ? 'x' : m.status.color === 'AMBRE' ? 'alert' : 'check'} size={13} /> {m.status.color === 'ROUGE' ? 'Pas en règle' : m.status.validUntil ? `En règle jusqu’au ${fmtDate(m.status.validUntil, true)}` : 'En règle'}</span>
+                          <span className={`tt-status tt-status-sm tt-${TONE[m.status.color]}`}><Icon name={m.status.color === 'ROUGE' && !m.status.nothingToPay ? 'x' : m.status.color === 'VERT' ? 'check' : 'alert'} size={13} /> {m.status.color === 'ROUGE' && !m.status.nothingToPay ? 'Pas en règle' : m.status.validUntil ? `En règle jusqu’au ${fmtDate(m.status.validUntil, true)}` : 'En règle'}</span>
+                          {m.status.validUntil && <> <ValidityCountdown compact from={m.status.validFrom} until={m.status.validUntil} /></>}
                         </div>
                         <div className="row-side">
                           <select aria-label={`Durée du pass pour ${m.plate}`} value={sel[m.motoId] ?? ''} disabled={!m.driver} onChange={(e) => setSel({ ...sel, [m.motoId]: e.target.value as Duration | '' })}>
@@ -199,7 +201,7 @@ export default function Cooperative() {
                     <div key={p.paymentReference}>
                       <p className="label">Référence du paiement groupé — {p.commune}</p>
                       <p className="ref-big mono">{p.paymentReference}</p>
-                      <p><MoneyText money={p.amount} /> · valable jusqu’au {fmtDate(p.expiresAt, true)}</p>
+                      <p><MoneyText money={p.amount} /> · valable jusqu’au {fmtDate(p.expiresAt, true)}{p.status === 'EN_ATTENTE' && <> <ValidityCountdown compact from={iss.createdAt} until={p.expiresAt} label="Référence de paiement" /></>}</p>
                     </div>
                   ))}
                   <p className="small">Après la confirmation signée de l’opérateur, chaque pass est activé individuellement (plaque + conducteur) et chaque conducteur reçoit un SMS.</p>

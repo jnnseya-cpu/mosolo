@@ -10,6 +10,7 @@
 import type { User } from '../../core/auth.js';
 import { conflict, notFound, unprocessable, forbidden } from '../../core/errors.js';
 import { authorize } from '../../core/policy.js';
+import { validityView } from '../../core/validity.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { PAYABLE_STATUSES } from '../../modules/assessment/service.js';
 import { taxpayerRecipient } from '../../modules/identity/recipients.js';
@@ -17,6 +18,7 @@ import { actorOf, addDays, CATEGORY_LABELS, formatShortCode, maskIuc, newShortCo
 
 /** Durée de validité et seuil ambre — [paramètres de DÉMONSTRATION ; « période fixée par la règle », acte J6]. */
 export const CLEARANCE_VALIDITY_DAYS = 90;
+/** @deprecated remplacé par la règle 49 % / 21 % (core/validity.ts) ; conservé pour les fiches existantes. */
 export const CLEARANCE_AMBER_DAYS = 15;
 
 export interface ClearanceBlocker { obligationId: string; label: string; dueDate: string; reason: 'IMPAYEE' | 'EN_ATTENTE_DE_RAPPROCHEMENT' | 'CONTESTEE_SANS_EFFET_SUSPENSIF' }
@@ -163,13 +165,16 @@ export class ClearanceService {
     const today = this.d.today();
     if (c.status === 'REVOQUE') return 'REVOQUE';
     if (c.validUntil < today) return 'EXPIRE';
-    if (addDays(today, CLEARANCE_AMBER_DAYS) >= c.validUntil) return 'BIENTOT_EXPIRE';
+    // Règle 49 % / 21 % : sous 49 % de validité restante, le quitus est signalé « expire bientôt » (ambre ou rouge).
+    const v = validityView(c.validFrom, c.validUntil, new Date(this.d.nowIso()));
+    if (v.band === 'EXPIRE') return 'EXPIRE';
+    if (v.band === 'AMBRE' || v.band === 'ROUGE') return 'BIENTOT_EXPIRE';
     return 'VALIDE';
   }
 
   view(c: Clearance) {
     return {
-      ...c, shortCodeDisplay: formatShortCode(c.shortCode), check: this.statusOf(c),
+      ...c, shortCodeDisplay: formatShortCode(c.shortCode), check: this.statusOf(c), validity: validityView(c.validFrom, c.validUntil, new Date(this.d.nowIso())),
       verifyPath: `/fiscal/verifier/quitus/${c.shortCode}?s=${c.signature}`,
       notice: 'Quitus informatif (acte J6 non certifié) — vérifiable par QR ; ne contient aucune donnée sensible.',
     };
@@ -194,6 +199,7 @@ export class ClearanceService {
     const tp = this.d.ctx.taxpayers.get(c.taxpayerId);
     return {
       result, checkedAt: at, number: c.number, taxpayerRef: maskIuc(tp.iuc), validFrom: c.validFrom, validUntil: c.validUntil,
+      validity: validityView(c.validFrom, c.validUntil, new Date(at)),
       informative: true, notice: 'Quitus informatif : il atteste l’absence d’obligation exigible impayée à la date de délivrance.',
     };
   }

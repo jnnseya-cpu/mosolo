@@ -49,7 +49,12 @@ export function buildApp(opts: AppOptions & { logger?: boolean } = {}): FastifyI
 
   void app.register(cors, {
     origin: true,
-    exposedHeaders: ['idempotent-replayed', 'x-mosolo-subject', 'content-language', 'retry-after', 'x-mosolo-sha256', 'x-mosolo-signature'],
+    exposedHeaders: ['idempotent-replayed', 'x-mosolo-subject', 'content-language', 'retry-after', 'x-mosolo-sha256', 'x-mosolo-signature', 'x-mosolo-server-time'],
+  });
+
+  // Heure de référence = heure du SERVEUR (§ H.11.6) : chaque réponse la porte ; le client s'y cale pour ses comptes à rebours.
+  app.addHook('onSend', async (_req, reply) => {
+    reply.header('x-mosolo-server-time', ctx.clock.now().toISOString());
   });
 
   // Corps brut conservé : nécessaire à la vérification des signatures (prestataires, terminaux).

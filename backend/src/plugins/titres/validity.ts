@@ -3,6 +3,7 @@
  * Aucune fonction ne reçoit l'heure d'un terminal : l'instant de référence est toujours fourni par l'horloge serveur.
  */
 import { badRequest } from '../../core/errors.js';
+import { readValidity, type ValidityBand } from '@mosolo/shared';
 import {
   KINSHASA_OFFSET_MS, STATUS_PRESENTATION, type Credential, type DisplayStatus, type StatusColor, type ValidityPolicy,
 } from './model.js';
@@ -74,6 +75,8 @@ export interface StatusView {
   text: string;
   /** Secondes restantes avant la fin (positif) ou écoulées depuis (négatif). */
   remainingSeconds: number;
+  /** Règle 49 % / 21 % : part de validité restante et bande de couleur (même calcul dans toute l'application). */
+  validity: { band: ValidityBand; pct: number | null; from: string; until: string };
   invalidReason?: 'REVOQUE' | 'ANNULE' | 'REMPLACE' | 'DEJA_UTILISE' | 'EPUISE' | 'CONDITION_NON_REMPLIE';
   serverTime: string;
 }
@@ -100,8 +103,10 @@ export function statusAt(c: Pick<Credential, 'state' | 'stateReason' | 'validFro
   const from = new Date(c.validFrom).getTime();
   const until = new Date(c.validUntil).getTime();
   const remaining = until - t;
+  const reading = readValidity(from, until, t);
+  const validity = { band: reading.band, pct: reading.pct === null ? null : Math.round(reading.pct * 10) / 10, from: c.validFrom, until: c.validUntil };
   const base = (status: DisplayStatus, text: string, extra: Partial<StatusView> = {}): StatusView => ({
-    status, ...STATUS_PRESENTATION[status], text, remainingSeconds: Math.round(remaining / 1000), serverTime: now.toISOString(), ...extra,
+    status, ...STATUS_PRESENTATION[status], text, remainingSeconds: Math.round(remaining / 1000), validity, serverTime: now.toISOString(), ...extra,
   });
   if (c.state === 'REVOQUE') return base('INVALIDE', 'INVALIDE — titre révoqué', { invalidReason: 'REVOQUE' });
   if (c.state === 'ANNULE') return base('INVALIDE', 'INVALIDE — titre annulé', { invalidReason: 'ANNULE' });
@@ -117,14 +122,16 @@ export function statusAt(c: Pick<Credential, 'state' | 'stateReason' | 'validFro
   }
   if (t < from) return base('PAS_ENCORE_ACTIF', `VALIDE À PARTIR DU ${kinshasaLabel(from)}`);
   if (t > until + c.toleranceMinutes * MIN) return base('EXPIRE', `EXPIRÉ DEPUIS ${formatDuration(t - until)}`);
-  if (t > until) return base('BIENTOT_EXPIRE', `EXPIRÉ — TOLÉRANCE EN COURS (${formatDuration(until + c.toleranceMinutes * MIN - t)})`);
-  if (remaining <= c.amberMinutes * MIN) return base('BIENTOT_EXPIRE', `EXPIRE DANS ${formatDuration(remaining)}`);
+  if (t > until) return base('CRITIQUE', `EXPIRÉ — TOLÉRANCE EN COURS (${formatDuration(until + c.toleranceMinutes * MIN - t)})`);
+  // Couleur par part de validité restante (décision du 26/09/2026) : ≥ 49 % vert, 21–49 % ambre, < 21 % rouge.
+  if (reading.band === 'ROUGE') return base('CRITIQUE', `EXPIRE DANS ${formatDuration(remaining)}`);
+  if (reading.band === 'AMBRE') return base('BIENTOT_EXPIRE', `VALIDE — expire dans ${formatDuration(remaining)}`);
   return base('VALIDE', `VALIDE — encore ${formatDuration(remaining)}`);
 }
 
 /** Réponse minimale de contrôle. */
 export function controlResultOf(s: DisplayStatus): 'VALIDE' | 'INVALIDE' | 'EXPIRE' {
-  if (s === 'VALIDE' || s === 'BIENTOT_EXPIRE') return 'VALIDE';
+  if (s === 'VALIDE' || s === 'BIENTOT_EXPIRE' || s === 'CRITIQUE') return 'VALIDE';
   if (s === 'EXPIRE') return 'EXPIRE';
   return 'INVALIDE';
 }

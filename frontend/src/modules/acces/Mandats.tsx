@@ -7,6 +7,7 @@ import { useState, type FormEvent } from 'react';
 import { useApp } from '../../context';
 import { PageHead } from '../../components/Shell';
 import { Chip, StatusBadge } from '../../components/StatusBadge';
+import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { Drawer } from '../../components/Drawer';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
@@ -30,6 +31,7 @@ function MandateCard({ m, asMandant, onRevoke }: { m: Mandate; asMandant: boolea
           <div className="ac-meta">
             <span>{m.kind === 'PROFESSIONNEL' ? 'Mandat de tiers professionnel' : 'Mandataire de confiance'}</span>
             <span>Du {fmtDate(m.validFrom)} au {fmtDate(m.validTo)}</span>
+            {(m.status === 'ACTIF' || m.status === 'EXPIRE') && <ValidityCountdown compact from={m.validFrom} until={m.validTo} label="Mandat" />}
             {m.certified && <span><Icon name="shieldCheck" size={14} /> Certifié N3</span>}
           </div>
         </div>

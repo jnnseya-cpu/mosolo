@@ -46,3 +46,17 @@ Dossier `galerie/` (JPEG, téléphone 390 px et ordinateur 1440 px) et PDF `KINS
 - `verticales-usagers/` (23) et `verticales-agents/` (17) : chaque écran capturé avec le profil qui l'utilise.
 
 Régénération : `tools/captures/` (serveur `MOSOLO_RATE_LIMIT=off`, frontend en aperçu sur le port 4173 ; `gallery.cjs` lit au lancement les codes de plaque, qui changent à chaque démarrage).
+
+## Partie 6 — Preuves sur tous les canaux (`galerie/preuves-canaux/`, 18 écrans)
+
+Règle de couleur unique : **vert** tant qu'il reste au moins 49 % de validité, **ambre** de 21 % à moins de 49 %, **rouge** sous 21 % (encore valable), puis **EXPIRÉ**. L'heure de référence est celle du serveur.
+
+Écrans et documents :
+- **Vérifier une preuve** : comment lire la couleur ; ticket de stationnement vert ; autorisation publicitaire rouge ; certificat pas encore actif.
+- **Preuves imprimées** : A6, ticket 80 mm et ticket 58 mm, avec le logo de la Ville, un QR, l'échéancier des couleurs et la mention démonstration. Deux PDF réellement imprimés : `05-impression-a6.pdf` et `06-impression-ticket-80mm.pdf`.
+- **WhatsApp** : consentement, vérification, comment payer (sans lien de paiement).
+- **SMS « V + code »** depuis un téléphone basique.
+- **Version légère `/l`** : sans JavaScript, moins de 10 Ko par page.
+- **Comptes à rebours** : stationnement, pass wewa et quitus.
+
+Les pages 1 à 36 du PDF de la galerie reprennent ces écrans. Régénération : `tools/captures/preuves.cjs`. Le serveur est redémarré entre deux appareils, car le limiteur anti-énumération bloque les vérifications répétées.

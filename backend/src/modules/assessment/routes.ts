@@ -51,7 +51,7 @@ export function registerAssessmentRoutes(app: FastifyInstance, ctx: AppContext):
     ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'obligation.viewed', resourceType: 'obligation', resourceId: o.id });
     return {
       ...obligationDetail(o),
-      paymentOrders: ctx.payments.byObligation(o.id).map((p) => ({ paymentOrderId: p.id, paymentReference: p.paymentReference, status: p.status, expiresAt: p.expiresAt })),
+      paymentOrders: ctx.payments.byObligation(o.id).map((p) => ({ paymentOrderId: p.id, paymentReference: p.paymentReference, status: p.status, createdAt: p.createdAt, expiresAt: p.expiresAt })),
       receipts: ctx.payments.byObligation(o.id).flatMap((p) => {
         const r = ctx.receipts.byPaymentOrder(p.id);
         return r ? [{ number: r.number, code: r.code, status: r.status }] : [];
