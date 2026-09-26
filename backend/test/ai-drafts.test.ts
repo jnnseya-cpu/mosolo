@@ -7,6 +7,16 @@ import { setup } from './helpers.js';
 const FIELDS = ['situation', 'insight', 'risk', 'recommendation', 'nextAction', 'owner', 'deadline', 'confidence'] as const;
 
 describe('Couche d’intelligence', () => {
+  it('ne crée pas de doublon : une recommandation identique en attente est réutilisée', async () => {
+    const env = await setup();
+    const a = await env.req('POST', '/v1/ai/insights', 'u-gouverneur', { context: 'governor' });
+    const b = await env.req('POST', '/v1/ai/insights', 'u-gouverneur', { context: 'governor' });
+    expect(b.json().id).toBe(a.json().id);
+    await env.req('POST', `/v1/ai/recommendations/${a.json().id}/decide`, 'u-gouverneur', { decision: 'REJETEE', reason: 'Déjà traité' });
+    const c = await env.req('POST', '/v1/ai/insights', 'u-gouverneur', { context: 'governor' });
+    expect(c.json().id).not.toBe(a.json().id);
+  });
+
   it('produit une AIRecommendation complète (8 rubriques + décision + niveau d’autonomie)', async () => {
     const env = await setup();
     const res = await env.req('POST', '/v1/ai/insights', 'u-gouverneur', { context: 'governor' });

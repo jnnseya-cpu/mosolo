@@ -65,6 +65,12 @@ export class AIService {
   generate(user: User, context: AIContext, subjectId?: string): StoredRecommendation {
     authorize(user, 'ai.insight', { context });
     const [draft] = this.provider.generate(context, this.snapshot(), subjectId);
+    // Pas de doublon : si une recommandation identique (même contexte, sujet et situation) attend encore
+    // une décision humaine, elle est réutilisée au lieu d'en créer une nouvelle à chaque consultation.
+    const pending = this.recommendations.find(
+      (r) => r.status === 'EMISE' && r.context === context && r.subjectId === subjectId && r.situation === draft!.situation,
+    )[0];
+    if (pending) return pending;
     return this.store(context, draft!, { ...(subjectId ? { subjectId } : {}), example: context === 'governor' });
   }
 
