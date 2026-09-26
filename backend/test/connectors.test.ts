@@ -180,7 +180,7 @@ describe('Connecteur KODA', () => {
   it('mode réel : Bearer + Idempotency-Key, métadonnées minimales, secret jamais journalisé ; échec → 502 sans ordre', async () => {
     const logs: HttpLogEntry[] = [];
     const { fetch, calls } = mockFetch(() => ({ status: 200, body: { intent_id: 'int_live_1', client_secret: 'cs_secret', checkout_url: 'https://kodajnn.com/c/int_live_1' } }));
-    const env = await setupConnectors({ KODA_API_KEY: 'sk_test_SUPERSECRETKODA1234', KODA_WEBHOOK_SECRET: 'whsec_koda_test' }, fetch, logs);
+    const env = await setupConnectors({ KODA_API_KEY: 'sk_test_SUPERSECRETKODA1234', KODA_WEBHOOK_SECRET: 'whsec_koda_test', KODA_SUCCESS_URL: 'https://portail.exemple/retour' }, fetch, logs);
     const res = await createProviderOrder(env, 'koda');
     expect(res.statusCode).toBe(201);
     expect(res.json()).toMatchObject({ providerIntentId: 'int_live_1', checkoutUrl: 'https://kodajnn.com/c/int_live_1', sandbox: true });
@@ -198,7 +198,7 @@ describe('Connecteur KODA', () => {
 
     // Prestataire en panne : 502, aucun ordre à moitié créé ; POST KODA jamais rejoué (idempotence non documentée).
     const down = mockFetch(() => ({ status: 503, body: {} }));
-    const env2 = await setupConnectors({ KODA_API_KEY: 'sk_test_SUPERSECRETKODA1234', KODA_WEBHOOK_SECRET: 'whsec_koda_test' }, down.fetch);
+    const env2 = await setupConnectors({ KODA_API_KEY: 'sk_test_SUPERSECRETKODA1234', KODA_WEBHOOK_SECRET: 'whsec_koda_test', KODA_SUCCESS_URL: 'https://portail.exemple/retour' }, down.fetch);
     const fail = await createProviderOrder(env2, 'koda');
     expect(fail.statusCode).toBe(502);
     expect(fail.json().code).toBe('PROVIDER_UNAVAILABLE');
@@ -262,7 +262,8 @@ describe('Configuration et pièces de dossier', () => {
   it('alias de règlement absent du coffre, clé publiable ou secret de webhook manquant → erreur de configuration', () => {
     expect(() => buildApp({ connectorEnv: { KODA_SETTLEMENT_ACCOUNT_ALIAS: 'COMPTE-PRIVE-OPERATEUR' } })).toThrow(ConnectorConfigError);
     expect(() => buildApp({ connectorEnv: { BITRIPAY_SETTLEMENT_ACCOUNT_ALIAS: 'INCONNU' } })).toThrow(/coffre/);
-    expect(() => buildApp({ connectorEnv: { KODA_API_KEY: 'pk_live_publishable', KODA_WEBHOOK_SECRET: 'x' } })).toThrow(/publiable/);
+    expect(() => buildApp({ connectorEnv: { KODA_API_KEY: 'pk_live_publishable', KODA_WEBHOOK_SECRET: 'x', KODA_SUCCESS_URL: 'https://portail.exemple/retour' } })).toThrow(/publiable/);
+    expect(() => buildApp({ connectorEnv: { KODA_API_KEY: 'sk_live_abc', KODA_WEBHOOK_SECRET: 'x' } })).toThrow(/KODA_SUCCESS_URL/);
     expect(() => buildApp({ connectorEnv: { BITRIPAY_API_KEY: 'sk_live_abc' } })).toThrow(/secret de webhook/);
     expect(() => buildApp({ connectorEnv: { KODA_SETTLEMENT_ACCOUNT_ALIAS: DEMO.dgtkAlias } })).not.toThrow();
   });

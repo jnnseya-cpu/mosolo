@@ -11,7 +11,8 @@ import { ConnectorConfigError, CONNECTOR_IDS, type ConnectorId, type PaymentConn
 
 /** Alias par défaut : compte de recettes DGIPK de démonstration (voir seed.ts). */
 export const DEFAULT_SETTLEMENT_ACCOUNT_ALIAS = 'KIN-DGIPK-RECETTES-01';
-export const DEFAULT_KODA_SUCCESS_URL = 'https://mosolo.kinshasa.cd/paiements/retour';
+/** URL de retour de démonstration (portail local). En mode réel, KODA_SUCCESS_URL est obligatoire : aucun domaine n'est présumé. */
+export const DEFAULT_KODA_SUCCESS_URL = 'http://localhost:5173/espace';
 
 function list(v: string | undefined, fallback: readonly string[]): string[] {
   const items = (v ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -63,6 +64,9 @@ export class ConnectorRegistry {
 }
 
 export function buildConnectorRegistry(env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env, runtime: ConnectorRuntime = {}): ConnectorRegistry {
+  if (env.KODA_API_KEY && !env.KODA_SUCCESS_URL) {
+    throw new ConnectorConfigError('KODA_SUCCESS_URL est obligatoire en mode réel (URL de retour du portail officiel, à fournir par la Ville).');
+  }
   const koda = new KodaConnector(
     {
       ...(env.KODA_API_KEY ? { apiKey: env.KODA_API_KEY } : {}),

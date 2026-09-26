@@ -38,7 +38,8 @@ export class ApiError extends Error {
 
   toProblem(instance?: string): ProblemDetails {
     return {
-      type: `https://mosolo.kinshasa.cd/problemes/${this.code.toLowerCase().replace(/_/g, '-')}`,
+      // URN neutre : aucun nom de domaine n'est présumé tant que la Ville n'a pas désigné le sien.
+      type: `urn:mosolo:probleme:${this.code.toLowerCase().replace(/_/g, '-')}`,
       title: TITLES[this.status] ?? 'Erreur',
       status: this.status,
       detail: this.message,

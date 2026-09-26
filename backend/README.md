@@ -44,7 +44,8 @@ src/
     objects           objets fiscaux, baux
     rules             registre juridique, cycle de vie, évaluateur de formules sûr (formula.ts)
     assessment        liquidation déterministe, obligations et explications
-    payments          ordres de paiement, rappels prestataires signés
+    payments          ordres de paiement, rappels prestataires signés, confirmFromProvider (contrôles communs)
+      connectors/     BitriPay et KODA : types, minor-units, http-client, koda, bitripay, registry
     treasury          relevés, rapprochement à trois voies, grand livre en partie double (ledger.ts)
     receipts          quittances signées Ed25519, vérification publique minimale
     vault             coffre des comptes bénéficiaires (quorum, hors bande, 72 h)
@@ -88,6 +89,7 @@ Règles de conception :
 | AC-RCP-01 | Vérification publique minimale (aucun nom, IUC tronqué) ; quittance altérée → `FRAUD_SUSPECTED` | `payments.test.ts` |
 | AC-COM-01 | Avis obligatoire délivré malgré la désinscription, jamais sur WhatsApp, preuve conservée | `communications.test.ts` |
 | AC-COM-02 | Sans clé fournisseur : statut `journalise` (bac à sable) | `communications.test.ts` |
+| § 18.7–18.12 | Connecteurs BitriPay / KODA : unités mineures exactes (CDF à zéro décimale chez KODA), signature invalide → 401 + alerte, rejeu d'événement sans effet, montant différent → 422, annonce de règlement sans `REGLE`, bac à sable sans réseau, clé jamais journalisée, alias hors coffre → refus de démarrer, pièce capture/SMS sans effet et interdite au contribuable | `connectors.test.ts` |
 | AC-CUR-01 | Obligation USD : contre-valeur CDF indicative avec taux et source, sur l'ordre et la quittance (et montant payé en EUR) | `payments.test.ts` |
 | AC-AI-01 | Recommandation IA sans effet tant qu'elle n'est pas décidée ; décision journalisée ; garde IA | `ai-drafts.test.ts` |
 | AC-SAV-01 | Brouillons : une version par enregistrement, historique complet, résumé des changements | `ai-drafts.test.ts` |
@@ -150,6 +152,77 @@ curl -s localhost:8080/v1/public/receipts/<receiptCode>        # VALID / RECONCI
 Terminaux terrain : `x-device-signature` = HMAC-SHA256 hexadécimal du corps brut avec la clé de l'appareil
 (`dev-terrain-001` → `demo-device-key-001`, affecté à `u-agent-terrain`).
 
+## Connecteurs de prestataires : BitriPay et KODA
+
+Deux connecteurs de prestataires **candidats** (non désignés : agrément BCC, convention et passation préalables — voir
+[`docs/document-maitre/18b-connecteurs-prestataires.md`](../docs/document-maitre/18b-connecteurs-prestataires.md)).
+Code : `src/modules/payments/connectors/`. Ils partagent **exactement** les contrôles du rappel générique via
+`PaymentService.confirmFromProvider` (référence, montant exact `Money`, doublon, écritures, quittance provisoire, audit).
+
+- Ordre lié : `POST /v1/obligations/:id/payment-orders` avec `{"channel":"MOBILE_MONEY"|"QR","provider":"koda"|"bitripay"}`.
+  L'intention est créée chez le prestataire **avant** l'enregistrement de l'ordre ; en cas d'échec : 502 `PROVIDER_UNAVAILABLE`,
+  **aucun ordre enregistré** (le client réessaie avec une nouvelle clé d'idempotence). Idempotency-Key sortante = référence de paiement.
+- Webhooks : `POST /v1/providers/koda/webhooks`, `POST /v1/providers/bitripay/webhooks` (corps brut, `content-type: application/json`).
+- `payment_intent.settled` (BitriPay) = **annonce de règlement** : indice de rapprochement (`payments.settlementAnnouncements`) +
+  audit `payment.settlement_announced` ; l'ordre reste `CONFIRME` jusqu'au relevé du compte public.
+- Vérification capture / SMS chez le prestataire : **jamais** proposée au contribuable ; relais réservé à R17/R18/R20
+  (`POST /v1/payment-orders/:reference/provider-verification-evidence`) → pièce de dossier `legalEffect: "AUCUN"`.
+
+**Bac à sable local** : sans clé API, aucun appel réseau ; l'intention est simulée (`providerIntentId: "sbx_…"`,
+`checkoutUrl: null`, `sandbox: true`) et les secrets de webhook de démonstration sont `demo-whsec-koda` et `demo-whsec-bitripay`.
+Avec une clé `sk_test_…` : environnement de test du prestataire (`sandbox: true`) ; `sk_live_…` : réel. Une clé publiable `pk_…`
+est refusée au démarrage ; hors bac à sable local, le secret de webhook est obligatoire.
+
+| Variable | Rôle | Défaut |
+|---|---|---|
+| `KODA_API_KEY` | clé secrète `sk_…` (serveur uniquement) | absente ⇒ bac à sable local |
+| `KODA_WEBHOOK_SECRET` | secret HMAC des webhooks | `demo-whsec-koda` en bac à sable local |
+| `KODA_BASE_URL` | URL de l'API | `https://kodajnn.com/v1` |
+| `KODA_SETTLEMENT_ACCOUNT_ALIAS` | alias du compte public de règlement (**doit exister dans le coffre**) | `KIN-DGIPK-RECETTES-01` |
+| `KODA_OPERATORS`, `KODA_SUCCESS_URL` | opérateurs proposés ; URL de retour (sans valeur probante) | `orange_cd,mpesa_cd` ; démo : `http://localhost:5173/espace` — **obligatoire en mode réel** |
+| `BITRIPAY_API_KEY` | clé secrète `sk_test_…` / `sk_live_…` | absente ⇒ bac à sable local |
+| `BITRIPAY_WEBHOOK_SECRET` | secret `whsec_…` du point de terminaison | `demo-whsec-bitripay` en bac à sable local |
+| `BITRIPAY_ED25519_PUBLIC_KEY` | clé publique plateforme (PEM ou 32 octets base64), épinglée depuis `GET /v1/keys` | absente |
+| `BITRIPAY_HMAC_REQUIRED`, `BITRIPAY_ED25519_REQUIRED` | schémas de signature exigés | `true`, `false` |
+| `BITRIPAY_BASE_URL` | URL de l'API | `https://api.bitripay.com/v1` |
+| `BITRIPAY_SETTLEMENT_ACCOUNT_ALIAS` | alias du compte public de règlement (**doit exister dans le coffre**) | `KIN-DGIPK-RECETTES-01` |
+| `BITRIPAY_CDF_EXPONENT` | décimales du CDF chez BitriPay (0 ou 2) [À VÉRIFIER] | `2` (ISO 4217) |
+| `BITRIPAY_ALLOWED_OPERATORS` | opérateurs proposés | `orange_cd,mpesa_cd,airtel_cd,africell_cd` |
+
+Un alias de règlement absent du coffre **empêche le démarrage** (`ConnectorConfigError`) : MOSOLO ne détient jamais les fonds.
+
+### Simuler un webhook signé (bac à sable local)
+
+Une seule référence active par obligation : jouez l'un **ou** l'autre des deux scénarios sur un serveur fraîchement démarré.
+
+```bash
+OBL=$(curl -s -H 'x-demo-user: u-contribuable' localhost:8080/v1/obligations | node -pe 'JSON.parse(require("fs").readFileSync(0))[0].id')
+
+# KODA — montant en unités mineures KODA (USD : 2 décimales ; CDF : 0 décimale, 25000 = 25 000 FC)
+ORDER=$(curl -s -X POST -H 'x-demo-user: u-contribuable' -H 'content-type: application/json' -H "Idempotency-Key: $(uuidgen)" \
+  -d '{"channel":"MOBILE_MONEY","provider":"koda"}' localhost:8080/v1/obligations/$OBL/payment-orders)
+REF=$(echo "$ORDER" | node -pe 'JSON.parse(require("fs").readFileSync(0)).paymentReference')
+INTENT=$(echo "$ORDER" | node -pe 'JSON.parse(require("fs").readFileSync(0)).providerIntentId')
+BODY="{\"id\":\"evt_$RANDOM\",\"type\":\"payment.verified\",\"data\":{\"intent_id\":\"$INTENT\",\"amount\":15000,\"currency\":\"USD\",\"receipt_id\":\"KR-$RANDOM\",\"metadata\":{\"payment_reference\":\"$REF\"}}}"
+SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac demo-whsec-koda -hex | awk '{print $2}')
+curl -s -X POST -H 'content-type: application/json' -H "x-koda-signature: $SIG" -d "$BODY" localhost:8080/v1/providers/koda/webhooks
+# → {"received":true,"results":[{"outcome":"PROCESSED","status":"CONFIRME","receiptStatus":"PROVISOIRE",…}]}
+
+# BitriPay — en-tête t=<unix>,v1=HMAC-SHA256("<t>.<corps>")
+ORDER=$(curl -s -X POST -H 'x-demo-user: u-contribuable' -H 'content-type: application/json' -H "Idempotency-Key: $(uuidgen)" \
+  -d '{"channel":"QR","provider":"bitripay"}' localhost:8080/v1/obligations/$OBL/payment-orders)
+REF=$(echo "$ORDER" | node -pe 'JSON.parse(require("fs").readFileSync(0)).paymentReference')
+INTENT=$(echo "$ORDER" | node -pe 'JSON.parse(require("fs").readFileSync(0)).providerIntentId')
+T=$(date +%s)
+BODY="{\"id\":\"evt_$RANDOM\",\"type\":\"payment_intent.succeeded\",\"data\":{\"object\":{\"id\":\"$INTENT\",\"amount_minor\":15000,\"currency\":\"USD\",\"metadata\":{\"payment_reference\":\"$REF\"}}}}"
+V1=$(printf '%s' "$T.$BODY" | openssl dgst -sha256 -hmac demo-whsec-bitripay -hex | awk '{print $2}')
+curl -s -X POST -H 'content-type: application/json' -H "BitriPay-Signature: t=$T,v1=$V1" -d "$BODY" localhost:8080/v1/providers/bitripay/webhooks
+# Puis la même commande avec "type":"payment_intent.settled" (nouvel id d'événement, nouveau T) :
+# → outcome SETTLEMENT_ANNOUNCED ; l'ordre reste CONFIRME jusqu'à l'import du relevé (POST /v1/settlements/statements).
+```
+
+Rejouer exactement la même requête renvoie 200 avec `"replayed": true`, sans seconde quittance ni écriture.
+
 ## Variables d'environnement
 
 | Variable | Rôle |
@@ -157,6 +230,7 @@ Terminaux terrain : `x-device-signature` = HMAC-SHA256 hexadécimal du corps bru
 | `PORT`, `HOST` | écoute (défaut `8080`, `0.0.0.0`) |
 | `MOSOLO_AUDIT_HMAC_KEY` | clé de signature du journal d'audit (aléatoire au démarrage si absente) |
 | `MOSOLO_PROVIDER_SECRET_MM_OPERATOR_A`, `…_BANK_A`, `…_CARD_GATEWAY` | secrets HMAC des prestataires (défauts de démo `demo-secret-…`) |
+| `KODA_*`, `BITRIPAY_*` | connecteurs de prestataires (voir « Connecteurs de prestataires : BitriPay et KODA ») |
 | `MOSOLO_EMAIL_PROVIDER_KEY`, `MOSOLO_SMS_PROVIDER_KEY`, `MOSOLO_PUSH_PROVIDER_KEY`, `MOSOLO_WHATSAPP_PROVIDER_KEY`, `MOSOLO_USSD_PROVIDER_KEY`, `MOSOLO_SVI_PROVIDER_KEY`, `MOSOLO_COURRIER_PROVIDER_KEY` | clés fournisseurs ; absente ⇒ canal en bac à sable (`journalise`) |
 
 ## Ce qui relève de la démonstration et ce qui est prêt pour la suite
@@ -185,7 +259,8 @@ Toutes les routes du contrat sont implémentées à l'identique. Routes **ajout�
 - `POST /v1/ledger/entries/:id/reversals` (contre-écriture) ; `DELETE|PUT|PATCH /v1/ledger/entries/:id` et `/v1/audit/events/:id` → 405 ;
 - `GET /v1/beneficiary-accounts` (vue masquée du coffre) ;
 - `GET /v1/appeals/:id`, `POST /v1/appeals/:id/instruct` (instruction par R20, préalable à la décision R21) ;
-- `GET /v1/security/alerts`.
+- `GET /v1/security/alerts` ;
+- `POST /v1/payment-orders/:reference/provider-verification-evidence` (R17/R18/R20 : pièce de dossier, sans effet sur le paiement).
 
 Précisions de format (compatibles avec le contrat) : en-tête de signature des lots terrain `x-device-signature` ;
 rappel prestataire : champ facultatif `payerAmount` (montant payé dans la devise du payeur) ;

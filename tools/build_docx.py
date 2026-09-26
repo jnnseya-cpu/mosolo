@@ -45,7 +45,7 @@ MERMAID_CONFIG = {
 
 
 def concat() -> str:
-    files = sorted(f for f in os.listdir(SRC) if re.match(r"^\d\d-.*\.md$", f))
+    files = sorted(f for f in os.listdir(SRC) if re.match(r"^\d\d[a-z]?-.*\.md$", f))
     parts = []
     for f in files:
         txt = open(os.path.join(SRC, f), encoding="utf-8").read()
