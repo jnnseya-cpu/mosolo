@@ -97,6 +97,9 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/integrite/incidents', element: lazy(() => import('./integrite/Incidents')), nav: { label: 'Incidents de sécurité', short: 'Incidents', icon: 'alert', group: 'operations', roles: ['R28', 'R27', 'R26', 'R25', 'R22'] } },
   { path: '/integrite/donnees', element: lazy(() => import('./integrite/EspaceDonnees')), nav: { label: 'Protection des données', short: 'Données', icon: 'lock', group: 'operations', roles: ['R25', 'R22', 'R23', 'R30'] } },
   { path: '/integrite/revue-acces', element: lazy(() => import('./integrite/RevueAcces')), nav: { label: 'Revue des accès', short: 'Accès', icon: 'users', group: 'operations', roles: ['R28', 'R08', 'R22', 'R25'] } },
+  { path: '/integrite/collusion', element: lazy(() => import('./integrite/Collusion')), nav: { label: 'Collusion sous quatre yeux', short: 'Collusion', icon: 'users', group: 'operations', roles: ['R22', 'R23', 'R24', 'R28', 'R06'] } },
+  { path: '/integrite/seuils', element: lazy(() => import('./integrite/RegistreSeuils')), nav: { label: 'Registre des seuils anti-fraude', short: 'Seuils', icon: 'scale', group: 'pilotage', roles: ['R22', 'R23', 'R24', 'R28', 'R06', 'R05', 'R01', 'R02', 'R26', 'R27'] } },
+  { path: '/integrite/cles', element: lazy(() => import('./integrite/SanteCles')), nav: { label: 'Santé des clés', short: 'Clés', icon: 'lock', group: 'operations', roles: ['R26', 'R28'] } },
 
   // Pilotage : tableaux par profil, indicateurs, piste d'audit, transparence
   { path: '/pilotage/tableaux', element: lazy(() => import('./pilotage/Tableaux')), nav: { label: 'Tableaux par profil', short: 'Tableaux', icon: 'grid', group: 'pilotage', roles: DASH } },

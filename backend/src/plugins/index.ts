@@ -12,6 +12,7 @@ import { verticalesPlugin } from './verticales/plugin.js';
 import { canauxPlugin } from './canaux/plugin.js';
 import { terrainPlugin } from './terrain/plugin.js';
 import { integritePlugin } from './integrite/plugin.js';
+import { integriteGouvernancePlugin } from './integrite/gouvernance/plugin.js';
 import { pilotagePlugin } from './pilotage/plugin.js';
 import { iaPlugin } from './ia/plugin.js';
 import { preuvesPlugin } from './preuves/plugin.js';
@@ -35,6 +36,7 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   canauxPlugin,
   terrainPlugin,
   integritePlugin,
+  integriteGouvernancePlugin,
   pilotagePlugin,
   iaPlugin,
   preuvesPlugin,
