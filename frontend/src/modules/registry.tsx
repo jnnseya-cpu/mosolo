@@ -33,6 +33,7 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/fiscal/exonerations', element: lazy(() => import('./fiscal/Exonerations')), nav: { label: 'Exonérations', short: 'Exonérations', icon: 'scale', group: 'operations', roles: ['R30', 'R31', 'R06', 'R07', 'R11', 'R12', 'R13', 'R14', 'R22', 'R24'] } },
   { path: '/fiscal/quitus', element: lazy(() => import('./fiscal/Quitus')), nav: { label: 'Quitus fiscal', short: 'Quitus', icon: 'shieldCheck', group: 'public', roles: ['R30', 'R31', 'R06', 'R07', 'R12', 'R37'] } },
   { path: '/fiscal/baux', element: lazy(() => import('./fiscal/AttestationsBail')) },
+  { path: '/autour-de-moi', element: lazy(() => import('./fiscal/AutourDeMoi')), nav: { label: 'Autour de moi', short: 'Autour', icon: 'gps', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24', 'R35'] } },
   { path: '/fiscal/carte', element: lazy(() => import('./fiscal/Carte')), nav: { label: 'Carte fiscale', short: 'Carte', icon: 'pin', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R22'] } },
   { path: '/fiscal/verifier', element: lazy(() => import('./fiscal/Verifier')) },
   { path: '/fiscal/verifier/:type', element: lazy(() => import('./fiscal/Verifier')) },

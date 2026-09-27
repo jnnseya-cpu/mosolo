@@ -19,6 +19,11 @@ definePolicy('fiscal:object.read', {
 definePolicy('fiscal:object.validate', { R06: always, R07: always, R11: always });
 definePolicy('fiscal:plate.pose', { R10: inTerritory('full'), R11: always, R07: always });
 definePolicy('fiscal:plate.scan', { R06: always, R07: always, R11: always, R09: inTerritory('full'), R10: inTerritory('full') });
+// « Autour de moi » : agents des modules liés aux biens et activités, sur place, dans leur secteur, sans montant.
+definePolicy('fiscal:nearby', {
+  R06: always, R07: always, R22: always, R24: always,
+  R09: inTerritory('minimal'), R10: inTerritory('minimal'), R11: inTerritory('minimal'), R35: inTerritory('minimal'),
+});
 definePolicy('fiscal:map.objects', { R06: always, R07: always, R11: always, R22: always, R09: inTerritory('minimal'), R10: inTerritory('minimal') });
 
 // Relations contribuable–objet

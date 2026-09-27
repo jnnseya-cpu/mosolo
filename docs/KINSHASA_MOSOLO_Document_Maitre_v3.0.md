@@ -7545,23 +7545,24 @@ Tests (`backend/test/parking-field.test.ts`) :
 | Contrôle des titres et du pass wewa | Lieu du contrôle |
 | Enrôlement assisté | Domicile ou site de la personne enrôlée |
 | Missions de terrain et contre-visites | Position du constat, comparée au point enregistré |
+| Autour de moi (agents des biens et activités) | Biens et commerces proches colorés vert, ambre, rouge, dans le secteur de l’agent |
 | Carte des zones (usager, régie), carte des supports, points de paiement | Fond OSM au lieu du plan schématique |
 
 - **Contrôle côté serveur** : chaque photo de preuve porte sa distance au centre de la zone ; elle est signalée si la précision dépasse 30 m, si la source n’est pas le GPS, ou si elle est à plus de 600 m de la zone. Ces signaux alimentent la surveillance des constats (§ I.15, 5).
 
-## I.17 Ce qui reste ouvert
+**« Autour de moi » : biens et commerces proches en vert, ambre ou rouge** (demande du maître d’ouvrage du 27/09/2026). Les agents des modules liés aux biens et aux activités physiques (propriété, locatif, entreprises, marchés, chantiers, sites, publicité) disposent de l’écran « Autour de moi » (`/autour-de-moi`, route `GET /v1/fiscal/nearby`). Une fois sur place, ils voient les biens et commerces proches :
 
-Les points suivants ne relèvent pas du logiciel seul ou attendent un acte, un protocole ou une convention ; ils sont signalés dans les écrans concernés et ne produisent aucun effet financier tant qu’ils ne sont pas levés.
+| Couleur | Sens |
+|---|---|
+| Vert | À jour : aucune obligation exigible impayée |
+| Ambre | Paiement partiel, échéance dans les 30 jours, paiement en rapprochement ou objet non encore validé |
+| Rouge | En retard, sur un objet vérifié |
+| Gris | Recensé, non encore liquidé |
+| Bleu | En litige ou en revue |
 
-| Domaine | Point ouvert | Condition de levée |
-|---|---|---|
-| Commission et surveillance | Arrêté fixant le taux de 10 % ; validation des seuils de surveillance des constats | Arrêté du Gouverneur ; avis de l’inspection des services |
-| Tarifs et assiettes | Tarifs réels du pass wewa, du stationnement, des titres de transport, de la publicité, des redevances AVIA et portuaires, de la contribution plastique | Actes J21, J23, J24, J25, J28 et fiches de règles certifiées (quatre visas) |
-| Quitus fiscal | Effet bloquant sur les mutations et services | Acte J6 ; le quitus reste informatif jusque-là |
-| Répartition | Parts légales éventuelles entre entités | Lecture de l’OL 18/004 et actes provinciaux ; aucune clé paramétrée |
-| Identité | Clés d’accès FIDO2 (passkeys), récupération de compte | Raccordement WebAuthn ; procédure de récupération validée |
-| Canaux | Passerelles USSD, SMS, SVI et courrier réelles ; code court et numéro vert ; compte WhatsApp Business certifié et fournisseur contractualisé ; validation des textes lingala de l’assistant | Conventions opérateurs (J29), contrat du fournisseur WhatsApp, avis de l’autorité de protection des données |
-| Données géographiques | Géométries PostGIS, référentiel officiel des codes de communes, cartographie de la population ; installation du fond OSM de Kinshasa sur le serveur de la Ville (`tools/maps/construire-tuiles-kinshasa.sh`) et complétion des quartiers | Protocoles de données et référentiel arrêté ; accès réseau à `build.protomaps.com` ou `download.geofabrik.de` depuis le serveur |
-| Partenaires | Connecteurs BSP/GDS et IFA (AVIA), passerelle bancaire réelle (CALCU), immatriculations nationales | Accords et protocoles avec le pouvoir central et les partenaires |
-| Exploitation | Persistance des états encore volatils (idempotence, brouillons serveur, lots terrain, boîtes in-app), clé de signature QR dédiée, secrets TOTP au coffre de secrets | Mise en production (hébergement souverain) |
-| IA | Registre complet des modèles (évaluations, biais, dérive), OCR des baux, « 12 questions » par action | Gouvernance IA validée par le délégué à la protection des données |
+- **Une fois dans la zone** : la liste ne s’affiche que si la position, mesurée par le GPS (100 m de précision au plus, jamais une position saisie à la main), se trouve dans une commune du **secteur de l’agent**. Hors secteur, rien n’est montré.
+- **Carte et liste** : la position de l’agent, le rayon choisi (100 m à 1 km) et les biens colorés sur la carte OSM ; la liste va du plus proche au plus éloigné (référence IGF, plaque posée, quartier, motif de la couleur) ; filtre par couleur ; mise à jour automatique quand l’agent se déplace de 40 m.
+- **Aucun montant ni nom de contribuable** : la couleur oriente la visite, elle ne vaut ni constat ni sanction (circuit RW1 inchangé) ; l’agent n’encaisse rien.
+- **Journalisation** : chaque consultation est tracée (position, précision, rayon, commune, nombre de biens et de rouges montrés), ce qui alimente la surveillance des agents.
+- **Rôles** : agent de terrain, superviseur, contrôleur et sous-traitant de terrain dans leur secteur ; direction, chef de service, audit et anti-fraude partout. Les véhicules (objets mobiles) sont exclus.
+- Tests : `backend/test/fiscal-nearby.test.ts` (dans le secteur, hors secteur, précision insuffisante, rayon plafonné, rôles refusés).

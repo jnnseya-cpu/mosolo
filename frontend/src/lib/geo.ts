@@ -134,3 +134,18 @@ export function webglSupported(): boolean {
   } catch { webgl = false; }
   return webgl;
 }
+
+/** Anneau (lon, lat) approchant un cercle de `radiusM` mètres — pour tracer un rayon de recherche sur la carte. */
+export function circleRing(lon: number, lat: number, radiusM: number, steps = 64): [number, number][] {
+  const out: [number, number][] = [];
+  const dLat = radiusM / 111_320; const dLon = radiusM / (111_320 * Math.cos((lat * Math.PI) / 180));
+  for (let i = 0; i <= steps; i++) { const a = (i / steps) * 2 * Math.PI; out.push([lon + dLon * Math.cos(a), lat + dLat * Math.sin(a)]); }
+  return out;
+}
+
+/** Distance en mètres (haversine). */
+export function metersBetween(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
+  const r = (d: number) => (d * Math.PI) / 180;
+  const h = Math.sin(r(b.lat - a.lat) / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lon - a.lon) / 2) ** 2;
+  return 2 * 6_371_008.8 * Math.asin(Math.min(1, Math.sqrt(h)));
+}

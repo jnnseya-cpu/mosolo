@@ -5,6 +5,7 @@
  * L'agent n'encaisse jamais d'argent ; un constat ne crée jamais de dette.
  */
 import { useState, type ChangeEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '../context';
 import { useAutosave } from '../hooks/useAutosave';
 import { useOnline } from '../hooks/useOnline';
@@ -255,7 +256,9 @@ export default function Field() {
   const agent = me.data?.agent;
   return (
     <div className="page page-wide">
-      <PageHead eyebrow={tr('field.eyebrow')} title={tr('nav.field')} lead="Missions affectées par votre superviseur, capture hors ligne, constats scellés et synchronisés. Chaque action est géolocalisée." />
+      <PageHead eyebrow={tr('field.eyebrow')} title={tr('nav.field')} lead="Missions affectées par votre superviseur, capture hors ligne, constats scellés et synchronisés. Chaque action est géolocalisée.">
+        <Link to="/autour-de-moi" className="btn btn-secondary btn-sm"><Icon name="gps" size={16} /> Autour de moi</Link>
+      </PageHead>
       <div className="callout callout-danger callout-strong" role="note">
         <Icon name="cash" size={20} />
         <p><strong>{tr('field.noCash')}</strong> Le contribuable paie lui-même, par les canaux officiels ; aucune quittance n’est émise par l’agent.</p>

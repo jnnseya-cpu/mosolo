@@ -16,7 +16,7 @@ export const TILES_URL = '/tiles/kinshasa.pmtiles';
 export const KINSHASA_BOUNDS: [[number, number], [number, number]] = [[15.05, -4.75], [15.70, -4.15]];
 
 export interface GeoMarker { id: string; lon: number; lat: number; color?: string; label?: string }
-export interface GeoPolygon { id: string; rings: [number, number][][]; color?: string; label?: string }
+export interface GeoPolygon { id: string; rings: [number, number][][]; color?: string; label?: string; fillOpacity?: number }
 export interface GeoMapProps {
   center: [number, number];
   zoom?: number;
@@ -64,7 +64,7 @@ function style(withTiles: boolean): StyleSpecification {
 
 function overlayData(p: GeoMapProps) {
   return {
-    polys: { type: 'FeatureCollection', features: (p.polygons ?? []).map((g) => ({ type: 'Feature', properties: { id: g.id, color: g.color ?? '#232C6B', label: g.label ?? '' }, geometry: { type: 'Polygon', coordinates: g.rings } })) },
+    polys: { type: 'FeatureCollection', features: (p.polygons ?? []).map((g) => ({ type: 'Feature', properties: { id: g.id, color: g.color ?? '#232C6B', label: g.label ?? '', op: g.fillOpacity ?? 0.18 }, geometry: { type: 'Polygon', coordinates: g.rings } })) },
     lines: { type: 'FeatureCollection', features: (p.lines ?? []).map((l) => ({ type: 'Feature', properties: { id: l.id, color: l.color ?? '#1E9BD7' }, geometry: { type: 'LineString', coordinates: l.coords } })) },
     points: { type: 'FeatureCollection', features: (p.markers ?? []).map((m) => ({ type: 'Feature', properties: { id: m.id, color: m.color ?? '#D7141A', label: m.label ?? '' }, geometry: { type: 'Point', coordinates: [m.lon, m.lat] } })) },
     acc: { type: 'FeatureCollection', features: p.accuracy ? [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [circle(p.accuracy.lon, p.accuracy.lat, Math.max(1, p.accuracy.radiusM))] } }] : [] },
@@ -97,7 +97,7 @@ export default function GeoMap(props: GeoMapProps) {
       m.addSource('m-points', { type: 'geojson', data: d.points as never });
       m.addLayer({ id: 'm-acc-fill', type: 'fill', source: 'm-acc', paint: { 'fill-color': '#1E9BD7', 'fill-opacity': 0.15 } });
       m.addLayer({ id: 'm-acc-line', type: 'line', source: 'm-acc', paint: { 'line-color': '#1E9BD7', 'line-width': 1.5 } });
-      m.addLayer({ id: 'm-polys-fill', type: 'fill', source: 'm-polys', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.18 } });
+      m.addLayer({ id: 'm-polys-fill', type: 'fill', source: 'm-polys', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['get', 'op'] } });
       m.addLayer({ id: 'm-polys-line', type: 'line', source: 'm-polys', paint: { 'line-color': ['get', 'color'], 'line-width': 2 } });
       m.addLayer({ id: 'm-lines', type: 'line', source: 'm-lines', paint: { 'line-color': ['get', 'color'], 'line-width': 4, 'line-opacity': 0.8 } });
       m.addLayer({ id: 'm-points', type: 'circle', source: 'm-points', paint: { 'circle-radius': 7, 'circle-color': ['get', 'color'], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 } });
@@ -107,7 +107,7 @@ export default function GeoMap(props: GeoMapProps) {
         m.on('mouseenter', layer, () => { if (latest.current.onSelect) m.getCanvas().style.cursor = 'pointer'; });
         m.on('mouseleave', layer, () => { m.getCanvas().style.cursor = ''; });
       }
-      if (latest.current.bounds) m.fitBounds(latest.current.bounds, { padding: 30, maxZoom: 17, duration: 0 });
+      if (latest.current.bounds) m.fitBounds(latest.current.bounds, { padding: 20, maxZoom: 17, duration: 0 });
     });
     m.on('click', (e) => latest.current.onPick?.(e.lngLat.lng, e.lngLat.lat));
     map.current = m;
@@ -118,7 +118,8 @@ export default function GeoMap(props: GeoMapProps) {
   // Mise à jour des couches MOSOLO et du centre sans recréer la carte.
   useEffect(() => {
     const m = map.current;
-    if (!m || !m.isStyleLoaded()) return;
+    // Sources pas encore créées : le gestionnaire « load » appliquera les dernières données (latest.current).
+    if (!m || !m.getSource('m-points')) return;
     const d = overlayData(props);
     (m.getSource('m-acc') as GeoJSONSource | undefined)?.setData(d.acc as never);
     (m.getSource('m-polys') as GeoJSONSource | undefined)?.setData(d.polys as never);

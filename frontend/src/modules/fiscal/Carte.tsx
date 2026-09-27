@@ -4,6 +4,7 @@
  * Grand public : agrégats seulement, masqués sous 20 objets ; contribuable : ses biens ; agent : son périmètre.
  */
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { MapStatusColor } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { PageHead } from '../../components/Shell';
@@ -66,7 +67,9 @@ export default function Carte() {
   return (
     <div className="page page-wide fs-page">
       <PageHead eyebrow="Cadastre fiscal" title="Carte à deux couches"
-        lead="Couche « situation fiscale » ou couche « vérification / couverture du recensement ». Les couleurs sont calculées par le serveur ; une couleur ne déclenche jamais de mesure automatique." />
+        lead="Couche « situation fiscale » ou couche « vérification / couverture du recensement ». Les couleurs sont calculées par le serveur ; une couleur ne déclenche jamais de mesure automatique.">
+        <Link to="/autour-de-moi" className="btn btn-secondary btn-sm"><Icon name="gps" size={16} /> Autour de moi</Link>
+      </PageHead>
       <FiscalTabs />
       <DemoNote>Données de démonstration fictives (recensement simulé). Disposition des communes schématique, non géographique.</DemoNote>
       <div className="fs-map-tools">

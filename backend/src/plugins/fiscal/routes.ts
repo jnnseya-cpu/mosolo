@@ -11,6 +11,7 @@ import { DECLARATION_KINDS, KIND_LABELS } from './declarations.js';
 import type { GeoLevel } from './geo.js';
 import { CLOSE_REASONS, PROOF_TYPES, RELATION_ROLES, ROLE_LABELS } from './relations.js';
 import type { FiscalService } from './service.js';
+import { buildNearby } from './nearby.js';
 
 const proofSchema = z.object({ type: z.enum(PROOF_TYPES), reference: z.string().trim().min(3).max(200), sha256: z.string().regex(/^[0-9a-f]{64}$/).optional() }).strict();
 const reasonSchema = z.object({ reason: z.string().trim().min(3).max(1000) }).strict();
@@ -326,6 +327,16 @@ export function registerFiscalRoutes(app: FastifyInstance, ctx: AppContext, svc:
   });
 
   app.get<{ Params: { code: string }; Querystring: { s?: string } }>('/v1/public/fiscal/lease-attestations/:code', async (req) => svc.clearances.publicCheckAttestation(req.params.code, req.query.s));
+
+  // ——— Autour de moi (agents sur place, dans leur secteur) ———
+  app.get<{ Querystring: Record<string, string> }>('/v1/fiscal/nearby', async (req) => {
+    const user = requireUser(req);
+    const q = parse(z.object({
+      lat: z.coerce.number().min(-5.2).max(-3.9), lon: z.coerce.number().min(15).max(16.6),
+      accuracyM: z.coerce.number().positive().max(100_000), radiusM: z.coerce.number().positive().max(100_000).optional(),
+    }), req.query);
+    return buildNearby(svc.d, svc.properties, user, q);
+  });
 
   // ——— Carte à deux couches ———
   app.get<{ Querystring: { layer?: string; commune?: string } }>('/v1/fiscal/map', async (req) => {

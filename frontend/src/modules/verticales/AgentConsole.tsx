@@ -389,7 +389,9 @@ export default function AgentConsole() {
   return (
     <div className="page page-wide">
       <PageHead eyebrow="Verticales" title="Console d’instruction"
-        lead="Instruire, constater, proposer : une personne habilitée et distincte décide, avec motif. Aucun encaissement, aucune sanction automatique." />
+        lead="Instruire, constater, proposer : une personne habilitée et distincte décide, avec motif. Aucun encaissement, aucune sanction automatique.">
+        <Link to="/autour-de-moi" className="btn btn-secondary btn-sm"><Icon name="gps" size={16} /> Autour de moi</Link>
+      </PageHead>
       <ExampleNotice text="Démonstration : dossiers et objets fictifs. Choisissez un agent de l’entité dans l’en-tête (ex. instructeur ou cheffe de service DGTK)." />
       {!user && <EmptyState title="Connexion d’un agent requise" icon="lock" />}
       {user && (
