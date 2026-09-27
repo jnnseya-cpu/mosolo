@@ -15,7 +15,7 @@ npm run build -w frontend        # tsc + vite build + service worker (dist/)
 npm run preview -w frontend      # sert dist/ (http://localhost:4173) — PWA installable
 ```
 
-Variable d’environnement : `VITE_API_URL` (défaut `http://localhost:8080`), par ex. `VITE_API_URL=https://api.mosolo.example npm run build -w frontend`.
+Variable d’environnement : `VITE_API_URL` (défaut : `http://localhost:8080` en développement ; même origine que la page dans une construction de production), par ex. `VITE_API_URL=https://api.mosolo.example npm run build -w frontend`.
 
 L’authentification de démonstration passe par l’en-tête `x-demo-user` : choisissez l’utilisateur dans l’en-tête (liste `GET /v1/demo/users`, libellés courts par rôle, nom complet en infobulle).
 

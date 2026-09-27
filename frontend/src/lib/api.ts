@@ -2,7 +2,15 @@
  * Client HTTP du contrat d'API v1 (specs/contrat-api.md).
  * Aucun code backend n'est importé : seules les routes du contrat sont appelées.
  */
-export const API_URL: string = (import.meta.env.VITE_API_URL ?? 'http://localhost:8080').replace(/\/$/, '');
+/**
+ * Adresse de l'API. Construction de production sans VITE_API_URL : même origine (application servie par l'API,
+ * MOSOLO_STATIC_DIR) — jamais « localhost », qui serait injoignable pour tout usager et bloqué par la CSP.
+ * Développement (`vite`, tests) : API locale sur le port 8080 par défaut.
+ */
+export function resolveApiUrl(env: { VITE_API_URL?: string; DEV: boolean }): string {
+  return (env.VITE_API_URL ?? (env.DEV ? 'http://localhost:8080' : '')).replace(/\/$/, '');
+}
+export const API_URL: string = resolveApiUrl(import.meta.env);
 
 const USER_KEY = 'mosolo.demoUser';
 const LANG_KEY = 'mosolo.lang';

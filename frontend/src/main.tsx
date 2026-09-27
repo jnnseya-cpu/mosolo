@@ -16,7 +16,11 @@ import { captureInstallPrompt } from './hooks/useInstallPrompt';
 import { flushPendingDrafts, hydrateDrafts } from './lib/drafts';
 
 captureInstallPrompt();
-registerSW({ immediate: true });
+try {
+  registerSW({ immediate: true });
+} catch {
+  // Service worker indisponible (contexte isolé, stockage bloqué) : l'application fonctionne en ligne, sans hors-ligne.
+}
 window.addEventListener('online', () => { void flushPendingDrafts(); });
 
 function render() {
