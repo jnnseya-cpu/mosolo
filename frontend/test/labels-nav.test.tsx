@@ -24,7 +24,21 @@ describe('navigation par rôle', () => {
   });
   it('gouverneur : pilotage uniquement', () => {
     // Pas de « Vérification publique » dans le compte des autorités (R01 à R05), décision du 27/09/2026.
-    for (const r of ['R01', 'R02', 'R03', 'R04', 'R05']) expect(routes([r])).toEqual(['/', '/gouverneur', '/ia']);
+    for (const r of ['R01', 'R02', 'R05']) expect(routes([r])).toEqual(['/', '/gouverneur', '/ia']);
+    // R03, R04 : le tableau du Gouverneur leur est refusé en lecture — entrée masquée du menu (présentation seulement,
+    // deuxième passe adverse du 27/09/2026) ; la page /gouverneur reste accessible par son adresse.
+    for (const r of ['R03', 'R04']) expect(routes([r])).toEqual(['/', '/ia']);
+  });
+  it('menu aligné sur les droits de lecture : entrées masquées, pages conservées (shared/src/menu.ts)', () => {
+    expect(modules(['R17'])).not.toContain('/terrain/sous-traitants');
+    expect(modules(['R06'])).toContain('/terrain/sous-traitants');
+    expect(modules(['R17'])).not.toContain('/chaine');
+    for (const p of ['/vehicules/fourrieres', '/citoyen/cadastre', '/citoyen/activites', '/citoyen/vehicules', '/citoyen/transport']) expect(modules(['R10'])).not.toContain(p);
+    for (const p of ['/documents', '/verticales/fiches', '/rakapay/cooperative']) expect(modules(['R30'])).not.toContain(p);
+    expect(modules(['R05'])).not.toContain('/rakapay/pilotage');
+    expect(routes(['R05', 'R17'])).toContain('/tresor');
+    // Une personne portant aussi un rôle qui lit la donnée garde l'entrée.
+    expect(modules(['R10', 'R09'])).toContain('/citoyen/cadastre');
   });
   it('trésor, terrain, audit', () => {
     expect(routes(['R17'])).toEqual(['/', '/ia', '/tresor']);

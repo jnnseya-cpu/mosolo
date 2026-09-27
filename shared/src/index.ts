@@ -14,3 +14,4 @@ export * from './plates.js';
 export * from './recettes.js';
 export * from './profiles.js';
 export * from './programme.js';
+export * from './menu.js';

@@ -8,6 +8,7 @@ import { CityLogo, MakerMark, Tricolour } from './Brand';
 import { Icon } from './Icon';
 import { CurrencySelector, DemoUserSelector, LanguageSelector } from './Selectors';
 import { MODULE_ROUTES } from '../modules/registry';
+import { menuMasque } from '@mosolo/shared';
 
 export interface NavItem { to: string; key: UIKey; icon: string; group: 'public' | 'pilotage' | 'operations'; label?: string; short?: string; roles?: string[] }
 
@@ -65,7 +66,9 @@ export function visibleNav(roles: string[] | undefined): NavItem[] {
   // Entrées publiques (roles: []) : pour le public et les usagers, pas dans les menus de travail des agents.
   const isPublicUser = roles.length === 0 || roles.some((r) => PUBLIC_USER_ROLES.includes(r));
   const extra = MODULE_NAV.filter((n) => (n.roles!.length === 0 ? isPublicUser : n.roles!.some((r) => roles.includes(r))));
-  return [...core, ...extra];
+  // Présentation seulement (27/09/2026) : pas d'entrée de menu dont la lecture principale est refusée au rôle ; la route
+  // et la page restent accessibles par leur adresse (voir shared/src/menu.ts).
+  return [...core, ...extra].filter((n) => !menuMasque(n.to, roles));
 }
 
 /**
