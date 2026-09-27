@@ -30,4 +30,12 @@ export function declareParkingPolicies(): void {
     R01: always, R02: always, R05: always, R06: sameEntity, R07: sameEntity, R09: sameEntity, R22: always, R23: always,
   });
   definePolicy('parking:reminders.run', { R06: sameEntity, R07: sameEntity });
+  // Chapitre 11A (smart.ts) : recommandations tarifaires décidées par la régie ; profil de plaque réservé à la priorisation ;
+  // transmission au contentieux par la régie (aucune mesure) ; surréservation, affectation et déploiement : autorité (R06).
+  definePolicy('parking:pricing.decide', { R06: sameEntity, R07: sameEntity });
+  definePolicy('parking:plate.profile', { R06: sameEntity, R07: sameEntity, R09: sameEntity, R20: always, R21: always, R22: always });
+  definePolicy('parking:plate.refer', { R06: sameEntity, R07: sameEntity });
+  definePolicy('parking:overbooking.validate', { R06: sameEntity });
+  definePolicy('parking:affectation.manage', { R06: sameEntity, R07: sameEntity });
+  definePolicy('parking:deployment.activate', { R06: sameEntity });
 }

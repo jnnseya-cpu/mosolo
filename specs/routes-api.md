@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **641 routes** dans 36 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **669 routes** dans 36 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -10,7 +10,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **641 routes** dans 36
 | extension fiscal | 44 |
 | extension ia | 28 |
 | extension integrite | 58 |
-| extension parking | 36 |
+| extension parking | 64 |
 | extension pilotage | 24 |
 | extension preuves | 14 |
 | extension publicite | 34 |
@@ -316,28 +316,54 @@ Généré depuis le code source (`tools/gen_routes.py`) : **641 routes** dans 36
 
 | Méthode | Chemin |
 |---|---|
+| GET | `/v1/parking/affectation` |
+| GET | `/v1/parking/affectation/commitments` |
+| POST | `/v1/parking/affectation/commitments` |
+| POST | `/v1/parking/affectation/commitments/:id/publish` |
 | GET | `/v1/parking/agents/earnings` |
 | GET | `/v1/parking/agents/me/earnings` |
 | GET | `/v1/parking/control/:plate` |
+| GET | `/v1/parking/deployment` |
+| POST | `/v1/parking/deployment/phases/:n/activation` |
+| POST | `/v1/parking/deployment/phases/:n/zones` |
 | POST | `/v1/parking/evidence-photos` |
 | GET | `/v1/parking/evidence-photos/:id` |
 | GET | `/v1/parking/indicators` |
+| GET | `/v1/parking/occupancy` |
+| GET | `/v1/parking/overbooking` |
+| POST | `/v1/parking/overbooking/activation` |
+| POST | `/v1/parking/overbooking/legal-validation` |
 | GET | `/v1/parking/partners` |
 | POST | `/v1/parking/partners` |
 | POST | `/v1/parking/partners/:id/occupancy` |
 | POST | `/v1/parking/partners/:id/status` |
 | GET | `/v1/parking/partners/mine` |
 | GET | `/v1/parking/penalties` |
+| GET | `/v1/parking/plates/:plate/profile` |
+| POST | `/v1/parking/plates/:plate/referrals` |
+| GET | `/v1/parking/plates/priorities` |
+| GET | `/v1/parking/pricing-recommendations` |
+| POST | `/v1/parking/pricing-recommendations/:id/decide` |
+| POST | `/v1/parking/pricing-recommendations/run` |
+| GET | `/v1/parking/reconfigurations` |
+| POST | `/v1/parking/reconfigurations` |
+| POST | `/v1/parking/reconfigurations/:id/status` |
 | POST | `/v1/parking/reminders/run` |
 | GET | `/v1/parking/reservations` |
 | POST | `/v1/parking/reservations` |
 | POST | `/v1/parking/reservations/:id/decide` |
+| POST | `/v1/parking/reservations/:id/unavailability` |
 | GET | `/v1/parking/reservations/mine` |
+| GET | `/v1/parking/revenue-sources` |
 | POST | `/v1/parking/sessions` |
 | GET | `/v1/parking/sessions/:id` |
 | POST | `/v1/parking/sessions/:id/end` |
 | POST | `/v1/parking/sessions/:id/extend` |
 | GET | `/v1/parking/sessions/mine` |
+| POST | `/v1/parking/tariff-grids` |
+| GET | `/v1/parking/tariff-modes` |
+| POST | `/v1/parking/tariff-simulations` |
+| GET | `/v1/parking/urban-data` |
 | POST | `/v1/parking/vehicles` |
 | GET | `/v1/parking/vehicles/mine` |
 | GET | `/v1/parking/violations` |
@@ -350,6 +376,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **641 routes** dans 36
 | GET | `/v1/parking/zones` |
 | POST | `/v1/parking/zones` |
 | GET | `/v1/parking/zones/:id` |
+| POST | `/v1/parking/zones/:id/premium` |
+| POST | `/v1/parking/zones/:id/sensor-readings` |
 | POST | `/v1/parking/zones/:id/suspension` |
 | POST | `/v1/parking/zones/:id/tariff` |
 

@@ -129,3 +129,9 @@
 .mon-sub { font-size: 13px; }
 .mon-table > tbody > tr > th[scope='row'] { min-width: 210px; }
 .mon-table .btn-link { text-align: left; }
+
+/* ParkSmart § 11A — occupation par heure (cible 15–25 % de places libres) */
+.pk-hours th, .pk-hours td { padding: 4px 6px; font-size: 12px; white-space: nowrap; }
+.pk-hours .pk-cell-sature { background: var(--warning-bg); }
+.pk-hours .pk-cell-dans_la_cible { background: color-mix(in srgb, var(--good, #2e7d32) 14%, transparent); }
+.pk-hours .pk-cell-sous_utilise { background: var(--surface-2, #f6f7fa); }

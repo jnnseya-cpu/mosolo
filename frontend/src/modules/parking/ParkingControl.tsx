@@ -115,7 +115,7 @@ function ControlPanel({ zones, loading, onRecorded }: { zones: Zone[]; loading: 
             <div className="pk-light-icon"><Icon name={view.icon} size={40} /></div>
             <p className="pk-light-title">{view.label}</p>
             <p><span className="pk-plate">{result.plate}</span></p>
-            {result.validUntil && <p className="small">Valable jusqu’à {fmtDate(result.validUntil, true)} ({result.title === 'RESERVATION' ? 'réservation' : 'session'})</p>}
+            {result.validUntil && <p className="small">Valable jusqu’à {fmtDate(result.validUntil, true)} ({result.title === 'RESERVATION' ? 'réservation' : result.title === 'TITRE' ? 'abonnement ou titre lié à la plaque' : 'session'})</p>}
             <p className="small">{result.guidance}</p>
             <p className="small muted">Contrôle {result.checkId} · {fmtDate(result.checkedAt, true)}</p>
           </div>
