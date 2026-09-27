@@ -36,7 +36,9 @@ const SHORT: Record<string, UIKey> = {
 /** Sections visibles selon les rôles (les routes restent accessibles par URL). */
 const ROLE_ROUTES: [string[], string[]][] = [
   [['R30', 'R31'], ['/inscription', '/espace', '/services', '/verifier']],
-  [['R01', 'R02', 'R03', 'R04', 'R05'], ['/gouverneur', '/ia', '/verifier']],
+  // Gouverneur, directeur de cabinet, secrétaire exécutif, ministre et autres autorités : pas de « Vérification publique »
+  // dans leur compte (décision du maître d'ouvrage, 27/09/2026) ; la page reste publique pour les usagers.
+  [['R01', 'R02', 'R03', 'R04', 'R05'], ['/gouverneur', '/ia']],
   [['R06', 'R07', 'R08'], ['/communications', '/registre', '/ia']],
   [['R13', 'R14', 'R15', 'R16'], ['/registre']],
   [['R17', 'R18', 'R19'], ['/tresor']],
@@ -217,7 +219,7 @@ export function Footer() {
     <footer className="app-footer">
       <div className="footer-inner">
         <p className="footer-inst">{tr('footer.institutions')}</p>
-        <p className="footer-legal">{tr('footer.legal')}</p>
+        {/* Mention « Document de travail… » retirée de l'affichage à la demande du maître d'ouvrage (27/09/2026) ; texte conservé dans i18n. */}
         <MakerMark />
       </div>
     </footer>

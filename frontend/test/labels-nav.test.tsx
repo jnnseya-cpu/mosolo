@@ -23,7 +23,8 @@ describe('navigation par rôle', () => {
     expect(routes(['R30'])).toEqual(['/', '/inscription', '/espace', '/services', '/verifier']);
   });
   it('gouverneur : pilotage uniquement', () => {
-    expect(routes(['R01'])).toEqual(['/', '/verifier', '/gouverneur', '/ia']);
+    // Pas de « Vérification publique » dans le compte des autorités (R01 à R05), décision du 27/09/2026.
+    for (const r of ['R01', 'R02', 'R03', 'R04', 'R05']) expect(routes([r])).toEqual(['/', '/gouverneur', '/ia']);
   });
   it('trésor, terrain, audit', () => {
     expect(routes(['R17'])).toEqual(['/', '/ia', '/tresor']);

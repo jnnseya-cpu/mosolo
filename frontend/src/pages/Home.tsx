@@ -211,7 +211,6 @@ export default function Home() {
           </div>
           <div>
             <p className="caps-sm">{tr('footer.legalTitle')}</p>
-            <p className="muted-light small">{tr('footer.legal')}</p>
             <p className="muted-light small">{tr('footer.langNote')}</p>
           </div>
         </div>
