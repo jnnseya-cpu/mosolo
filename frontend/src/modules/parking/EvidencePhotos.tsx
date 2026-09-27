@@ -9,7 +9,8 @@ import { Icon } from '../../components/Icon';
 
 export interface EvidencePhotoMeta {
   id: string; slot: string; slotLabel: string; sha256: string; url: string; lat: number; lon: number; accuracyM: number | null;
-  gpsSource: 'GPS' | 'ZONE'; place: string; stampedAt: string; receivedAt: string; agentId: string; agentName: string; clockWarning: boolean;
+  gpsSource: 'GPS' | 'MANUEL' | 'ZONE'; place: string; stampedAt: string; receivedAt: string; agentId: string; agentName: string; clockWarning: boolean;
+  distanceFromZoneM?: number | null; lowAccuracy?: boolean; farFromZone?: boolean;
 }
 
 function Thumb({ p, onOpen }: { p: EvidencePhotoMeta; onOpen: (src: string) => void }) {
@@ -28,7 +29,9 @@ function Thumb({ p, onOpen }: { p: EvidencePhotoMeta; onOpen: (src: string) => v
       <figcaption>
         <strong>{p.slotLabel}</strong>
         <span>{new Date(p.stampedAt).toLocaleString('fr-FR', { timeZone: 'Africa/Kinshasa' })}</span>
-        <span>{p.gpsSource === 'GPS' ? `GPS ${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}${p.accuracyM !== null ? ` ± ${Math.round(p.accuracyM)} m` : ''}` : 'Position de la zone (GPS indisponible)'}</span>
+        <span>{p.gpsSource === 'GPS' ? `GPS ${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}${p.accuracyM !== null ? ` ± ${Math.round(p.accuracyM)} m` : ''}` : p.gpsSource === 'MANUEL' ? `Ajustée à la main ${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}` : 'Position de la zone (GPS indisponible)'}</span>
+        {p.lowAccuracy && <span className="ev-warn"><Icon name="alert" size={12} /> Position imprécise ({p.gpsSource === 'GPS' ? 'précision > 30 m' : 'non mesurée par GPS'}) : à vérifier</span>}
+        {p.farFromZone && <span className="ev-warn"><Icon name="alert" size={12} /> À {p.distanceFromZoneM} m du centre de la zone</span>}
         {p.clockWarning && <span className="ev-warn"><Icon name="alert" size={12} /> Heure incrustée éloignée de l’heure de réception</span>}
         <span className="mono ev-sha" title={p.sha256}>SHA-256 {p.sha256.slice(0, 12)}…</span>
       </figcaption>

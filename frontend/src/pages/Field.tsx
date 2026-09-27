@@ -14,6 +14,8 @@ import { AutosaveBar } from '../components/VersionHistory';
 import { StatusBadge, type Tone } from '../components/StatusBadge';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../components/States';
 import { Icon } from '../components/Icon';
+import { GpsQualityLine, MapCheck } from '../components/GpsQuality';
+import { usePreciseGps, type PreciseFix } from '../lib/geo';
 import { api, describeError, safeGet, safeSet } from '../lib/api';
 import { hmacSha256Hex, sha256Hex, uid } from '../lib/crypto';
 import type { UIKey } from '../lib/i18n';
@@ -43,20 +45,15 @@ const STATE: Record<QState, { tone: Tone; label: string }> = {
   rejected: { tone: 'critical', label: 'Refusé' }, conflict: { tone: 'serious', label: 'Conflit' },
 };
 
+/** Position PRÉCISE : moyenne des meilleurs relevés jusqu'à la cible de 10 m (ou 30 s), qualité affichée. */
 function useGps() {
   const { tr } = useApp();
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  function locate(cb: (p: { lat: string; lon: string; accuracy: string; at: string }) => void) {
-    if (!navigator.geolocation) { setErr(tr('field.gpsUnsupported')); return; }
-    setBusy(true); setErr(null);
-    navigator.geolocation.getCurrentPosition(
-      (p) => { cb({ lat: p.coords.latitude.toFixed(6), lon: p.coords.longitude.toFixed(6), accuracy: String(Math.round(p.coords.accuracy)), at: new Date(p.timestamp).toISOString() }); setBusy(false); },
-      (e) => { setErr(e.code === 1 ? tr('field.gpsDenied') : tr('field.gpsFailed')); setBusy(false); },
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
-    );
-  }
-  return { busy, err, locate };
+  const g = usePreciseGps({ targetM: 10 });
+  const err = g.status === 'denied' ? tr('field.gpsDenied') : g.status === 'unavailable' ? (typeof navigator !== 'undefined' && !navigator.geolocation ? tr('field.gpsUnsupported') : tr('field.gpsFailed')) : null;
+  const toP = (f: PreciseFix) => ({ lat: f.lat.toFixed(6), lon: f.lon.toFixed(6), accuracy: String(f.accuracy !== null ? Math.max(1, Math.round(f.accuracy)) : 25), at: f.at, source: f.source });
+  function locate(cb: (p: ReturnType<typeof toP>) => void) { g.locate((f) => cb(toP(f))); }
+  function pick(lat: number, lon: number, cb: (p: ReturnType<typeof toP>) => void) { g.pick(lat, lon, (f) => cb(toP(f))); }
+  return { busy: g.busy, err, locate, pick, fix: g.fix, status: g.status, targetM: g.targetM };
 }
 
 function CaptureForm({ mission, objectId, onSaved }: { mission: Mission; objectId: string | null; onSaved: () => void }) {
@@ -106,6 +103,9 @@ function CaptureForm({ mission, objectId, onSaved }: { mission: Mission; objectI
             {acc > mission.toleranceM ? <StatusBadge tone="warning" label={`Au-delà de la tolérance de ${mission.toleranceM} m`} /> : <StatusBadge tone="good" label={tr('field.accuracyOk')} />}
           </p>
         )}
+        <GpsQualityLine fix={gps.fix} status={gps.status} targetM={gps.targetM} />
+        <MapCheck lat={v.lat ? Number(v.lat) : null} lon={v.lon ? Number(v.lon) : null} accuracy={v.accuracy ? Number(v.accuracy) : null}
+          onPick={(y, x) => gps.pick(y, x, (p) => draft.setValue((d) => ({ ...d, lat: p.lat, lon: p.lon, accuracy: p.accuracy, gpsAt: p.at })))} />
         {gps.err && <p className="err">{gps.err}</p>}
         <span className="hint">Position obligatoire. Un écart au point enregistré est signalé pour vérification, jamais rejeté automatiquement.</span>
       </div>
@@ -162,6 +162,7 @@ function CounterVisitItem({ cv, onDone }: { cv: CounterVisit; onDone: () => void
             <button type="button" className="btn btn-sm btn-secondary" disabled={gps.busy} onClick={() => gps.locate((p) => setPos(p))}><Icon name="gps" size={16} /> Position</button>
             {pos && <span className="mono small">{pos.lat}, {pos.lon} (± {pos.accuracy} m)</span>}
           </div>
+          <GpsQualityLine fix={gps.fix} status={gps.status} targetM={gps.targetM} />
           {gps.err && <p className="err">{gps.err}</p>}
           <label className="label" htmlFor={`cv-${cv.id}`}>Observations</label>
           <textarea id={`cv-${cv.id}`} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />

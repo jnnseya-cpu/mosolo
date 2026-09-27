@@ -11,6 +11,7 @@
 import type { MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import { CommissionService } from './commissions.js';
+import { AgentMonitoring } from './monitoring.js';
 import type { User } from '../../core/auth.js';
 import type { ParkingService } from '../parking/service.js';
 import { OVERDUE_VISIBILITY_DAYS } from '../parking/field.js';
@@ -26,6 +27,8 @@ export interface OverdueLine {
   overdueDays: number;
   /** Montant fixé par la décision (non négociable). */
   amount: MoneyJSON;
+  /** Pénalité du module de l'agent qui contrôle (visible sans délai). */
+  sameModule?: boolean;
 }
 
 export interface OverdueDisclosure {
@@ -37,19 +40,29 @@ export interface OverdueDisclosure {
 
 /** Usagers, partenaires et observateurs : jamais destinataires (seuls les agents publics qui contrôlent le sont). */
 const NON_AGENT_ROLES = new Set(['R30', 'R31', 'R32', 'R33', 'R34', 'R36', 'R37']);
+/** Module d'origine des pénalités correspondant au module du contrôle. */
+const PENALTY_MODULE_OF_CONTROL: Record<string, string> = { STATIONNEMENT: 'STATIONNEMENT', PUBLICITE: 'PUBLICITE', TITRES: 'TITRES', RAKAPAY: 'TITRES', VERTICALES: 'VERTICALES' };
 const alnum = (p: string) => p.toUpperCase().replace(/[^0-9A-Z]/g, '');
 const DAY_MS = 86_400_000;
 
 export class SanctionsService {
   /** Commission de 10 % des agents de tous les modules. */
   readonly commissions: CommissionService;
+  /** Surveillance des constats par agent (incitation liée à la commission). */
+  readonly monitoring: AgentMonitoring;
 
   constructor(private readonly ctx: AppContext) {
     this.commissions = new CommissionService(ctx);
+    this.monitoring = new AgentMonitoring(ctx, this.commissions);
   }
 
-  /** Pénalités impayées depuis plus de 30 jours (sans montant), pour un titulaire et/ou une plaque. */
+  /** Pénalités impayées depuis plus de 30 jours (tous modules), pour un titulaire et/ou une plaque. */
   overdue(subject: { taxpayerId?: string | null; plate?: string | null }): OverdueLine[] {
+    return this.unpaid(subject).filter((l) => l.overdueDays >= OVERDUE_VISIBILITY_DAYS);
+  }
+
+  /** Toutes les pénalités décidées et impayées d'un titulaire et/ou d'une plaque, quelle que soit leur ancienneté. */
+  unpaid(subject: { taxpayerId?: string | null; plate?: string | null }): OverdueLine[] {
     const out: OverdueLine[] = [];
     const now = this.ctx.clock.now().getTime();
     const parking = this.ctx.ext.parking as ParkingService | undefined;
@@ -82,25 +95,29 @@ export class SanctionsService {
     const pay = paymentState(this.ctx, ob.id).state;
     if (pay === 'PAYE' || pay === 'RAPPROCHE') return null;
     const days = Math.floor((now - Date.parse(decision.at)) / DAY_MS);
-    if (days < OVERDUE_VISIBILITY_DAYS) return null;
     return { module, moduleLabel, reference, nature: nature.replace(/_/g, ' ').toLowerCase(), decidedAt: decision.at, overdueDays: days, amount: ob.amount };
   }
 
   /**
-   * À la suite d'un contrôle effectué par l'agent (tout module) : pénalités impayées depuis plus de 30 jours.
-   * Rien pour un usager public ; divulgation journalisée seulement s'il y a quelque chose à montrer.
+   * À la suite d'un contrôle effectué par l'agent (décision du maître d'ouvrage du 27/09/2026) :
+   * - pénalités de SON module : visibles dès la décision, quelle que soit leur ancienneté ;
+   * - pénalités des AUTRES modules : visibles seulement après 30 jours d'impayé.
+   * Le montant est affiché dans les deux cas. Rien pour un usager ; divulgation journalisée.
    */
   afterControl(user: User, subject: { taxpayerId?: string | null; plate?: string | null }, module: string, controlRef: string): OverdueDisclosure | null {
     if (user.roles.every((r) => NON_AGENT_ROLES.has(r))) return null;
-    const lines = this.overdue(subject);
+    const own = PENALTY_MODULE_OF_CONTROL[module] ?? module;
+    const lines = this.unpaid(subject)
+      .map((l) => ({ ...l, sameModule: l.module === own }))
+      .filter((l) => l.sameModule || l.overdueDays >= OVERDUE_VISIBILITY_DAYS);
     if (!lines.length) return null;
     this.ctx.audit.append({
       actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'penalties.overdue.disclosed', resourceType: 'control', resourceId: controlRef,
-      details: { module, count: lines.length, references: lines.map((l) => l.reference), subject: subject.taxpayerId ? 'titulaire' : 'plaque' },
+      details: { module, count: lines.length, references: lines.map((l) => l.reference), sameModule: lines.filter((l) => l.sameModule).length, subject: subject.taxpayerId ? 'titulaire' : 'plaque' },
     });
     return {
       count: lines.length, lines, thresholdDays: OVERDUE_VISIBILITY_DAYS,
-      guidance: `Pénalité(s) impayée(s) depuis plus de ${OVERDUE_VISIBILITY_DAYS} jours. Le montant est celui fixé par la décision : il ne se négocie pas. Invitez l’usager à payer par les canaux officiels (USSD, application, banque, point agréé) avec sa référence. N’encaissez rien ; aucune mesure sur place.`,
+      guidance: `Pénalité(s) impayée(s) : celles de votre module dès la décision, celles des autres modules après ${OVERDUE_VISIBILITY_DAYS} jours. Le montant est celui fixé par la décision : il ne se négocie pas. Invitez l’usager à payer par les canaux officiels (USSD, application, banque, point agréé) avec sa référence. N’encaissez rien ; aucune mesure sur place.`,
     };
   }
 }

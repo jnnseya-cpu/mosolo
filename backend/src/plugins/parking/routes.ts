@@ -108,7 +108,7 @@ export function registerParkingRoutes(app: FastifyInstance, ctx: AppContext, svc
       checkId: z.string().min(1).max(40), slot: z.enum(EVIDENCE_SLOTS), imageBase64: z.string().min(100).max(1_300_000),
       sha256: z.string().regex(sha256Hex64, 'empreinte SHA-256 hexadécimale attendue'),
       lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180), accuracyM: z.number().min(0).max(100_000).optional(),
-      gpsSource: z.enum(['GPS', 'ZONE']), place: z.string().trim().min(3).max(200), stampedAt: z.string().datetime({ offset: true }),
+      gpsSource: z.enum(['GPS', 'MANUEL', 'ZONE']), place: z.string().trim().min(3).max(200), stampedAt: z.string().datetime({ offset: true }),
     }).strict(), req.body);
     return reply.code(201).send(svc.field.upload(requireUser(req), body));
   });

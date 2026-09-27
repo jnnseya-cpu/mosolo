@@ -85,3 +85,14 @@ Parcours réel dans le navigateur, avec deux caméras simulées : un gros plan d
 - pénalité impayée depuis plus de 30 jours visible **avec son montant** dans un autre module.
 
 Les cinq photos réelles sont dans `photo-*.jpg`. Régénération : `tools/captures/field.cjs`.
+
+## Partie 8 — Carte OpenStreetMap et géolocalisation précise (`galerie/carte-geolocalisation/`)
+
+- contrôle des titres : pénalité d'un autre module visible après 30 jours d'impayé, avec son montant ;
+- surveillance des constats par agent (détail par module, signaux « à examiner », aucune mesure automatique) ;
+- carte OSM auto-hébergée des points de paiement (MapLibre) ;
+- caméra de preuve : position précise (précision, qualité, nombre de relevés) et carte avec cercle de précision ;
+- point ajusté à la main sur la carte, marqué et signalé au vérificateur ;
+- enrôlement assisté : relevé précis et carte de vérification.
+
+Le fond de carte de Kinshasa n'est pas encore installé dans cet environnement (accès réseau aux serveurs de tuiles bloqué) : les cartes affichent les couches MOSOLO sur fond neutre, avec la note indiquant l'outil `tools/maps/construire-tuiles-kinshasa.sh`. Régénération : `tools/captures/geo.cjs`.

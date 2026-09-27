@@ -18,6 +18,8 @@ import { playSignal, type ControlView } from './common';
 import './titres.css';
 import { QrScanner } from '../../components/QrScanner';
 import { OverduePenalties } from '../../components/OverduePenalties';
+import { GpsQualityLine } from '../../components/GpsQuality';
+import { usePreciseGps } from '../../lib/geo';
 
 type Mode = 'qr' | 'plate' | 'vest';
 type Scope = '81' | 'tous';
@@ -135,7 +137,10 @@ export default function Controle() {
   const place = useMemo(() => ({ commune, ...(placeLabel.trim() ? { label: placeLabel.trim() } : {}), ...(gps ?? {}) }), [commune, placeLabel, gps]);
   const isController = !!user?.roles.some((r) => ['R10', 'R11', 'R35'].includes(r));
 
-  const locate = () => navigator.geolocation?.getCurrentPosition((p) => setGps({ lat: Number(p.coords.latitude.toFixed(5)), lon: Number(p.coords.longitude.toFixed(5)) }), () => setErr('Position indisponible : indiquez le lieu.'));
+  // Position précise (moyenne des meilleurs relevés, cible 15 m : le contrôle ne doit pas attendre).
+  const pgps = usePreciseGps({ targetM: 15, maxWaitMs: 15_000 });
+  const locate = () => pgps.locate((f) => setGps({ lat: Number(f.lat.toFixed(6)), lon: Number(f.lon.toFixed(6)) }));
+  useEffect(() => { if (pgps.status === 'denied' || pgps.status === 'unavailable') setErr('Position indisponible : indiquez le lieu.'); }, [pgps.status]);
 
   async function controlOnline(v: string) {
     const payload = v.trim();
@@ -272,8 +277,9 @@ export default function Controle() {
                 </div>
               </div>
               <div className="btn-row">
-                <button type="button" className="btn btn-ghost btn-sm" onClick={locate}><Icon name="gps" size={16} /> {gps ? `${gps.lat}, ${gps.lon}` : 'Joindre la position'}</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={locate} disabled={pgps.busy}><Icon name="gps" size={16} /> {gps ? `${gps.lat}, ${gps.lon}` : 'Joindre la position'}</button>
               </div>
+              <GpsQualityLine fix={pgps.fix} status={pgps.status} targetM={pgps.targetM} />
               <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={busy || !value.trim()}><Icon name="shieldCheck" size={18} /> {busy ? 'Vérification…' : offline ? 'Vérifier hors ligne' : 'Vérifier'}</button>
             </form>
             {err && <p className="notice notice-err" role="alert" style={{ marginTop: 12 }}>{err}</p>}

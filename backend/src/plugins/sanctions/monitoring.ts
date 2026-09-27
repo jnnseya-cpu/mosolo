@@ -1,0 +1,174 @@
+/**
+ * Surveillance des constats par agent (recommandation retenue par le maître d'ouvrage) : la commission de 10 % sur les
+ * pénalités crée une incitation à multiplier les constats ; ce tableau la rend visible.
+ *
+ * Pour chaque agent et chaque module : contrôles, défauts relevés, constats, constats écartés à la vérification,
+ * classés à la décision, contestés, annulés ; photos à position approximative ou à horloge douteuse ; part des
+ * pénalités dans sa commission. Des SIGNAUX « à examiner » comparent l'agent à la médiane de ses pairs.
+ * Un signal n'entraîne AUCUNE mesure automatique : il ouvre un examen humain (superviseur, contrôle mystère § 15A).
+ */
+import type { AppContext } from '../../context.js';
+import type { ParkingService } from '../parking/service.js';
+import type { PubliciteService } from '../publicite/service.js';
+import type { TitresService } from '../titres/service.js';
+import type { VerticalesService } from '../verticales/service.js';
+import type { TerrainService } from '../terrain/service.js';
+import type { CommissionService } from './commissions.js';
+
+export interface AgentModuleStats {
+  module: string;
+  moduleLabel: string;
+  controls: number;
+  defects: number;
+  constats: number;
+  rejected: number;
+  retained: number;
+  dismissed: number;
+  contested: number;
+  annulled: number;
+  weakEvidence: number;
+}
+
+export interface AgentSignal { code: string; module: string; level: 'A_EXAMINER' | 'INFO'; text: string }
+
+export interface AgentMonitoringRow {
+  agentId: string;
+  agentName: string;
+  modules: AgentModuleStats[];
+  totals: Omit<AgentModuleStats, 'module' | 'moduleLabel'>;
+  constatRatePct: string | null;
+  penaltyCommissionSharePct: string | null;
+  signals: AgentSignal[];
+}
+
+const LABEL: Record<string, string> = { STATIONNEMENT: 'Stationnement', PUBLICITE: 'Publicité', TITRES: 'Titres et pass wewa', VERTICALES: 'Verticales (plaques)', TERRAIN: 'Terrain (missions)' };
+const pct = (n: number, d: number) => (d > 0 ? ((n * 100) / d).toFixed(1) : null);
+const median = (xs: number[]) => {
+  if (!xs.length) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+};
+
+/** Seuils des signaux (paramètres à valider par l'inspection des services ; aucun effet automatique). */
+export const MONITORING_THRESHOLDS = {
+  minControls: 5, constatRateVsMedian: 2, minConstats: 3, rejectionPct: 30, dismissalPct: 40, contestPct: 30, weakEvidencePct: 30, penaltySharePct: 70,
+};
+
+export class AgentMonitoring {
+  constructor(private readonly ctx: AppContext, private readonly commissions: CommissionService) {}
+
+  private blank(module: string): AgentModuleStats {
+    return { module, moduleLabel: LABEL[module] ?? module, controls: 0, defects: 0, constats: 0, rejected: 0, retained: 0, dismissed: 0, contested: 0, annulled: 0, weakEvidence: 0 };
+  }
+
+  /** Statistiques brutes : agent → module → compteurs. */
+  private stats(): Map<string, Map<string, AgentModuleStats>> {
+    const byAgent = new Map<string, Map<string, AgentModuleStats>>();
+    const get = (agent: string, module: string) => {
+      if (!byAgent.has(agent)) byAgent.set(agent, new Map());
+      const m = byAgent.get(agent)!;
+      if (!m.has(module)) m.set(module, this.blank(module));
+      return m.get(module)!;
+    };
+    const annulled = (obligationId: string | null | undefined) => !!obligationId && this.ctx.assessment.obligations.get(obligationId)?.status === 'ANNULEE';
+
+    const pk = this.ctx.ext.parking as ParkingService | undefined;
+    if (pk) {
+      for (const c of pk.checks.all()) { const s = get(c.agentId, 'STATIONNEMENT'); s.controls += 1; if (c.light === 'ROUGE') s.defects += 1; }
+      for (const v of pk.violations.all()) {
+        const s = get(v.agentId, 'STATIONNEMENT');
+        s.constats += 1;
+        if (v.status === 'REJETE') s.rejected += 1;
+        if (v.status === 'RETENU') s.retained += 1;
+        if (v.status === 'CLASSE') s.dismissed += 1;
+        if (v.contests.length) s.contested += 1;
+        if (annulled(v.decision?.obligationId)) s.annulled += 1;
+      }
+      for (const p of pk.field.photos.all()) if (!p.supersededBy && (p.gpsSource !== 'GPS' || p.clockSkewSeconds > 300 || (p.accuracyM ?? 0) > 50)) get(p.agentId, 'STATIONNEMENT').weakEvidence += 1;
+    }
+    const pub = this.ctx.ext.publicite as PubliciteService | undefined;
+    if (pub) {
+      for (const i of pub.inspections.all()) { const s = get(i.inspectorId, 'PUBLICITE'); s.controls += 1; if (i.finding !== 'CONFORME') s.defects += 1; }
+      for (const c of pub.cases.all()) {
+        const insp = pub.inspections.get(c.inspectionId);
+        if (!insp) continue;
+        const s = get(insp.inspectorId, 'PUBLICITE');
+        s.constats += 1;
+        if (c.status === 'REJETE_QA') s.rejected += 1;
+        if (c.status === 'RETENU') s.retained += 1;
+        if (c.status === 'CLASSE') s.dismissed += 1;
+        if (c.contests.length) s.contested += 1;
+        if (annulled(c.decision?.obligationId)) s.annulled += 1;
+      }
+    }
+    const ti = this.ctx.ext.titres as TitresService | undefined;
+    if (ti) {
+      for (const e of ti.controls.all()) { const s = get(e.controllerId, 'TITRES'); s.controls += 1; if (e.result !== 'VALIDE') s.defects += 1; }
+      for (const k of ti.constats.all()) {
+        const s = get(k.controllerId, 'TITRES');
+        s.constats += 1;
+        if (k.status === 'CLASSE') s.dismissed += 1;
+        if (k.status === 'TRANSMIS') s.retained += 1;
+      }
+    }
+    const vx = this.ctx.ext.verticales as VerticalesService | undefined;
+    if (vx) for (const sc of vx.scans.all()) get(sc.by, 'VERTICALES').controls += 1;
+    const te = this.ctx.ext.terrain as TerrainService | undefined;
+    if (te) {
+      for (const f of te.findings.all()) {
+        const s = get(f.agentId, 'TERRAIN');
+        s.controls += 1;
+        if (f.outcome === 'CONSTATE' || f.outcome === 'OBJET_NON_ENREGISTRE') { s.defects += 1; s.constats += 1; }
+        if (f.gps.accuracyM > 50) s.weakEvidence += 1;
+      }
+    }
+    return byAgent;
+  }
+
+  report() {
+    const T = MONITORING_THRESHOLDS;
+    const raw = this.stats();
+    // Médiane des pairs par module : taux de constats des agents ayant au moins `minControls` contrôles.
+    const peerRates = new Map<string, { agent: string; rate: number }[]>();
+    for (const [agent, mods] of raw) for (const s of mods.values()) {
+      if (s.controls >= T.minControls) peerRates.set(s.module, [...(peerRates.get(s.module) ?? []), { agent, rate: s.constats / s.controls }]);
+    }
+    const rows: AgentMonitoringRow[] = [];
+    for (const [agentId, mods] of raw) {
+      const modules = [...mods.values()].sort((a, b) => a.module.localeCompare(b.module));
+      const totals = modules.reduce((acc, s) => {
+        for (const k of ['controls', 'defects', 'constats', 'rejected', 'retained', 'dismissed', 'contested', 'annulled', 'weakEvidence'] as const) acc[k] += s[k];
+        return acc;
+      }, { controls: 0, defects: 0, constats: 0, rejected: 0, retained: 0, dismissed: 0, contested: 0, annulled: 0, weakEvidence: 0 });
+      const signals: AgentSignal[] = [];
+      for (const s of modules) {
+        // Médiane des AUTRES agents du module (l'agent n'est pas comparé à lui-même).
+        const med = median((peerRates.get(s.module) ?? []).filter((p) => p.agent !== agentId).map((p) => p.rate));
+        const rate = s.controls ? s.constats / s.controls : 0;
+        if (s.controls >= T.minControls && s.constats >= T.minConstats && med > 0 && rate > T.constatRateVsMedian * med) {
+          signals.push({ code: 'TAUX_CONSTATS_ELEVE', module: s.module, level: 'A_EXAMINER', text: `${s.moduleLabel} : ${(rate * 100).toFixed(0)} % de contrôles suivis d’un constat, plus du double de la médiane des pairs (${(med * 100).toFixed(0)} %).` });
+        }
+        const verified = s.rejected + s.retained + s.dismissed;
+        if (verified >= T.minConstats && (s.rejected * 100) / verified >= T.rejectionPct) signals.push({ code: 'PREUVES_ECARTEES', module: s.module, level: 'A_EXAMINER', text: `${s.moduleLabel} : ${pct(s.rejected, verified)} % des constats écartés à la vérification (preuves insuffisantes).` });
+        const decided = s.retained + s.dismissed;
+        if (decided >= T.minConstats && (s.dismissed * 100) / decided >= T.dismissalPct) signals.push({ code: 'CONSTATS_CLASSES', module: s.module, level: 'A_EXAMINER', text: `${s.moduleLabel} : ${pct(s.dismissed, decided)} % des constats classés sans suite par la décision.` });
+        if (s.retained >= T.minConstats && ((s.contested + s.annulled) * 100) / s.retained >= T.contestPct) signals.push({ code: 'CONTESTATIONS', module: s.module, level: 'A_EXAMINER', text: `${s.moduleLabel} : ${pct(s.contested + s.annulled, s.retained)} % des pénalités retenues contestées ou annulées.` });
+        if (s.constats >= T.minConstats && (s.weakEvidence * 100) / Math.max(1, s.constats * (s.module === 'STATIONNEMENT' ? 5 : 1)) >= T.weakEvidencePct) signals.push({ code: 'PREUVES_FAIBLES', module: s.module, level: 'A_EXAMINER', text: `${s.moduleLabel} : photos ou positions souvent imprécises (GPS absent ou > 50 m, horloge décalée).` });
+      }
+      const earn = this.commissions.lines(agentId).filter((l) => l.state !== 'ANNULEE');
+      const pen = earn.filter((l) => l.source === 'PENALITE').length;
+      const share = pct(pen, earn.length);
+      if (earn.length >= T.minConstats && share !== null && Number(share) >= T.penaltySharePct) signals.push({ code: 'COMMISSION_PENALITES', module: 'TOUS', level: 'INFO', text: `${share} % de la commission provient de pénalités (plutôt que de paiements provoqués) : à suivre.` });
+      rows.push({
+        agentId, agentName: this.ctx.users.get(agentId)?.name ?? agentId, modules, totals,
+        constatRatePct: pct(totals.constats, totals.controls), penaltyCommissionSharePct: share, signals,
+      });
+    }
+    rows.sort((a, b) => b.signals.filter((x) => x.level === 'A_EXAMINER').length - a.signals.filter((x) => x.level === 'A_EXAMINER').length || a.agentName.localeCompare(b.agentName, 'fr'));
+    return {
+      generatedAt: this.ctx.clock.now().toISOString(), thresholds: T, rows,
+      notice: 'Un signal ouvre un examen humain (superviseur, contrôle mystère) ; il n’entraîne aucune mesure automatique contre l’agent. Seuils à valider par l’inspection des services.',
+    };
+  }
+}

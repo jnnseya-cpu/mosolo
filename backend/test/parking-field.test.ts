@@ -70,7 +70,8 @@ describe('ParkSmart — caméra de preuve (plaque rouge) : 5 photos des abords, 
       const r = await up(slot);
       expect(r.statusCode, slot).toBe(201);
       expect(r.json()).not.toHaveProperty('dataBase64');
-      expect(r.json()).toMatchObject({ slot, gpsSource: 'GPS', place: GPS.place, agentId: 'pk-controleur', clockWarning: false });
+      expect(r.json()).toMatchObject({ slot, gpsSource: 'GPS', place: GPS.place, agentId: 'pk-controleur', clockWarning: false, lowAccuracy: false });
+      expect(typeof r.json().distanceFromZoneM).toBe('number');
       ids.push(r.json().id);
     }
     // Reprise de la vue avant : l'ancienne photo est conservée, marquée remplacée.
@@ -78,10 +79,11 @@ describe('ParkSmart — caméra de preuve (plaque rouge) : 5 photos des abords, 
     const field = (e.app.ctx.ext.parking as { field: { photos: { get(id: string): { supersededBy: string | null } } } }).field;
     expect(field.photos.get(ids[0]!)!.supersededBy).toBe(retake.id);
     ids[0] = retake.id;
-    // Une photo déjà versée ne peut pas être réutilisée ; une heure incrustée éloignée est signalée.
+    // Une photo déjà versée ne peut pas être réutilisée ; une heure incrustée éloignée est signalée, de même qu'un point
+    // ajusté à la main sur la carte (source MANUEL : position imprécise, à vérifier).
     expect((await up('ABORDS_ARRIERE', img)).statusCode).toBe(201);
-    const late = await e.req('POST', '/v1/parking/evidence-photos', 'pk-controleur', { checkId: red.checkId, slot: 'AUTRE', ...jpeg(), ...GPS, stampedAt: '2026-09-26T07:00:00.000Z' });
-    expect(late.json().clockWarning).toBe(true);
+    const late = await e.req('POST', '/v1/parking/evidence-photos', 'pk-controleur', { checkId: red.checkId, slot: 'AUTRE', ...jpeg(), ...GPS, gpsSource: 'MANUEL', stampedAt: '2026-09-26T07:00:00.000Z' });
+    expect(late.json()).toMatchObject({ clockWarning: true, gpsSource: 'MANUEL', lowAccuracy: true });
     ids[4] = late.json().id;
     ids[1] = (e.app.ctx.ext.parking as { field: { activeForCheck(c: string): { id: string; slot: string }[] } }).field.activeForCheck(red.checkId).find((p) => p.slot === 'ABORDS_ARRIERE')!.id;
 
@@ -128,6 +130,10 @@ describe('Pénalités visibles : module stationnement, puis tous modules après 
     expect(list).toHaveLength(1);
     expect((await e.req('GET', `/v1/parking/penalties?plate=${PARKING_DEMO.plateTenant}`, 'u-contribuable')).statusCode).toBe(403);
 
+    // Même module (stationnement) : visible dès la décision, avec le montant ; autre module : seulement après 30 jours.
+    const sanctions = e.app.ctx.ext.sanctions as { afterControl(u: unknown, s: unknown, m: string, r: string): { lines: { sameModule: boolean; amount: unknown }[] } | null };
+    const same = sanctions.afterControl(e.app.ctx.users.get('pk-superviseur'), { plate: PARKING_DEMO.plateTenant }, 'STATIONNEMENT', 'test');
+    expect(same?.lines[0]).toMatchObject({ sameModule: true, amount: { amount: '20000.00', currency: 'CDF' } });
     const place = { commune: 'Gombe', label: 'Boulevard du 30 Juin' };
     const titresControl = () => e.req('POST', '/v1/titres/controles', 'rk-controleur', { plate: PARKING_DEMO.plateTenant, place });
     // Avant 30 jours : rien hors du module.
@@ -246,5 +252,31 @@ describe('Commission de 10 % : tous les agents, quel que soit leur module', () =
     // Au-delà de 72 h, rien n'est attribué.
     const svc = (e.app.ctx.ext.sanctions as { commissions: { lines(a?: string): { obligationId: string; agentId: string }[] } }).commissions;
     expect(svc.lines().filter((l) => l.obligationId === ob.id)).toHaveLength(1);
+  });
+});
+
+describe('Surveillance des constats par agent', () => {
+  it('compteurs par agent et par module ; signal « à examiner » sans mesure automatique ; accès restreint', async () => {
+    const e = await env();
+    const pk = e.app.ctx.ext.parking as { checks: { append(c: unknown): unknown }; violations: { insert(v: unknown): unknown } };
+    // Un agent qui constate beaucoup plus que ses pairs (données de test).
+    const now = e.clock.now().toISOString();
+    for (let i = 0; i < 10; i++) pk.checks.append({ id: `T-CHK-A-${i}`, plate: `KN-10${i}0-TS`, zoneId: PARKING_DEMO.zoneGombe, commune: 'Gombe', light: 'VERT', title: 'SESSION', agentId: 'pk-pair', at: now });
+    pk.checks.append({ id: 'T-CHK-A-R', plate: 'KN-1999-TS', zoneId: PARKING_DEMO.zoneGombe, commune: 'Gombe', light: 'ROUGE', title: null, agentId: 'pk-pair', at: now });
+    pk.violations.insert({ id: 'T-V-A', reference: 'T-CST-A', zoneId: PARKING_DEMO.zoneGombe, commune: 'Gombe', plate: 'KN-1999-TS', nature: 'NON_PAIEMENT', lightAtCheck: 'ROUGE', checkId: null, evidenceId: 'x', agentId: 'pk-pair', createdAt: now, holderTaxpayerId: null, status: 'CONSTATE', contests: [] });
+    for (let i = 0; i < 10; i++) {
+      pk.checks.append({ id: `T-CHK-B-${i}`, plate: `KN-20${i}0-TS`, zoneId: PARKING_DEMO.zoneGombe, commune: 'Gombe', light: 'ROUGE', title: null, agentId: 'pk-zele', at: now });
+      pk.violations.insert({ id: `T-V-B-${i}`, reference: `T-CST-B-${i}`, zoneId: PARKING_DEMO.zoneGombe, commune: 'Gombe', plate: `KN-20${i}0-TS`, nature: 'NON_PAIEMENT', lightAtCheck: 'ROUGE', checkId: null, evidenceId: 'x', agentId: 'pk-zele', createdAt: now, holderTaxpayerId: null, status: i < 4 ? 'REJETE' : 'CONSTATE', contests: [] });
+    }
+    const r = await e.req('GET', '/v1/agents/monitoring', 'pk-superviseur');
+    expect(r.statusCode).toBe(200);
+    const rows = r.json().rows as { agentId: string; totals: { constats: number; rejected: number }; signals: { code: string; level: string }[] }[];
+    const zele = rows.find((x) => x.agentId === 'pk-zele')!;
+    expect(zele.totals).toMatchObject({ constats: 10, rejected: 4 });
+    expect(zele.signals.map((s) => s.code)).toEqual(expect.arrayContaining(['TAUX_CONSTATS_ELEVE', 'PREUVES_ECARTEES']));
+    expect(rows[0]!.agentId).toBe('pk-zele'); // les agents à examiner d'abord
+    expect(r.json().notice).toMatch(/aucune mesure automatique/);
+    expect((await e.req('GET', '/v1/agents/monitoring', 'pk-controleur')).statusCode).toBe(403);
+    expect((await e.req('GET', '/v1/agents/monitoring', 'u-contribuable')).statusCode).toBe(403);
   });
 });

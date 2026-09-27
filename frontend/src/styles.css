@@ -849,9 +849,30 @@ input[type='file'] { font-size: 13.5px; max-width: 100%; }
 .overdue-pen-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .overdue-pen-list li { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 6px 10px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); }
 .overdue-pen-mod { font-weight: 600; color: var(--ink); }
+.overdue-pen-mine { font-weight: 700; color: var(--warning-ink); }
 .overdue-pen-days { color: var(--warning-ink); font-weight: 600; }
 .overdue-pen-guidance { margin: 0; color: var(--ink); }
 .overdue-pen-note { margin: 0; font-size: 12.5px; color: var(--ink-2); }
 .earn-rules { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
 
 .overdue-pen-amount { font-variant-numeric: tabular-nums; }
+
+/* ── Carte OpenStreetMap auto-hébergée ── */
+.geomap { margin: 0; display: grid; gap: 4px; min-width: 0; }
+.geomap-canvas { width: 100%; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #eef1f5; }
+.geomap-loading { display: grid; place-items: center; color: var(--ink-3); font-size: 13px; }
+.geomap-note { margin: 0; color: var(--warning-ink); }
+/* ── Position précise ── */
+.ploc { display: grid; gap: 8px; }
+.ploc-head strong { display: inline-flex; align-items: center; gap: 6px; }
+.ploc-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 13.5px; }
+.ploc-q { font-weight: 700; padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+.ploc-q.EXCELLENTE, .ploc-q.BONNE { background: var(--good-bg); color: var(--good-ink); }
+.ploc-q.MOYENNE { background: var(--warning-bg); color: var(--warning-ink); }
+.ploc-q.FAIBLE { background: var(--critical-bg); color: var(--critical-ink); }
+.ploc-bar { height: 6px; border-radius: 999px; background: var(--line-soft, #e6e9ef); overflow: hidden; }
+.ploc-bar > i { display: block; height: 100%; background: var(--good); transition: width 0.4s; }
+.ploc-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ploc-line { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 6px; }
+.ploc-line .ploc-bar { flex-basis: 100%; }
+.ploc-map { margin-top: 6px; display: grid; gap: 6px; }

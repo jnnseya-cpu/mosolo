@@ -4,6 +4,8 @@ import { useApi } from '../../hooks/useApi';
 import { PageHead } from '../../components/Shell';
 import { Icon } from '../../components/Icon';
 import { MoneyText } from '../../components/MoneyText';
+import { GeoMapLazy } from '../../components/GeoMapLazy';
+import { webglSupported } from '../../lib/geo';
 import { StatusBadge } from '../../components/StatusBadge';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { api, describeError } from '../../lib/api';
@@ -14,7 +16,7 @@ interface VerifyResult { kind: string; status: string; message: string; amount?:
 
 const TYPE_ICON: Record<string, string> = { GUICHET_BANCAIRE_MOSOLO: 'building', AGENCE_BANCAIRE: 'bank', AGENT_MONNAIE_MOBILE: 'phone', TPE_PRESTATAIRE: 'card' };
 
-/** Plan schématique : projection linéaire des coordonnées dans l'emprise des points (aucun fond de carte externe). */
+/** Plan schématique (repli sans WebGL) : projection linéaire des coordonnées dans l'emprise des points (aucun fond de carte externe). */
 function PointsMap({ points, guichets, selected, onSelect }: { points: PublicPoint[]; guichets: Guichet[]; selected: string | null; onSelect: (id: string) => void }) {
   const W = 640; const H = 360; const pad = 36;
   const lats = points.map((p) => p.lat); const lons = points.map((p) => p.lon);
@@ -77,8 +79,12 @@ export default function PaymentPointsPublic() {
           </div>
           <div className="cx-two">
             <section className="panel">
-              <header className="panel-head"><div><h2 className="panel-title"><Icon name="pin" size={18} /> Plan schématique</h2><p className="panel-sub">Carré : guichet bancaire d’un guichet MOSOLO · rond : autre point · croix : point suspendu</p></div></header>
-              <PointsMap points={pts} guichets={guichets} selected={selected} onSelect={setSelected} />
+              <header className="panel-head"><div><h2 className="panel-title"><Icon name="pin" size={18} /> Carte des points</h2><p className="panel-sub">{webglSupported() ? 'Bleu foncé : guichet bancaire d’un guichet MOSOLO · bleu clair : autre point · gris : point suspendu · rouge : point sélectionné. © contributeurs OpenStreetMap.' : 'Plan schématique — carré : guichet bancaire d’un guichet MOSOLO · rond : autre point · croix : point suspendu'}</p></div></header>
+              <GeoMapLazy center={[15.3136, -4.3217]} height={360} ariaLabel="Carte des points de paiement agréés"
+                {...(pts.length ? { bounds: [[Math.min(...pts.map((p) => p.lon)), Math.min(...pts.map((p) => p.lat))], [Math.max(...pts.map((p) => p.lon)), Math.max(...pts.map((p) => p.lat))]] as [[number, number], [number, number]] } : {})}
+                markers={pts.map((p) => ({ id: p.id, lon: p.lon, lat: p.lat, color: p.status !== 'ACTIF' ? '#8a8f98' : p.id === selected ? '#D7141A' : p.type === 'GUICHET_BANCAIRE_MOSOLO' ? '#232C6B' : '#1E9BD7', label: p.id === selected ? p.name : '' }))}
+                onSelect={setSelected}
+                fallback={<PointsMap points={pts} guichets={guichets} selected={selected} onSelect={setSelected} />} />
             </section>
             <section className="panel">
               <header className="panel-head"><h2 className="panel-title"><Icon name="building" size={18} /> Guichets MOSOLO communaux</h2><span className="count">{guichets.length}</span></header>

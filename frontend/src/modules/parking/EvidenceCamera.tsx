@@ -8,6 +8,8 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { api, describeError, serverNow } from '../../lib/api';
 import { Icon } from '../../components/Icon';
+import { PreciseLocation } from '../../components/PreciseLocation';
+import type { PreciseFix } from '../../lib/geo';
 
 export const SLOTS = [
   { id: 'ABORDS_AVANT', label: 'Abords — devant', hint: 'Reculez : montrez ce qui est devant le véhicule (rue, marquage, panneau)' },
@@ -18,7 +20,7 @@ export const SLOTS = [
 ] as const;
 type SlotId = (typeof SLOTS)[number]['id'];
 
-interface Fix { lat: number; lon: number; accuracy: number | null; source: 'GPS' | 'ZONE' }
+export interface Fix { lat: number; lon: number; accuracy: number | null; source: 'GPS' | 'MANUEL' | 'ZONE' }
 interface Taken { id: string; preview: string; sha256: string }
 
 const kin = (t: number) => new Date(t).toLocaleString('fr-FR', { timeZone: 'Africa/Kinshasa', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -69,7 +71,6 @@ export function EvidenceCamera({ checkId, plate, zone, agent, onDone, onCancel }
   const [live, setLive] = useState(false);
   const [camMsg, setCamMsg] = useState('Ouverture de la caméra…');
   const [fix, setFix] = useState<Fix | null>(null);
-  const [gpsMsg, setGpsMsg] = useState('Recherche de la position GPS…');
   const [place, setPlace] = useState('');
   const [slot, setSlot] = useState<SlotId>('ABORDS_AVANT');
   const [taken, setTaken] = useState<Partial<Record<SlotId, Taken>>>({});
@@ -86,15 +87,9 @@ export function EvidenceCamera({ checkId, plate, zone, agent, onDone, onCancel }
       .catch(() => setCamMsg('Caméra refusée ou indisponible : utilisez « Photo depuis l’appareil ».'));
     return () => { stop = true; stream?.getTracks().forEach((t) => t.stop()); };
   }, []);
-  useEffect(() => {
-    if (!navigator.geolocation) { setGpsMsg('GPS indisponible sur cet appareil.'); return; }
-    const id = navigator.geolocation.watchPosition(
-      (p) => { setFix({ lat: p.coords.latitude, lon: p.coords.longitude, accuracy: p.coords.accuracy ?? null, source: 'GPS' }); setGpsMsg(''); },
-      () => setGpsMsg('Position GPS refusée ou introuvable.'),
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
-    );
-    return () => navigator.geolocation.clearWatch(id);
-  }, []);
+  const onFix = (f: PreciseFix | null) => setFix(f ? { lat: f.lat, lon: f.lon, accuracy: f.accuracy !== null ? Math.round(f.accuracy * 10) / 10 : null, source: f.source } : null);
+  const srcText = (f: Fix) => f.source === 'GPS' ? `GPS ${f.lat.toFixed(6)}, ${f.lon.toFixed(6)}${f.accuracy !== null ? ` ± ${Math.round(f.accuracy)} m` : ''}`
+    : f.source === 'MANUEL' ? `Position ajustée à la main ${f.lat.toFixed(6)}, ${f.lon.toFixed(6)}` : 'Position de la zone (GPS indisponible)';
 
   const count = Object.keys(taken).length;
   const canShoot = !!fix && place.trim().length >= 3 && !busy;
@@ -109,7 +104,7 @@ export function EvidenceCamera({ checkId, plate, zone, agent, onDone, onCancel }
         `MOSOLO · CONSTAT STATIONNEMENT · ${plate} · ${s.label}`,
         `${kin(at)} (heure serveur, Kinshasa)`,
         `Agent : ${agent.name} (${agent.id}) · contrôle ${checkId}`,
-        `${fix.source === 'GPS' ? `GPS ${fix.lat.toFixed(6)}, ${fix.lon.toFixed(6)}${fix.accuracy !== null ? ` ± ${Math.round(fix.accuracy)} m` : ''}` : `Position de la zone (GPS indisponible)`} · ${place.trim()}`,
+        `${srcText(fix)} · ${place.trim()}`,
       ]);
       const buf = await encode(canvas.current);
       const sha = await sha256Hex(buf);
@@ -144,11 +139,10 @@ export function EvidenceCamera({ checkId, plate, zone, agent, onDone, onCancel }
       <div className="evc-meta">
         <span><Icon name="clock" size={14} /> {kin(now)} <span className="muted">(heure serveur)</span></span>
         <span><Icon name="user" size={14} /> {agent.name}</span>
-        <span className={fix ? 'evc-ok' : 'evc-wait'}><Icon name="gps" size={14} /> {fix ? (fix.source === 'GPS' ? `${fix.lat.toFixed(5)}, ${fix.lon.toFixed(5)}${fix.accuracy !== null ? ` ± ${Math.round(fix.accuracy)} m` : ''}` : 'Position de la zone (à vérifier)') : gpsMsg}</span>
-        {!fix && gpsMsg !== 'Recherche de la position GPS…' && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFix({ lat: zone.center.lat, lon: zone.center.lon, accuracy: null, source: 'ZONE' })}>Utiliser la position de la zone (signalé au vérificateur)</button>
-        )}
       </div>
+
+      <PreciseLocation label="Position du véhicule" targetM={10} compact onChange={onFix}
+        fallback={{ lat: zone.center.lat, lon: zone.center.lon, label: 'Utiliser la position de la zone' }} />
 
       <label className="field"><span className="label">Lieu précis (saisi par l’agent)</span>
         <input value={place} onChange={(e) => setPlace(e.target.value)} placeholder="ex. Bd du 30 Juin, face à la poste, côté fleuve" maxLength={200} required />

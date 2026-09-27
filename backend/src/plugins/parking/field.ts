@@ -60,7 +60,7 @@ export interface EvidencePhoto {
   lat: number;
   lon: number;
   accuracyM: number | null;
-  gpsSource: 'GPS' | 'ZONE';
+  gpsSource: 'GPS' | 'MANUEL' | 'ZONE';
   place: string;
   /** Heure incrustée dans l'image (horloge serveur synchronisée sur l'appareil). */
   stampedAt: string;
@@ -72,7 +72,24 @@ export interface EvidencePhoto {
   supersededBy: string | null;
 }
 
-export type PhotoMeta = Omit<EvidencePhoto, 'dataBase64'> & { slotLabel: string; url: string; clockWarning: boolean };
+export type PhotoMeta = Omit<EvidencePhoto, 'dataBase64'> & {
+  slotLabel: string; url: string; clockWarning: boolean;
+  /** Distance au centre de la zone contrôlée (m) et signaux de position pour le vérificateur. */
+  distanceFromZoneM: number | null; lowAccuracy: boolean; farFromZone: boolean;
+};
+
+/** Précision GPS au-delà de laquelle la position est signalée au vérificateur (m). */
+export const GPS_WARN_ACCURACY_M = 30;
+/** Distance au centre de la zone au-delà de laquelle la photo est signalée (m). */
+export const ZONE_WARN_DISTANCE_M = 600;
+
+/** Distance géodésique (haversine), en mètres. */
+export function distanceM(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
+  const R = 6_371_000; const r = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * r; const dLon = (b.lon - a.lon) * r;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) ** 2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(h)));
+}
 
 export interface PenaltyLine {
   module: 'STATIONNEMENT' | 'PUBLICITE';
@@ -125,7 +142,12 @@ export class ParkingField {
 
   meta(p: EvidencePhoto): PhotoMeta {
     const { dataBase64: _omit, ...rest } = p;
-    return { ...rest, slotLabel: SLOT_LABEL[p.slot], url: `/v1/parking/evidence-photos/${p.id}`, clockWarning: p.clockSkewSeconds > CLOCK_SKEW_WARN_SECONDS };
+    const z = this.svc.zones.get(p.zoneId);
+    const dist = z?.center ? distanceM({ lat: p.lat, lon: p.lon }, z.center) : null;
+    return {
+      ...rest, slotLabel: SLOT_LABEL[p.slot], url: `/v1/parking/evidence-photos/${p.id}`, clockWarning: p.clockSkewSeconds > CLOCK_SKEW_WARN_SECONDS,
+      distanceFromZoneM: dist, lowAccuracy: p.gpsSource !== 'GPS' || (p.accuracyM ?? Infinity) > GPS_WARN_ACCURACY_M, farFromZone: dist !== null && dist > ZONE_WARN_DISTANCE_M,
+    };
   }
 
   activeForCheck(checkId: string): EvidencePhoto[] {
@@ -134,7 +156,7 @@ export class ParkingField {
 
   upload(user: User, input: {
     checkId: string; slot: EvidenceSlot; imageBase64: string; sha256: string; lat: number; lon: number; accuracyM?: number;
-    gpsSource: 'GPS' | 'ZONE'; place: string; stampedAt: string;
+    gpsSource: 'GPS' | 'MANUEL' | 'ZONE'; place: string; stampedAt: string;
   }): PhotoMeta {
     const check = this.svc.checks.get(input.checkId);
     if (!check) throw notFound('CHECK_NOT_FOUND', 'Contrôle inconnu.');

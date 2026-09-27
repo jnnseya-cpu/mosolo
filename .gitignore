@@ -9,3 +9,7 @@ backend/data/
 
 # Moteur OCR copié depuis node_modules au build
 frontend/public/ocr/
+
+# Fond de carte OSM fabriqué par tools/maps (volumineux)
+frontend/public/tiles/
+data/osm/

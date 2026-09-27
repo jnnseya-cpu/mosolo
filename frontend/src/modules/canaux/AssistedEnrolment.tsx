@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
@@ -9,6 +9,8 @@ import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components
 import { api, describeError, safeGet, safeSet } from '../../lib/api';
 import { hmacSha256Hex, sha256Hex, uid } from '../../lib/crypto';
 import { hasRole, Pictogram } from './shared';
+import { GpsQualityLine, MapCheck } from '../../components/GpsQuality';
+import { usePreciseGps, type PreciseFix } from '../../lib/geo';
 import './canaux.css';
 
 const LANGS = [
@@ -94,13 +96,11 @@ export default function AssistedEnrolment() {
     set('photoSha256', await sha256Hex(await file.arrayBuffer()));
   }
 
-  function gps() {
-    navigator.geolocation?.getCurrentPosition(
-      (p) => setD((x) => ({ ...x, lat: p.coords.latitude.toFixed(5), lon: p.coords.longitude.toFixed(5), accuracyM: String(Math.round(p.coords.accuracy)) })),
-      () => setErr('Position indisponible : saisissez les coordonnées relevées.'),
-      { enableHighAccuracy: true, timeout: 8000 },
-    );
-  }
+  // Position précise du domicile ou du site (cible 10 m) ; un point ajusté sur la carte est enregistré avec une précision prudente de 25 m.
+  const pgps = usePreciseGps({ targetM: 10 });
+  const applyFix = (f: PreciseFix) => setD((x) => ({ ...x, lat: f.lat.toFixed(6), lon: f.lon.toFixed(6), accuracyM: String(f.accuracy !== null ? Math.max(1, Math.round(f.accuracy)) : 25) }));
+  function gps() { pgps.locate(applyFix); }
+  useEffect(() => { if (pgps.status === 'denied' || pgps.status === 'unavailable') setErr('Position indisponible : saisissez les coordonnées relevées.'); }, [pgps.status]);
 
   const ready = d.fullName.trim().length > 1 && d.quartier && d.landmark.length > 2 && d.lat && d.lon && d.summaryReadAt && d.method && d.noPayment
     && (d.method === 'VOIX' ? !!d.voiceSha : !!d.witnessName.trim() && !!d.witnessRelation.trim());
@@ -190,6 +190,8 @@ export default function AssistedEnrolment() {
               </div>
               <div className="btn-row"><button type="button" className="btn btn-secondary btn-sm" onClick={gps}><Icon name="gps" size={16} /> Relever la position</button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setD((x) => ({ ...x, lat: '-4.3689', lon: '15.3561', accuracyM: '15' }))}>Position d’exemple</button></div>
+              <GpsQualityLine fix={pgps.fix} status={pgps.status} targetM={pgps.targetM} />
+              <MapCheck lat={d.lat ? Number(d.lat) : null} lon={d.lon ? Number(d.lon) : null} accuracy={d.accuracyM ? Number(d.accuracyM) : null} onPick={(y, x) => pgps.pick(y, x, applyFix)} />
               <div className="field"><label className="label" htmlFor="cx-ch">Lieu d’enrôlement</label><select id="cx-ch" value={d.channel} onChange={(e) => set('channel', e.target.value as Draft['channel'])}><option value="DOMICILE">À domicile</option><option value="SITE">Sur site</option><option value="GUICHET_MOSOLO">Guichet MOSOLO</option></select></div>
               <div className="field"><label className="label" htmlFor="cx-mission">Mission</label><input id="cx-mission" className="mono" value={d.missionId} onChange={(e) => set('missionId', e.target.value)} /></div>
             </fieldset>

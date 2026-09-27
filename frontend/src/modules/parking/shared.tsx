@@ -7,6 +7,9 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { formatMoney, type MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { Icon } from '../../components/Icon';
+import { GpsQualityLine, MapCheck } from '../../components/GpsQuality';
+import { GeoMapLazy } from '../../components/GeoMapLazy';
+import { usePreciseGps, type PreciseFix } from '../../lib/geo';
 import { StatusBadge, type Tone } from '../../components/StatusBadge';
 import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { api, describeError, newIdempotencyKey, serverNow } from '../../lib/api';
@@ -224,27 +227,21 @@ export function PhotoHashes({ value, onChange, max = 4, label = 'Photographies (
   );
 }
 
-/** Position GPS de l'appareil (saisie manuelle possible si la géolocalisation est refusée). */
+/** Position GPS PRÉCISE de l'appareil (moyenne des meilleurs relevés, qualité affichée, carte OSM pour vérifier ;
+ * saisie ou ajustement manuel possibles, signalés). */
 export function GpsField({ lat, lon, onChange }: { lat: string; lon: string; onChange: (lat: string, lon: string, accuracy?: number) => void }) {
-  const [msg, setMsg] = useState<string | null>(null);
-  function locate() {
-    if (!navigator.geolocation) { setMsg('Géolocalisation indisponible : saisir la position.'); return; }
-    setMsg('Localisation…');
-    navigator.geolocation.getCurrentPosition(
-      (p) => { onChange(p.coords.latitude.toFixed(6), p.coords.longitude.toFixed(6), Math.round(p.coords.accuracy)); setMsg(`Précision ≈ ${Math.round(p.coords.accuracy)} m`); },
-      () => setMsg('Position refusée : saisir la position.'),
-      { enableHighAccuracy: true, timeout: 8000 },
-    );
-  }
+  const gps = usePreciseGps({ targetM: 10 });
+  const apply = (f: PreciseFix) => onChange(f.lat.toFixed(6), f.lon.toFixed(6), f.accuracy !== null ? Math.round(f.accuracy) : undefined);
   return (
     <div className="field">
       <span className="label">Position GPS</span>
       <div className="pk-gps">
         <input aria-label="Latitude" inputMode="decimal" value={lat} onChange={(e) => onChange(e.target.value, lon)} placeholder="Latitude" />
         <input aria-label="Longitude" inputMode="decimal" value={lon} onChange={(e) => onChange(lat, e.target.value)} placeholder="Longitude" />
-        <button type="button" className="btn btn-secondary btn-sm" onClick={locate}><Icon name="gps" size={16} /> Localiser</button>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => gps.locate(apply)} disabled={gps.busy}><Icon name="gps" size={16} /> {gps.busy ? 'Localisation…' : 'Localiser'}</button>
       </div>
-      {msg && <span className="hint">{msg}</span>}
+      <GpsQualityLine fix={gps.fix} status={gps.status} targetM={gps.targetM} />
+      <MapCheck lat={lat ? Number(lat) : null} lon={lon ? Number(lon) : null} accuracy={gps.fix?.accuracy ?? null} onPick={(y, x) => gps.pick(y, x, apply)} />
     </div>
   );
 }
@@ -278,7 +275,25 @@ export function ReasonForm({ confirmLabel, onSubmit, danger, children, placehold
 export interface MapShape { id: string; type: 'Polygon' | 'LineString'; coordinates: [number, number][]; color: string; label: string; dashed?: boolean }
 export interface MapPoint { id: string; lat: number; lon: number; color: string; label: string; ring?: boolean }
 
+/** Carte OpenStreetMap auto-hébergée des zones, tronçons et points ; plan schématique sur les appareils sans WebGL. */
 export function MiniMap({ shapes = [], points = [], height = 280, caption, onSelect }: {
+  shapes?: MapShape[]; points?: MapPoint[]; height?: number; caption: string; onSelect?: (id: string) => void;
+}) {
+  const all: [number, number][] = [...shapes.flatMap((s) => s.coordinates), ...points.map((p) => [p.lon, p.lat] as [number, number])];
+  if (all.length === 0) return <p className="muted small">Aucun élément à cartographier.</p>;
+  const lons = all.map((p) => p[0]); const lats = all.map((p) => p[1]);
+  const bounds: [[number, number], [number, number]] = [[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]];
+  return (
+    <GeoMapLazy center={[(bounds[0][0] + bounds[1][0]) / 2, (bounds[0][1] + bounds[1][1]) / 2]} bounds={bounds} height={height} ariaLabel={caption}
+      polygons={shapes.filter((s) => s.type === 'Polygon').map((s) => ({ id: s.id, rings: [s.coordinates], color: s.color, label: s.label }))}
+      lines={shapes.filter((s) => s.type === 'LineString').map((s) => ({ id: s.id, coords: s.coordinates, color: s.color }))}
+      markers={points.map((p) => ({ id: p.id, lon: p.lon, lat: p.lat, color: p.color, label: p.ring ? p.label : '' }))}
+      {...(onSelect ? { onSelect } : {})}
+      fallback={<SchematicMap shapes={shapes} points={points} height={height} caption={caption} {...(onSelect ? { onSelect } : {})} />} />
+  );
+}
+
+function SchematicMap({ shapes = [], points = [], height = 280, caption, onSelect }: {
   shapes?: MapShape[]; points?: MapPoint[]; height?: number; caption: string; onSelect?: (id: string) => void;
 }) {
   const all: [number, number][] = [...shapes.flatMap((s) => s.coordinates), ...points.map((p) => [p.lon, p.lat] as [number, number])];

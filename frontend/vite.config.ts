@@ -65,7 +65,8 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,ico,webmanifest,woff2}'],
         // Moteur OCR (~7 Mo) : hors du pré-cache d'installation, mis en cache à la première lecture de plaque.
-        globIgnores: ['**/ocr/**'],
+        globIgnores: ['**/ocr/**', '**/tiles/**'],
+        navigateFallbackDenylist: [/^\/tiles\//, /^\/ocr\//],
         navigateFallback: '/index.html',
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         runtimeCaching: [
@@ -73,6 +74,13 @@ export default defineConfig({
             urlPattern: ({ url }) => url.pathname.startsWith('/ocr/'),
             handler: 'CacheFirst',
             options: { cacheName: 'mosolo-ocr', cacheableResponse: { statuses: [0, 200] }, expiration: { maxEntries: 10 } },
+          },
+          // Carte OSM auto-hébergée : polices et icônes mises en cache à la première carte. Les tuiles
+          // (/tiles/kinshasa.pmtiles, lues par plages d'octets) ne passent pas par le service worker.
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith('/map/'),
+            handler: 'CacheFirst',
+            options: { cacheName: 'mosolo-map', cacheableResponse: { statuses: [0, 200] }, expiration: { maxEntries: 60 } },
           },
           {
             urlPattern: ({ url }) => url.pathname === '/v1/meta',

@@ -7411,12 +7411,16 @@ Le circuit RW1 est inchangé : le **constat ne sanctionne pas**.
 
 **3. Pénalités visibles, avec leur montant.**
 
-- **Dans le module** : tout agent du stationnement voit, au contrôle d’une plaque, les pénalités de l’usager : montant, état de paiement, ancienneté de l’impayé.
-- **Dans tous les modules, après 30 jours d’impayé** : une pénalité non payée 30 jours après sa décision devient visible, **avec son montant**, de **tout agent de tout module, à l’occasion d’un contrôle**. Contrôles concernés :
+Règle retenue par le maître d’ouvrage : **dans les 30 jours, seulement les agents du module ; au-delà de 30 jours, tous les agents**.
+
+- **Agents du même module, à tout âge** : après un contrôle, l’agent voit les pénalités impayées de l’usager **relevant de son module**, dès leur décision, avec leur montant (marquées « votre module »). Correspondance : contrôle de stationnement → pénalités du stationnement ; contrôle de titres ou de pass wewa → pénalités des titres ; inspection publicitaire → publicité ; scan de plaque d’objet → verticales.
+- **Agents de tous les modules, après 30 jours d’impayé** : une pénalité non payée 30 jours après sa décision devient visible, **avec son montant**, de **tout agent de tout module, à l’occasion d’un contrôle**. Contrôles concernés :
+  - stationnement ;
   - titres et tickets ;
   - pass wewa (même pour une plaque qui n’est pas celle d’une moto enregistrée) ;
   - scan d’une plaque d’étal, de chantier ou de site ;
   - inspection publicitaire.
+- Le bandeau de l’écran de contrôle s’intitule selon le cas « Pénalités impayées de votre module », « … depuis plus de 30 jours » ou les deux.
 - **Garde-fous** :
   - visible seulement **après un contrôle réel** (divulgation journalisée avec la référence du contrôle) ;
   - jamais pour un usager ;
@@ -7468,6 +7472,22 @@ Tableaux de bord :
 
 Risque de conflit d’intérêts à surveiller (indicateurs par agent, contrôles mystère, § 15A) : les garde-fous ci-dessus (preuve vérifiée, décision par un tiers, recours, annulation de la commission) doivent rester actifs.
 
+**5. Surveillance des constats par agent (recommandation retenue).** La commission sur les pénalités crée une incitation à multiplier les constats ; l’écran « Surveillance des constats » (`/agents/surveillance`) la rend visible.
+
+- **Compteurs par agent et par module** : contrôles, défauts relevés, constats, constats écartés à la vérification, retenus, classés sans suite, contestés, annulés, photos ou positions faibles (GPS absent, ajusté à la main ou au-delà de 50 m, horloge décalée) ; part des pénalités dans sa commission.
+- **Signaux « à examiner »**, comparés à la **médiane des autres agents du même module** :
+
+| Signal | Condition (seuils à valider par l’inspection des services) |
+|---|---|
+| Taux de constats élevé | Plus du double de la médiane des pairs (au moins 5 contrôles et 3 constats) |
+| Preuves écartées | 30 % ou plus des constats vérifiés écartés |
+| Constats classés | 40 % ou plus des constats décidés classés sans suite |
+| Contestations | 30 % ou plus des pénalités retenues contestées ou annulées |
+| Preuves faibles | 30 % ou plus de photos ou positions imprécises |
+| Commission issue de pénalités | 70 % ou plus (information seulement) |
+
+- **Un signal n’entraîne aucune mesure automatique** : il ouvre un examen humain (superviseur, contrôle mystère § 15A). Accès : Gouverneur et cabinet, direction et régies (DGIPK, DGRK), supervision de terrain, inspection, audit.
+
 Routes :
 
 | Route | Rôle |
@@ -7477,29 +7497,71 @@ Routes :
 | `GET /v1/parking/penalties?plate=` | Pénalités d’un usager (agents du module) |
 | `GET /v1/agents/me/earnings` | Gains de l’agent, tous modules |
 | `GET /v1/agents/earnings` | Commissions de tous les agents (pilotage, régies, Trésor, audit) |
+| `GET /v1/agents/monitoring` | Surveillance des constats par agent (pilotage, régies, supervision, inspection, audit) |
 | `GET /v1/parking/agents/me/earnings` | Gains de l’agent (même contenu, pour les écrans du stationnement) |
 | Champ `penalitesImpayees` | Ajouté aux réponses des contrôles des autres modules |
 
 Tests (`backend/test/parking-field.test.ts`) :
 - empreintes, formats, délais et verrouillage des photos ;
 - constat lié à ses photos, droits de lecture ;
-- visibilité à 30 jours et absence de montant ;
+- visibilité : même module à tout âge, tous modules après 30 jours, jamais pour l’usager ;
 - états de la commission, attribution des paiements, droits d’accès ;
 - commission d’un contrôleur de titres (titre racheté après un contrôle non valide) et d’un agent des verticales (dette payée après le scan) ;
-- montant visible dans les autres modules.
+- montant visible dans les autres modules ;
+- surveillance des constats (signal d’un agent qui multiplie les constats, droits d’accès) ;
+- point ajusté à la main (source MANUEL) signalé comme position imprécise.
 
-## I.16 Ce qui reste ouvert
+## I.16 Cartographie OpenStreetMap auto-hébergée et géolocalisation précise
+
+**Choix du maître d’ouvrage : OpenStreetMap, auto-hébergée** (plutôt que Google Maps).
+
+| Critère | Google Maps | OpenStreetMap auto-hébergée (retenue) |
+|---|---|---|
+| Coût | Facturé à l’usage au-delà d’un quota ; montant variable avec le nombre d’agents et d’usagers | Aucune redevance ; seul l’hébergement (quelques centaines de Mo) |
+| Souveraineté des données | Chaque affichage passe par les serveurs de Google (positions des agents, lieux contrôlés) | Tout est servi par MOSOLO : aucune position ne sort de l’infrastructure de la Ville |
+| Hors réseau | Limité, conditions d’utilisation restrictives | Fonctionne sans réseau une fois l’application et la carte chargées |
+| Qualité à Kinshasa | Bonne sur les grands axes | Bonne sur les axes ; les quartiers peuvent être complétés par la Ville (données ouvertes, licence ODbL) |
+| Licence | Contrat commercial, restrictions de stockage | ODbL : mention « © contributeurs OpenStreetMap » obligatoire (affichée sur chaque carte) |
+
+**Construction.**
+
+- **Moteur** : MapLibre GL (libre), chargé seulement par les écrans qui affichent une carte.
+- **Fond de carte** : tuiles vectorielles de Kinshasa au format PMTiles, fichier unique `/tiles/kinshasa.pmtiles` servi par MOSOLO, fabriqué par `tools/maps/construire-tuiles-kinshasa.sh` (extrait Protomaps ou Geofabrik + Planetiler ; emprise 15,05–15,70 E, 4,15–4,75 S ; zoom 16). Le fichier n’est pas dans le dépôt : il se fabrique sur le serveur de la Ville. Tant qu’il manque, les cartes affichent les couches MOSOLO (points, zones, cercle de précision) sur un fond neutre, avec une note.
+- **Polices et icônes de carte** : servies par MOSOLO (`/map/`), licences dans `frontend/public/map/LICENCES.md`.
+- **Anciens téléphones sans WebGL** : les écrans gardent leur plan schématique ; les coordonnées restent affichées et enregistrées.
+- **Application installée (PWA)** : le moteur de carte est pré-chargé ; polices et icônes sont mises en cache à la première carte ; les tuiles (lues par plages d’octets) ne passent pas par le service worker.
+
+**Géolocalisation précise, partout où elle sert.**
+
+- **Méthode** : GPS haute précision, jamais de position en cache ; plusieurs relevés ; la position retenue est la **moyenne pondérée des meilleurs relevés récents** (précision au plus 1,5 fois la meilleure, 25 secondes au plus). La recherche s’arrête à la précision cible (10 m pour les preuves, l’enrôlement et les missions ; 15 m pour le contrôle des titres, qui ne doit pas attendre) ou au bout de 30 secondes, en gardant le meilleur résultat.
+- **Qualité affichée et transmise** : excellente (≤ 5 m), bonne (≤ 15 m), moyenne (≤ 50 m), faible au-delà ; nombre de relevés ; barre de progression.
+- **Carte de vérification** : le point et son cercle de précision sur la carte OSM. L’agent peut **ajuster le point à la main** : la position est alors marquée « MANUEL » et signalée au vérificateur ; sans GPS, la position de la zone peut être utilisée, marquée « ZONE ».
+- **Écrans concernés** :
+
+| Écran | Usage de la position |
+|---|---|
+| Caméra de preuve (stationnement) | Incrustée dans chaque photo, avec sa précision et sa source |
+| Constat de stationnement, inspection publicitaire, espace annonceur | Position du véhicule ou du support |
+| Contrôle des titres et du pass wewa | Lieu du contrôle |
+| Enrôlement assisté | Domicile ou site de la personne enrôlée |
+| Missions de terrain et contre-visites | Position du constat, comparée au point enregistré |
+| Carte des zones (usager, régie), carte des supports, points de paiement | Fond OSM au lieu du plan schématique |
+
+- **Contrôle côté serveur** : chaque photo de preuve porte sa distance au centre de la zone ; elle est signalée si la précision dépasse 30 m, si la source n’est pas le GPS, ou si elle est à plus de 600 m de la zone. Ces signaux alimentent la surveillance des constats (§ I.15, 5).
+
+## I.17 Ce qui reste ouvert
 
 Les points suivants ne relèvent pas du logiciel seul ou attendent un acte, un protocole ou une convention ; ils sont signalés dans les écrans concernés et ne produisent aucun effet financier tant qu’ils ne sont pas levés.
 
 | Domaine | Point ouvert | Condition de levée |
 |---|---|---|
+| Commission et surveillance | Arrêté fixant le taux de 10 % ; validation des seuils de surveillance des constats | Arrêté du Gouverneur ; avis de l’inspection des services |
 | Tarifs et assiettes | Tarifs réels du pass wewa, du stationnement, des titres de transport, de la publicité, des redevances AVIA et portuaires, de la contribution plastique | Actes J21, J23, J24, J25, J28 et fiches de règles certifiées (quatre visas) |
 | Quitus fiscal | Effet bloquant sur les mutations et services | Acte J6 ; le quitus reste informatif jusque-là |
 | Répartition | Parts légales éventuelles entre entités | Lecture de l’OL 18/004 et actes provinciaux ; aucune clé paramétrée |
 | Identité | Clés d’accès FIDO2 (passkeys), récupération de compte | Raccordement WebAuthn ; procédure de récupération validée |
 | Canaux | Passerelles USSD, SMS, SVI et courrier réelles ; code court et numéro vert ; compte WhatsApp Business certifié et fournisseur contractualisé ; validation des textes lingala de l’assistant | Conventions opérateurs (J29), contrat du fournisseur WhatsApp, avis de l’autorité de protection des données |
-| Données géographiques | Géométries PostGIS, référentiel officiel des codes de communes, cartographie de la population | Protocoles de données et référentiel arrêté |
+| Données géographiques | Géométries PostGIS, référentiel officiel des codes de communes, cartographie de la population ; installation du fond OSM de Kinshasa sur le serveur de la Ville (`tools/maps/construire-tuiles-kinshasa.sh`) et complétion des quartiers | Protocoles de données et référentiel arrêté ; accès réseau à `build.protomaps.com` ou `download.geofabrik.de` depuis le serveur |
 | Partenaires | Connecteurs BSP/GDS et IFA (AVIA), passerelle bancaire réelle (CALCU), immatriculations nationales | Accords et protocoles avec le pouvoir central et les partenaires |
 | Exploitation | Persistance des états encore volatils (idempotence, brouillons serveur, lots terrain, boîtes in-app), clé de signature QR dédiée, secrets TOTP au coffre de secrets | Mise en production (hébergement souverain) |
 | IA | Registre complet des modèles (évaluations, biais, dérive), OCR des baux, « 12 questions » par action | Gouvernance IA validée par le délégué à la protection des données |
