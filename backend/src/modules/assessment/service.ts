@@ -128,6 +128,12 @@ export interface CalculateInput {
 
 export const PAYABLE_STATUSES: ObligationStatus[] = ['EMISE', 'EXIGIBLE', 'EN_RETARD', 'PARTIELLEMENT_PAYEE'];
 
+/** Services rendus par le module paiements à la liquidation (sans dépendance circulaire). */
+export interface ObligationPaymentHooks {
+  paidOn(obligationId: string): Money;
+  onSuperseded(originalId: string, rectifiedId: string): void;
+}
+
 /** Garde appelée avant toute liquidation réelle ; lève une erreur pour l'empêcher. */
 export type LiquidationGuard = (ctx: { user: User; rule: { id: string; code: string; administeringEntity: string; periodicity: string }; objectId: string; taxpayerId: string; at: Date }) => void;
 
@@ -156,6 +162,18 @@ export class AssessmentService {
   /** Branche un fournisseur de réductions (exonérations approuvées). */
   registerAdjuster(fn: AssessmentAdjuster): void {
     this.adjusters.push(fn);
+  }
+
+  /** Lien vers le module paiements (branché par lui) : cumul payé et fermeture des références d'une obligation remplacée. */
+  private paymentHooks?: ObligationPaymentHooks;
+
+  setPaymentHooks(h: ObligationPaymentHooks): void {
+    this.paymentHooks = h;
+  }
+
+  /** Montant déjà payé sur une obligation (y compris sur celles qu'elle remplace) ; zéro sans module paiements. */
+  paidAmount(id: string): Money {
+    return this.paymentHooks?.paidOn(id) ?? Money.zero(this.get(id).amount.currency);
   }
 
   calculate(user: User, input: CalculateInput): { trace: AssessmentTrace; obligation?: Obligation } {
@@ -349,7 +367,8 @@ export class AssessmentService {
 
   /**
    * Obligation rectificative (décision sur réclamation) : l'originale est conservée au statut ANNULEE,
-   * sa créance est contrepassée, une nouvelle obligation liée est émise.
+   * sa créance est contrepassée, une nouvelle obligation liée est émise pour le montant rectifié TOTAL ;
+   * ce qui a déjà été payé sur l'originale compte pour elle.
    */
   rectify(originalId: string, newAmount: MoneyJSON, ctx: { appealId: string; reason: string; decidedBy: User; decisionType?: 'RECLAMATION' | 'REMISE' | 'CORRECTION_DECLARATION' }): Obligation {
     const original = this.get(originalId);
@@ -373,6 +392,14 @@ export class AssessmentService {
       attribution: original.attribution,
     });
     this.obligations.update({ ...original, status: 'ANNULEE', supersededBy: rectified.id });
+    // Les références non payées de l'originale sont fermées ; les paiements déjà reçus sont repris par la
+    // rectificative (cumul payé sur la chaîne), qui naît donc partiellement payée ou soldée. Écritures cohérentes :
+    // créance = montant rectifié − paiements déjà crédités ; un trop-perçu est signalé pour remboursement.
+    this.paymentHooks?.onSuperseded(original.id, rectified.id);
+    const paid = this.paidAmount(rectified.id);
+    if (!paid.isZero()) {
+      return this.setStatus(rectified.id, paid.compare(Money.fromJSON(amount)) >= 0 ? 'SOLDEE' : 'PARTIELLEMENT_PAYEE');
+    }
     return rectified;
   }
 }

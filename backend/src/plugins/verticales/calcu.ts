@@ -144,8 +144,17 @@ export class CalcuService {
       const amount = Money.fromJSON(tx.amount);
       if (engagement) {
         const ref = Money.fromJSON(engagement.amount);
+        // Cumul des paiements de la même opération sur le même compte (y compris celui-ci) : un engagement ne se
+        // dépasse pas non plus par fractionnement en plusieurs virements.
+        const prior = this.transactions.find((t) => t.accountNumberHash === tx.accountNumberHash && t.reference === tx.reference && t.amount.currency === amount.currency);
+        const cumul = prior.reduce((m, t) => m.add(Money.fromJSON(t.amount)), amount);
         if (ref.currency !== amount.currency) { findings.push('Devise différente de celle de l’engagement.'); worst('AMBRE'); }
-        else if (amount.compare(ref) > 0) { findings.push(`Montant supérieur à l’engagement (${ref.toDecimalString()} ${ref.currency}) : surfacturation présumée.`); worst('ROUGE'); }
+        else if (cumul.compare(ref) > 0) {
+          findings.push(prior.length
+            ? `Cumul des paiements de l’opération (${cumul.toDecimalString()} ${cumul.currency}) supérieur à l’engagement (${ref.toDecimalString()} ${ref.currency}) : surfacturation présumée.`
+            : `Montant supérieur à l’engagement (${ref.toDecimalString()} ${ref.currency}) : surfacturation présumée.`);
+          worst('ROUGE');
+        }
       }
       if (!docs.some((d) => norm(d.supplier) === norm(tx.beneficiary))) { findings.push('Bénéficiaire différent du fournisseur des justificatifs : dépense hors objet présumée.'); worst('AMBRE'); }
       if (docs.some((d) => d.date > tx.at.slice(0, 10))) { findings.push('Justificatif daté après le paiement.'); worst('AMBRE'); }

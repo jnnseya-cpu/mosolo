@@ -79,6 +79,11 @@ export interface SuspenseItem {
   status: 'OUVERT' | 'APURE';
   clearing?: { operationId: string; mode: 'AFFECTATION' | 'RESTITUTION'; paymentReference?: string; ledgerEntryId: string; at: string };
   demo?: boolean;
+  /**
+   * Paiement reçu mais non affecté (doublon, référence expirée…) : fonds encore chez le prestataire. Seule la
+   * restitution à l'instrument d'origine est possible ; elle solde la créance sur le prestataire.
+   */
+  unappliedId?: string;
 }
 
 export type OperationKind =
@@ -223,6 +228,14 @@ export class TresorService {
     this.privateKey = pair.privateKey;
     this.publicKey = pair.publicKey;
     ctx.treasury.setExceptionOverlay((e) => this.decorate(e));
+    // Paiement non affecté : porté au compte d'attente (écriture déjà passée par le module paiements), daté, justifié.
+    ctx.payments.onUnapplied((u) => {
+      this.openSuspense({
+        accountAlias: u.beneficiaryAlias, amount: u.amount, valueDate: kinDate(u.receivedAt), paymentReference: u.paymentReference,
+        exceptionId: `EXC-NAFF-${u.id}`, unappliedId: u.id, openedBy: 'systeme:paiements',
+        justification: `Paiement ${u.provider} ${u.providerTxnId} non affecté (${u.reason}) : remboursement vers l'instrument d'origine à décider.`,
+      }, u.ledgerEntryId);
+    });
   }
 
   private now(): string {
@@ -406,15 +419,16 @@ export class TresorService {
 
   /* ------------------------------------------------------------ suspens */
 
-  private openSuspense(input: Omit<SuspenseItem, 'id' | 'openedAt' | 'ledgerEntryId' | 'status'>): SuspenseItem {
+  /** `existingEntryId` : écriture de mise en attente déjà passée (paiement non affecté), aucune nouvelle écriture. */
+  private openSuspense(input: Omit<SuspenseItem, 'id' | 'openedAt' | 'ledgerEntryId' | 'status'>, existingEntryId?: string): SuspenseItem {
     const id = this.ids.next('SUSP');
-    const entry = this.ctx.ledger.postPair({
+    const entryId = existingEntryId ?? this.ctx.ledger.postPair({
       eventType: 'SUSPENSE_OPENED', description: `Fonds non identifiés sur ${input.accountAlias} (${input.valueDate}) portés en compte d'attente`,
       sourceType: 'suspense', sourceId: id, debit: 'COMPTE_PUBLIC_RECETTES', credit: 'COMPTE_ATTENTE', amount: input.amount,
-    });
-    const item = this.suspense.insert({ ...input, id, openedAt: this.now(), ledgerEntryId: entry.id, status: 'OUVERT' });
+    }).id;
+    const item = this.suspense.insert({ ...input, id, openedAt: this.now(), ledgerEntryId: entryId, status: 'OUVERT' });
     this.ctx.audit.append({
-      actor: { kind: 'user', id: input.approvedBy ?? input.openedBy }, action: 'suspense.opened', resourceType: 'suspense', resourceId: id,
+      actor: input.unappliedId ? { kind: 'system', id: input.openedBy } : { kind: 'user', id: input.approvedBy ?? input.openedBy }, action: 'suspense.opened', resourceType: 'suspense', resourceId: id,
       details: { amount: input.amount, accountAlias: input.accountAlias, exceptionId: input.exceptionId ?? null, proposedBy: input.openedBy },
     });
     return item;
@@ -497,6 +511,7 @@ export class TresorService {
         if (!s) throw notFound('SUSPENSE_NOT_FOUND', `Suspens inconnu : ${input.suspenseId}`);
         if (s.status !== 'OUVERT') throw conflict('SUSPENSE_CLEARED', `Le suspens ${s.id} est déjà apuré.`);
         if (input.mode === 'AFFECTATION') {
+          if (s.unappliedId) throw unprocessable('UNAPPLIED_PAYMENT_REFUND_ONLY', `Le suspens ${s.id} porte un paiement non affecté : seule la restitution à l'instrument d'origine est possible.`);
           const o = this.order(input.paymentReference);
           if (o.status !== 'CONFIRME') throw conflict('PAYMENT_NOT_CONFIRMED', `Le paiement ${o.paymentReference} doit être confirmé par le prestataire (statut ${o.status}).`);
           if (!Money.fromJSON(o.amount).equals(Money.fromJSON(s.amount))) throw unprocessable('AMOUNT_MISMATCH', `Montant du suspens ${s.amount.amount} ${s.amount.currency} ≠ montant dû ${o.amount.amount} ${o.amount.currency}.`);
@@ -571,6 +586,19 @@ export class TresorService {
     return updated;
   }
 
+  /**
+   * Après contrepassation ou remboursement : l'obligation en vigueur reprend l'état que justifie le cumul encore payé
+   * (SOLDEE, PARTIELLEMENT_PAYEE ou EXIGIBLE). Seuls ces états « de paiement » sont recalculés ; ANNULEE, CONTESTEE…
+   * ne sont jamais touchés.
+   */
+  private restoreObligationStatus(obligationId: string) {
+    const ob = this.ctx.assessment.get(this.ctx.payments.currentObligationId(obligationId));
+    if (ob.status !== 'SOLDEE' && ob.status !== 'PARTIELLEMENT_PAYEE') return ob;
+    const paid = this.ctx.payments.paidOn(ob.id);
+    const status = paid.compare(Money.fromJSON(ob.amount)) >= 0 ? 'SOLDEE' : paid.isZero() ? 'EXIGIBLE' : 'PARTIELLEMENT_PAYEE';
+    return status === ob.status ? ob : this.ctx.assessment.setStatus(ob.id, status);
+  }
+
   private notifyTaxpayer(event: string, r: Receipt | undefined, reference: string): void {
     if (!r) return;
     this.ctx.comms.publish(event, [taxpayerRecipient(this.ctx.taxpayers.get(r.taxpayerId))], { reference }, { entity: r.administration });
@@ -605,8 +633,7 @@ export class TresorService {
         const r = this.ctx.receipts.byPaymentOrder(o.id);
         let receiptNumber: string | undefined;
         if (r && (r.status === 'PROVISOIRE' || r.status === 'DEFINITIVE' || r.status === 'SUSPECTE')) receiptNumber = this.ctx.receipts.applyDecision(r.id, 'CONTREPASSEE', decision).number;
-        const ob = this.ctx.assessment.get(o.obligationId);
-        if (ob.status === 'SOLDEE') this.ctx.assessment.setStatus(ob.id, 'EXIGIBLE');
+        const ob = this.restoreObligationStatus(o.obligationId);
         this.ctx.comms.publish('payment.reversed', [taxpayerRecipient(this.ctx.taxpayers.get(o.taxpayerId))], { reference: o.paymentReference }, { entity: ob.entity });
         return { paymentReference: o.paymentReference, reversalEntries: reversed, receiptNumber: receiptNumber ?? null };
       }
@@ -618,6 +645,8 @@ export class TresorService {
           sourceType: 'payment_order', sourceId: o.id, debit: 'RECETTES_CONSTATEES', credit: 'COMPTE_PUBLIC_RECETTES', amount: o.amount,
         });
         this.ctx.payments.markRefunded(o.id, entry.id);
+        // Comme pour la contrepassation : l'obligation redevient due à hauteur de ce qui a été restitué.
+        this.restoreObligationStatus(o.obligationId);
         this.ctx.audit.append({ actor, action: 'payment.refunded', resourceType: 'payment_order', resourceId: o.id, details: { operationId: op.id, ledgerEntryId: entry.id, destination: 'INSTRUMENT_ORIGINE' } });
         const r = this.ctx.receipts.byPaymentOrder(o.id);
         const receipt = r && r.status === 'DEFINITIVE' ? this.ctx.receipts.applyDecision(r.id, 'REMBOURSEE', decision) : undefined;
@@ -638,12 +667,21 @@ export class TresorService {
           ledgerEntryId = m.ledgerEntryId;
           paymentReference = o.paymentReference;
         } else {
+          // Paiement non affecté : les fonds sont restitués par le prestataire au payeur (créance sur le prestataire soldée).
           ledgerEntryId = this.ctx.ledger.postPair({
             eventType: 'SUSPENSE_RESTITUTION', description: `Restitution du suspens ${s.id} à l'émetteur d'origine (${op.id})`,
-            sourceType: 'suspense', sourceId: s.id, debit: 'COMPTE_ATTENTE', credit: 'COMPTE_PUBLIC_RECETTES', amount: s.amount,
+            sourceType: 'suspense', sourceId: s.id, debit: 'COMPTE_ATTENTE', credit: s.unappliedId ? 'FONDS_A_RECEVOIR_PRESTATAIRES' : 'COMPTE_PUBLIC_RECETTES', amount: s.amount,
           }).id;
         }
         this.suspense.update({ ...s, status: 'APURE', clearing: { operationId: op.id, mode: input.mode!, ...(paymentReference ? { paymentReference } : {}), ledgerEntryId, at: decision.at } });
+        if (s.unappliedId && s.exceptionId) {
+          // L'exception « paiement non affecté » est résolue par cette restitution validée à quatre yeux.
+          const c = this.caseOf(s.exceptionId);
+          this.cases.update({
+            ...c, status: 'RESOLUE', decision: { approvedBy: user.id, approvedAt: decision.at, suspenseId: s.id },
+            history: [...c.history, { at: decision.at, by: user.id, action: 'RESOLUTION_VALIDEE', note: `Restitution ${op.id}` }],
+          });
+        }
         this.ctx.audit.append({ actor, action: 'suspense.cleared', resourceType: 'suspense', resourceId: s.id, details: { mode: input.mode, paymentReference: paymentReference ?? null, operationId: op.id } });
         return { suspenseId: s.id, mode: input.mode, ledgerEntryId, paymentReference: paymentReference ?? null };
       }
@@ -756,6 +794,13 @@ export class TresorService {
     if (last && date <= last.date) throw conflict('DAY_ALREADY_CLOSED', `Journée ${date} déjà couverte par la clôture ${last.id}.`);
     const fromSeq = (last?.toSeq ?? 0) + 1;
     const entries = this.ctx.ledger.list().filter((e) => e.seq >= fromSeq && kinDate(e.at) <= date);
+    // Une journée antérieure encore ouverte se clôture d'abord : jamais deux journées dans une même clôture (les totaux
+    // mensuels resteraient mélangés). Les écritures tardives d'une journée déjà clôturée suivent la clôture suivante.
+    const earlier = entries.find((e) => kinDate(e.at) < date && (!last || kinDate(e.at) > last.date));
+    if (earlier) {
+      const day = kinDate(earlier.at);
+      throw conflict('EARLIER_DAY_NOT_CLOSED', `La journée du ${day} comporte des écritures non clôturées : clôturez-la avant celle du ${date}.`, { date: day });
+    }
     const toSeq = entries.at(-1)?.seq ?? fromSeq - 1;
     const totals = new Map<CurrencyCode, { debit: Money; credit: Money }>();
     for (const e of entries) for (const l of e.lines) {
@@ -791,10 +836,13 @@ export class TresorService {
     const unimputed = this.ctx.payments.orders.find((o) => o.status === 'RAPPROCHE' && !this.imputations.get(o.id) && kinDate(this.settlementEntryOf(o)?.at ?? o.reconciledAt ?? this.now()).startsWith(month));
     if (unimputed.length) throw conflict('UNIMPUTED_ENTRIES', `${unimputed.length} paiement(s) rapproché(s) du mois ne sont pas imputés selon la nomenclature.`, { count: unimputed.length });
     const days = this.daily.find((d) => d.date.startsWith(month));
+    // Totaux du mois = écritures DATÉES du mois (toutes couvertes par une clôture quotidienne, contrôlé ci-dessus),
+    // jamais la somme de clôtures qui pourraient porter des écritures tardives d'un autre mois.
     const totals = new Map<CurrencyCode, { debit: Money; credit: Money }>();
-    for (const d of days) for (const t of d.totals) {
-      const cur = totals.get(t.currency) ?? { debit: Money.zero(t.currency), credit: Money.zero(t.currency) };
-      totals.set(t.currency, { debit: cur.debit.add(Money.fromJSON(t.debit)), credit: cur.credit.add(Money.fromJSON(t.credit)) });
+    for (const e of inMonth) for (const l of e.lines) {
+      const m = Money.fromJSON(l.amount);
+      const cur = totals.get(m.currency) ?? { debit: Money.zero(m.currency), credit: Money.zero(m.currency) };
+      totals.set(m.currency, l.side === 'DEBIT' ? { ...cur, debit: cur.debit.add(m) } : { ...cur, credit: cur.credit.add(m) });
     }
     const content = {
       id: `CLM-${month}`, month, dailyClosures: days.map((d) => d.id), dailyHashes: days.map((d) => d.hash),

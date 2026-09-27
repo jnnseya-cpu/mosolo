@@ -576,7 +576,8 @@ export class VerticalesService {
     }
     if (proc.kind === 'QUITUS' && c.objectId) {
       const obls = this.ctx.assessment.obligations.find((o) => o.objectId === c.objectId && o.status !== 'ANNULEE');
-      const unpaid = obls.filter((o) => o.status !== 'SOLDEE' && !this.ctx.payments.byObligation(o.id).some((p) => CONFIRMED.includes(p.status)));
+      // Réglée = SOLDEE ou cumul payé ≥ montant ; un simple acompte confirmé ne suffit pas au quitus.
+      const unpaid = obls.filter((o) => o.status !== 'SOLDEE' && this.ctx.payments.paidOn(o.id).compare(Money.fromJSON(o.amount)) < 0);
       out.push({ code: 'DUES_SETTLED', label: unpaid.length ? `Droits du chantier non réglés : ${unpaid.map((o) => o.id).join(', ')}` : 'Droits liés au chantier réglés (paiement confirmé)', met: unpaid.length === 0 });
       const contested = obls.some((o) => o.status === 'CONTESTEE');
       out.push({ code: 'NO_OPEN_DISPUTE', label: 'Aucune contestation en cours sur le chantier', met: !contested });

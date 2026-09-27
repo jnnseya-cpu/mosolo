@@ -18,12 +18,16 @@ describe('Grand livre et rapprochement', () => {
     expect((await env.req('GET', '/v1/ledger/entries', 'u-tresor')).json()).toHaveLength(entries.length);
     expect(env.app.ctx.audit.list({ action: 'ledger.tamper.attempt' }).total).toBe(3);
 
-    const rev = await env.req('POST', `/v1/ledger/entries/${target.id}/reversals`, 'u-tresor', { reason: 'Contrepassement prestataire (test)' });
-    expect(rev.statusCode).toBe(201);
-    expect(rev.json()).toMatchObject({ reversalOf: target.id, eventType: 'REVERSAL' });
-    expect(rev.json().lines[0].side).toBe(target.lines[0].side === 'DEBIT' ? 'CREDIT' : 'DEBIT');
-    const twice = await env.req('POST', `/v1/ledger/entries/${target.id}/reversals`, 'u-tresor', { reason: 'Deuxième tentative' });
-    expect(twice.json().code).toBe('ALREADY_REVERSED');
+    // Une seule personne ne contrepasse jamais : sans le circuit de double validation du Trésor, la route refuse.
+    const alone = await env.req('POST', `/v1/ledger/entries/${target.id}/reversals`, 'u-tresor', { reason: 'Contrepassement prestataire (test)' });
+    expect(alone.statusCode).toBe(422);
+    expect(alone.json().code).toBe('FOUR_EYES_REQUIRED');
+    expect(env.app.ctx.ledger.isReversed(target.id)).toBe(false);
+    // Contre-écriture liée à l'original (passée par le circuit à quatre yeux, voir tresor.test.ts).
+    const rev = env.app.ctx.ledger.reverse(target.id, 'Contrepassement prestataire (test)', { kind: 'user', id: 'u-tresor' });
+    expect(rev).toMatchObject({ reversalOf: target.id, eventType: 'REVERSAL' });
+    expect(rev.lines[0]!.side).toBe(target.lines[0].side === 'DEBIT' ? 'CREDIT' : 'DEBIT');
+    expect(() => env.app.ctx.ledger.reverse(target.id, 'Deuxième tentative', { kind: 'user', id: 'u-tresor' })).toThrow(/déjà contrepassée/);
     const balance = (await env.req('GET', '/v1/ledger/balance', 'u-auditeur')).json();
     expect(balance.balanced).toBe(true);
     expect(balance.byCurrency.find((c: { currency: string }) => c.currency === 'USD').debit).toEqual(

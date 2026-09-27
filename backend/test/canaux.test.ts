@@ -6,7 +6,7 @@ import { hmacSha256Hex } from '../src/core/crypto.js';
 import { canauxPlugin } from '../src/plugins/canaux/plugin.js';
 import type { CanauxService } from '../src/plugins/canaux/service.js';
 import { integerToFrenchWords, moneyToFrenchWords } from '../src/plugins/canaux/words.js';
-import { normalizeReference } from '../src/plugins/canaux/points.js';
+import { holderPrincipal, normalizeReference } from '../src/plugins/canaux/points.js';
 import type { TestEnv } from './helpers.js';
 
 const DEMO_CARD = '48217730159'; // préfixe de la carte de démonstration (chiffre de contrôle calculé par le service)
@@ -145,6 +145,25 @@ describe('canaux — USSD et SVI', () => {
     expect(done.text).toContain('Aucun agent ne demande');
     const fromBalance = await ussd(c, '+243810000001', ['1', '1234', '2']);
     expect(fromBalance[3].text).toContain('Choisissez l’obligation');
+  });
+
+  it('identifiant de session aléatoire ; après un paiement partiel, l’écran de confirmation annonce le solde (montant de l’ordre)', async () => {
+    const start = await c.env.req('POST', '/v1/ussd/sessions', undefined, { msisdn: '+243810000001' });
+    const other = await c.env.req('POST', '/v1/ussd/sessions', undefined, { msisdn: '+243810000001' });
+    expect(start.json().sessionId).toMatch(/^USSD-[A-Za-z0-9_-]{22}$/);
+    expect(other.json().sessionId).not.toBe(start.json().sessionId);
+    // Simulation : un acompte de 50 USD déjà confirmé sur l'obligation de 150 USD.
+    const ob = c.env.app.ctx.assessment.byTaxpayer('TP-DEMO-0001').find((o) => o.amount.amount === '150.00')!;
+    c.env.app.ctx.payments.orders.insert({
+      id: 'PO-ACOMPTE', paymentReference: 'PR-ACPT-0000', obligationId: ob.id, taxpayerId: ob.taxpayerId, channel: 'MOBILE_MONEY',
+      amount: { amount: '50.00', currency: 'USD' }, indicativeAmount: null, beneficiaryAlias: 'KIN-DGIPK-RECETTES-01', expiresAt: '2026-09-28T09:00:00.000Z',
+      status: 'CONFIRME', createdBy: 'test', createdAt: '2026-09-26T08:00:00.000Z', ledgerEntryIds: [],
+    });
+    const s = await ussd(c, '+243810000001', ['2', '1234', '1', '1']);
+    expect(s[3].text).toContain('Payer USD 100.00');
+    const ref = /Référence (PR-[0-9A-Z]{4}-[0-9A-Z]{4})/.exec(s[4].text)![1]!;
+    expect(c.env.app.ctx.payments.byReference(ref)!.amount).toEqual({ amount: '100.00', currency: 'USD' });
+    expect(s[4].text).toContain('Montant USD 100.00');
   });
 
   it('verrouille le canal après trois codes erronés et lève une alerte (sans sanction)', async () => {
@@ -373,6 +392,31 @@ describe('canaux — points de paiement agréés (R32)', () => {
     expect(p2.json().receiptNumber).toBe(receipt.receiptNumber);
   });
 
+  it('référence liée à un prestataire connecté : jamais encaissée en espèces ni réutilisée au point, contribuable orienté', async () => {
+    const sit = (await c.env.req('GET', `/v1/payment-points/PA-LIMETE-MM01/cards/${demoCard(c)}`, 'canaux-op-limete')).json();
+    const obligationId = sit.obligations[0].obligationId as string;
+    const ob = c.env.app.ctx.assessment.get(obligationId);
+    const linked = await c.env.app.ctx.payments.createOrderWithProvider(holderPrincipal(ob.taxpayerId, 'TEST'), obligationId, { channel: 'MOBILE_MONEY', provider: 'bitripay' });
+    expect(linked.providerIntentId).toBeDefined();
+    const reuse = await c.env.req('POST', '/v1/payment-points/PA-LIMETE-MM01/card-references', 'canaux-op-limete', { cardNumber: demoCard(c), obligationId }, { 'idempotency-key': randomUUID() });
+    expect(reuse.statusCode).toBe(409);
+    expect(reuse.json()).toMatchObject({ code: 'PROVIDER_LINKED_REFERENCE_ACTIVE', paymentReference: linked.paymentReference });
+    const cash = await collect(c, linked.paymentReference);
+    expect(cash.statusCode).toBe(409);
+    expect(cash.json().code).toBe('REFERENCE_PROVIDER_LINKED');
+    expect(c.env.app.ctx.receipts.receipts.find((r) => r.paymentReference === linked.paymentReference)).toHaveLength(0);
+  });
+
+  it('point ACTIF restauré sans secret de signature (redémarrage) : habilitation rétablie ; point suspendu jamais', async () => {
+    const pts = c.svc.points.points.all();
+    const active = pts.find((p) => p.status === 'ACTIF')!;
+    const suspended = pts.find((p) => p.status === 'SUSPENDU')!;
+    for (const p of [active, suspended]) delete c.env.app.ctx.secrets.providerSecrets[p.providerId];
+    const sup = (await c.env.req('GET', '/v1/payment-points', 'u-tresor')).json();
+    expect(sup.points.find((p: { id: string }) => p.id === active.id).habilitated).toBe(true);
+    expect(sup.points.find((p: { id: string }) => p.id === suspended.id).habilitated).toBe(false);
+  });
+
   it('refuse l’encaissement par un agent public, par l’opérateur d’un autre point, et par un point suspendu', async () => {
     const ref = await cardReference(c);
     const agent = await collect(c, ref.paymentReference, 'PA-LIMETE-MM01', 'u-agent-terrain');
@@ -391,20 +435,33 @@ describe('canaux — points de paiement agréés (R32)', () => {
 
   it('vérification par code court (minimale) et limitation anti-énumération', async () => {
     const code = c.svc.points.collections.all()[0]!.shortCode;
-    const ok = await c.env.req('GET', `/v1/public/short-codes/${code}`, undefined, undefined, { 'x-forwarded-for': '10.0.0.1' });
+    // Source = adresse réseau vue par le serveur ; l'en-tête X-Forwarded-For du client est ignoré.
+    const from = (ip: string, path: string, headers: Record<string, string> = {}) => c.env.app.inject({ method: 'GET', url: path, remoteAddress: ip, headers });
+    const ok = await from('10.0.0.1', `/v1/public/short-codes/${code}`);
     expect(ok.statusCode).toBe(200);
     expect(ok.json().status).toBe('EN ATTENTE');
     expect(JSON.stringify(ok.json())).not.toMatch(/Nsimba|Kiese/);
-    const hdr = { 'x-forwarded-for': '10.0.0.66' };
-    for (const bad of ['AAAAAA', 'ZZZZZZ', '123456', 'QWERTY', 'BCDEFG']) {
-      expect((await c.env.req('GET', `/v1/public/short-codes/${bad}`, undefined, undefined, hdr)).statusCode).toBe(200);
+    for (const [i, bad] of ['AAAAAA', 'ZZZZZZ', '123456', 'QWERTY', 'BCDEFG'].entries()) {
+      // Changer d'X-Forwarded-For à chaque essai ne crée pas une nouvelle source.
+      expect((await from('10.0.0.66', `/v1/public/short-codes/${bad}`, { 'x-forwarded-for': `192.0.2.${i}` })).statusCode).toBe(200);
     }
-    const blocked = await c.env.req('GET', `/v1/public/short-codes/${code}`, undefined, undefined, hdr);
+    const blocked = await from('10.0.0.66', `/v1/public/short-codes/${code}`, { 'x-forwarded-for': '192.0.2.99' });
     expect(blocked.statusCode).toBe(429);
     expect(blocked.json().code).toBe('TOO_MANY_VERIFICATIONS');
     expect(c.env.app.ctx.alerts.alerts.find((a) => a.type === 'SHORT_CODE_ENUMERATION_SUSPECTED').length).toBe(1);
     // Une autre source n'est pas pénalisée.
-    expect((await c.env.req('GET', `/v1/public/short-codes/${code}`, undefined, undefined, { 'x-forwarded-for': '10.0.0.2' })).statusCode).toBe(200);
+    expect((await from('10.0.0.2', `/v1/public/short-codes/${code}`)).statusCode).toBe(200);
+    // La garde des quittances (receipts.admit) s'applique aussi à cette route, comme à /v1/public/receipts/:code.
+    const limits = c.env.app.ctx.receipts.gate.limits;
+    const previous = limits.maxPerWindow;
+    limits.maxPerWindow = 0;
+    try {
+      const gated = await from('10.0.0.3', `/v1/public/short-codes/${code}`);
+      expect(gated.statusCode).toBe(429);
+      expect(gated.json().code).toBe('VERIFICATION_RATE_LIMITED');
+    } finally {
+      limits.maxPerWindow = previous;
+    }
   });
 
   it('clôture de caisse, versement bancaire au compte public, rapprochement ; écart ⇒ exception et proposition, suspension décidée par le Trésor', async () => {

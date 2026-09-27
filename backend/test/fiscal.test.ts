@@ -310,6 +310,22 @@ describe('Fiscal — exonérations et remises', () => {
     expect(() => env.svc.exemptions.legalVisa({ ...guichet, roles: ['R14'] }, id2, { decision: 'FAVORABLE', reason: 'Visa test' })).toThrow(/distincte/);
   });
 
+  it('remise sur une obligation devenue non payable : décision refusée et JAMAIS enregistrée comme approuvée', async () => {
+    const env = await setupFiscal();
+    const obA = env.app.ctx.assessment.byTaxpayer('TP-FISC-DEMO-01')[0]!;
+    const id = (await env.req('POST', '/v1/fiscal/exemptions', 'u-guichet', {
+      kind: 'REMISE', obligationId: obA.id, amount: { amount: '50.00', currency: 'USD' }, grounds: 'Sinistre (exemple fictif).',
+      proofs: [{ type: 'PV', reference: 'PV-2' }], validFrom: '2026-09-26', legalBasis: { instrumentId: 'demo-instrument-001', article: 'Art. 5 (fictif)' },
+    })).json().id;
+    await env.req('POST', `/v1/fiscal/exemptions/${id}/instruction`, 'u-guichet', { decision: 'FAVORABLE', reason: 'Conforme' });
+    await env.req('POST', `/v1/fiscal/exemptions/${id}/legal-visa`, 'u-juriste-verificateur', { decision: 'FAVORABLE', reason: 'Conforme' });
+    env.app.ctx.assessment.setStatus(obA.id, 'SOLDEE');
+    const d = await env.req('POST', `/v1/fiscal/exemptions/${id}/decision`, 'u-fiscal-directeur', { decision: 'APPROUVEE', reason: 'Sinistre constaté' });
+    expect(d.json().code).toBe('OBLIGATION_NOT_REMITTABLE');
+    expect(env.svc.exemptions.get(id).status).toBe('VISA_JURIDIQUE');
+    expect(env.app.ctx.assessment.get(obA.id).supersededBy).toBeUndefined();
+  });
+
   it('remise : double validation puis obligation rectifiée par contre-écriture ; exonération appliquée à la liquidation du seed', async () => {
     const env = await setupFiscal();
     // Seed : contribuable B exonéré à 50 % ⇒ 75,00 au lieu de 150,00, avec base légale dans l'explication.

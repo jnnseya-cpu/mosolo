@@ -22,7 +22,7 @@ import { ObjectService } from './modules/objects/service.js';
 import type { ConnectorRuntime } from './modules/payments/connectors/koda.js';
 import { buildConnectorRegistry } from './modules/payments/connectors/registry.js';
 import { PaymentService } from './modules/payments/service.js';
-import { ReceiptService } from './modules/receipts/service.js';
+import { loadReceiptSigningKey, ReceiptService } from './modules/receipts/service.js';
 import { RuleService } from './modules/rules/service.js';
 import { LedgerService } from './modules/treasury/ledger.js';
 import { TreasuryService } from './modules/treasury/service.js';
@@ -45,6 +45,7 @@ export interface Secrets {
 
 /** Secrets de DÉMONSTRATION (surchargeables par variables d'environnement). */
 export function defaultSecrets(env: NodeJS.ProcessEnv = process.env): Secrets {
+  const receiptKey = loadReceiptSigningKey(env.MOSOLO_RECEIPT_SIGNING_KEY);
   return {
     auditHmacKey: env.MOSOLO_AUDIT_HMAC_KEY ?? randomSecret(),
     providerSecrets: {
@@ -58,6 +59,8 @@ export function defaultSecrets(env: NodeJS.ProcessEnv = process.env): Secrets {
       'dev-terrain-002': 'demo-device-key-002',
       'dev-terrain-perdu': 'demo-device-key-perdu',
     },
+    // Clé de signature des quittances stable entre redémarrages (MOSOLO_RECEIPT_SIGNING_KEY, PEM ou base64 PKCS#8).
+    ...(receiptKey ? { receiptSigningKey: receiptKey } : {}),
   };
 }
 

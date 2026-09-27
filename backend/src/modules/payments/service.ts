@@ -4,7 +4,7 @@
  */
 import { Money, PRIMARY_CURRENCY, UNATTRIBUTED_COMMUNE, canTransition, type CurrencyCode, type MoneyJSON, type PaymentStatus, type TerritorialAttribution } from '@mosolo/shared';
 import { z } from 'zod';
-import type { AuditLog } from '../../core/audit.js';
+import type { AuditActor, AuditLog } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { HOUR_MS, type Clock } from '../../core/clock.js';
 import { checkChar, hmacSha256Hex, randomCode, safeEqualHex, sha256Hex } from '../../core/crypto.js';
@@ -63,7 +63,35 @@ export interface PaymentOrder {
   installmentPlanId?: string;
   /** Copie du rattachement territorial de l'obligation (§ 20.3) : la recette compte pour cette commune. */
   attribution?: TerritorialAttribution;
+  /** Motif de fermeture d'une référence non payée (ECHOUE) : expiration, obligation rectifiée ou non payable. */
+  closedReason?: OrderClosedReason;
+  closedAt?: string;
 }
+
+/** Fermeture d'une référence INITIE sans paiement : état terminal ECHOUE de la table partagée, motif explicite. */
+export type OrderClosedReason = 'REFERENCE_EXPIREE' | 'OBLIGATION_REMPLACEE' | 'OBLIGATION_NON_PAYABLE' | 'ECHEC_PRESTATAIRE';
+
+/**
+ * Paiement reçu mais NON AFFECTÉ (doublon, référence expirée ou fermée, obligation déjà couverte, rectifiée ou
+ * non payable) : aucune quittance ; fonds portés au compte d'attente et exception de rapprochement ouverte pour
+ * remboursement vers l'instrument d'origine. Le paiement légitime n'est jamais touché.
+ */
+export interface UnappliedPayment {
+  id: string;
+  reason: 'DOUBLON' | 'OBLIGATION_SOLDEE' | OrderClosedReason;
+  provider: string;
+  providerTxnId: string;
+  paymentReference: string;
+  paymentOrderId: string;
+  obligationId: string;
+  taxpayerId: string;
+  beneficiaryAlias: string;
+  amount: MoneyJSON;
+  ledgerEntryId: string;
+  receivedAt: string;
+}
+
+const CONFIRMED_LIKE: PaymentStatus[] = ['CONFIRME', 'REGLE', 'RAPPROCHE'];
 
 /** Recettes réelles par commune du fait générateur (agrégats seulement, par devise, niveaux jamais additionnés). */
 export interface CommuneRevenue {
@@ -81,14 +109,17 @@ export interface ProviderConfirmation {
   provider: string;
   providerTxnId: string;
   paymentReference: string;
-  outcome: 'CONFIRME' | 'ECHOUE' | 'DOUBLON';
+  outcome: CallbackResponse['status'];
   receivedAt: string;
   response: CallbackResponse;
 }
 
 export interface CallbackResponse {
-  status: 'CONFIRME' | 'ECHOUE' | 'DOUBLON';
+  /** NON_AFFECTE : paiement reçu mais non imputable (référence expirée, obligation couverte ou rectifiée) ⇒ remboursement. */
+  status: 'CONFIRME' | 'ECHOUE' | 'DOUBLON' | 'NON_AFFECTE';
   paymentReference: string;
+  /** Motif d'un paiement non affecté (voir UnappliedPayment). */
+  reason?: UnappliedPayment['reason'];
   receiptNumber?: string;
   receiptCode?: string;
   receiptStatus?: string;
@@ -238,6 +269,8 @@ export class PaymentService {
   readonly providerHolds = new InMemoryAppendOnlyRepository<ProviderHold>();
   readonly providerResolutions = new InMemoryAppendOnlyRepository<ProviderResolutionRecord>();
   readonly verificationEvidence = new InMemoryAppendOnlyRepository<VerificationEvidenceRecord>();
+  readonly unappliedPayments = new InMemoryAppendOnlyRepository<UnappliedPayment>();
+  private readonly unappliedListeners: ((u: UnappliedPayment) => void)[] = [];
   private readonly nonces = new Set<string>();
   /** Obligations dont une intention prestataire est en cours de création (verrou anti-concurrence). */
   private readonly pendingIntents = new Set<string>();
@@ -256,7 +289,10 @@ export class PaymentService {
     private readonly ledger: LedgerService,
     private readonly providerSecrets: Record<string, string>,
     readonly connectors: ConnectorRegistry,
-  ) {}
+  ) {
+    // La liquidation connaît le cumul payé (rectification, décision sur réclamation) sans dépendre de ce module.
+    assessment.setPaymentHooks({ paidOn: (id) => this.paidOn(id), onSuperseded: (from, to) => this.onSuperseded(from, to) });
+  }
 
   private newReference(): string {
     for (;;) {
@@ -285,12 +321,35 @@ export class PaymentService {
     this.installmentResolver = fn;
   }
 
-  /** Montant déjà payé (confirmé, réglé ou rapproché) sur une obligation, par devise de l'obligation. */
+  /**
+   * Montant déjà payé (confirmé, réglé ou rapproché) sur une obligation, par devise de l'obligation. Les paiements
+   * reçus sur les obligations qu'elle remplace (rectification, remise) sont repris : un paiement n'est jamais perdu.
+   */
   paidOn(obligationId: string): Money {
     const ob = this.assessment.get(obligationId);
+    const lineage = new Set<string>([ob.id]);
+    for (let cur = ob; cur.supersedes && !lineage.has(cur.supersedes); ) {
+      lineage.add(cur.supersedes);
+      cur = this.assessment.get(cur.supersedes);
+    }
     return this.orders
-      .find((o) => o.obligationId === obligationId && ['CONFIRME', 'REGLE', 'RAPPROCHE'].includes(o.status))
+      .find((o) => lineage.has(o.obligationId) && CONFIRMED_LIKE.includes(o.status))
       .reduce((m, o) => m.add(Money.fromJSON(o.amount)), Money.zero(ob.amount.currency));
+  }
+
+  /** Obligation en vigueur d'une chaîne de rectifications (la dernière émise). */
+  currentObligationId(obligationId: string): string {
+    const seen = new Set<string>();
+    let cur = this.assessment.get(obligationId);
+    while (cur.supersededBy && !seen.has(cur.id)) {
+      seen.add(cur.id);
+      cur = this.assessment.get(cur.supersededBy);
+    }
+    return cur.id;
+  }
+
+  private isActive(o: PaymentOrder, now: Date): boolean {
+    return o.status === 'INITIE' && new Date(o.expiresAt) > now;
   }
 
   private prepareOrder(user: User, obligationId: string, input: { channel: PaymentChannel; displayCurrency?: CurrencyCode; installmentPlanId?: string }) {
@@ -299,21 +358,25 @@ export class PaymentService {
     if (!PAYABLE_STATUSES.includes(obligation.status)) {
       throw unprocessable('OBLIGATION_NOT_PAYABLE', `Obligation au statut ${obligation.status} : paiement impossible.`);
     }
+    // Une intention prestataire est en cours de création : aucune autre référence tant qu'elle n'est pas tranchée.
+    if (this.pendingIntents.has(obligationId)) {
+      throw conflict('PAYMENT_INITIATION_IN_PROGRESS', 'Une initiation de paiement est déjà en cours pour cette obligation.');
+    }
     const now = this.clock.now();
-    let amount: MoneyJSON = obligation.amount;
+    // « Déjà payé » = solde restant nul, jamais la simple existence d'un paiement confirmé : un solde partiel reste payable.
+    const remaining = Money.fromJSON(obligation.amount).subtract(this.paidOn(obligationId));
+    if (remaining.isZero() || remaining.isNegative()) {
+      throw unprocessable('OBLIGATION_ALREADY_PAID', 'Cette obligation est déjà entièrement couverte par des paiements confirmés.');
+    }
+    let amount: MoneyJSON = remaining.toJSON();
     if (input.installmentPlanId) {
       if (!this.installmentResolver) throw unprocessable('INSTALLMENT_PLANS_UNAVAILABLE', 'Aucun échéancier ne peut être payé : module de recouvrement non chargé.');
       amount = this.installmentResolver(obligationId, input.installmentPlanId);
+      if (Money.fromJSON(amount).compare(remaining) > 0) amount = remaining.toJSON();
     }
-    const remaining = Money.fromJSON(obligation.amount).subtract(this.paidOn(obligationId));
-    if (Money.fromJSON(amount).compare(remaining) > 0) amount = remaining.toJSON();
-    for (const o of this.orders.find((x) => x.obligationId === obligationId)) {
-      if (['CONFIRME', 'REGLE', 'RAPPROCHE'].includes(o.status) && !(input.installmentPlanId && !remaining.isZero() && !remaining.isNegative())) {
-        throw unprocessable('OBLIGATION_ALREADY_PAID', `Un paiement confirmé existe déjà (${o.paymentReference}).`);
-      }
-      if (o.status === 'INITIE' && new Date(o.expiresAt) > now) {
-        throw conflict('ACTIVE_PAYMENT_REFERENCE_EXISTS', `Une référence active existe déjà pour cette obligation.`, { paymentReference: o.paymentReference });
-      }
+    const active = this.orders.findOne((x) => x.obligationId === obligationId && this.isActive(x, now));
+    if (active) {
+      throw conflict('ACTIVE_PAYMENT_REFERENCE_EXISTS', `Une référence active existe déjà pour cette obligation.`, { paymentReference: active.paymentReference });
     }
     const beneficiaryAlias = this.vault.resolveAlias(obligation.beneficiaryAccountAlias);
     const draft: PaymentOrder = {
@@ -338,6 +401,17 @@ export class PaymentService {
   }
 
   private commitOrder(user: User, draft: PaymentOrder, entity: string): PaymentOrder {
+    const now = this.clock.now();
+    // Nouvelle vérification APRÈS l'éventuel appel au prestataire : jamais deux références actives.
+    const active = this.orders.findOne((x) => x.obligationId === draft.obligationId && this.isActive(x, now));
+    if (active) {
+      if (draft.provider && draft.providerIntentId) this.cancelProviderIntent(draft.provider, draft.providerIntentId, draft.id, 'ACTIVE_PAYMENT_REFERENCE_EXISTS');
+      throw conflict('ACTIVE_PAYMENT_REFERENCE_EXISTS', `Une référence active existe déjà pour cette obligation.`, { paymentReference: active.paymentReference });
+    }
+    // Les références expirées de l'obligation sont fermées (ECHOUE, motif) : un paiement tardif n'y sera jamais imputé.
+    for (const o of this.orders.find((x) => x.obligationId === draft.obligationId && x.status === 'INITIE')) {
+      this.closeOrder(o, 'REFERENCE_EXPIREE', { kind: 'user', id: user.id, roles: user.roles });
+    }
     const order = this.orders.insert({ ...draft, id: draft.id || this.ids.next('PO') });
     this.audit.append({
       actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'payment.reference.issued', resourceType: 'payment_order', resourceId: order.id,
@@ -382,9 +456,6 @@ export class PaymentService {
         `Le compte de règlement de ${connector.label} (${connector.settlementAccountAlias}) n'est pas le compte bénéficiaire de l'obligation (${draft.beneficiaryAlias}).`,
       );
     }
-    if (this.pendingIntents.has(obligationId)) {
-      throw conflict('PAYMENT_INITIATION_IN_PROGRESS', 'Une initiation de paiement est déjà en cours pour cette obligation.');
-    }
     this.pendingIntents.add(obligationId);
     const id = this.ids.next('PO');
     try {
@@ -414,6 +485,83 @@ export class PaymentService {
   private transition(o: PaymentOrder, to: PaymentStatus, extra: Partial<PaymentOrder> = {}): PaymentOrder {
     if (!canTransition(o.status, to)) throw conflict('INVALID_PAYMENT_TRANSITION', `Transition ${o.status} → ${to} interdite.`);
     return this.orders.update({ ...o, ...extra, status: to });
+  }
+
+  /** Ferme une référence non payée (INITIE → ECHOUE, motif daté) et annule l'intention prestataire liée. */
+  private closeOrder(o: PaymentOrder, reason: OrderClosedReason, actor: AuditActor): PaymentOrder {
+    const closed = this.transition(o, 'ECHOUE', { closedReason: reason, closedAt: this.clock.now().toISOString() });
+    this.audit.append({
+      actor, action: 'payment.reference.closed', resourceType: 'payment_order', resourceId: o.id,
+      details: { paymentReference: o.paymentReference, reason, expiresAt: o.expiresAt, providerIntentId: o.providerIntentId ?? null },
+    });
+    // Une intention déclarée échouée par le prestataire lui-même n'a pas à être annulée.
+    if (o.provider && o.providerIntentId && reason !== 'ECHEC_PRESTATAIRE') this.cancelProviderIntent(o.provider, o.providerIntentId, o.id, reason);
+    return closed;
+  }
+
+  /** Annulation de l'intention chez le prestataire (sans attente) : un échec est journalisé, jamais bloquant. */
+  private cancelProviderIntent(provider: string, providerIntentId: string, orderId: string, reason: string): void {
+    const connector = this.connectors.get(provider);
+    if (!connector) return;
+    const actor = { kind: 'system' as const, id: 'paiements' };
+    void connector.cancelIntent(providerIntentId, `cancel-${orderId}`).then(
+      () => this.audit.append({ actor, action: 'payment.provider_intent.cancelled', resourceType: 'payment_order', resourceId: orderId, details: { provider, providerIntentId, reason } }),
+      (e: unknown) => this.audit.append({
+        actor, action: 'payment.provider_intent.cancel_failed', resourceType: 'payment_order', resourceId: orderId, outcome: 'FAILURE',
+        details: { provider, providerIntentId, reason, error: e instanceof ApiError ? e.code : e instanceof Error ? e.name : 'erreur' },
+      }),
+    );
+  }
+
+  /** Rectification d'une obligation : ses références non payées sont fermées (le solde se paie sur la nouvelle). */
+  private onSuperseded(originalId: string, rectifiedId: string): void {
+    const actor = { kind: 'system' as const, id: 'paiements' };
+    for (const o of this.orders.find((x) => x.obligationId === originalId && x.status === 'INITIE')) this.closeOrder(o, 'OBLIGATION_REMPLACEE', actor);
+    const rectified = this.assessment.get(rectifiedId);
+    const paid = this.paidOn(rectifiedId);
+    if (paid.compare(Money.fromJSON(rectified.amount)) > 0) {
+      this.alerts.raise({
+        type: 'OVERPAYMENT_AFTER_RECTIFICATION', severity: 'HIGH', source: 'paiements',
+        detail: `Obligation ${rectifiedId} rectifiée à ${rectified.amount.amount} ${rectified.amount.currency} alors que ${paid.toDecimalString()} ${paid.currency} sont déjà payés : trop-perçu à rembourser.`,
+        context: { originalId, rectifiedId, paid: paid.toJSON(), amount: rectified.amount },
+      });
+    }
+  }
+
+  /** Abonnement aux paiements non affectés (module Trésor : suspens, puis remboursement à quatre yeux). */
+  onUnapplied(fn: (u: UnappliedPayment) => void): void {
+    this.unappliedListeners.push(fn);
+  }
+
+  /**
+   * Paiement reçu mais non imputable : jamais de quittance ni d'effet sur l'ordre légitime. Écriture « fonds à recevoir
+   * du prestataire » ↔ compte d'attente, exception de rapprochement (calculée par la trésorerie), alerte et avis.
+   */
+  private recordUnapplied(provider: string, n: NormalizedConfirmation, order: PaymentOrder, reason: UnappliedPayment['reason'], entity: string): UnappliedPayment {
+    const id = this.ids.next('NAFF');
+    const entry = this.ledger.postPair({
+      eventType: 'PAYMENT_UNAPPLIED', description: `Paiement ${provider} ${n.providerTxnId} non affecté (${reason}) sur ${order.paymentReference} : à rembourser`,
+      sourceType: 'unapplied_payment', sourceId: id, debit: 'FONDS_A_RECEVOIR_PRESTATAIRES', credit: 'COMPTE_ATTENTE', amount: order.amount,
+    });
+    const u = this.unappliedPayments.append({
+      id, reason, provider, providerTxnId: n.providerTxnId, paymentReference: order.paymentReference, paymentOrderId: order.id,
+      obligationId: order.obligationId, taxpayerId: order.taxpayerId, beneficiaryAlias: order.beneficiaryAlias, amount: order.amount,
+      ledgerEntryId: entry.id, receivedAt: this.clock.now().toISOString(),
+    });
+    const actor = { kind: 'provider' as const, id: provider };
+    this.audit.append({
+      actor, action: reason === 'DOUBLON' ? 'payment.duplicate_detected' : 'payment.unapplied', resourceType: 'payment_order', resourceId: order.id, outcome: 'FAILURE',
+      details: { providerTxnId: n.providerTxnId, currentStatus: order.status, reason, unappliedId: id, ledgerEntryId: entry.id },
+    });
+    this.alerts.raise({
+      type: reason === 'DOUBLON' ? 'PAYMENT_DUPLICATE' : 'PAYMENT_UNAPPLIED', severity: 'HIGH', source: `prestataire:${provider}`, actor,
+      detail: `Paiement ${n.providerTxnId} sur ${order.paymentReference} non affecté (${reason}) : fonds en compte d'attente, remboursement à instruire.`,
+      context: { unappliedId: id, paymentReference: order.paymentReference, providerTxnId: n.providerTxnId, reason },
+    });
+    const tp = this.taxpayers.get(order.taxpayerId);
+    this.comms.publish(reason === 'DOUBLON' ? 'payment.duplicate_detected' : 'refund.requested', [taxpayerRecipient(tp)], { reference: order.paymentReference }, { entity });
+    for (const fn of this.unappliedListeners) fn(u);
+    return u;
   }
 
   private reject(provider: string, status: number, code: string, detail: string, context: Record<string, unknown>): never {
@@ -509,18 +657,44 @@ export class PaymentService {
     const tp = this.taxpayers.get(order.taxpayerId);
     const obligation = this.assessment.get(order.obligationId);
 
+    const now = this.clock.now();
+    const expired = new Date(order.expiresAt) <= now;
     if (n.status === 'FAILED') {
-      if (order.status === 'INITIE') this.transition(order, 'ECHOUE');
-      this.audit.append({ actor, action: 'payment.failed', resourceType: 'payment_order', resourceId: order.id, details: { providerTxnId: n.providerTxnId } });
+      // Rappel générique : une tentative échouée n'est pas terminale tant que la référence est valable (le payeur peut
+      // réessayer, un succès ultérieur avec une nouvelle transaction sera confirmé) — comme les tentatives BitriPay.
+      // Un échec annoncé par un connecteur pour SON intention est terminal (l'intention est morte chez le prestataire).
+      let terminal = false;
+      if (order.status === 'INITIE' && (expired || order.providerIntentId)) {
+        this.closeOrder(order, expired ? 'REFERENCE_EXPIREE' : 'ECHEC_PRESTATAIRE', actor);
+        terminal = true;
+      }
+      this.audit.append({ actor, action: terminal ? 'payment.failed' : 'payment.attempt_failed', resourceType: 'payment_order', resourceId: order.id, details: { providerTxnId: n.providerTxnId, terminal } });
       this.comms.publish('payment.failed', [taxpayerRecipient(tp)], { reference: order.paymentReference }, { entity: obligation.entity });
       return record('ECHOUE', { status: 'ECHOUE', paymentReference: order.paymentReference });
     }
 
     if (order.status !== 'INITIE') {
-      // Deuxième paiement pour une même référence : DOUBLON, traité par règle (remboursement), jamais de 2e quittance.
-      this.audit.append({ actor, action: 'payment.duplicate_detected', resourceType: 'payment_order', resourceId: order.id, outcome: 'FAILURE', details: { providerTxnId: n.providerTxnId, currentStatus: order.status } });
-      this.comms.publish('payment.duplicate_detected', [taxpayerRecipient(tp)], { reference: order.paymentReference }, { entity: obligation.entity });
-      return record('DOUBLON', { status: 'DOUBLON', paymentReference: order.paymentReference });
+      // Deuxième paiement pour une même référence (DOUBLON) ou paiement sur une référence fermée : jamais de 2e
+      // quittance ; fonds en compte d'attente et exception pour remboursement, sans toucher au paiement légitime.
+      const reason: UnappliedPayment['reason'] = order.status === 'ECHOUE' ? (order.closedReason ?? 'REFERENCE_EXPIREE') : 'DOUBLON';
+      this.recordUnapplied(provider, n, order, reason, obligation.entity);
+      const status = reason === 'DOUBLON' ? 'DOUBLON' : 'NON_AFFECTE';
+      return record(status, { status, paymentReference: order.paymentReference, reason });
+    }
+
+    // Référence expirée (paiement achevé après l'échéance), obligation rectifiée, non payable ou déjà couverte :
+    // aucune confirmation ; la référence est fermée et le paiement part en remboursement.
+    const completedAt = new Date(n.completedAt);
+    const late = Number.isNaN(completedAt.getTime()) ? expired : completedAt > new Date(order.expiresAt);
+    const reason: UnappliedPayment['reason'] | undefined =
+      obligation.supersededBy ? 'OBLIGATION_REMPLACEE'
+        : obligation.status === 'ANNULEE' || obligation.status === 'ADMISE_EN_NON_VALEUR' ? 'OBLIGATION_NON_PAYABLE'
+          : this.paidOn(obligation.id).compare(Money.fromJSON(obligation.amount)) >= 0 ? 'OBLIGATION_SOLDEE'
+            : late ? 'REFERENCE_EXPIREE' : undefined;
+    if (reason) {
+      this.closeOrder(order, reason === 'OBLIGATION_SOLDEE' ? 'OBLIGATION_NON_PAYABLE' : reason, actor);
+      this.recordUnapplied(provider, n, this.orders.get(order.id)!, reason, obligation.entity);
+      return record('NON_AFFECTE', { status: 'NON_AFFECTE', paymentReference: order.paymentReference, reason });
     }
 
     const payerAmount = n.payerAmount && n.payerAmount.currency !== order.amount.currency ? Money.fromJSON(n.payerAmount as MoneyJSON).toJSON() : undefined;

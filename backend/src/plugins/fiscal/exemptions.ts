@@ -191,16 +191,21 @@ export class ExemptionService {
     if (x.validFrom < today && !input.retroactivity) {
       throw unprocessable('RETROACTIVITY_REQUIRES_DECISION', `Date d’effet ${x.validFrom} antérieure à la décision : une décision expresse de rétroactivité (référence et motif) est requise.`);
     }
-    let approved = this.exemptions.update({ ...x, status: 'APPROUVEE', steps: [...x.steps, s], ...(input.retroactivity ? { retroactivity: input.retroactivity } : {}) });
+    // Remise : l'obligation doit être encore payable et la rectification réussir AVANT que la décision soit enregistrée
+    // (jamais une remise « APPROUVEE » sans obligation rectifiée).
+    let rectifiedObligationId: string | undefined;
     if (x.kind === 'REMISE' && x.obligationId && x.amount) {
       const ob = this.d.ctx.assessment.get(x.obligationId);
-      if (!PAYABLE_STATUSES.includes(ob.status)) throw unprocessable('OBLIGATION_NOT_REMITTABLE', `Obligation au statut ${ob.status} : remise impossible.`);
+      if (!PAYABLE_STATUSES.includes(ob.status) || ob.supersededBy) throw unprocessable('OBLIGATION_NOT_REMITTABLE', `Obligation au statut ${ob.status} : remise impossible.`);
       const remaining = Money.fromJSON(ob.amount).subtract(Money.fromJSON(x.amount));
-      const rectified = this.d.ctx.assessment.rectify(ob.id, (remaining.isNegative() ? Money.zero(remaining.currency) : remaining).toJSON(), {
+      rectifiedObligationId = this.d.ctx.assessment.rectify(ob.id, (remaining.isNegative() ? Money.zero(remaining.currency) : remaining).toJSON(), {
         appealId: x.id, reason: `Remise ${x.id} — ${x.legalBasis.title}, ${x.legalBasis.article}`, decidedBy: user, decisionType: 'REMISE',
-      });
-      approved = this.exemptions.update({ ...approved, rectifiedObligationId: rectified.id });
+      }).id;
     }
+    const approved = this.exemptions.update({
+      ...x, status: 'APPROUVEE', steps: [...x.steps, s], ...(input.retroactivity ? { retroactivity: input.retroactivity } : {}),
+      ...(rectifiedObligationId ? { rectifiedObligationId } : {}),
+    });
     this.d.ctx.audit.append({
       actor: actorOf(user), action: 'exemption.granted', resourceType: 'exemption', resourceId: id,
       details: { kind: x.kind, legalBasis: x.legalBasis.instrumentId, article: x.legalBasis.article, validFrom: x.validFrom, validTo: x.validTo ?? null, approvers: this.participants(approved), retroactive: !!input.retroactivity },

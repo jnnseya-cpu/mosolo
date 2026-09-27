@@ -110,6 +110,14 @@ export class PaymentPointService {
   private revokeHabilitation(p: PaymentPoint): void {
     delete this.ctx.secrets.providerSecrets[p.providerId];
   }
+  /**
+   * Habilitation d'un point ACTIF restauré depuis la persistance : le secret (dérivé, jamais stocké) est rétabli.
+   * Un point non actif n'en reçoit jamais.
+   */
+  private ensureHabilitated(p: PaymentPoint): string | undefined {
+    if (p.status === 'ACTIF' && this.ctx.secrets.providerSecrets[p.providerId] === undefined) this.habilitate(p);
+    return this.ctx.secrets.providerSecrets[p.providerId];
+  }
 
   // ---------- Registre (Trésor) ----------
 
@@ -219,7 +227,7 @@ export class PaymentPointService {
         collectionsToday: this.collections.find((c) => c.pointId === p.id && c.cashDay === today).length,
         openExceptions: this.exceptions.find((e) => e.pointId === p.id).length,
         pendingProposals: this.proposals.find((x) => x.pointId === p.id && x.status === 'PROPOSEE').length,
-        habilitated: this.ctx.secrets.providerSecrets[p.providerId] !== undefined,
+        habilitated: this.ensureHabilitated(p) !== undefined,
       })),
       proposals: this.proposals.all().sort((a, b) => b.proposedAt.localeCompare(a.proposedAt)),
       exceptions: this.exceptions.all().sort((a, b) => b.openedAt.localeCompare(a.openedAt)),
@@ -258,6 +266,11 @@ export class PaymentPointService {
     if (!order) throw notFound('PAYMENT_REFERENCE_NOT_FOUND', `Référence inconnue : ${ref}`);
     if (order.status !== 'INITIE') throw conflict('REFERENCE_NOT_PAYABLE', `Référence au statut ${order.status} : aucun encaissement possible.`, { status: order.status });
     if (new Date(order.expiresAt) <= this.clock()) throw unprocessable('PAYMENT_REFERENCE_EXPIRED', 'Référence expirée : faites générer une nouvelle référence.');
+    // Une référence liée à une intention d'un prestataire connecté ne se paie que chez lui : le point ne peut pas
+    // la confirmer (la confirmation serait refusée après encaissement des espèces).
+    if (order.providerIntentId) {
+      throw conflict('REFERENCE_PROVIDER_LINKED', `Référence liée au prestataire ${order.provider ?? ''} : elle se paie uniquement chez lui, pas en espèces au point.`, { provider: order.provider ?? null });
+    }
     return order;
   }
 
@@ -286,13 +299,16 @@ export class PaymentPointService {
 
   payableObligations(taxpayerId: string) {
     const now = this.clock();
+    // Payable = solde restant positif (un paiement partiel laisse le solde payable) ; montant affiché = montant de
+    // l'ordre à payer : celui de la référence active, sinon le solde restant.
     return this.ctx.assessment.byTaxpayer(taxpayerId)
       .filter((o) => PAYABLE_STATUSES.includes(o.status))
-      .filter((o) => !this.ctx.payments.byObligation(o.id).some((x) => ['CONFIRME', 'REGLE', 'RAPPROCHE'].includes(x.status)))
-      .map((o) => {
+      .map((o) => ({ o, remaining: Money.fromJSON(o.amount).subtract(this.ctx.payments.paidOn(o.id)) }))
+      .filter(({ remaining }) => !remaining.isZero() && !remaining.isNegative())
+      .map(({ o, remaining }) => {
         const active = this.ctx.payments.byObligation(o.id).find((x) => x.status === 'INITIE' && new Date(x.expiresAt) > now);
         return {
-          obligationId: o.id, revenue: o.ruleCode, label: o.label, amount: o.amount, dueDate: o.dueDate, entity: o.entity,
+          obligationId: o.id, revenue: o.ruleCode, label: o.label, amount: active?.amount ?? remaining.toJSON(), obligationAmount: o.amount, dueDate: o.dueDate, entity: o.entity,
           activeReference: active?.paymentReference ?? null, activeReferenceCreatedAt: active?.createdAt ?? null, activeReferenceExpiresAt: active?.expiresAt ?? null,
         };
       });
@@ -349,7 +365,7 @@ export class PaymentPointService {
     const dayTotal = this.collections.find((c) => c.pointId === p.id && c.cashDay === day && c.amount.currency === order.amount.currency)
       .reduce((acc, c) => acc.add(Money.fromJSON(c.amount)), Money.zero(order.amount.currency as CurrencyCode));
     if (dayTotal.add(amount).compare(perDay) > 0) throw unprocessable('POINT_DAILY_LIMIT_EXCEEDED', `Plafond journalier du point atteint (${perDay.toDecimalString()} ${order.amount.currency}).`);
-    const secret = this.ctx.secrets.providerSecrets[p.providerId];
+    const secret = this.ensureHabilitated(p);
     if (!secret) throw forbidden('POINT_NOT_HABILITATED', "Point sans habilitation de signature active : aucune preuve valable ne peut être émise.");
 
     // Confirmation serveur à serveur signée (HMAC du corps brut, nonce unique, horodatage) — circuit commun.
@@ -573,6 +589,15 @@ export function issueOrReuseReference(ctx: AppContext, taxpayerId: string, oblig
     if (e instanceof ApiError && e.code === 'ACTIVE_PAYMENT_REFERENCE_EXISTS') {
       const ref = String(e.extensions.paymentReference ?? '');
       const existing = ctx.payments.byReference(ref);
+      // Une référence liée à un prestataire connecté (BitriPay, KODA) ne se paie que chez lui : jamais réutilisée
+      // pour le point agréé, l'USSD ou la monnaie mobile générique. Le contribuable est clairement orienté.
+      if (existing?.providerIntentId) {
+        throw conflict(
+          'PROVIDER_LINKED_REFERENCE_ACTIVE',
+          `Une référence ${existing.paymentReference} liée au prestataire ${existing.provider ?? ''} est en cours jusqu'au ${existing.expiresAt.slice(0, 10)} : payez-la chez ce prestataire, ou attendez son expiration pour obtenir une nouvelle référence.`,
+          { paymentReference: existing.paymentReference, provider: existing.provider ?? null, expiresAt: existing.expiresAt },
+        );
+      }
       if (existing) return existing;
     }
     throw e;

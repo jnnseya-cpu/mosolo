@@ -223,6 +223,15 @@ describe('verticales — construction : visite et quitus de chantier', () => {
     expect((await env.req('POST', `/v1/verticales/cases/${quitus.id}/visits`, 'u-agent-terrain', { date: '2026-09-26', result: 'CONFORME', observations: 'Constat hors zone.' })).statusCode).toBe(403);
     expect((await env.req('POST', `/v1/verticales/cases/${quitus.id}/visits`, VX_DEMO.users.fieldAgent, { date: '2026-09-26', result: 'CONFORME', observations: 'Travaux achevés, voie libérée.', evidenceSha256: HASH })).statusCode).toBe(201);
     const space = (await env.req('GET', '/v1/verticales/construction/space', 'u-contribuable')).json();
+    // Un acompte confirmé ne règle pas les droits : seul le cumul payé ≥ montant (ou SOLDEE) compte.
+    const due = env.app.ctx.assessment.get(space.obligations[0].id);
+    env.app.ctx.payments.orders.insert({
+      id: 'PO-ACOMPTE-CHANTIER', paymentReference: 'PR-ACPT-CHAN', obligationId: due.id, taxpayerId: due.taxpayerId, channel: 'MOBILE_MONEY',
+      amount: { amount: '0.01', currency: due.amount.currency }, indicativeAmount: null, beneficiaryAlias: 'acompte-test', expiresAt: '2026-09-28T09:00:00.000Z',
+      status: 'CONFIRME', createdBy: 'test', createdAt: '2026-09-26T08:00:00.000Z', ledgerEntryIds: [],
+    });
+    const partial = await env.req('POST', `/v1/verticales/cases/${quitus.id}/propose`, VX_DEMO.users.instructor, { outcome: 'ACCEPTER', reason: 'Acompte seulement.' });
+    expect(partial.json().unmet.map((u: { code: string }) => u.code)).toEqual(['DUES_SETTLED']);
     await pay(env, space.obligations[0].id);
     const ok = await env.req('POST', `/v1/verticales/cases/${quitus.id}/propose`, VX_DEMO.users.instructor, { outcome: 'ACCEPTER', reason: 'Visite conforme, droits réglés.' });
     expect(ok.statusCode).toBe(200);
@@ -359,6 +368,18 @@ describe('verticales — CALCU : ne bloque aucun paiement, gel seulement par dé
     expect(tx.json()).toMatchObject({ score: 'ROUGE', blocked: false });
     expect(tx.json().reportId).toMatch(/^CALCU-RPT-2026-/);
     expect((await env.req('GET', '/v1/verticales/calcu/overview', VX_DEMO.users.bank)).statusCode).toBe(403);
+  });
+
+  it('engagement dépassé par cumul de paiements fractionnés (même opération, même compte) : surfacturation présumée', async () => {
+    const env = await setupVx();
+    // Seed : OP-DEMO-0012, engagement de 12 500 000 CDF déjà entièrement payé (vert). Un complément, même modeste, dépasse.
+    const extra = await env.req('POST', '/v1/verticales/calcu/gateway/transactions', VX_DEMO.users.bank, {
+      bank: 'Banque partenaire A (démo)', accountNumber: 'CD00 1111 2222 3333 4444 0001', amount: { amount: '1000000', currency: 'CDF' },
+      at: '2026-09-26T08:00:00.000Z', beneficiary: 'Société de travaux fictive (démo)', reference: 'OP-DEMO-0012',
+    });
+    expect(extra.json()).toMatchObject({ score: 'ROUGE', blocked: false });
+    const tx = env.svc.calcu.transactions.get(extra.json().id)!;
+    expect(tx.findings.some((f) => /Cumul des paiements de l’opération \(13500000\.00 CDF\)/.test(f))).toBe(true);
   });
 
   it('gel d’un dossier : organe de contrôle seulement, motif et base légale ; clôture par une autre personne', async () => {

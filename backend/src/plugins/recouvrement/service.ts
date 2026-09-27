@@ -1150,7 +1150,11 @@ export class RecoveryService {
     const exec = isRuleExecutable(rule, this.ctx.clock.now());
     if (!exec.ok) throw unprocessable('ACTE_REQUIS', `Aucune remise hors règle ACTIVE : ${rule.code} v${rule.version} — ${exec.reason}.`, { ruleStatus: rule.status });
     if (!rule.exemptions.length) throw unprocessable('REMISSION_BASIS_NOT_DECLARED', `La règle ${rule.code} ne déclare aucune base de remise ou d’exonération.`);
-    if (!PAYABLE.includes(o.status)) throw unprocessable('OBLIGATION_NOT_PAYABLE', `Obligation au statut ${o.status}.`);
+    // La base de remise est la règle même de l'obligation (une version en vigueur de son code), jamais une autre recette.
+    if (rule.code !== o.ruleCode) throw unprocessable('REMISSION_BASIS_RULE_MISMATCH', `La règle ${rule.code} ne fonde pas l’obligation (${o.ruleCode}) : remise impossible sur cette base.`);
+    if (!PAYABLE.includes(o.status) || o.supersededBy) throw unprocessable('OBLIGATION_NOT_PAYABLE', `Obligation au statut ${o.status}${o.supersededBy ? `, remplacée par ${o.supersededBy}` : ''}.`);
+    const pending = this.remissions.findOne((x) => x.obligationId === o.id && x.status === 'DEMANDEE');
+    if (pending) throw conflict('REMISSION_ALREADY_PENDING', `Une demande de remise ${pending.id} est déjà en attente de décision pour cette obligation.`, { remissionId: pending.id });
     const req = Money.fromJSON(input.requestedAmount);
     const orig = Money.fromJSON(o.amount);
     if (req.currency !== orig.currency) throw badRequest('CURRENCY_MISMATCH', `Montant attendu en ${orig.currency}.`);
@@ -1179,6 +1183,11 @@ export class RecoveryService {
     const exec = isRuleExecutable(rule, this.ctx.clock.now());
     if (!exec.ok) throw unprocessable('ACTE_REQUIS', `Règle de remise non exécutable : ${exec.reason}.`);
     const o = this.ctx.assessment.get(r.obligationId);
+    // L'obligation a pu être payée, rectifiée ou annulée depuis la demande : contrôles rejoués à la décision.
+    if (!PAYABLE.includes(o.status) || o.supersededBy) {
+      throw conflict('OBLIGATION_NOT_PAYABLE', `Obligation au statut ${o.status}${o.supersededBy ? `, remplacée par ${o.supersededBy}` : ''} : remise sans objet.`);
+    }
+    if (rule.code !== o.ruleCode) throw unprocessable('REMISSION_BASIS_RULE_MISMATCH', `La règle ${rule.code} ne fonde pas l’obligation (${o.ruleCode}).`);
     const amount = input.grantedAmount ? Money.fromJSON(input.grantedAmount) : Money.fromJSON(r.requestedAmount);
     if (amount.currency !== o.amount.currency || amount.isNegative() || amount.compare(Money.fromJSON(o.amount)) >= 0) {
       throw unprocessable('INVALID_REMISSION_AMOUNT', 'Le montant après remise doit être positif, dans la devise de l’obligation et inférieur au montant dû.');

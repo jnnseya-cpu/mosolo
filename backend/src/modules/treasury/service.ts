@@ -28,7 +28,8 @@ export interface StatementLine {
 }
 
 export type ExceptionType =
-  | 'ORPHAN_CREDIT' | 'CREDIT_WITHOUT_CONFIRMATION' | 'DUPLICATE_CREDIT' | 'WRONG_ACCOUNT' | 'UNKNOWN_ACCOUNT' | 'AMOUNT_MISMATCH' | 'MISSING_SETTLEMENT' | 'PROVIDER_AMBIGUOUS';
+  | 'ORPHAN_CREDIT' | 'CREDIT_WITHOUT_CONFIRMATION' | 'DUPLICATE_CREDIT' | 'WRONG_ACCOUNT' | 'UNKNOWN_ACCOUNT' | 'AMOUNT_MISMATCH' | 'MISSING_SETTLEMENT' | 'PROVIDER_AMBIGUOUS'
+  | 'UNAPPLIED_PAYMENT';
 
 /** Cycle de traitement d'une exception (§ 20, C3-113) : ouverte → en cours → résolue ou classée avec motif. */
 export type ExceptionStatus = 'OUVERTE' | 'EN_COURS' | 'RESOLUE' | 'CLASSEE';
@@ -38,6 +39,7 @@ export type ExceptionQueue = 'PAIEMENT_SANS_OBLIGATION' | 'OBLIGATION_SANS_REGLE
 
 export const EXCEPTION_QUEUE: Record<ExceptionType, ExceptionQueue> = {
   DUPLICATE_CREDIT: 'PAIEMENT_SANS_OBLIGATION',
+  UNAPPLIED_PAYMENT: 'PAIEMENT_SANS_OBLIGATION',
   MISSING_SETTLEMENT: 'OBLIGATION_SANS_REGLEMENT',
   PROVIDER_AMBIGUOUS: 'OBLIGATION_SANS_REGLEMENT',
   ORPHAN_CREDIT: 'REGLEMENT_SANS_PAIEMENT',
@@ -177,10 +179,11 @@ export class TreasuryService {
     });
     this.payments.settleAndReconcile(order.id, entry.id);
     const receipt = this.receipts.finalize(order.id);
-    // Échéancier : l'obligation n'est soldée que lorsque le cumul payé atteint son montant.
-    const ob = this.assessment.get(order.obligationId);
+    // Échéancier : l'obligation n'est soldée que lorsque le cumul payé atteint son montant. Un paiement reçu sur une
+    // obligation depuis rectifiée compte pour l'obligation en vigueur ; une obligation ANNULEE ne change jamais d'état.
+    const ob = this.assessment.get(this.payments.currentObligationId(order.obligationId));
     const fully = this.payments.paidOn(ob.id).compare(Money.fromJSON(ob.amount)) >= 0;
-    const obligation = this.assessment.setStatus(order.obligationId, fully ? 'SOLDEE' : 'PARTIELLEMENT_PAYEE');
+    const obligation = ob.status === 'ANNULEE' ? ob : this.assessment.setStatus(ob.id, fully ? 'SOLDEE' : 'PARTIELLEMENT_PAYEE');
     this.audit.append({ actor: opts.actor, action: 'reconciliation.matched', resourceType: 'payment_order', resourceId: order.id, details: { ...opts.details, receipt: receipt.number, ledgerEntryId: entry.id } });
     this.comms.publish('receipt.finalized', [taxpayerRecipient(this.taxpayers.get(order.taxpayerId))], { reference: receipt.number }, { entity: obligation.entity });
     return { paymentReference: order.paymentReference, receiptNumber: receipt.number, obligationId: obligation.id, amount: order.amount, ledgerEntryId: entry.id };
@@ -206,7 +209,13 @@ export class TreasuryService {
       detail: `Résultat opérateur inconnu signalé par ${h.provider} le ${h.receivedAt} : interroger la résolution prestataire, puis attendre la confirmation signée ou le relevé.`,
       status: 'OUVERTE', openedAt: h.receivedAt, computed: true,
     }));
-    return [...this.exceptions.all(), ...missing, ...held].map((e) => ({ ...e, queue: EXCEPTION_QUEUE[e.type] }));
+    // Paiement reçu mais non affecté (doublon, référence expirée, obligation couverte ou rectifiée) : à rembourser.
+    const unapplied: ReconciliationException[] = this.payments.unappliedPayments.all().map((u) => ({
+      id: `EXC-NAFF-${u.id}`, type: 'UNAPPLIED_PAYMENT', paymentReference: u.paymentReference,
+      detail: `Paiement ${u.provider} ${u.providerTxnId} de ${u.amount.amount} ${u.amount.currency} non affecté (${u.reason}) : fonds en compte d'attente, remboursement vers l'instrument d'origine à décider.`,
+      status: 'OUVERTE', openedAt: u.receivedAt, computed: true, unappliedId: u.id,
+    }));
+    return [...this.exceptions.all(), ...missing, ...held, ...unapplied].map((e) => ({ ...e, queue: EXCEPTION_QUEUE[e.type] }));
   }
 
   /** Exceptions ouvertes + « règlement manquant » calculé (confirmation sans crédit après J+1). */
