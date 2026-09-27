@@ -133,6 +133,12 @@ export function installRateLimit(app: FastifyInstance, ctx: AppContext, config: 
     if (req.method === 'OPTIONS') return;
     const path = req.url.split('?')[0] ?? req.url;
     if (config.exempt.includes(path)) return;
+    // Fichiers de l'application web servie par le même service (scripts, feuilles de style, icônes, pages du client) :
+    // hors limitation de l'API (deuxième passe adverse, 27/09/2026). Un chargement de l'application demande des dizaines
+    // de fichiers ; derrière une adresse partagée (NAT d'opérateur mobile, bureau), le palier global épuisé renvoyait
+    // du JSON 429 à la place d'un script et cassait l'application. L'API (/v1), les pages légères (/l) et
+    // /.well-known restent limitées.
+    if ((req.method === 'GET' || req.method === 'HEAD') && !path.startsWith('/v1/') && path !== '/l' && !path.startsWith('/l/') && !path.startsWith('/.well-known/')) return;
     // Route-alias du catalogue des API (routes françaises) : la requête relayée vers la route canonique est seule
     // comptée, avec le palier de la route canonique (public, authentification ou global) — jamais deux fois.
     if (isAliasRoute(req)) return;
