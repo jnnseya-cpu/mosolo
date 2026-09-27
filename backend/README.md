@@ -249,7 +249,7 @@ Rejouer exactement la même requête renvoie 200 avec `"replayed": true`, sans s
 |---|---|
 | `PORT`, `HOST` | écoute (défaut `8080`, `0.0.0.0`) |
 | `MOSOLO_DEMO_MODE` | `true` : mode démonstration (défaut : **désactivé**) ; interdit avec `NODE_ENV=production` (démarrage refusé) |
-| `NODE_ENV` | `production` : refuse `MOSOLO_DEMO_MODE=true` et `MOSOLO_DEMO_CREDENTIALS=true` |
+| `NODE_ENV` | `production` : refuse `MOSOLO_DEMO_MODE=true` (et donc `--demo`) et `MOSOLO_DEMO_CREDENTIALS=true` ; exige `DATABASE_URL` (jamais de stockage en mémoire) et refuse le point d'entrée sans persistance `src/server.ts` (utiliser `npm start -w backend`) |
 | `MOSOLO_DEMO_CREDENTIALS` | `true` : sème le mot de passe et les secrets TOTP de démonstration hors mode démo (préproduction) ; interdit en production |
 | `MOSOLO_AUDIT_HMAC_KEY` | clé de signature du journal d'audit (aléatoire au démarrage si absente, en démonstration seulement ; **obligatoire hors démonstration** — contrôle de santé des clés au démarrage —, 32 caractères minimum) |
 | `MOSOLO_AUDIT_ANCHOR_PATH` | fichier de l'**ancre externe** de la tête du journal d'audit (rang, empreinte, heure, signés HMAC), hors de la base — idéalement volume distinct / répliqué WORM ; réécrit après chaque lot d'audit persisté. **Obligatoire** avec `DATABASE_URL` hors démonstration : chaîne plus courte que l'ancre ou d'empreinte différente ⇒ démarrage refusé. Même chemin pour `db:restore` |
