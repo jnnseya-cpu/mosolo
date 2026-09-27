@@ -36,8 +36,22 @@ export function renderText(event: CommunicationEvent, vars: Record<string, strin
   const parts = [fillPlaceholders(event.objet, vars)];
   if (vars.reference) parts.push(`Réf. ${vars.reference}`);
   if (vars.amount) parts.push(vars.amount);
+  if (vars.code) parts.push(`Code de vérification ${vars.code}`);
   parts.push('Détail : espace MOSOLO ou code USSD officiel.');
   return parts.join(' — ');
+}
+
+/** Longueur maximale d'un SMS (un segment GSM-7) — module 6 : « messages de moins de 160 caractères ». */
+export const SMS_MAX_CHARS = 160;
+const LIEN = /\b(?:https?:\/\/|www\.)\S+|\b[\w-]+\.(?:com|net|org|info|xyz|top|click|link|ly|me|io|cd)(?:\/\S*)?\b/gi;
+
+/**
+ * Corps d'un SMS (module 6, conçu contre l'hameçonnage) : AUCUN lien (toute adresse web est retirée — l'usager passe
+ * par l'espace MOSOLO ou le code USSD officiel, jamais par un lien reçu), espaces normalisés, 160 caractères au plus.
+ */
+export function smsText(body: string): string {
+  const clean = body.replace(LIEN, '').replace(/\s+/g, ' ').replace(/\s+([—,.])/g, '$1').trim();
+  return clean.length <= SMS_MAX_CHARS ? clean : `${clean.slice(0, SMS_MAX_CHARS - 1).trimEnd()}…`;
 }
 
 export interface EmailPreview {

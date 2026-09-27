@@ -24,7 +24,7 @@ import type { PilotagePlanningHooks, PilotageService, Query } from '../service.j
 import { MIN_CONTRIBUTORS, type FundedProjectsSection } from '../transparency.js';
 import {
   additionalGrossMinor, addDays, amountsOf, EXEMPLE_ILLUSTRATIF, BASELINE_METRICS, dayCount, HYPOTHESIS_VARIABLES, INSTRUCTION_ORIGINS, MATURITY, meetsThreshold, moneyOfMinor, parseEntriesCsv,
-  pickHypothesis, PILOT_COMMUNES, PILOT_CRITERIA, PILOT_MILESTONES, PROCUREMENT, PROJECT_DOMAINS, prorate, RANV_COMPONENTS, SCENARIO_CODES, SCENARIOS,
+  pickHypothesis, PILOT_COMMUNES, PILOT_COMMUNES_46, PILOT_CRITERIA, PILOT_CRITERIA_46, PILOT_MILESTONES, PILOT_SEQUENCE_46, PROCUREMENT, PROJECT_DOMAINS, prorate, RANV_COMPONENTS, SCENARIO_CODES, SCENARIOS,
   selectEntries, SLA_KINDS, tenths, validateEntry,
   type BaselineEntry, type BaselineSet, type FundScenario, type FundScenarioItem, type Hypothesis, type HypothesisVariable, type Instruction, type InstructionOrigin,
   type Maturity, type Milestone, type Procurement, type ProjectDomain, type PublicProject, type RanvComponent, type ScenarioCode, type SetKind, type SlaAgreement,
@@ -44,6 +44,12 @@ const addTo = (m: Cur, c: CurrencyCode, v: bigint) => m.set(c, (m.get(c) ?? 0n) 
 const curJson = (m: Cur) => [...m.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([c, v]) => moneyOfMinor(v, c));
 const minorOf = (m: MoneyJSON) => Money.fromJSON(m).minor;
 
+/** Enveloppe d'investissement inscrite au budget voté (acte budgétaire) ; certifiée par une seconde personne. */
+export interface BudgetEnvelope {
+  id: string; period: string; currency: CurrencyCode; amount: MoneyJSON; actReference: string; label: string;
+  status: 'IMPORTEE' | 'CERTIFIEE' | 'REJETEE'; importedBy: string; importedAt: string; certification?: { by: string; at: string; approve: boolean; motif: string };
+}
+
 export class PlanificationService implements PilotagePlanningHooks {
   readonly baselines = new InMemoryRepository<BaselineSet>();
   readonly targets = new InMemoryRepository<TargetSet>();
@@ -55,6 +61,8 @@ export class PlanificationService implements PilotagePlanningHooks {
   readonly probes = new InMemoryAppendOnlyRepository<AvailabilityProbe>();
   readonly projects = new InMemoryRepository<PublicProject>();
   readonly fundScenarios = new InMemoryRepository<FundScenario>();
+  /** Enveloppes d'investissement du budget voté (module 48) : capacité disponible selon le budget voté, certifiée à deux personnes. */
+  readonly envelopes = new InMemoryRepository<BudgetEnvelope>();
   readonly pilot = new InMemoryRepository<PilotConfig>();
   readonly snapshots = new InMemoryAppendOnlyRepository<PilotSnapshot>();
   private readonly ids = new IdGenerator();
@@ -314,7 +322,8 @@ export class PlanificationService implements PilotagePlanningHooks {
     const val = (ks: KpiResult[] | null, code: string | null) => (ks && code ? ks.find((k) => k.code === code) ?? null : null);
     const growthP = this.groupGrowth(cfg.communes, facts, range);
     const growthC = cfg.controls.length ? this.groupGrowth(cfg.controls, facts, range) : { value: null, note: 'Aucune commune témoin désignée.' };
-    const criteria = PILOT_CRITERIA.map((c) => {
+    // Type élargi : la branche « sans indicateur » reste disponible pour tout critère futur non mesurable.
+    const criteria = (PILOT_CRITERIA as readonly { code: string; label: string; threshold: string; kpi: string | null; op: string; value: string }[]).map((c) => {
       if (c.code === 'PROGRESSION_RECETTES') {
         const gap = growthP.value !== null && growthC.value !== null ? (Number(growthP.value) - Number(growthC.value)).toFixed(1) : null;
         return { code: c.code, label: c.label, threshold: c.threshold, pilot: { value: growthP.value, unit: '%', met: null, note: growthP.note }, controls: { value: growthC.value, unit: '%', note: growthC.note }, gapPoints: gap,
@@ -328,14 +337,27 @@ export class PlanificationService implements PilotagePlanningHooks {
         status: pv === null ? 'NON_MESURE' : met ? 'ATTEINT' : 'NON_ATTEINT', note: p?.status === 'NON_MESURE' ? `Source non disponible (${p.source}).` : '' };
     });
     const day = start ? Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / DAY_MS) : null;
+    // Document maître FR 2, ch. 46 : texte du critère et indicateurs du § 40, communes pilotes comparées aux témoins.
+    const ind40 = (code: string) => {
+      const p = val(pk, code); const k = val(ck, code);
+      const pv = p && p.status !== 'NON_MESURE' ? p.value : null; const kv = k && k.status !== 'NON_MESURE' ? k.value : null;
+      return { code, label: p?.label ?? code, unit: p?.unit ?? '', targetLabel: p?.targetLabel ?? null, pilot: pv, controls: kv, pilotStatus: p?.status ?? 'NON_MESURE', gapPoints: pv !== null && kv !== null ? (Number(pv) - Number(kv)).toFixed(1) : null };
+    };
+    const criteria46 = criteria.map((c) => ({ ...c, texte46: PILOT_CRITERIA_46[c.code as keyof typeof PILOT_CRITERIA_46].texte, indicateurs40: PILOT_CRITERIA_46[c.code as keyof typeof PILOT_CRITERIA_46].indicateurs40.map(ind40) }));
+    const week = day !== null && day >= 0 ? Math.floor(day / 7) + 1 : null;
     return {
-      generatedAt: this.now(), reference: '§ 45.1, § 45.3, § 45.5', config: cfg, day, period: range,
+      generatedAt: this.now(), reference: '§ 45.1, § 45.3, § 45.5 ; Document maître FR 2, ch. 46', config: cfg, day, period: range,
+      chapitre46: {
+        communes: PILOT_COMMUNES_46, sequence: PILOT_SEQUENCE_46.map((s) => ({ ...s, enCours: week !== null && week >= s.semaines[0] && week <= s.semaines[1] })), semaine: week,
+        temoins: cfg.controls.length ? cfg.controls : null,
+        note: 'Comparaison avec les communes témoins désignées par une personne (configuration du protocole) ; la décision d’extension reste humaine.',
+      },
       milestones: Object.entries(PILOT_MILESTONES).map(([m, n]) => {
         const due = start ? addDays(start, n) : null;
         const snap = this.snapshots.findOne((s) => s.milestone === m);
         return { milestone: m, days: n, dueDate: due, reached: !!due && due <= today, signed: snap ? { id: snap.id, takenAt: snap.takenAt, sha256: snap.sha256 } : null };
       }),
-      criteria,
+      criteria: criteria46,
       protocol: 'Base de référence auditée avant démarrage ; communes pilotes comparées aux communes témoins ; revues signées à chaque jalon ; décision de généralisation sur résultats vérifiés de façon indépendante.',
       baseline: this.certifiedBase() ? { id: this.certifiedBase()!.id, period: this.certifiedBase()!.period } : null,
     };
@@ -788,7 +810,36 @@ export class PlanificationService implements PilotagePlanningHooks {
 
   listProjects(user: User) {
     this.gate(user, 'project.read');
-    return { domains: PROJECT_DOMAINS, maturity: MATURITY, procurement: PROCUREMENT, items: this.projects.all(), scenarios: this.fundScenarios.all().sort((a, b) => (a.proposedAt < b.proposedAt ? 1 : -1)) };
+    const scen = this.fundScenarios.all();
+    return {
+      domains: PROJECT_DOMAINS, maturity: MATURITY, procurement: PROCUREMENT, items: this.projects.all(), scenarios: scen.sort((a, b) => (a.proposedAt < b.proposedAt ? 1 : -1)),
+      envelopes: this.envelopes.all(),
+      // Indicateurs du module 48 : scénarios produits et retenus.
+      indicators: [
+        { code: 'SCENARIOS_PRODUITS', label: 'Scénarios d’emploi des fonds produits', measured: true, value: String(scen.length), unit: 'scénarios', detail: { lots: new Set(scen.map((x) => x.batchId)).size } },
+        { code: 'SCENARIOS_RETENUS', label: 'Scénarios retenus par l’autorité', measured: true, value: String(scen.filter((x) => x.status === 'RETENU').length), unit: 'scénarios', detail: { ecartes: scen.filter((x) => x.status === 'ECARTE').length, enAttente: scen.filter((x) => x.status === 'PROPOSE').length } },
+      ],
+    };
+  }
+
+  /** Enveloppe d'investissement du budget voté (référence de l'acte budgétaire) : import, puis certification à deux personnes. */
+  importEnvelope(user: User, input: { period: string; amount: MoneyJSON; actReference: string; label: string }) {
+    this.gate(user, 'baseline.import');
+    const e = this.envelopes.insert({ id: this.ids.next('ENV'), period: input.period, currency: input.amount.currency as CurrencyCode, amount: Money.parseStrict(input.amount).toJSON(), actReference: input.actReference, label: input.label, status: 'IMPORTEE', importedBy: user.id, importedAt: this.now() });
+    this.audit(user, 'pilotage.budget_envelope.imported', 'budget_envelope', e.id, { period: e.period, amount: e.amount, actReference: e.actReference });
+    return e;
+  }
+
+  certifyEnvelope(user: User, id: string, input: { approve: boolean; motif: string }) {
+    this.gate(user, 'targets.certify');
+    const e = this.envelopes.get(id);
+    if (!e) throw notFound('ENVELOPE_NOT_FOUND', 'Enveloppe inconnue.');
+    if (e.status !== 'IMPORTEE') throw conflict('ALREADY_DECIDED', 'Enveloppe déjà décidée.');
+    assertDistinctPerson(user.id, [e.importedBy], 'L’enveloppe du budget voté est certifiée par une personne distincte de celle qui l’a importée.');
+    for (const old of this.envelopes.find((x) => x.status === 'CERTIFIEE' && x.period === e.period && x.currency === e.currency)) this.envelopes.update({ ...old, status: 'REJETEE', certification: { ...(old.certification ?? { by: user.id, at: this.now(), approve: false }), motif: `Remplacée par ${e.id}` } as NonNullable<BudgetEnvelope['certification']> });
+    const out = this.envelopes.update({ ...e, status: input.approve ? 'CERTIFIEE' : 'REJETEE', certification: { by: user.id, at: this.now(), ...input } });
+    this.audit(user, input.approve ? 'pilotage.budget_envelope.certified' : 'pilotage.budget_envelope.rejected', 'budget_envelope', id, { motif: input.motif });
+    return out;
   }
 
   /**
@@ -807,6 +858,17 @@ export class PlanificationService implements PilotagePlanningHooks {
       if (d < range.from || d > range.to) continue;
       available += minorOf(o.amount);
       byCommune.set(o.commune, (byCommune.get(o.commune) ?? 0n) + minorOf(o.amount));
+    }
+    // Capacité disponible SELON LE BUDGET VOTÉ (module 48) : si une enveloppe certifiée couvre la période, la capacité
+    // est plafonnée par l'enveloppe diminuée des financements déjà constatés ; sinon, recettes rapprochées seules (signalé).
+    const reconciledAvailable = available;
+    const envelope = this.envelopes.find((e) => e.status === 'CERTIFIEE' && e.currency === input.currency && (input.period === e.period || input.period.startsWith(e.period) || e.period.startsWith(input.period)))[0];
+    let budgetBasis = 'Aucune enveloppe du budget voté certifiée pour la période : capacité = recettes rapprochées seules (à confirmer par l’autorité budgétaire).';
+    if (envelope) {
+      const funded = this.projects.find((p) => !!p.funding && p.funding.amount.currency === input.currency && p.funding.decidedAt.slice(0, 4) === envelope.period.slice(0, 4)).reduce((a, p) => a + minorOf(p.funding!.amount), 0n);
+      const cap = minorOf(envelope.amount) - funded;
+      if (cap < available) available = cap > 0n ? cap : 0n;
+      budgetBasis = `Enveloppe du budget voté ${envelope.actReference} (${envelope.amount.amount} ${envelope.currency}) diminuée des financements constatés (${moneyOfMinor(funded, input.currency).amount}) ; capacité retenue = minimum avec le rapproché (${moneyOfMinor(reconciledAvailable, input.currency).amount}).`;
     }
     const candidates = this.projects.find((p) => ['PROPOSE', 'RETENU'].includes(p.status) && p.cost.currency === input.currency);
     if (candidates.length === 0) throw conflict('NO_CANDIDATE', `Aucun projet proposé ou retenu en ${input.currency}.`);
@@ -833,7 +895,7 @@ export class PlanificationService implements PilotagePlanningHooks {
       });
       const s = this.fundScenarios.insert({
         id: this.ids.next('SCEN'), batchId, variant: v.variant, label: v.label, currency: input.currency, period: input.period, available: moneyOfMinor(available, input.currency),
-        availableBasis: `Recettes rapprochées (niveau 9) de ${input.period} ; source légale : ${input.legalFundSource}. La disponibilité budgétaire (niveau 11) relève du budget voté.`,
+        availableBasis: `Recettes rapprochées (niveau 9) de ${input.period} ; source légale : ${input.legalFundSource}. La disponibilité budgétaire (niveau 11) relève du budget voté. ${budgetBasis}`,
         items, unallocated: moneyOfMinor(left, input.currency), proposedBy: { kind: 'ai', agent: 'ALLOCATION' }, proposedAt: this.now(), requestedBy: user.id, status: 'PROPOSE', notice,
       });
       this.audit({ kind: 'ai', id: 'agent:ALLOCATION' }, 'pilotage.fund_scenario.proposed', 'fund_scenario', s.id, { requestedBy: user.id, variant: v.variant, items: items.length, available: s.available });

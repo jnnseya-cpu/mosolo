@@ -22,7 +22,7 @@ interface Indicators {
   generatedAt: string; notice: string; taxRule: { code: string; version: number | null; status: string; demo: boolean };
   totals: {
     devices: number; active: number; authorized: number; declaredPending: number; undeclared: number; expired: number; retired: number; authorizedRate: string | null;
-    expiringSoon: number; regularized: number; requestsPending: number; inspections: number; casesOpen: number; casesRetained: number; casesDismissed: number; contested: number;
+    expiringSoon: number; regularized: number; requestsPending: number; inspections: number; casesOpen: number; casesRetained: number; casesDismissed: number; casesValidated?: number; contested: number;
     obligations: number; revenue: MoneyJSON[]; authorizedSurfaceM2: string; revenuePerM2: MoneyJSON[];
   };
   byFinding: { finding: string; count: number }[];
@@ -70,6 +70,7 @@ export default function AdDashboard() {
           <dl className="kv">
             <div><dt>Demandes d’autorisation en cours</dt><dd>{t.requestsPending}</dd></div>
             <div><dt>Dossiers retenus</dt><dd>{t.casesRetained}</dd></div>
+            <div><dt>Constats validés (vérification confirmée)</dt><dd>{t.casesValidated ?? 0}</dd></div>
             <div><dt>Dossiers classés ou écartés</dt><dd>{t.casesDismissed}</dd></div>
             <div><dt>Dossiers contestés</dt><dd>{t.contested}</dd></div>
             <div><dt>Supports régularisés (recensés puis autorisés)</dt><dd>{t.regularized}</dd></div>

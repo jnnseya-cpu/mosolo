@@ -38,7 +38,9 @@ export interface FiscalObjectView {
   localityRank: number;
   status: 'PROVISOIRE' | 'VALIDE';
   probativeStatus: string;
-  igf: { code: string; uuid: string; assignedAt: string } | null;
+  /** Cycle de vie (§ 30 du Document maître FR 2) : provisoire, actif, suspendu, clos. */
+  lifecycle?: ObjectLifecycle;
+  igf: { code: string; uuid: string; assignedAt: string; cahierCode?: string | null } | null;
   holder: string | null;
   highValue: boolean;
   attributes: Record<string, unknown>;
@@ -69,11 +71,15 @@ export interface QueueResponse {
 
 export interface PrefilledField { name: string; label: string; value: string | null; source: string; probativeStatus: string | null; editable: boolean }
 
+/** Calcul affiché (Document maître FR 2, ch. 43) : taux, retenue et arrêté lus dans la fiche de règle. */
+export interface CalculAffiche { formule: string; base: string; taux: string | null; tauxRetenue: string | null; bareme: Record<string, string>; arretes: { id: string; titre: string; statut: string }[]; mention: string }
+
 export interface Prefill {
   objectId: string; igf: string | null; kind: string; kindLabel: string; period: string; localityRank: number;
   rule: { id: string; code: string; version: number; label: string; status: string; executable: boolean; reason?: string; demo: boolean };
   fields: PrefilledField[];
   notice: string;
+  calcul?: CalculAffiche;
 }
 
 export interface Trace {
@@ -90,6 +96,8 @@ export interface Declaration {
   acknowledgement: { number: string; receivedAt: string; contentHash: string };
   filedBy: string; filedByRole: string;
   liquidation: { mode: string; obligationId?: string; trace?: Trace; message: string };
+  calcul?: CalculAffiche;
+  piece?: { name: string; mediaType: string; sha256: string; sizeBytes?: number };
   correctionReason?: string;
   instruction?: { decision: string; reason: string; decidedBy: string; at: string; rectifiedObligationId?: string };
 }
@@ -127,6 +135,9 @@ export interface LeaseAttestationView {
 export interface LeaseRow {
   id: string; role: 'BAILLEUR' | 'LOCATAIRE'; unitIgf: string; commune: string | null; quartier: string | null; rent: MoneyJSON;
   periodicity: string; start: string; end: string | null; probativeStatus: string; attestation: LeaseAttestationView | null;
+  /** État du bail (§ 30 du Document maître FR 2) : déclaré, vérifié, résilié, contesté. */
+  state?: 'DECLARE' | 'OBSERVE' | 'VERIFIE' | 'RESILIE' | 'CONTESTE'; stateLabel?: string;
+  termination?: { endDate: string; reason: string; by: string; byRole: string; at: string } | null;
 }
 
 export interface MapResponse {
@@ -138,4 +149,10 @@ export interface MapResponse {
   objects: { id: string; igf: string | null; category: string; categoryLabel: string; commune: string; quartier: string; lat: number; lon: number; color: MapStatusColor; label: string; reason: string; demo: boolean }[];
   notice: string;
   example: boolean;
+}
+
+/** Cycle de vie d'un objet fiscal (§ 30, § 17.3 du Document maître FR 2, nouvelle version). */
+export interface ObjectLifecycle {
+  state: 'PROVISOIRE' | 'ACTIF' | 'SUSPENDU' | 'CLOS'; label: string; since: string | null; motif: string | null; reason: string | null;
+  pendingClosureId: string | null; liquidationAllowed: boolean;
 }

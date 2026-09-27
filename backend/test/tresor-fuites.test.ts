@@ -19,7 +19,7 @@ import { sha256Hex } from '../src/core/crypto.js';
 import { tresorPlugin } from '../src/plugins/tresor/plugin.js';
 import { loadClosureSigningKey, type TresorService } from '../src/plugins/tresor/service.js';
 import { DEMO } from '../src/seed.js';
-import { callbackBody, PROVIDER_SECRET, signedCallback, type TestEnv } from './helpers.js';
+import { callbackBody, PROVIDER_SECRET, signedCallback, type TestEnv, postStatement } from './helpers.js';
 
 async function setupFuites() {
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
@@ -60,7 +60,7 @@ function line(paymentReference: string, amount = '150.00', extra: Record<string,
 }
 
 async function statement(env: Env, lines: unknown[], id = `REL-${randomUUID().slice(0, 8)}`) {
-  return env.req('POST', '/v1/settlements/statements', 'u-tresor', { statementId: id, lines });
+  return postStatement(env, 'u-tresor', { statementId: id, lines });
 }
 
 async function op(env: Env, body: Record<string, unknown>, proposer = 'u-tresor') {

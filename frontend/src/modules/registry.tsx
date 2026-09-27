@@ -12,6 +12,8 @@ export interface ModuleRoute {
   nav?: { label: string; short?: string; icon: string; group: 'public' | 'pilotage' | 'operations'; roles: string[] };
 }
 
+/** Lecteurs des écrans du programme (politique programme:read). */
+const PROGRAMME = ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R08', 'R13', 'R14', 'R15', 'R16', 'R17', 'R18', 'R22', 'R23', 'R24', 'R25', 'R26', 'R27', 'R28'];
 const DASH = ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R08', 'R17', 'R18', 'R22', 'R23', 'R24'];
 
 export const MODULE_ROUTES: ModuleRoute[] = [
@@ -53,10 +55,12 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/mes-arrieres', element: lazy(() => import('./recouvrement/MyArrears')), nav: { label: 'Mes arriérés et échéances', short: 'Arriérés', icon: 'clock', group: 'public', roles: ['R30', 'R31'] } },
   { path: '/recouvrement', element: lazy(() => import('./recouvrement/RecoveryQueue')), nav: { label: 'Recouvrement', icon: 'scale', group: 'operations', roles: ['R06', 'R07', 'R11', 'R20', 'R21', 'R22', 'R23'] } },
   { path: '/recouvrement/avis/:id', element: lazy(() => import('./recouvrement/NoticeView')) },
+  // Réclamations et recours côté administration (module 37 ; § 13.4 et § 23 du Document maître FR 2) : propriétaire, délai, état, décision motivée.
+  { path: '/recours', element: lazy(() => import('./recouvrement/Recours')), nav: { label: 'Réclamations et recours', short: 'Recours', icon: 'scale', group: 'operations', roles: ['R06', 'R07', 'R20', 'R21', 'R22', 'R23'] } },
   // Remises (demande et instruction R20, décision R21) et admission en non-valeur (proposition R20, décision R21) ; lecture : recouvrement:read.
   { path: '/recouvrement/remises', element: lazy(() => import('./recouvrement/Remises')), nav: { label: 'Remises gracieuses', short: 'Remises', icon: 'scale', group: 'operations', roles: ['R06', 'R07', 'R11', 'R20', 'R21', 'R22', 'R23'] } },
   // Campagnes (§ 8, § 45) et prorogations d'échéance (§ 6.2)
-  { path: '/recouvrement/campagnes', element: lazy(() => import('./recouvrement/Campagnes')), nav: { label: 'Campagnes et calendrier', short: 'Campagnes', icon: 'clock', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R11', 'R13', 'R16', 'R22', 'R23'] } },
+  { path: '/recouvrement/campagnes', element: lazy(() => import('./recouvrement/Campagnes')), nav: { label: 'Campagnes et calendrier', short: 'Campagnes', icon: 'clock', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R11', 'R13', 'R16', 'R22', 'R23', 'R09', 'R20', 'R21'] } },
   { path: '/recouvrement/non-valeurs', element: lazy(() => import('./recouvrement/NonValeurs')), nav: { label: 'Admissions en non-valeur', short: 'Non-valeurs', icon: 'ban', group: 'operations', roles: ['R06', 'R07', 'R11', 'R20', 'R21', 'R22', 'R23'] } },
 
   // Liquidation : dérogations à la base connue (lecture liquidation R06/R07/R11 et audit R22/R23 ; approbation R06/R07)
@@ -89,6 +93,8 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/stationnement/controle', element: lazy(() => import('./parking/ParkingControl')), nav: { label: 'Contrôle du stationnement', short: 'Stationnement', icon: 'car', group: 'operations', roles: ['R11', 'R09'] } },
   { path: '/mes-gains', element: lazy(() => import('./parking/AgentEarnings')), nav: { label: 'Mes gains (10 %)', short: 'Gains', icon: 'cash', group: 'operations', roles: ['R09', 'R10', 'R11', 'R12', 'R35'] } },
   { path: '/stationnement/mes-gains', element: lazy(() => import('./parking/AgentEarnings')) },
+  // Module 67 : réserve des agents par module, points de résultats vérifiés × note de qualité (§ 37A.5).
+  { path: '/agents/reserve', element: lazy(() => import('./terrain/ReserveAgents')), nav: { label: 'Réserve des agents (§ 37A.5)', short: 'Réserve', icon: 'scale', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R09', 'R11', 'R17', 'R22', 'R23', 'R24'] } },
   { path: '/agents/validation-commissions', element: lazy(() => import('./parking/CommissionValidations')), nav: { label: 'Validation des commissions', short: 'Commissions', icon: 'cash', group: 'pilotage', roles: ['R06', 'R07', 'R09', 'R01', 'R02', 'R05', 'R17', 'R22', 'R23', 'R24'] } },
   { path: '/agents/surveillance', element: lazy(() => import('./parking/AgentMonitoring')), nav: { label: 'Surveillance des constats', short: 'Constats', icon: 'analysis', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R09', 'R22', 'R23', 'R24'] } },
   { path: '/stationnement/regie', element: lazy(() => import('./parking/ParkingRegie')), nav: { label: 'Régie du stationnement', short: 'Zones', icon: 'parking', group: 'operations', roles: ['R06', 'R07'] } },
@@ -110,11 +116,29 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/verifier-plaque', element: lazy(() => import('./verticales/PlateVerify')) },
   { path: '/verifier-plaque/:code', element: lazy(() => import('./verticales/PlateVerify')) },
   { path: '/controle/calcu', element: lazy(() => import('./verticales/CalcuConsole')), nav: { label: 'CALCU — contrôle de la dépense', short: 'CALCU', icon: 'bank', group: 'pilotage', roles: ['R01', 'R05', 'R08', 'R15', 'R17', 'R22', 'R23'] } },
+  { path: '/verticales/fiches', element: lazy(() => import('./verticales/Fiches')), nav: { label: 'Fiches sectorielles (modules 13 à 25)', short: 'Fiches', icon: 'grid', group: 'operations', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24', 'R30', 'R31', 'R34', 'R35'] } },
+  // Partie V : patrimoine provincial (inventaire → évaluation → appel → revenus domaniaux) et environnement (registre, simulation).
+  { path: '/verticales/actifs', element: lazy(() => import('./verticales/Patrimoine')), nav: { label: 'Patrimoine provincial (MOSOLO Assets)', short: 'Patrimoine', icon: 'bank', group: 'operations', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R11', 'R15', 'R22', 'R23'] } },
+  { path: '/verticales/environnement', element: lazy(() => import('./verticales/Environnement')), nav: { label: 'Environnement — registre et simulation', short: 'Environnement', icon: 'leaf', group: 'operations', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R11', 'R22', 'R23'] } },
   { path: '/verticales/secteurs', element: lazy(() => import('./verticales/Secteurs')), nav: { label: 'Modules sectoriels (acte requis)', short: 'Secteurs', icon: 'grid', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24', 'R30', 'R31', 'R35'] } },
   // Référentiel des recettes (Cahier ch. 7) : transparence publique, inventaire et codes pour les agents habilités.
   { path: '/referentiel/recettes', element: lazy(() => import('./referentiel/Recettes')), nav: { label: 'Référentiel des recettes', short: 'Recettes', icon: 'ledger', group: 'public', roles: [] } },
+  // Modèle de données (ch. 30) et matrice d'habilitations (ch. 12) du Document maître FR 2, évalués en direct.
+  { path: '/referentiel/modele-donnees', element: lazy(() => import('./referentiel/ModeleDonnees')), nav: { label: 'Modèle de données et habilitations', short: 'Modèle', icon: 'table', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R13', 'R14', 'R16', 'R17', 'R22', 'R23', 'R25', 'R26', 'R28'] } },
 
   // Terrain : supervision, sous-traitants, badges
+  // Gestion documentaire (module 38) : pièces chiffrées, versions, sceau, OCR, conservation, exports filigranés.
+  { path: '/documents', element: lazy(() => import('./documents/Documents')), nav: { label: 'Gestion documentaire', short: 'Documents', icon: 'file', group: 'operations', roles: ['R06', 'R07', 'R09', 'R11', 'R12', 'R17', 'R18', 'R20', 'R21', 'R22', 'R23', 'R24', 'R25', 'R30', 'R31'] } },
+  // Notifications et communication (module 39) : modèles versionnés, avis sur plaque, indicateurs ; préférences du contribuable.
+  { path: '/communication/notifications', element: lazy(() => import('./communication/Notifications')), nav: { label: 'Notifications et modèles', short: 'Notifications', icon: 'message', group: 'operations', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R10', 'R11', 'R12', 'R13', 'R14', 'R16', 'R20', 'R21', 'R22', 'R23'] } },
+  { path: '/mes-preferences', element: lazy(() => import('./communication/MesPreferences')), nav: { label: 'Mes préférences de communication', short: 'Préférences', icon: 'message', group: 'public', roles: ['R30', 'R31'] } },
+  // Indicateurs des modules 27 à 40 (spécification fonctionnelle), calculés sur les données réelles.
+  { path: '/pilotage/indicateurs-modules-27-40', element: lazy(() => import('./pilotage/IndicateursModules2740')), nav: { label: 'Indicateurs des modules 27 à 40', short: 'Indicateurs 27–40', icon: 'gauge', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R08', 'R17', 'R18', 'R20', 'R21', 'R22', 'R23', 'R24'] } },
+  // Renseignement anti-fraude (module 40) : scores explicables, suspension conservatoire, transmission à l'autorité.
+  { path: '/integrite/renseignement', element: lazy(() => import('./integrite/Renseignement')), nav: { label: 'Renseignement anti-fraude', short: 'Renseignement', icon: 'shieldCheck', group: 'operations', roles: ['R24', 'R22', 'R28', 'R26', 'R06', 'R21'] } },
+  // Inspection et constat (module 35) : dossiers préparés, paquet hors ligne, procès-verbaux selon les pouvoirs.
+  { path: '/terrain/inspection', element: lazy(() => import('./terrain/Inspection')), nav: { label: 'Inspection et constat', short: 'Inspection', icon: 'file', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R23', 'R24'] } },
+  { path: '/mes-proces-verbaux', element: lazy(() => import('./terrain/MesProcesVerbaux')), nav: { label: 'Procès-verbaux me concernant', short: 'PV', icon: 'file', group: 'public', roles: ['R30', 'R31'] } },
   { path: '/terrain/supervision', element: lazy(() => import('./terrain/Supervision')), nav: { label: 'Supervision terrain', short: 'Supervision', icon: 'gauge', group: 'operations', roles: ['R06', 'R07', 'R09', 'R11', 'R22', 'R23', 'R24', 'R35'] } },
   { path: '/terrain/sous-traitants', element: lazy(() => import('./terrain/Subcontractors')), nav: { label: 'Sous-traitants et équipes', short: 'Sous-traitants', icon: 'users', group: 'operations', roles: ['R06', 'R07', 'R08', 'R09', 'R11', 'R17', 'R22', 'R23', 'R24', 'R35'] } },
   // Apprentissage et environnement de travail (§ 24) : espace par rôle, mes certificats, administration des certifications
@@ -161,6 +185,12 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/pilotage/accords-service', element: lazy(() => import('./pilotage/AccordsService')), nav: { label: 'Accords de service entre entités', short: 'Accords', icon: 'users', group: 'pilotage', roles: [...DASH, 'R15', 'R16'] } },
   { path: '/pilotage/projets', element: lazy(() => import('./pilotage/Projets')), nav: { label: 'Projets publics et emploi des fonds', short: 'Projets', icon: 'building', group: 'pilotage', roles: [...DASH, 'R15', 'R16'] } },
   { path: '/pilotage/partage-legal', element: lazy(() => import('./pilotage/PartageLegal')), nav: { label: 'Partage légal des recettes', short: 'Partage', icon: 'scale', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R08', 'R13', 'R14', 'R15', 'R16', 'R17', 'R18', 'R22', 'R23', 'R24'] } },
+  // Programme (Document maître FR 2, ch. 41–48) : risques, recette, versions, 100 premiers jours, décisions du Gouvernement.
+  { path: '/pilotage/risques', element: lazy(() => import('./pilotage/Risques')), nav: { label: 'Registre des risques', short: 'Risques', icon: 'alert', group: 'pilotage', roles: PROGRAMME } },
+  { path: '/pilotage/recette', element: lazy(() => import('./pilotage/Recette')), nav: { label: 'Recette — critères d’acceptation', short: 'Recette', icon: 'check', group: 'pilotage', roles: PROGRAMME } },
+  { path: '/pilotage/versions', element: lazy(() => import('./pilotage/Versions')), nav: { label: 'Plan de livraison par versions', short: 'Versions', icon: 'table', group: 'pilotage', roles: PROGRAMME } },
+  { path: '/pilotage/cent-jours', element: lazy(() => import('./pilotage/CentJours')), nav: { label: 'Plan des 100 premiers jours', short: '100 jours', icon: 'clock', group: 'pilotage', roles: PROGRAMME } },
+  { path: '/pilotage/decisions-gouvernement', element: lazy(() => import('./pilotage/Decisions')), nav: { label: 'Décisions du Gouvernement provincial', short: 'Décisions', icon: 'scale', group: 'pilotage', roles: PROGRAMME } },
   { path: '/satisfaction', element: lazy(() => import('./pilotage/Satisfaction')), nav: { label: 'Donner mon avis', short: 'Avis', icon: 'check', group: 'public', roles: ['R30', 'R31'] } },
 
   // Vision : sept questions par objet et par obligation, chaîne opératoire en treize maillons, maillons sautés (audit)
@@ -192,6 +222,34 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/vehicules/mes-vehicules', element: lazy(() => import('./vehicules-controle/MesVehicules')), nav: { label: 'Mes véhicules', short: 'Véhicules', icon: 'car', group: 'public', roles: ['R30', 'R31'] } },
   { path: '/vehicules/verifier', element: lazy(() => import('./vehicules-controle/VerifierVignette')), nav: { label: 'Vérifier une vignette technique ou un centre', short: 'Vignette technique', icon: 'shieldCheck', group: 'public', roles: [] } },
   { path: '/v/ct/:numero', element: lazy(() => import('./vehicules-controle/VerifierVignette')) },
+  // Parcours du citoyen — modules 1 à 12 de la Spécification fonctionnelle (application Android et iOS, portail public,
+  // relations, cadastre, locatif, patentes, véhicules, transport, indicateurs).
+  { path: '/application', element: lazy(() => import('./citoyen/Application')), nav: { label: 'Application mobile (Android et iOS)', short: 'Application', icon: 'phone', group: 'public', roles: [] } },
+  { path: '/simulateurs', element: lazy(() => import('./citoyen/PortailPublic')), nav: { label: 'Informations et simulateurs', short: 'Simuler', icon: 'analysis', group: 'public', roles: [] } },
+  { path: '/citoyen/pieces', element: lazy(() => import('./citoyen/Pieces')), nav: { label: 'Contrôle des pièces (enrôlement)', short: 'Pièces', icon: 'shieldCheck', group: 'operations', roles: ['R07', 'R09', 'R10', 'R11', 'R12', 'R22', 'R30', 'R31'] } },
+  { path: '/mon-espace/situation', element: lazy(() => import('./citoyen/Situation')), nav: { label: 'Attestation de situation', short: 'Situation', icon: 'file', group: 'public', roles: ['R30', 'R31', 'R12'] } },
+  { path: '/citoyen/relations', element: lazy(() => import('./citoyen/Relations')), nav: { label: 'Relations : revue à la date d’effet', short: 'Relations', icon: 'replace', group: 'operations', roles: ['R06', 'R07', 'R11', 'R22'] } },
+  { path: '/citoyen/cadastre', element: lazy(() => import('./citoyen/Cadastre')), nav: { label: 'Cadastre fiscal géospatial', short: 'Cadastre', icon: 'pin', group: 'operations', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24'] } },
+  { path: '/citoyen/locatif', element: lazy(() => import('./citoyen/Locatif')), nav: { label: 'Intelligence locative (IRL)', short: 'Locatif', icon: 'building', group: 'operations', roles: ['R01', 'R05', 'R06', 'R07', 'R09', 'R11', 'R22', 'R24'] } },
+  { path: '/citoyen/activites', element: lazy(() => import('./citoyen/Activites')), nav: { label: 'Activités et patentes', short: 'Patentes', icon: 'store', group: 'operations', roles: ['R01', 'R05', 'R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24', 'R30', 'R31'] } },
+  { path: '/citoyen/vehicules', element: lazy(() => import('./citoyen/Vehicules')), nav: { label: 'Véhicules et circulation', short: 'Véhicules', icon: 'car', group: 'operations', roles: ['R01', 'R05', 'R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24', 'R35'] } },
+  { path: '/citoyen/transport', element: lazy(() => import('./citoyen/Transport')), nav: { label: 'Autorisations de transport', short: 'Transport', icon: 'bus', group: 'operations', roles: ['R01', 'R05', 'R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24', 'R30', 'R31'] } },
+  { path: '/citoyen/indicateurs', element: lazy(() => import('./citoyen/Indicateurs')), nav: { label: 'Indicateurs des modules 1 à 12', short: 'KPI citoyen', icon: 'gauge', group: 'pilotage', roles: [...DASH, 'R11'] } },
+  // Pilotage et décision (modules 41 à 47), plateforme et accès (51 à 55), recettes spécifiques (56, 57), terrain (58), apprentissage (50)
+  { path: '/decision/commandement', element: lazy(() => import('./decision/Commandement')), nav: { label: 'Centre de commandement (Command Centre)', short: 'Commandement', icon: 'gauge', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R05'] } },
+  { path: '/decision/regie-fiscale', element: lazy(() => import('./decision/Regies').then((m) => ({ default: m.RegieFiscale }))), nav: { label: 'Tableau de bord de la régie fiscale', short: 'Régie fiscale', icon: 'chart', group: 'pilotage', roles: ['R06', 'R07', 'R01', 'R02', 'R03', 'R05', 'R22', 'R23'] } },
+  { path: '/decision/regie-taxes', element: lazy(() => import('./decision/Regies').then((m) => ({ default: m.RegieTaxes }))), nav: { label: 'Tableau de bord de la régie des taxes', short: 'Régie des taxes', icon: 'chart', group: 'pilotage', roles: ['R06', 'R07', 'R01', 'R02', 'R03', 'R05', 'R22', 'R23'] } },
+  { path: '/decision/ministere', element: lazy(() => import('./decision/Finances').then((m) => ({ default: m.TableauMinistere }))), nav: { label: 'Tableau de bord ministériel', short: 'Ministère', icon: 'building', group: 'pilotage', roles: ['R04', 'R01', 'R02', 'R03', 'R05', 'R17', 'R18', 'R22', 'R23'] } },
+  { path: '/decision/salle-controle', element: lazy(() => import('./decision/Finances').then((m) => ({ default: m.SalleControle }))), nav: { label: 'Salle de contrôle finances et trésorerie', short: 'Salle de contrôle', icon: 'alert', group: 'pilotage', roles: ['R17', 'R18', 'R05', 'R15', 'R01', 'R22', 'R23'] } },
+  { path: '/decision/audit', element: lazy(() => import('./decision/AuditInvestigation')), nav: { label: 'Audit et investigation', short: 'Audit', icon: 'shieldCheck', group: 'pilotage', roles: ['R22', 'R23', 'R24'] } },
+  { path: '/decision/previsions', element: lazy(() => import('./decision/Finances').then((m) => ({ default: m.PrevisionTresorerie }))), nav: { label: 'Prévision de trésorerie hebdomadaire', short: 'Prévision', icon: 'analysis', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R05', 'R06', 'R07', 'R15', 'R17', 'R18', 'R22', 'R23'] } },
+  { path: '/acces/delegations', element: lazy(() => import('./acces/Delegations')), nav: { label: 'Accès et délégations', short: 'Délégations', icon: 'users', group: 'operations', roles: ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R08', 'R09', 'R11', 'R12', 'R13', 'R14', 'R15', 'R16', 'R18', 'R20', 'R21', 'R22', 'R23', 'R24', 'R26', 'R28'] } },
+  { path: '/plateforme/partenaires', element: lazy(() => import('./plateforme/Plateforme').then((m) => ({ default: m.Partenaires }))), nav: { label: 'Intégration et API partenaires', short: 'API partenaires', icon: 'sync', group: 'operations', roles: ['R26', 'R27', 'R28', 'R25', 'R22', 'R23'] } },
+  { path: '/plateforme/administration', element: lazy(() => import('./plateforme/Plateforme').then((m) => ({ default: m.Administration }))), nav: { label: 'Administration de la plateforme', short: 'Administration', icon: 'grid', group: 'operations', roles: ['R26', 'R27', 'R28', 'R22', 'R23'] } },
+  { path: '/plateforme/supervision', element: lazy(() => import('./plateforme/Plateforme').then((m) => ({ default: m.SupervisionSante }))), nav: { label: 'Supervision et santé du système', short: 'Supervision', icon: 'gauge', group: 'operations', roles: ['R26', 'R27', 'R28', 'R22'] } },
+  { path: '/grands-redevables', element: lazy(() => import('./verticales/GrandsRedevables')), nav: { label: 'Grands redevables', short: 'Grands redevables', icon: 'building', group: 'operations', roles: ['R06', 'R07', 'R11', 'R01', 'R02', 'R05', 'R22', 'R23', 'R24'] } },
+  { path: '/terrain/equipements', element: lazy(() => import('./terrain/Equipements')), nav: { label: 'Équipements terrain (terminaux)', short: 'Terminaux', icon: 'phone', group: 'operations', roles: ['R28', 'R08', 'R09', 'R06', 'R22', 'R24', 'R26'] } },
+  { path: '/apprentissage/procedures', element: lazy(() => import('./apprentissage/Procedures')), nav: { label: 'Base de procédures', short: 'Procédures', icon: 'file', group: 'operations', roles: [] } },
 
   // IA : liens directs
   { path: '/ia/autonomie', element: lazy(() => import('./ia/AutonomyPage')) },

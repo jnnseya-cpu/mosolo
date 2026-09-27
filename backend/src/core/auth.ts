@@ -107,6 +107,22 @@ export class UserDirectory {
     return u;
   }
 
+  /**
+   * Suspension CONSERVATOIRE d'un accès technique (module 40) : décidée par une personne habilitée, limitée dans le
+   * temps, levée par une personne ; toute requête du compte est alors refusée (403). Ce n'est pas une sanction.
+   */
+  private readonly accessHolds = new Map<string, { reference: string; until: string; reason: string }>();
+  holdAccess(id: string, hold: { reference: string; until: string; reason: string }): void {
+    if (!this.users.has(id)) throw new Error(`Utilisateur inconnu : ${id}`);
+    this.accessHolds.set(id, hold);
+  }
+  releaseAccess(id: string): void {
+    this.accessHolds.delete(id);
+  }
+  accessHold(id: string): { reference: string; until: string; reason: string } | undefined {
+    return this.accessHolds.get(id);
+  }
+
   /** Contribuables pour lesquels un mandataire agit (mandats actifs). */
   setMandants(id: string, taxpayerIds: string[]): User {
     const u = this.users.get(id);
@@ -186,14 +202,25 @@ export function requireAcr(user: User, minimum: AcrValue): void {
   }
 }
 
+/**
+ * Préfixes des jetons MACHINE (clients partenaires OAuth2 « client credentials », module 52) : ils ne désignent aucune
+ * personne ; la résolution des utilisateurs les ignore et chaque interface partenaire les vérifie elle-même.
+ */
+const machineTokenPrefixes = new Set<string>();
+export function registerMachineTokenPrefix(prefix: string): void {
+  machineTokenPrefixes.add(prefix);
+}
+
 export function resolveDemoUser(req: FastifyRequest, directory: UserDirectory): User | undefined {
   const authz = req.headers.authorization;
   const verifier = bearerVerifiers.get(directory);
+  const machine = typeof authz === 'string' ? /^Bearer\s+(\S+)$/i.exec(authz.trim())?.[1] : undefined;
+  if (machine && [...machineTokenPrefixes].some((p) => machine.startsWith(p))) return undefined;
   // Sans fournisseur d'identité chargé, l'en-tête Authorization est ignoré (comportement historique).
   if (verifier && typeof authz === 'string' && authz.trim() !== '') {
     const m = /^Bearer\s+(\S+)$/i.exec(authz.trim());
     if (!m) throw unauthorized('INVALID_AUTHORIZATION', 'En-tête Authorization invalide (attendu : Bearer <jeton>).');
-    return verifier(m[1]!, req);
+    return assertNoAccessHold(directory, verifier(m[1]!, req));
   }
   const header = req.headers['x-demo-user'];
   const id = Array.isArray(header) ? header[0] : header;
@@ -201,6 +228,13 @@ export function resolveDemoUser(req: FastifyRequest, directory: UserDirectory): 
   if (!isDemoMode()) throw unauthorized('DEMO_AUTH_DISABLED', 'Authentification de démonstration désactivée : utilisez un jeton de session (Authorization: Bearer).');
   const user = directory.get(id);
   if (!user) throw unauthorized('UNKNOWN_DEMO_USER', `Utilisateur de démonstration inconnu : ${id}`);
+  return assertNoAccessHold(directory, user);
+}
+
+/** Refus de toute requête d'un compte dont l'accès technique est suspendu à titre conservatoire (module 40). */
+function assertNoAccessHold(directory: UserDirectory, user: User): User {
+  const hold = directory.accessHold(user.id);
+  if (hold) throw forbidden('ACCESS_SUSPENDED_PRECAUTIONARY', `Accès technique suspendu à titre conservatoire jusqu’au ${hold.until} (${hold.reference}). Mesure non disciplinaire : contacter le responsable sécurité.`, { reference: hold.reference, until: hold.until });
   return user;
 }
 

@@ -454,3 +454,67 @@ Chaque commune comprend des quartiers traités et des quartiers de comparaison a
 | 8 | Approuver les quatre communes pilotes et le calendrier (recensement avant février 2027) | Gouverneur | 15 jours |
 | 9 | Retenir le modèle commercial hybride (§ 37.3) et exclure tout prélèvement automatique de recettes au profit d'un tiers ; lancer la procédure de passation appropriée | Gouvernement, Finances | 60 jours |
 | 10 | Arrêter le financement des moyens physiques (terminaux, plaques, guichets, communications) et conditionner la généralisation à des résultats audités | Gouvernement provincial | 45 jours |
+
+
+# Complément — Document maître FR 2 (27/09/2026), chapitres 41 à 48 : ce qui est construit
+
+Les chapitres 40 à 47 ci-dessus sont ceux de la version 3.0 ; ils restent en vigueur (règle n° 1). La nouvelle version
+(FR 2) les renumérote en 41 à 48 et en modifie le contenu. Les deux registres sont harmonisés : chaque risque du FR 2 cite
+les risques de l'ancien registre qu'il recoupe. La matrice de couverture phrase par phrase figure dans
+`couverture-ch41-48.md`.
+
+- **Registre des risques (ch. 41)** — écran « Registre des risques » (`/pilotage/risques`), route
+  `/v1/pilotage/programme/risques`. Le registre reprend les treize risques, leur probabilité, leur impact et leur traitement
+  cités mot pour mot, avec une carte de chaleur. Chaque mesure est reliée au contrôle de la plateforme qui la met en œuvre
+  (fichier et test) ou marquée « externe » : dialogue social, séquestre du code, test d'intrusion, audit indépendant. Le
+  rôle propriétaire et la périodicité de revue (90 jours) sont des valeurs par défaut, à confirmer par le maître
+  d'ouvrage. Chaque risque est revu par son propriétaire ou par la supervision ; une revue en retard est signalée ; tout
+  est journalisé.
+- **Recette — critères d'acceptation (ch. 42, 43, 45)** — écran `/pilotage/recette`. Il présente :
+  - les 15 critères d'acceptation : les 10 du FR 2 et 5 critères « postes de décision » dont la preuve est à relier à
+    la fusion d'un autre lot ;
+  - les 10 récits du carnet, chacun prouvé par un test de bout en bout (`backend/test/carnet-recits.test.ts`) ;
+  - les 9 points de la stratégie de tests.
+
+  Chaque critère renvoie au test qui le prouve (`backend/test/recette-criteres.test.ts` et tests existants). Un test
+  vérifie que chaque fichier et chaque titre cités existent. Huit éléments exigent le monde réel : recette avec des agents
+  réels, test d'intrusion par un tiers, charge sur l'infrastructure cible, prestataires réels, dossiers anonymisés,
+  terminaux d'entrée de gamme, reprise après sinistre réelle, validation des jeux juridiques. Ils sont suivis par statut,
+  avec une preuve (procès-verbal et empreinte), et ne sont jamais simulés. Le script de charge
+  `tools/charge/pic-fin-janvier.mjs` (Node seul) complète le scénario k6 existant.
+- **Plan de livraison par versions (ch. 44)** — écran `/pilotage/versions`. Les versions V0.1 à V3.0 y sont rattachées
+  aux modules qui les livrent. La construction est vérifiée à l'exécution ; la mise en service est décidée par une
+  personne, sur procès-verbal.
+- **Pilote de 180 jours (ch. 46)** — le tableau du pilote gagne :
+  - la raison du choix et les objets prioritaires des quatre communes ;
+  - la séquence en cinq étapes, avec l'étape en cours ;
+  - le texte de chaque critère de succès et les indicateurs du § 40 qui le mesurent, pour les communes pilotes et les
+    communes témoins.
+
+  Le critère « contestations traitées dans le délai légal » est désormais mesuré par l'indicateur `RECOURS_DANS_DELAI`.
+- **Plan des 100 premiers jours (ch. 47)** — écran `/pilotage/cent-jours`. Il reprend les six périodes, leurs actions et
+  leurs responsables. Le jour 1 est fixé par une personne. Chaque action est suivie par une personne, avec une instruction
+  de suivi émise par le circuit existant des instructions. Les plans datés et les comités des ch. 35 à 37 relèvent d'un
+  autre lot.
+- **Décisions requises du Gouvernement provincial (ch. 48)** — écran `/pilotage/decisions-gouvernement`. Le registre
+  reprend les dix décisions mot pour mot, avec pour chacune :
+  - un statut (à prendre, prise, refusée) ;
+  - l'acte correspondant (référence, date et empreinte) ;
+  - un enregistrement par une personne, puis une validation par une autre (circuit `DECISION_GOUVERNEMENT`).
+
+  Pour chaque décision, l'écran affiche ce qu'elle débloque, avec l'état calculé des verrous de la plateforme. Une
+  décision enregistrée ne force jamais un verrou : le point J14 reste « acte requis » tant qu'il n'est pas tranché par son
+  propre circuit.
+
+  La synthèse finale (48.2) est affichée. **La décision n° 10** (« sans pourcentage automatique sur les recettes
+  publiques ») contredit le modèle du § 37A retenu par le maître d'ouvrage. Le comportement du § 37A n'est pas modifié. La
+  contradiction est enregistrée : « Contradiction signalée au maître d'ouvrage — arbitrage attendu ».
+- **Refus de l'OL 13/001** — l'instrument est enregistré ABROGÉ. Toute règle qui le cite comme texte en vigueur est
+  refusée à la publication ; ce refus est vérifié par les tests.
+- **Compléments issus des récits et des critères** :
+  - la déclaration IRL affiche le taux, la retenue et l'arrêté, et accepte une pièce justificative facultative ;
+  - le constat d'un objet non enregistré porte sa catégorie ;
+  - le recours est affecté dès son dépôt à la file d'instruction de l'entité administratrice ;
+  - toute lecture directe d'un dossier journalise un motif (déclaré, sinon la finalité du rôle) ;
+  - les tableaux distinguent explicitement les six états ;
+  - la carte des écarts du Gouverneur est présentée en carte schématique et s'exporte signée.

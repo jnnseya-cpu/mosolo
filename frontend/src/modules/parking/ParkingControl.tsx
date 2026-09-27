@@ -3,6 +3,7 @@
  * Contrôle par plaque (résultat minimal : vert, ambre, rouge), constat photographique HUMAIN,
  * vérification par une personne distincte. Aucune sanction, aucun encaissement sur le terrain.
  */
+import { ActiveTitles, type ActiveTitle } from './Stationnement14';
 import { OverduePenalties, type OverduePenaltiesData } from '../../components/OverduePenalties';
 import { AssistedPay } from '../../components/AssistedPay';
 import { useRef, useState, type FormEvent } from 'react';
@@ -26,7 +27,7 @@ import { usePreciseLocation, withPresence, type PreciseFix } from '../../lib/geo
 import './parking.css';
 
 interface PenaltyLine { module: string; reference: string; nature: string; status: string; createdAt: string; decidedAt: string | null; amount: MoneyJSON | null; payment: string; unpaid: boolean; overdueDays: number | null; zone?: string; obligationId?: string | null }
-interface ControlResult { checkId: string; plate: string; zone: { id: string; code: string; name: string } | null; light: Light; title: string | null; validUntil: string | null; checkedAt: string; guidance: string; penalties?: PenaltyLine[]; penaltiesUnpaid?: number; penalitesImpayees?: OverduePenaltiesData; presenceVerified?: boolean }
+interface ControlResult { checkId: string; plate: string; zone: { id: string; code: string; name: string } | null; light: Light; title: string | null; validUntil: string | null; checkedAt: string; guidance: string; penalties?: PenaltyLine[]; penaltiesUnpaid?: number; penalitesImpayees?: OverduePenaltiesData; presenceVerified?: boolean; activeTitles?: ActiveTitle[] }
 interface Evidence { photoIds: string[]; place: string; lat: number; lon: number; accuracy: number | null }
 
 export default function ParkingControl() {
@@ -115,11 +116,12 @@ function ControlPanel({ zones, loading, onRecorded }: { zones: Zone[]; loading: 
             <div className="pk-light-icon"><Icon name={view.icon} size={40} /></div>
             <p className="pk-light-title">{view.label}</p>
             <p><span className="pk-plate">{result.plate}</span></p>
-            {result.validUntil && <p className="small">Valable jusqu’à {fmtDate(result.validUntil, true)} ({result.title === 'RESERVATION' ? 'réservation' : result.title === 'TITRE' ? 'abonnement ou titre lié à la plaque' : 'session'})</p>}
+            {result.validUntil && <p className="small">Valable jusqu’à {fmtDate(result.validUntil, true)} ({result.title === 'RESERVATION' ? 'réservation' : result.title === 'TITRE' ? 'abonnement ou titre lié à la plaque' : result.title === 'EXEMPTION' ? 'exemption' : 'session'})</p>}
             <p className="small">{result.guidance}</p>
             <p className="small muted">Contrôle {result.checkId} · {fmtDate(result.checkedAt, true)}</p>
           </div>
           {result.presenceVerified === false && <p className="notice small" role="note"><Icon name="gps" size={14} /> Position non vérifiée : contrôle sans commission.</p>}
+          <ActiveTitles items={result.activeTitles} />
           <Penalties items={result.penalties ?? []} />
           {/* Pénalités des autres modules impayées depuis plus de 30 jours (visibles après ce contrôle). */}
           <OverduePenalties data={result.penalitesImpayees} />

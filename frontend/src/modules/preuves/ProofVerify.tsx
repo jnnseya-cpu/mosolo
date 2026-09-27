@@ -53,7 +53,7 @@ export default function ProofVerify() {
           <input id="pv-code" className="input mono" value={input} onChange={(e) => setInput(e.target.value)} autoComplete="off" autoCapitalize="characters" placeholder="ex. PKT4K7M2QX, EVT-2026-00001-W, Q26KIN…" />
           <button className="btn btn-primary" disabled={busy || !input.trim()}><Icon name="shieldCheck" size={16} /> Vérifier</button>
         </div>
-        <p className="small muted">Sans smartphone : USSD <b>*[code court À CONFIGURER]#</b>, SMS <b>V</b> + code, WhatsApp <b>MENU</b>, ou la <a href={`${API_URL}/l`}>version légère</a> (sans application, faible débit).</p>
+        <p className="small muted">Sans smartphone : USSD <b>*[code court À RACCORDER — convention opérateur requise]#</b>, SMS <b>V</b> + code, WhatsApp <b>MENU</b>, ou la <a href={`${API_URL}/l`}>version légère</a> (sans application, faible débit).</p>
         {scan
           ? <QrScanner onResult={(raw) => { setScan(false); nav(scanTarget(raw)); }} onClose={() => setScan(false)} />
           : <button type="button" className="btn btn-secondary pv-scan" onClick={() => setScan(true)}><Icon name="qr" size={18} /> Scanner un QR code</button>}

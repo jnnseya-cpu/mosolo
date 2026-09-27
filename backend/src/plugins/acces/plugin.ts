@@ -8,6 +8,7 @@ import { conflict } from '../../core/errors.js';
 import { DEMO } from '../../seed.js';
 import { definePlugin } from '../types.js';
 import type { EntityKind } from './model.js';
+import { registerAccesIndicatorRoutes } from './indicateurs.js';
 import { registerAccesPolicies } from './policy.js';
 import { registerAccesRoutes } from './routes.js';
 import { AccesService } from './service.js';
@@ -181,5 +182,9 @@ export const accesPlugin = definePlugin<AccesService>({
     return svc;
   },
   seed: (ctx, svc) => seedDemo(ctx, svc),
-  routes: (app, ctx, svc) => registerAccesRoutes(app, ctx, svc),
+  routes: (app, ctx, svc) => {
+    registerAccesRoutes(app, ctx, svc);
+    // Indicateurs des modules 72 (modules activés, arbitrages, délais) et 74 (invitations, délais, révocations).
+    registerAccesIndicatorRoutes(app, ctx, svc);
+  },
 });

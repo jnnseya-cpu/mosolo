@@ -38,4 +38,8 @@ export function declareParkingPolicies(): void {
   definePolicy('parking:overbooking.validate', { R06: sameEntity });
   definePolicy('parking:affectation.manage', { R06: sameEntity, R07: sameEntity });
   definePolicy('parking:deployment.activate', { R06: sameEntity });
+  // Module 14 : exemptions (véhicules officiels, cas prévus par la règle) — la régie instruit, l'autorité décide (4 yeux).
+  definePolicy('parking:exemption.request', { R07: sameEntity, R06: sameEntity });
+  definePolicy('parking:exemption.decide', { R06: sameEntity, R07: sameEntity });
+  definePolicy('parking:exemption.read', { R06: sameEntity, R07: sameEntity, R09: sameEntity, R11: sameEntity, R22: always, R23: always });
 }

@@ -23,10 +23,15 @@ export const REQUIRED_VAULT_APPROVALS = 2;
 /** Veto d'un changement de compte bénéficiaire en attente ou en refroidissement. */
 definePolicy('vault:beneficiary.veto', { R01: GRANTS.always, R05: GRANTS.always, R22: GRANTS.always, R19: GRANTS.always });
 
+/** Nature du compte public de destination (module 60) : compte bancaire ou compte marchand Mobile Money public. */
+export type BeneficiaryAccountKind = 'BANCAIRE' | 'MOBILE_MONEY';
+
 export interface BeneficiaryAccount {
   id: string; // = alias
   alias: string;
   entity: string;
+  /** Absent sur les comptes historiques : compte bancaire. */
+  kind?: BeneficiaryAccountKind;
   bankName: string;
   accountNumber: string;
   holderName: string;
@@ -45,6 +50,11 @@ export interface ChangeRequest {
   approvals: { userId: string; at: string; outOfBandVerified: true }[];
   status: 'EN_ATTENTE_APPROBATION' | 'EN_REFROIDISSEMENT' | 'EFFECTIF' | 'ANNULEE';
   coolingEndsAt?: string;
+  /**
+   * Date d'effet FUTURE demandée (module 60) : le changement ne prend effet qu'à la plus tardive de cette date et de la
+   * fin du refroidissement. Absente : effet à la fin du refroidissement.
+   */
+  effectiveFrom?: string;
   effectiveAt?: string;
   /** Veto motivé : la demande est définitivement annulée, le compte en vigueur ne change pas. */
   veto?: { by: string; at: string; motif: string };
@@ -92,9 +102,15 @@ export class VaultService {
     return (['R01', 'R05', 'R22', 'R19'] as const).flatMap((r) => this.users.withRole(r)).map(userRecipient);
   }
 
-  propose(user: User, input: { alias: string; bankName: string; accountNumber: string; holderName: string; reason: string }): ChangeRequest {
+  propose(user: User, input: { alias: string; bankName: string; accountNumber: string; holderName: string; reason: string; effectiveFrom?: string }): ChangeRequest {
     authorize(user, 'beneficiary.propose');
     if (!this.aliasExists(input.alias)) throw notFound('UNKNOWN_BENEFICIARY_ALIAS', `Alias inconnu du coffre : ${input.alias}`);
+    if (input.effectiveFrom !== undefined) {
+      const at = Date.parse(input.effectiveFrom);
+      const earliest = this.clock.now().getTime() + COOLING_OFF_HOURS * HOUR_MS;
+      if (Number.isNaN(at)) throw unprocessable('INVALID_EFFECTIVE_DATE', 'Date d’effet invalide.');
+      if (at < earliest) throw unprocessable('EFFECTIVE_DATE_TOO_EARLY', `La date d’effet doit être future et postérieure au refroidissement de ${COOLING_OFF_HOURS} h (au plus tôt ${new Date(earliest).toISOString()}).`);
+    }
     const req = this.requests.insert({
       id: this.ids.next('CHG'),
       alias: input.alias,
@@ -104,13 +120,14 @@ export class VaultService {
       requestedAt: this.clock.now().toISOString(),
       approvals: [],
       status: 'EN_ATTENTE_APPROBATION',
+      ...(input.effectiveFrom ? { effectiveFrom: new Date(input.effectiveFrom).toISOString() } : {}),
     });
     this.audit.append({
       actor: { kind: 'user', id: user.id, roles: user.roles },
       action: 'beneficiary.change.proposed',
       resourceType: 'beneficiary_change',
       resourceId: req.id,
-      details: { alias: req.alias, proposedAccountHash: sha256Hex(input.accountNumber), reason: input.reason },
+      details: { alias: req.alias, proposedAccountHash: sha256Hex(input.accountNumber), reason: input.reason, effectiveFrom: req.effectiveFrom ?? null },
     });
     this.comms.publish('beneficiary.change.proposed', this.watchers(), { reference: req.id }, { entity: 'TRESOR' });
     return req;
@@ -173,6 +190,8 @@ export class VaultService {
     const now = this.clock.now();
     for (const req of this.requests.find((r) => r.status === 'EN_REFROIDISSEMENT')) {
       if (!req.coolingEndsAt || new Date(req.coolingEndsAt) > now) continue;
+      // Date d'effet future demandée : le changement attend cette date, même après le refroidissement.
+      if (req.effectiveFrom && new Date(req.effectiveFrom) > now) continue;
       const acc = this.accounts.get(req.alias)!;
       this.accounts.update({ ...acc, ...req.proposed, version: acc.version + 1, effectiveSince: now.toISOString() });
       this.requests.update({ ...req, status: 'EFFECTIF', effectiveAt: now.toISOString() });
@@ -197,8 +216,27 @@ export class VaultService {
   view() {
     this.applyDue();
     return {
-      accounts: this.accounts.all().map((a) => ({ ...a, accountNumber: maskAccount(a.accountNumber) })),
+      accounts: this.accounts.all().map((a) => ({ ...a, kind: a.kind ?? 'BANCAIRE', accountNumber: maskAccount(a.accountNumber) })),
       changeRequests: this.requests.all().map((r) => ({ ...r, proposed: { ...r.proposed, accountNumber: maskAccount(r.proposed.accountNumber) } })),
+      indicators: this.indicators(),
+    };
+  }
+
+  /**
+   * Indicateurs du module 60 : changements demandés, approuvés (quorum atteint : refroidissement ou effectifs),
+   * refusés (veto), en attente — et comptes verrouillés par nature. Calculés sur les demandes réelles.
+   */
+  indicators() {
+    const all = this.requests.all();
+    const accounts = this.accounts.all();
+    return {
+      requested: all.length,
+      approved: all.filter((r) => r.status === 'EN_REFROIDISSEMENT' || r.status === 'EFFECTIF').length,
+      effective: all.filter((r) => r.status === 'EFFECTIF').length,
+      refused: all.filter((r) => r.status === 'ANNULEE').length,
+      pending: all.filter((r) => r.status === 'EN_ATTENTE_APPROBATION').length,
+      coolingOff: all.filter((r) => r.status === 'EN_REFROIDISSEMENT').length,
+      accounts: { total: accounts.length, bank: accounts.filter((a) => (a.kind ?? 'BANCAIRE') === 'BANCAIRE').length, mobileMoney: accounts.filter((a) => a.kind === 'MOBILE_MONEY').length },
     };
   }
 

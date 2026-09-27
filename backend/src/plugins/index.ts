@@ -3,6 +3,10 @@ import type { MosoloPlugin } from './types.js';
 import { accesPlugin } from './acces/plugin.js';
 import { fiscalPlugin } from './fiscal/plugin.js';
 import { tresorPlugin } from './tresor/plugin.js';
+import { tresorRelevesPlugin } from './tresor/releves.js';
+import { documentsPlugin } from './documents/plugin.js';
+import { communicationPlugin } from './communication/plugin.js';
+import { indicateursModules2740Plugin } from './pilotage/indicateurs-modules-27-40.js';
 import { recouvrementPlugin } from './recouvrement/plugin.js';
 import { campagnesPlugin } from './recouvrement/campagnes-plugin.js';
 import { titresPlugin } from './titres/plugin.js';
@@ -22,6 +26,7 @@ import { repartitionPlugin } from './pilotage/repartition/plugin.js';
 import { planificationPlugin } from './pilotage/planification/plugin.js';
 import { partageLegalPlugin } from './pilotage/partage-legal/plugin.js';
 import { programmePlugin } from './pilotage/programme/plugin.js';
+import { recetteProgrammePlugin } from './pilotage/recette-programme/plugin.js';
 import { iaPlugin } from './ia/plugin.js';
 import { opportunitesPlugin } from './opportunites/plugin.js';
 import { iaModelesPlugin } from './ia/modeles.js';
@@ -34,6 +39,13 @@ import { integriteDetecteursPlugin } from './integrite/detecteurs/plugin.js';
 import { catalogueApiPlugin } from './catalogue-api/plugin.js';
 import { postesPlugin } from './postes/plugin.js';
 import { vehiculesControlePlugin } from './vehicules-controle/plugin.js';
+import { citoyenPlugin } from './citoyen/plugin.js';
+import { decisionPlugin } from './decision/plugin.js';
+import { plateformePlugin } from './plateforme/plugin.js';
+import { accesDelegationsPlugin } from './acces/delegations-plugin.js';
+import { equipementsPlugin } from './equipements/plugin.js';
+import { grandsRedevablesPlugin } from './verticales/grands-redevables-plugin.js';
+import { integriteEnquetesPlugin } from './integrite/enquetes/plugin.js';
 
 /**
  * Ordre : `acces` en tête (garde des revendications, mandats), puis `fiscal` (il branche les exonérations sur la liquidation), `titres` avant `rakapay`,
@@ -44,6 +56,12 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   accesPlugin,
   fiscalPlugin,
   tresorPlugin,
+  // Dépôt des fichiers de relevés (module 29) : file commune des imports à double validation.
+  tresorRelevesPlugin,
+  // Gestion documentaire (module 38) : stockage chiffré, versions, sceau, OCR, conservation, exports filigranés.
+  documentsPlugin,
+  // Notifications et communication (module 39) : modèles versionnés, préférences, accusés, canal de secours, avis sur plaque.
+  communicationPlugin,
   recouvrementPlugin,
   campagnesPlugin,
   titresPlugin,
@@ -59,6 +77,8 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   apprentissagePlugin,
   terrainPlugin,
   integritePlugin,
+  // Renseignement anti-fraude (module 40) : signaux, scores explicables, suspension conservatoire, transmission.
+  integriteEnquetesPlugin,
   integriteGouvernancePlugin,
   integriteSecuritePlugin,
   pilotagePlugin,
@@ -66,6 +86,8 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   planificationPlugin,
   programmePlugin,
   partageLegalPlugin,
+  // Programme (Document maître FR 2, ch. 41–48) : après planification (circuit des instructions) et pilotage.
+  recetteProgrammePlugin,
   iaPlugin,
   opportunitesPlugin,
   iaModelesPlugin,
@@ -79,5 +101,19 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   postesPlugin,
   // Routes françaises du catalogue des API (Cahier, ch. 31) : relais vers les routes canoniques de tous les modules.
   catalogueApiPlugin,
+  // Parcours du citoyen (modules 1 à 12) : après fiscal, titres, verticales, canaux et terrain qu'il relit.
+  citoyenPlugin,
+  // Pilotage et décision (modules 41 à 47) : lit le pilotage, la planification, le Trésor et l'intégrité.
+  decisionPlugin,
+  // Accès et délégations (module 51) : délégations, ABAC expliqué, détections, révocation à la fin d'une affectation.
+  accesDelegationsPlugin,
+  // Grands redevables (module 56) : portefeuille, gestionnaire dédié et rotation, conventions, journal des décisions.
+  grandsRedevablesPlugin,
+  // Gestion des équipements terrain (module 58) : MDM, attestation, expiration des données, appareil modifié.
+  equipementsPlugin,
+  // Plateforme (modules 52, 53, 55) : API partenaires, administration, supervision — avant le socle (limitation de débit).
+  plateformePlugin,
   soclePlugin,
+  // Indicateurs des modules 27 à 40 (spécification fonctionnelle) : lecture seule, après tous les modules.
+  indicateursModules2740Plugin,
 ];

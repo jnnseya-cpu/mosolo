@@ -26,6 +26,7 @@ import type { Credential, CredentialPlace, CredentialType } from '../titres/mode
 import { normalizePlate, type ControlInput, type MinimalControlView, type TitresService } from '../titres/service.js';
 import { statusAt } from '../titres/validity.js';
 import { OperateursRakaPay } from './operateurs.js';
+import { BilletterieRakaPay } from './billetterie.js';
 
 definePolicy('rakapay:register', { R10: GRANTS.inTerritory('full'), R09: GRANTS.inTerritory('full'), R07: GRANTS.always, R30: GRANTS.ownTaxpayer });
 definePolicy('rakapay:coop.manage', { R30: GRANTS.ownTaxpayer, R07: GRANTS.sameEntity, R06: GRANTS.sameEntity });
@@ -194,10 +195,13 @@ export class RakaPayService {
 
   /** Multi-opérateurs (§ 11D) : agrément, offres, agents exclusifs, circuit privé séparé, revue des ventes atypiques. */
   readonly operateurs: OperateursRakaPay;
+  /** Module 76/81 : limites approuvées, ajustements de l'opérateur, commission instantanée, analyse quotidienne, blocage préventif, période de grâce. */
+  readonly billetterie: BilletterieRakaPay;
 
   constructor(private readonly ctx: AppContext) {
     this.defineTypes();
     this.operateurs = new OperateursRakaPay(ctx, this);
+    this.billetterie = new BilletterieRakaPay(ctx, this);
   }
 
   get titres(): TitresService {
@@ -670,8 +674,15 @@ export class RakaPayService {
         total: this.complaints.count(), open: this.complaints.find((c) => c.status !== 'CLOS').length, closed: closed.length,
         averageHandlingHours: avgHours, confirmedShare: closed.length ? (confirmed / closed.length).toFixed(4) : null,
         byCommune: [...this.complaints.all().reduce((m, c) => m.set(c.commune, (m.get(c.commune) ?? 0) + 1), new Map<string, number>())].map(([commune, count]) => ({ commune, count })),
+        // Module 81 : plaintes de prélèvements irréguliers (prélèvement ou demande d'espèces sur la route), confirmées ou non.
+        irregularLevies: this.complaints.find((c) => c.category === 'PRELEVEMENT_IRREGULIER' || c.category === 'DEMANDE_ESPECES').length,
+        irregularLeviesConfirmed: closed.filter((c) => c.confirmed && (c.category === 'PRELEVEMENT_IRREGULIER' || c.category === 'DEMANDE_ESPECES')).length,
       },
-      tickets: { sold: tickets.credentials.total, active: tickets.credentials.active, controls: tickets.controls.total, reuseAttempts: tickets.controls.reuseAttempts },
+      tickets: {
+        sold: tickets.credentials.total, active: tickets.credentials.active, controls: tickets.controls.total, reuseAttempts: tickets.controls.reuseAttempts,
+        // Module 76 : pénalités retenues (pourcentage réglementaire) et pénalités contestées.
+        penaltiesRetained: tickets.constats.retained, penaltiesContested: tickets.constats.contested,
+      },
       revenueByCommune: [...revenue.entries()].map(([commune, m]) => ({ commune, basis: 'STATION_DEPART', amounts: [...m.values()].map((x) => x.toJSON()) })),
       titres: { wewa: wewaInd, billetterie: tickets },
     };

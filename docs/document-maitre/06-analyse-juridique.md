@@ -233,3 +233,24 @@ Règles complémentaires : une règle en brouillon ou approuvée mais non encore
 | J14 | Base légale des échéanciers et de la régularisation volontaire (abandon de pénalités) | Finances / Assemblée provinciale | Texte | Modules 83 et 90 désactivés | — |
 | J15 | Compétence provinciale pour une contribution plastique ou une REP (art. 174 Constitution, nomenclature, Décret 17/018) | Juridique + Environnement + pouvoir central | Analyse | Aucune activation | Catégorie `ACTE_REQUIS` |
 | J16 | Portée d'une décision de la Cour constitutionnelle de 2024 sur la création d'impôts provinciaux hors nomenclature, rapportée par la presse | Service juridique | Arrêt | Aucune recette nouvelle hors nomenclature | Catégorie `ACTE_REQUIS` |
+
+
+## 6.14 Complément — Document maître FR 2 (27/09/2026) : annexes A et B
+
+- **Annexe A (sources et fiabilité)** : les onze sources sont reprises mot pour mot au registre juridique
+  (`SOURCES_ANNEXE_A`). Chacune est rattachée aux instruments du registre des textes, dont le statut est affiché, et aux
+  points juridiques. Une source n'active jamais rien par elle-même. Le taux budgétaire moyen de 2025 est cité comme source
+  et n'est pas paramétré.
+- **Annexe B (13 points à vérifier)** : les points 1 à 8 étaient déjà couverts par J1 à J10. J5 cite la DGIPK ; la
+  dénomination DGRFK est à harmoniser selon les textes. Les points 9 à 13 ajoutent cinq points juridiques :
+  - **J31** : statuts de la RFCK ;
+  - **J32** : arrêté ministériel du 12 novembre 2025 ;
+  - **J33** : fourrière, avec J24 ;
+  - **J34** : nom de domaine officiel ;
+  - **J35** : valeur probante de la vignette électronique et de la vérification en ligne.
+
+  Pour ces points, l'autorité, l'hypothèse intérimaire et le verrou sont par défaut, à confirmer. Chacun se tranche par le
+  circuit existant : acte, puis deux personnes distinctes. Le 13e point ne figure que dans le fichier Word de la
+  nouvelle version.
+- La décision n° 3 du Gouvernement provincial (ch. 48) écarte expressément l'OL 13/001. Le registre des textes la tient
+  pour ABROGÉE, et toute règle qui la cite comme en vigueur est refusée à la publication.

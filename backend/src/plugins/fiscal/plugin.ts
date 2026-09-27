@@ -62,5 +62,14 @@ export const fiscalPlugin = definePlugin<FiscalService>({
   name: 'fiscal',
   create: (ctx) => new FiscalService(ctx),
   seed: (_ctx, svc) => svc.seedDemo(),
-  routes: (app, ctx, svc) => registerFiscalRoutes(app, ctx, svc),
+  routes: (app, ctx, svc) => {
+    registerFiscalRoutes(app, ctx, svc);
+    // Échéance et révision automatiques des exonérations (module 57) : toutes les heures hors tests.
+    const flag = (process.env.MOSOLO_EXONERATIONS_ECHEANCIER ?? '').trim().toLowerCase();
+    if (flag === 'on' || (flag !== 'off' && !process.env.VITEST)) {
+      const t = setInterval(() => { try { svc.exemptions.runReminders(); } catch { /* journalisé */ } }, 3_600_000);
+      t.unref();
+      app.addHook('onClose', async () => clearInterval(t));
+    }
+  },
 });

@@ -11,7 +11,7 @@ import { repartitionPlugin } from '../src/plugins/pilotage/repartition/plugin.js
 import { KEY_ID, type RepartitionService } from '../src/plugins/pilotage/repartition/service.js';
 import { tresorPlugin } from '../src/plugins/tresor/plugin.js';
 import { DEMO } from '../src/seed.js';
-import { callbackBody, PROVIDER_SECRET, publishCertifiedRule, signedCallback, type TestEnv } from './helpers.js';
+import { callbackBody, PROVIDER_SECRET, publishCertifiedRule, signedCallback, type TestEnv, postStatement } from './helpers.js';
 
 async function setupRep() {
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
@@ -38,7 +38,7 @@ async function payAndReconcile(env: Env) {
   const ob = env.app.ctx.assessment.byTaxpayer(DEMO.taxpayerId)[0]!.id;
   const order = (await env.req('POST', `/v1/obligations/${ob}/payment-orders`, 'u-contribuable', { channel: 'MOBILE_MONEY' }, { 'idempotency-key': randomUUID() })).json();
   await signedCallback(env, callbackBody(env, order.paymentReference));
-  const st = await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+  const st = await postStatement(env, 'u-tresor', {
     statementId: `REL-${randomUUID().slice(0, 8)}`,
     lines: [{ accountAlias: DEMO.dgipkAlias, amount: { amount: '150.00', currency: 'USD' }, valueDate: '2026-09-26', paymentReference: order.paymentReference }],
   });
@@ -94,7 +94,7 @@ describe('Clé de répartition § 37A : ACTE_REQUIS, simulation seulement', () =
     const o1 = (await env.req('POST', `/v1/obligations/${ob}/payment-orders`, 'u-contribuable', { channel: 'MOBILE_MONEY' }, { 'idempotency-key': randomUUID() })).json();
     await signedCallback(env, callbackBody(env, o1.paymentReference));
     expect((await env.req('GET', '/v1/pilotage/repartition', 'u-ministre-finances')).json().totals).toEqual([]);
-    await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+    await postStatement(env, 'u-tresor', {
       statementId: 'REL-TEST-1', lines: [{ accountAlias: DEMO.dgipkAlias, amount: { amount: '150.00', currency: 'USD' }, valueDate: '2026-09-26', paymentReference: o1.paymentReference }],
     });
     const res = await env.req('GET', '/v1/pilotage/repartition', 'u-ministre-finances');

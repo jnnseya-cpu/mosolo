@@ -14,7 +14,8 @@ import { Icon } from '../../components/Icon';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { DemoNote, FiscalTabs, PROBATIVE, ReasonAction, useViewer } from './common';
-import type { Declaration, FiscalObjectView, Prefill } from './types';
+import type { CalculAffiche, Declaration, FiscalObjectView, Prefill } from './types';
+import { sha256Hex } from '../../lib/crypto';
 import './fiscal.css';
 
 const KIND_LABEL: Record<string, string> = { IF: 'Impôt foncier', IRL: 'Impôt sur les revenus locatifs' };
@@ -26,6 +27,19 @@ const MODE: Record<string, string> = {
   OPPOSABLE: 'Obligation émise (règle ACTIVE)', SIMULATION_NON_OPPOSABLE: 'Simulation NON OPPOSABLE — aucune obligation',
   DEJA_LIQUIDEE: 'Déjà liquidée pour cette période — aucune double facturation', EN_INSTRUCTION: 'En instruction', AUCUNE: '—',
 };
+
+/** Calcul affiché au déclarant : taux, retenue et référence de l'arrêté (lus dans la fiche de règle, jamais saisis). */
+export function CalculBox({ c }: { c: CalculAffiche }) {
+  return (
+    <div className="callout callout-info" role="note">
+      <span>
+        <strong>Calcul :</strong> {c.formule}{c.taux !== null && <> · taux {c.taux} %</>}{c.tauxRetenue !== null && <> · retenue à la source {c.tauxRetenue} %</>}
+        <br /><span className="small">Base : {c.base}</span>
+        <br /><span className="small">Arrêté : {c.arretes.length ? c.arretes.map((a) => `${a.titre} (${a.statut === 'EN_VIGUEUR' ? 'en vigueur' : a.statut === 'A_VERIFIER' ? 'à vérifier' : a.statut})`).join(' ; ') : 'non cité'} — {c.mention}</span>
+      </span>
+    </div>
+  );
+}
 
 function LiquidationBox({ d }: { d: Declaration }) {
   const t = d.liquidation.trace;
@@ -73,6 +87,8 @@ function DeclarationCard({ d, onChanged, canInstruct }: { d: Declaration; onChan
       <dl className="kv kv-dense">
         <div><dt>Accusé de réception</dt><dd><span className="mono">{d.acknowledgement.number}</span> — {fmtDate(d.acknowledgement.receivedAt, true)}<br /><span className="small muted mono fs-hash">empreinte {d.acknowledgement.contentHash.slice(0, 16)}…</span></dd></div>
         {Object.entries(d.inputs).map(([k, v]) => <div key={k}><dt>{d.prefilled.find((f) => f.name === k)?.label ?? k}</dt><dd className="mono">{v}</dd></div>)}
+        {d.calcul && <div><dt>Taux, retenue, arrêté</dt><dd>{d.calcul.taux !== null ? `Taux ${d.calcul.taux} %` : d.calcul.formule}{d.calcul.tauxRetenue !== null ? ` · retenue ${d.calcul.tauxRetenue} %` : ''} · {d.calcul.arretes.map((a) => a.titre).join(' ; ') || 'arrêté non cité'}<br /><span className="small muted">{d.calcul.mention}</span></dd></div>}
+        {d.piece && <div><dt>Pièce justificative</dt><dd>{d.piece.name} <span className="small muted mono fs-hash">{d.piece.sha256.slice(0, 16)}…</span></dd></div>}
         {d.verificationRequired && <div><dt>Vérification</dt><dd>Correction à la baisse d’un élément vérifié : vérification ouverte (le dépôt n’est pas bloqué).</dd></div>}
         {d.correctionReason && <div><dt>Motif de correction</dt><dd>{d.correctionReason}</dd></div>}
         {d.instruction && <div><dt>Instruction</dt><dd>{d.instruction.decision === 'ACCEPTEE' ? 'Acceptée' : 'Rejetée'} — {d.instruction.reason}</dd></div>}
@@ -113,6 +129,7 @@ function NewDeclaration({ objects, onFiled }: { objects: FiscalObjectView[]; onF
   const [pre, setPre] = useState<Prefill | null>(null);
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [attest, setAttest] = useState(false);
+  const [piece, setPiece] = useState<{ name: string; mediaType: string; sha256: string; sizeBytes: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [filed, setFiled] = useState<Declaration | null>(null);
@@ -129,7 +146,7 @@ function NewDeclaration({ objects, onFiled }: { objects: FiscalObjectView[]; onF
     e.preventDefault(); if (!pre) return;
     setBusy(true); setErr(null);
     try {
-      const d = await api<Declaration>('/v1/fiscal/declarations', { method: 'POST', body: { objectId: pre.objectId, kind: pre.kind, period: pre.period, inputs, attest } });
+      const d = await api<Declaration>('/v1/fiscal/declarations', { method: 'POST', body: { objectId: pre.objectId, kind: pre.kind, period: pre.period, inputs, attest, ...(piece ? { piece } : {}) } });
       setFiled(d); setPre(null); onFiled();
     } catch (x) { setErr(describeError(x).message); } finally { setBusy(false); }
   }
@@ -176,6 +193,12 @@ function NewDeclaration({ objects, onFiled }: { objects: FiscalObjectView[]; onF
               <span className="hint">Pré-rempli : {f.value ?? '—'} · source : {f.source}{f.probativeStatus ? ` · ${PROBATIVE[f.probativeStatus]?.label ?? f.probativeStatus}` : ''}</span>
             </div>
           ))}
+          {pre.calcul && <CalculBox c={pre.calcul} />}
+          <div className="field">
+            <label className="label" htmlFor="pf-piece">Pièce justificative (facultative)</label>
+            <input id="pf-piece" type="file" onChange={(e) => { const f = e.target.files?.[0]; if (!f) { setPiece(null); return; } void f.arrayBuffer().then(sha256Hex).then((h) => setPiece({ name: f.name.slice(0, 200), mediaType: f.type || 'application/octet-stream', sha256: h, sizeBytes: f.size })); }} />
+            <span className="hint">Seule l’empreinte du document est transmise{piece ? ` : ${piece.name} · ${piece.sha256.slice(0, 16)}…` : ''}.</span>
+          </div>
           <label className="check"><input type="checkbox" checked={attest} onChange={(e) => setAttest(e.target.checked)} /><span>J’atteste l’exactitude de cette déclaration. Toute correction à la baisse d’un élément vérifié ouvre une vérification sans bloquer mon dépôt.</span></label>
           <button type="submit" className="btn btn-primary" disabled={busy || !attest}>{busy ? 'Dépôt…' : 'Déposer la déclaration'}</button>
         </form>

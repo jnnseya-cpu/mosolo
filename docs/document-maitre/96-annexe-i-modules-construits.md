@@ -861,3 +861,47 @@ Les routes du noyau du Cahier (chapitre 31) existent désormais sous leur nom fr
 | 20 | `POST /v1/affectations/scenarios` | Générer des scénarios d'affectation | Finances | Aucune exécution de dépense | `POST /v1/pilotage/projets/recommandations` |
 
 Ajouts au socle : filtre facultatif `objectId` sur `GET /v1/obligations` (refus explicite sans droit sur l'objet, puis filtrage de chaque obligation par rôle et territoire) ; contrôle « règle publiée uniquement » propre à la simulation du catalogue (journalisé `assessment.simulation.refused`). Tests : `backend/test/catalogue-api.test.ts` (16 tests : chaque route, rôle non habilité refusé, même personne refusée à la publication, simulation sans obligation, rejeu idempotent de l'ordre de paiement, signature du rappel vérifiée sur le corps brut et rejeu refusé, vérification publique minimale, débit compté une fois, corrélation d'audit).
+
+
+## I.21 Programme : risques, recette, versions, 100 premiers jours, décisions (Document maître FR 2, ch. 41–48)
+
+Module d'extension « programme » (`backend/src/plugins/pilotage/programme/`), voisin de la planification. Il en réutilise
+le circuit des instructions sans le modifier. Aucune action financière, aucune décision automatique.
+
+| Écran | Route | Contenu |
+|---|---|---|
+| Registre des risques (`/pilotage/risques`) | `GET /v1/pilotage/programme/risques` ; revues et propriétaire | 13 risques cités ; carte de chaleur ; mesures reliées au code et aux tests ; revue par une personne, retard signalé |
+| Recette — critères d'acceptation (`/pilotage/recette`) | `GET /v1/pilotage/programme/recette` ; suivis du monde réel | 15 critères (dont 5 à relier à la fusion du lot « postes de décision ») ; 10 récits ; 9 points de stratégie ; 8 suivis externes |
+| Plan de livraison par versions (`/pilotage/versions`) | `GET /v1/pilotage/programme/versions` ; état de mise en service | V0.1 à V3.0, modules livrés vérifiés à l'exécution |
+| Plan des 100 premiers jours (`/pilotage/cent-jours`) | `GET /v1/pilotage/programme/cent-jours` ; jour 1 ; actions ; instruction | 6 périodes, 18 actions, responsables |
+| Décisions du Gouvernement provincial (`/pilotage/decisions-gouvernement`) | `GET /v1/pilotage/programme/decisions` ; enregistrement ; validation (second facteur) | 10 décisions, acte et empreinte, deux personnes, verrous calculés, contradiction du § 37A signalée, synthèse 48.2 |
+| Carte des écarts (`/pilotage/assignations`) | `GET /v1/pilotage/assignations/ecarts/export` | Exportation signée (écarts et six états par commune), carte schématique des 24 communes |
+
+Tests :
+
+- `backend/test/recette-programme.test.ts` : textes cités mot pour mot, existence de chaque preuve citée, parcours complets ;
+- `backend/test/recette-criteres.test.ts` : un test par critère du ch. 42, plus les tests de paiement de bout en bout et
+  d'élévation de privilèges ;
+- `backend/test/carnet-recits.test.ts` : un test par récit du ch. 43 ;
+- `frontend/test/recette-programme.test.tsx` : pages, accessibilité et navigation ;
+- `frontend/test/recette-hors-ligne.test.ts` : journée complète hors réseau.
+
+Script de charge : `tools/charge/pic-fin-janvier.mjs`, Node seul, jamais lancé en intégration continue. La matrice de
+couverture est dans `couverture-ch41-48.md`.
+
+## I.21 Document maître FR 2 (nouvelle version) — chapitres 1 à 17 et 19 à 30 : analyse mot à mot et compléments
+
+Le Document maître FR 2 reçu le 27/09/2026 a été rapproché, phrase par phrase, du logiciel construit. La matrice complète (exigence → code → test → statut) figure dans `docs/document-maitre/couverture-nouvelle-version-ch01-30.md` ; elle cite pour chaque exigence un emplacement du code et au moins un test automatisé. Les compléments ci-dessous s’ajoutent à l’existant, sans rien retirer.
+
+| Exigence | Complément | Routes / écrans |
+|---|---|---|
+| § 17.2 identifiant géographique fiscal | Format du Cahier « KIN-<commune>-<quartier>-<voie>-<n°> » attribué EN PLUS du format territorial existant (conservé), comme alias stable et non réattribuable ; résolution dans les deux formats | `GET /v1/fiscal/igf/:code` ; fiche des biens, corrections d’objets |
+| § 30 et § 17.3 cycle de vie de l’objet | Provisoire, actif, suspendu (litige de limites, contestation, habitat informel à qualifier), clos (quatre yeux) ; aucune nouvelle liquidation sur un objet suspendu ou clos ; litige affiché en bleu | `POST /v1/fiscal/objects/:id/suspension`, `/reactivation`, `/closure`, `POST /v1/fiscal/object-closures/:id/decision`, `GET /v1/fiscal/object-closures` ; panneau « Cycle de vie » |
+| § 30 bail | État « résilié » : résiliation datée par une partie, autre partie notifiée, bail conservé | `POST /v1/fiscal/leases/:id/resiliation` ; attestations de bail |
+| § 16.6 couverture locative | Indicateurs par avenue, quartier et commune (enregistré, occupé/loué, bailleurs et locataires, valeur locative annualisée par devise, obligations, concentration) ; estimé et taux de couverture « non mesurés » | `GET /v1/fiscal/couverture-locative` ; vagues de recensement |
+| § 17.1 couches | Catalogue des 21 couches avec source, route et effectif ; couches sans données « non disponibles » | `GET /v1/fiscal/couches` ; carte fiscale |
+| § 15.2 remise d’un avis | Signature recueillie (empreinte) ou refus consigné, position et témoin, par l’agent de constat ; valeur probante à vérifier | `POST /v1/recouvrement/avis/:id/remise` ; aperçu de l’avis |
+| § 23 et § 13.4 recours | Propriétaire dès le dépôt (service compétent) puis agent désigné ; indicateurs de délai pour la direction de la régie et l’audit interne ; écran de traitement des recours (instruction, décision, effet suspensif) | `POST /v1/appeals/:id/assign`, `GET /v1/appeals/indicateurs`, `GET /v1/appeals/proprietaires` ; écrans « Réclamations et recours » et « Journal d’audit » |
+| § 30 et § 12 | Modèle de données (29 entités, états du Cahier ↔ états du code, effectifs sans nom) et matrice des 16 rôles évaluée en direct | `GET /v1/referentiel/modele-donnees`, `GET /v1/referentiel/matrice-habilitations` ; « Modèle de données et habilitations » |
+
+**Contradictions et différences signalées (arbitrage du maître d’ouvrage).** (1) Deux formats d’identifiant géographique coexistent (§ 17.2). (2) Le § 28.1 (« aucune part automatique pour l’administrateur de la plateforme ») contredit le modèle du promoteur (§ 37A) : le § 37A est conservé tel quel. (3) Les modules 59–61 du Cahier (RFCK) entrent en collision avec les numéros 59–61 déjà attribués (grand livre, coffre, découverte). (4) Lignes 41–44 du catalogue et chapitre 27 : repris par le lot « postes de décision ». Tests : `backend/test/document-maitre-fr2.test.ts`, `frontend/test/document-maitre-fr2.test.tsx`.

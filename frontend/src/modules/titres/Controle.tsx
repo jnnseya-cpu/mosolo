@@ -168,6 +168,8 @@ export default function Controle() {
     else if (mode === 'vest' || decoded?.k === 'GILET') { body = { vest: payload, place }; url = '/v1/rakapay/wewa/controles'; }
     else if (decoded?.k === 'AUTOCOLLANT') { body = { sticker: payload, place }; url = '/v1/rakapay/wewa/controles'; }
     else body = scope === '81' ? { qr: payload, place } : payload.startsWith('MD1.') || payload.startsWith('MT1.') ? { qr: payload, place } : { code: payload, place };
+    // Terminal enregistré (module 71) : l'identifiant configuré sur ce poste accompagne le contrôle en ligne.
+    if (url === '/v1/titres/controles' && safeGet('mosolo.titres.deviceId')) body = { ...body, deviceId: device.id };
     return api<ControlView>(url, { method: 'POST', body });
   }
 

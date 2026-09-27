@@ -159,6 +159,24 @@ definePolicy('rules:recalc.decide', { R06: GRANTS.sameEntity });
 
 const IN_FORCE: LegalInstrumentStatus[] = ['EN_VIGUEUR', 'MODIFIE'];
 
+/** Libellé de fait générateur normalisé (casse, accents, ponctuation) pour la détection des doublons d'administration. */
+export function normalizeTaxableEvent(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/**
+ * Règle en vigueur (PUBLIEE ou ACTIVE) d'une AUTRE administration, d'un autre code, sur le même fait générateur
+ * (libellé normalisé identique ; nature identique si les deux sont renseignées), sur une période qui chevauche.
+ */
+export function sameTaxableEventElsewhere(rule: Pick<RuleRecord, 'id' | 'code' | 'administeringEntity' | 'taxableEvent' | 'taxableEventKind' | 'revenueCategory' | 'effectiveFrom' | 'effectiveTo'>, all: RuleRecord[]): RuleRecord | undefined {
+  if (rule.revenueCategory === 'PENALITE') return undefined;
+  const ev = normalizeTaxableEvent(rule.taxableEvent);
+  const end = (r: { effectiveTo?: string }) => r.effectiveTo ?? '9999-12-31';
+  return all.find((o) => o.id !== rule.id && o.code !== rule.code && ['PUBLIEE', 'ACTIVE'].includes(o.status) && o.administeringEntity !== rule.administeringEntity
+    && o.revenueCategory !== 'PENALITE' && normalizeTaxableEvent(o.taxableEvent) === ev && (!o.taxableEventKind || !rule.taxableEventKind || o.taxableEventKind === rule.taxableEventKind)
+    && o.effectiveFrom <= end(rule) && rule.effectiveFrom <= end(o));
+}
+
 /** Rôle d'habilitation exigé pour chaque type d'approbation. */
 export const APPROVAL_ROLE: Record<Approval['role'], RoleCode> = {
   REDACTEUR: 'R13',
@@ -365,6 +383,13 @@ export class RuleService {
     }
     if (rule.sourceVerification !== 'OFFICIEL_CERTIFIE') {
       return { code: 'SOURCE_NOT_CERTIFIED', detail: `Source non certifiée (${rule.sourceVerification}) : OFFICIEL_CERTIFIE requis pour publier.` };
+    }
+    // Module 26 : aucune obligation doublonnant une autre administration — une règle en vigueur d'une AUTRE entité qui
+    // porte sur le même fait générateur (même libellé normalisé et même nature) sur une période qui chevauche bloque la
+    // publication (arbitrage requis au registre des arbitrages ; les pénalités ne sont pas concernées).
+    const twin = sameTaxableEventElsewhere(rule, this.rules.all());
+    if (twin) {
+      return { code: 'DOUBLON_ADMINISTRATION', detail: `Même fait générateur (« ${rule.taxableEvent} ») déjà porté par ${twin.administeringEntity} (${twin.code} v${twin.version}, ${twin.status}) : aucune obligation en double — arbitrage requis avant publication.` };
     }
     return null;
   }

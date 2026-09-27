@@ -6,6 +6,7 @@
 import { definePolicy, GRANTS } from '../../core/policy.js';
 import { definePlugin } from '../types.js';
 import { MatchingService } from './appariement.js';
+import { GrandLivreService, registerGrandLivreRoutes } from './grand-livre.js';
 import { PointContractsService } from './points-contrats.js';
 import { registerTresorComplementRoutes } from './routes-complements.js';
 import { registerTresorRoutes } from './routes.js';
@@ -47,5 +48,7 @@ export const tresorPlugin = definePlugin<TresorService>({
   routes: (app, ctx, svc) => {
     registerTresorRoutes(app, ctx, svc);
     registerTresorComplementRoutes(app, ctx, svc);
+    // Grand livre public (module 59) : scellement vérifié, écart grand livre / relevés, délai de clôture.
+    registerGrandLivreRoutes(app, new GrandLivreService(ctx, svc));
   },
 });

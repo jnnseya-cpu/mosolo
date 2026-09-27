@@ -147,7 +147,7 @@ function ContenuCard({ c, onDone }: { c: Contenu; onDone: () => void }) {
     <li className="panel">
       <div className="panel-head">
         <div className="min0"><p className="panel-title">{v.titre} <span className="mono small">{c.cle}</span></p>
-          <p className="panel-sub">{c.type === 'FICHE' ? 'Fiche d’aide' : 'Module'} · v{v.version} · {c.publics.map((p) => PROFIL_LIBELLE[p]).join(', ')} · auteur {v.auteur}</p></div>
+          <p className="panel-sub">{c.type === 'FICHE' ? 'Fiche d’aide' : c.type === 'PROCEDURE' ? 'Procédure (base versionnée)' : 'Module'} · v{v.version} · {c.publics.map((p) => PROFIL_LIBELLE[p]).join(', ')} · auteur {v.auteur}</p></div>
         <StatusBadge tone={st.tone} label={st.label} />
       </div>
       <p className="small">{v.corps}</p>
@@ -171,7 +171,7 @@ function ContenuCard({ c, onDone }: { c: Contenu; onDone: () => void }) {
 
 function CreationForm({ onDone }: { onDone: () => void }) {
   const a = useAction();
-  const [type, setType] = useState<'FICHE' | 'MODULE'>('FICHE');
+  const [type, setType] = useState<'FICHE' | 'MODULE' | 'PROCEDURE'>('FICHE');
   const [f, setF] = useState({ cle: '', titre: '', corps: '', lnTitre: '', lnCorps: '' });
   const [publics, setPublics] = useState<Profil[]>([]);
   const [qs, setQs] = useState<{ enonce: string; choix: string; bonne: number }[]>([]);
@@ -190,9 +190,10 @@ function CreationForm({ onDone }: { onDone: () => void }) {
       <div className="seg seg-sm" role="group" aria-label="Type de contenu">
         <button type="button" aria-pressed={type === 'FICHE'} onClick={() => setType('FICHE')}>Fiche d’aide</button>
         <button type="button" aria-pressed={type === 'MODULE'} onClick={() => setType('MODULE')}>Module avec épreuve</button>
+        <button type="button" aria-pressed={type === 'PROCEDURE'} onClick={() => setType('PROCEDURE')}>Procédure (base versionnée)</button>
       </div>
       <div className="field-row">
-        <div className="field"><label className="label" htmlFor="ap-k">{type === 'FICHE' ? 'Clé de l’écran ou de l’action' : 'Code du module'}</label><input id="ap-k" value={f.cle} onChange={(e) => setF({ ...f, cle: e.target.value })} placeholder="terrain.habilitation" required /></div>
+        <div className="field"><label className="label" htmlFor="ap-k">{type === 'FICHE' ? 'Clé de l’écran ou de l’action' : type === 'PROCEDURE' ? 'Clé de la procédure (ex. procedure.constat-terrain)' : 'Code du module'}</label><input id="ap-k" value={f.cle} onChange={(e) => setF({ ...f, cle: e.target.value })} placeholder="terrain.habilitation" required /></div>
         <div className="field"><label className="label" htmlFor="ap-ti">Titre (français simple)</label><input id="ap-ti" value={f.titre} onChange={(e) => setF({ ...f, titre: e.target.value })} required /></div>
       </div>
       <fieldset className="field"><legend className="label">Publics</legend>

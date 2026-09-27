@@ -12,6 +12,7 @@ import { ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
 import type { Notice, NoticeProof } from './types';
+import { DELIVERABLE_KINDS, FieldDeliverySummary, RemiseTerrainForm } from './RemiseTerrain';
 import './recouvrement.css';
 
 const CHANNEL_LABEL: Record<string, string> = { 'in-app': 'Application', sms: 'SMS', email: 'Courriel', ussd: 'USSD', whatsapp: 'WhatsApp', svi: 'Serveur vocal', push: 'Notification', courrier: 'Courrier' };
@@ -112,7 +113,11 @@ export default function NoticeView() {
             ))}
           </ul>
           <p className="small muted">Accusé de lecture : {proof.data.readAcknowledgement ? `${fmtDate(proof.data.readAcknowledgement.at, true)} (${proof.data.readAcknowledgement.by})` : 'aucun à ce jour'}</p>
+          {proof.data.fieldDelivery && <FieldDeliverySummary d={proof.data.fieldDelivery} />}
         </section>
+      )}
+      {proof.data && !proof.data.fieldDelivery && user?.roles.includes('R11') && DELIVERABLE_KINDS.includes(n.kind) && (
+        <RemiseTerrainForm noticeId={n.id} onDone={proof.reload} />
       )}
     </div>
   );

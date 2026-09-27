@@ -15,17 +15,59 @@ import './canaux.css';
 
 interface SupPoint {
   id: string; name: string; type: string; operator: string; commune: string; status: string; approval: { authority: string; reference: string };
-  referencedBy: string; activatedBy?: string; suspension?: { motif: string; by: string; at: string }; reinstatementRequest?: FourEyesRequest;
+  referencedBy: string; activatedBy?: string; suspension?: { motif: string; by: string; at: string; automatic?: boolean; exceptionId?: string }; reinstatementRequest?: FourEyesRequest;
   collectionsToday: number; openExceptions: number; pendingProposals: number; habilitated: boolean; settlementDelayHours: number;
 }
 interface Proposal { id: string; pointId: string; reason: string; detail: string; status: string; proposedAt: string; decidedBy?: string; motif?: string; dismissalRequest?: FourEyesRequest }
 interface Exc { id: string; pointId: string; day: string; type: string; detail: string; expected: MoneyJSON[]; observed: MoneyJSON[]; openedAt: string }
 interface Indicators {
-  enrolments: { total: number; byCommune: { commune: string; total: number; created: number; toReview: number }[]; rejectedAttempts: number };
+  enrolments: { total: number; byCommune: { commune: string; total: number; created: number; toReview: number; sharePct?: number | null }[]; rejectedAttempts: number };
   cards: { active: number; blocked: number; revoked: number; reissues: number };
-  channels: { ussdSessions: number; ivrSessions: number; authenticatedSessions: number; referencesIssued: number };
+  channels: {
+    ussdSessions: number; ivrSessions: number; authenticatedSessions: number; referencesIssued: number; ussdOperations?: number;
+    voice?: { calls: number; callsWithOperation: number; operations: number; byKind: Record<string, number>; byLanguage: Record<string, number>; tollFreeNumber: string };
+  };
+  accessibility?: { activePoints: number; communesTotal: number; communesCovered: number; communesCoveredPct: number; communesWithoutPoint: string[]; populationWithin15Min: null; note: string };
   points: { active: number; suspended: number; referenced: number; pilotCommunesWithBankDesk: number; collections: number; collected: MoneyJSON[]; medianSettlementHours: number | null; openExceptions: number; pendingProposals: number };
   verification: { total: number; suspectedEnumeration: number };
+}
+
+const VOICE_OPS: Record<string, string> = {
+  CONSULTATION: 'Consultations', REFERENCE: 'Références de paiement', QUITTANCES: 'Quittances lues', VERIFICATION: 'Vérifications',
+  POINTS: 'Listes de points', BLOCAGE_CARTE: 'Blocages de carte', CONTESTATION: 'Contestations',
+};
+
+/** Indicateurs d'inclusion (modules 63 à 66 et 68) calculés sur les données réelles du réseau et des canaux. */
+function InclusionIndicators({ ind }: { ind: Indicators }) {
+  const v = ind.channels.voice;
+  const a = ind.accessibility;
+  return (
+    <section className="panel cx-mt" aria-labelledby="cx-incl">
+      <header className="panel-head"><div><h2 className="panel-title" id="cx-incl"><Icon name="users" size={18} /> Indicateurs d’inclusion</h2><p className="panel-sub">Enrôlement assisté (63), serveur vocal (64), carte MOSOLO (65), accessibilité des points (66), vérification par code court (68).</p></div></header>
+      <div className="kpi-row cx-kpis">
+        <Kpi label="Appels au serveur vocal" value={v?.calls ?? ind.channels.ivrSessions} sub={v ? `${v.callsWithOperation} avec opération · ${v.operations} opération(s) à la voix` : undefined} />
+        <Kpi label="Cartes actives" value={ind.cards.active} sub={`${ind.cards.reissues} réémission(s) · ${ind.cards.blocked} bloquée(s) · ${ind.cards.revoked} révoquée(s)`} />
+        <Kpi label="Communes couvertes par un point actif" value={a ? `${a.communesCovered} / ${a.communesTotal}` : '—'} sub={a ? `${a.communesCoveredPct} % · ${a.activePoints} point(s) actif(s)` : undefined} />
+        <Kpi label="Vérifications par code court" value={ind.verification.total} sub={`${ind.verification.suspectedEnumeration} tentative(s) suspecte(s)`} />
+      </div>
+      {v && (
+        <p className="small">Opérations réalisées à la voix : {Object.entries(v.byKind).filter(([, n]) => n > 0).map(([k, n]) => `${VOICE_OPS[k] ?? k} ${n}`).join(' · ') || 'aucune'}. Numéro gratuit : <span className="mono">{v.tollFreeNumber}</span>.</p>
+      )}
+      {a && <p className="small muted">{a.note}{a.communesWithoutPoint.length ? ` Communes sans point actif : ${a.communesWithoutPoint.join(', ')}.` : ''}</p>}
+      {ind.enrolments.byCommune.length > 0 && (
+        <DataTable<Indicators['enrolments']['byCommune'][number]>
+          rows={ind.enrolments.byCommune} rowKey={(r) => r.commune} caption="Enrôlements assistés par commune"
+          columns={[
+            { key: 'commune', label: 'Commune', primary: true, render: (r) => r.commune },
+            { key: 'total', label: 'Dossiers assistés', num: true, render: (r) => r.total },
+            { key: 'share', label: 'Part', num: true, render: (r) => (r.sharePct === null || r.sharePct === undefined ? '—' : `${r.sharePct} %`) },
+            { key: 'created', label: 'Comptes créés', num: true, render: (r) => r.created },
+            { key: 'review', label: 'À revoir', num: true, render: (r) => r.toReview },
+          ]}
+        />
+      )}
+    </section>
+  );
 }
 
 function Kpi({ label, value, sub }: { label: string; value: ReactNode; sub?: string }) {
@@ -64,6 +106,7 @@ export default function PointsSupervision() {
           <Kpi label="Sessions USSD / SVI" value={`${ind.data.channels.ussdSessions} / ${ind.data.channels.ivrSessions}`} sub={`${ind.data.channels.referencesIssued} référence(s) émise(s)`} />
         </div>
       )}
+      {ind.data && <InclusionIndicators ind={ind.data} />}
       {msg && <p className="notice notice-ok">{msg}</p>}
       {err && <p className="notice notice-err" role="alert">{err}</p>}
       {sup.loading && <Loading />}
@@ -71,7 +114,7 @@ export default function PointsSupervision() {
       {sup.data && (
         <>
           <section className="panel" aria-labelledby="cx-props">
-            <header className="panel-head"><div><h2 className="panel-title" id="cx-props"><Icon name="scale" size={18} /> Propositions de suspension</h2><p className="panel-sub">Issues d’un écart ou d’un retard de versement. Aucune suspension automatique.</p></div><span className="count">{sup.data.proposals.filter((p) => p.status === 'PROPOSEE').length}</span></header>
+            <header className="panel-head"><div><h2 className="panel-title" id="cx-props"><Icon name="scale" size={18} /> Propositions de suspension</h2><p className="panel-sub">Issues d’un écart ou d’un retard de versement. Écart de montant : suspension décidée par le Trésor. Retard de règlement au-delà du délai contractuel : suspension CONSERVATOIRE automatique (décision du 27/09/2026) ; levée et pénalité décidées par des personnes.</p></div><span className="count">{sup.data.proposals.filter((p) => p.status === 'PROPOSEE').length}</span></header>
             {sup.data.proposals.length === 0 ? <EmptyState title="Aucune proposition" icon="check" /> : (
               <ul className="list-rows">{sup.data.proposals.map((p) => (
                 <li key={p.id} className="list-row list-row-stack">
@@ -97,7 +140,7 @@ export default function PointsSupervision() {
               columns={[
                 { key: 'name', label: 'Point', primary: true, render: (p) => <span className="cx-cell"><strong>{p.name}</strong><span className="small muted">{p.id} · {POINT_TYPE_LABEL[p.type]}</span><span className="small muted">Agrément {p.approval.reference} ({p.approval.authority})</span></span> },
                 { key: 'commune', label: 'Commune', render: (p) => p.commune },
-                { key: 'status', label: 'Statut', render: (p) => <span className="cx-cell"><StatusBadge tone={POINT_STATUS[p.status]?.tone ?? 'neutral'} label={POINT_STATUS[p.status]?.label ?? p.status} title={p.suspension?.motif} /><span className="small muted">{p.habilitated ? 'Signature habilitée' : 'Aucune habilitation'}</span></span> },
+                { key: 'status', label: 'Statut', render: (p) => <span className="cx-cell"><StatusBadge tone={POINT_STATUS[p.status]?.tone ?? 'neutral'} label={POINT_STATUS[p.status]?.label ?? p.status} title={p.suspension?.motif} /><span className="small muted">{p.habilitated ? 'Signature habilitée' : 'Aucune habilitation'}</span>{p.suspension?.automatic && <StatusBadge tone="warning" label="Suspension conservatoire automatique — levée par deux personnes" title={p.suspension.motif} />}</span> },
                 { key: 'today', label: 'Jour', num: true, render: (p) => <span className="cx-cell"><span>{p.collectionsToday} encaiss.</span><span className="small muted">{p.openExceptions} exception(s)</span></span> },
                 {
                   key: 'act', label: 'Décision', full: true, render: (p) => !hasRole(user?.roles, 'R17', 'R18') ? '—' : (

@@ -142,6 +142,12 @@ export const CIRCUITS: Circuit[] = [
     guard: { url: '/v1/pilotage/repartition/cles/:id/activation/decision', key: (p) => p.id!, refusal: approveFalse },
   },
   {
+    // Module 67 : reprise des points fictifs ou frauduleux de la réserve des agents (contrôle qualité → régie).
+    code: 'RESERVE_REPRISE_POINTS', label: 'Reprise de points de la réserve des agents (§ 37A.5)',
+    proposals: ['agents.reserve.clawback_proposed'], approvals: ['agents.reserve.clawback_decided'], refusals: ['agents.reserve.clawback_rejected'],
+    guard: { url: '/v1/agents/reserve/reprises/:id/decision', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
     code: 'RAKAPAY_AGREMENT_OPERATEUR', label: 'Agrément d’un opérateur de billetterie RakaPay',
     proposals: ['rakapay.operator.approval_proposed'], approvals: ['rakapay.operator.approved'], refusals: ['rakapay.operator.refused'],
   },
@@ -297,6 +303,19 @@ export const CIRCUITS: Circuit[] = [
   {
     code: 'DOMAINE_OFFICIEL_VERIFICATION', label: 'Domaine officiel de vérification (QR des vignettes)',
     proposals: ['domaine.official.proposed'], approvals: ['domaine.official.validated'], refusals: ['domaine.official.rejected'],
+  },
+  // Spécification fonctionnelle, modules 27 à 40 : circuits à deux personnes ajoutés.
+  {
+    code: 'TRESOR_IMPORT_RELEVE', label: 'Import d’un relevé bancaire ou d’opérateur (double validation, module 29)',
+    proposals: ['settlement.import.proposed'], approvals: ['settlement.import.validated'], refusals: ['settlement.import.rejected'],
+    key: detail('statementId'),
+    guard: { url: '/v1/settlements/statements/:statementId/validation', key: (p) => p.statementId!, refusal: approveFalse },
+  },
+  // Document maître FR 2, ch. 48 : décisions du Gouvernement provincial (enregistrement → validation par une autre personne).
+  {
+    code: 'DECISION_GOUVERNEMENT', label: 'Décision du Gouvernement provincial enregistrée sur acte (ch. 48)',
+    proposals: ['programme.decision.recorded'], approvals: ['programme.decision.validated'], refusals: ['programme.decision.rejected'],
+    guard: { url: '/v1/pilotage/programme/decisions/:numero/validation', key: (p) => `D${p.numero ?? ''}`, refusal: approveFalse },
   },
 ];
 

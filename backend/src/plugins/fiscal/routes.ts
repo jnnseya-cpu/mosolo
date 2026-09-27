@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { User } from '../../core/auth.js';
 import { requireUser } from '../../core/auth.js';
-import { badRequest, forbidden } from '../../core/errors.js';
+import { badRequest, forbidden, notFound } from '../../core/errors.js';
 import { isoDateString, moneySchema, parse } from '../../core/http.js';
 import { authorize, evaluate, hasAnyGrant } from '../../core/policy.js';
 import type { AppContext } from '../../context.js';
@@ -13,6 +13,9 @@ import { CLOSE_REASONS, PROOF_TYPES, RELATION_ROLES, ROLE_LABELS } from './relat
 import type { FiscalService } from './service.js';
 import { buildNearby } from './nearby.js';
 import { registerFiscalExtraRoutes } from './routes-extra.js';
+import { LEASE_STATE_LABELS, leaseStateOf } from '../../modules/objects/service.js';
+import { CLOSURE_MOTIFS, SUSPENSION_MOTIFS } from './lifecycle.js';
+import { layersCatalogue } from './couches.js';
 
 const proofSchema = z.object({ type: z.enum(PROOF_TYPES), reference: z.string().trim().min(3).max(200), sha256: z.string().regex(/^[0-9a-f]{64}$/).optional() }).strict();
 const reasonSchema = z.object({ reason: z.string().trim().min(3).max(1000) }).strict();
@@ -40,6 +43,11 @@ const declarationSchema = z.object({
   period: z.string().regex(/^\d{4}$/),
   inputs: z.record(decimal).default({}),
   attest: z.boolean(),
+  // Pièce justificative FACULTATIVE (Document maître FR 2, ch. 43) : empreinte, nom et type ; jamais exigée.
+  piece: z.object({
+    name: z.string().trim().min(1).max(200), mediaType: z.string().trim().min(3).max(100),
+    sha256: z.string().regex(/^[0-9a-fA-F]{64}$/, 'empreinte SHA-256 attendue'), sizeBytes: z.number().int().nonnegative().max(50_000_000).optional(),
+  }).strict().optional(),
 }).strict();
 
 const legalBasisSchema = z.object({ instrumentId: z.string().min(1), article: z.string().trim().min(1).max(200) }).strict();
@@ -111,6 +119,54 @@ export function registerFiscalRoutes(app: FastifyInstance, ctx: AppContext, svc:
     if (!related) authorize(user, 'fiscal:object.read', { communes: [o.commune], ...(o.taxpayerId ? { taxpayerId: o.taxpayerId } : {}) });
     return svc.objectView(o, user, mine);
   });
+
+  // Résolution d'un identifiant géographique fiscal, dans l'un ou l'autre format (§ 17.2) : territorial existant
+  // (« KIN-GOM-Q012-P004517 ») ou format du Cahier nouvelle version (« KIN-GOM-GOMBE-AV-MONT-001245 »).
+  app.get<{ Params: { code: string } }>('/v1/fiscal/igf/:code', async (req) => {
+    const user = requireUser(req);
+    const o = svc.geo.resolveCode(req.params.code, ctx.objects.objects);
+    if (!o || !o.igf) throw notFound('IGF_NOT_FOUND', `Identifiant géographique fiscal inconnu : ${req.params.code}`);
+    const mine = viewerTaxpayers(user);
+    const related = mine.some((t) => svc.relations.objectIdsOf(t).includes(o.id));
+    if (!related) authorize(user, 'fiscal:object.read', { communes: [o.commune], ...(o.taxpayerId ? { taxpayerId: o.taxpayerId } : {}) });
+    return {
+      objectId: o.id, uuid: o.igf.uuid, category: o.category, commune: o.commune, quartier: o.quartier, avenue: o.avenue ?? null,
+      formats: { territorial: o.igf.code, cahier: o.igf.cahierCode ?? null },
+      matchedFormat: o.igf.code === req.params.code.trim().toUpperCase() ? 'TERRITORIAL' : 'CAHIER',
+      stable: true, reassignable: false,
+    };
+  });
+
+  // ——— Couches du cadastre fiscal géospatial (§ 17.1) : catalogue des 21 couches, effectifs réels, sans nom ———
+  app.get('/v1/fiscal/couches', async (req) => layersCatalogue(svc.d, requireUser(req)));
+
+  // ——— Couverture locative par avenue, quartier et commune (§ 16.6) : agrégats, montants par devise ———
+  app.get<{ Querystring: { niveau?: string; commune?: string; quartier?: string } }>('/v1/fiscal/couverture-locative', async (req) => {
+    const q = parse(z.object({ niveau: z.enum(['COMMUNE', 'QUARTIER', 'AVENUE']).default('COMMUNE'), commune: z.string().optional(), quartier: z.string().optional() }).strict(), req.query);
+    return svc.rentalCoverage.report(requireUser(req), { level: q.niveau, ...(q.commune ? { commune: q.commune } : {}), ...(q.quartier ? { quartier: q.quartier } : {}) });
+  });
+
+  // ——— Cycle de vie de l'objet fiscal (§ 30 : provisoire, actif, suspendu, clos ; § 17.3 : litige de limites) ———
+  app.post<{ Params: { id: string } }>('/v1/fiscal/objects/:id/suspension', async (req) => {
+    const user = requireUser(req);
+    const body = parse(z.object({ motif: z.enum(SUSPENSION_MOTIFS), reason: z.string().trim().min(10).max(1000) }).strict(), req.body);
+    return svc.objectView(svc.lifecycle.suspend(user, req.params.id, body), user, []);
+  });
+  app.post<{ Params: { id: string } }>('/v1/fiscal/objects/:id/reactivation', async (req) => {
+    const user = requireUser(req);
+    const body = parse(reasonSchema, req.body);
+    return svc.objectView(svc.lifecycle.reactivate(user, req.params.id, body.reason), user, []);
+  });
+  app.post<{ Params: { id: string } }>('/v1/fiscal/objects/:id/closure', async (req, reply) => {
+    const body = parse(z.object({ motif: z.enum(CLOSURE_MOTIFS), reason: z.string().trim().min(10).max(1000), effectiveDate: isoDateString }).strict(), req.body);
+    return reply.code(201).send(svc.lifecycle.proposeClosure(requireUser(req), req.params.id, body));
+  });
+  app.post<{ Params: { id: string } }>('/v1/fiscal/object-closures/:id/decision', async (req) => {
+    const user = requireUser(req);
+    const body = parse(z.object({ approve: z.boolean(), reason: z.string().trim().min(5).max(1000) }).strict(), req.body);
+    return svc.lifecycle.decideClosure(user, req.params.id, body);
+  });
+  app.get<{ Querystring: { status?: string } }>('/v1/fiscal/object-closures', async (req) => svc.lifecycle.listClosures(requireUser(req), req.query.status));
 
   app.post<{ Params: { id: string } }>('/v1/fiscal/objects/:id/validate', async (req) => {
     const user = requireUser(req);
@@ -288,6 +344,20 @@ export function registerFiscalRoutes(app: FastifyInstance, ctx: AppContext, svc:
     };
   });
 
+  // Registre des exonérations (module 57) : indicateurs, rappels d'échéance et de révision, alertes de concentration.
+  app.get('/v1/fiscal/exemptions/registre', async (req) => {
+    authorize(requireUser(req), 'fiscal:exemption.queue');
+    return {
+      indicators: svc.exemptions.indicators(), alerts: svc.exemptions.concentrationAlerts(),
+      reminders: svc.exemptions.reminders.all().sort((a, b) => (a.at < b.at ? 1 : -1)),
+      upcoming: svc.exemptions.exemptions.find((x) => x.status === 'APPROUVEE').map((x) => ({ id: x.id, kind: x.kind, effectiveStatus: svc.exemptions.effectiveStatus(x), validTo: x.validTo ?? null, reviewDate: svc.exemptions.reviewDate(x) })).sort((a, b) => a.reviewDate.localeCompare(b.reviewDate)),
+      params: { reminderDays: 30, reviewMonths: 12, status: 'PAR_DEFAUT — à confirmer par le maître d’ouvrage' },
+    };
+  });
+  app.post('/v1/fiscal/exemptions/rappels', async (req) => {
+    authorize(requireUser(req), 'fiscal:exemption.revoke');
+    return { created: svc.exemptions.runReminders() };
+  });
   app.get<{ Params: { id: string } }>('/v1/fiscal/exemptions/:id', async (req) => {
     const user = requireUser(req);
     const x = svc.exemptions.get(req.params.id);
@@ -364,9 +434,18 @@ export function registerFiscalRoutes(app: FastifyInstance, ctx: AppContext, svc:
       return {
         id: l.id, role: l.lessorId === tp ? 'BAILLEUR' : 'LOCATAIRE', unitIgf: unit?.igf?.code ?? l.unitObjectId, commune: unit?.commune ?? null, quartier: unit?.quartier ?? null,
         rent: l.rent, periodicity: l.periodicity, start: l.start, end: l.end ?? null, probativeStatus: l.probativeStatus,
+        // État du bail (§ 30 du Document maître FR 2) : déclaré, vérifié, résilié, contesté.
+        state: leaseStateOf(l), stateLabel: LEASE_STATE_LABELS[leaseStateOf(l)], termination: l.termination ?? null,
         attestation: att ? svc.clearances.attestationView(att) : null,
       };
     }));
+  });
+
+  // Résiliation d'un bail par une partie (bailleur, locataire ou leur mandataire) : date d'effet et motif ; jamais supprimé.
+  app.post<{ Params: { id: string } }>('/v1/fiscal/leases/:id/resiliation', async (req) => {
+    const body = parse(z.object({ endDate: isoDateString, reason: z.string().trim().min(5).max(1000) }).strict(), req.body);
+    const l = ctx.objects.terminateLease(requireUser(req), req.params.id, body);
+    return { id: l.id, state: leaseStateOf(l), stateLabel: LEASE_STATE_LABELS[leaseStateOf(l)], end: l.end ?? null, termination: l.termination };
   });
 
   app.post<{ Params: { id: string } }>('/v1/fiscal/leases/:id/attestations', async (req, reply) => {

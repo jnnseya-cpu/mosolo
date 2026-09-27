@@ -11,8 +11,8 @@ export const KINSHASA_OFFSET_MS = 60 * 60 * 1000;
 export const PILOT_COMMUNES = ['Gombe', 'Limete', 'Kalamu', 'Ngaliema'] as const;
 
 /** Code USSD et numéro SVI : attribués par convention avec les opérateurs (J29) — jamais inventés. */
-export const USSD_CODE_LABEL = '*[code court À CONFIGURER]#';
-export const IVR_NUMBER_LABEL = '[numéro vert SVI À CONFIGURER]';
+export const USSD_CODE_LABEL = '*[code court À RACCORDER — convention opérateur requise]#';
+export const IVR_NUMBER_LABEL = '[numéro vert SVI À RACCORDER — convention opérateur requise]';
 
 /** Plage horaire d'enrôlement assisté (heure de Kinshasa) : hors plage ⇒ refus journalisé (§ H.13, agent d'enrôlement). */
 export const ENROLMENT_HOURS = { from: 7, to: 19 } as const;
@@ -56,7 +56,15 @@ export interface ChannelSession {
   steps: number;
   /** Menu choisi avant identification (reprise après saisie du code secret). */
   pendingIntent?: string;
+  /**
+   * Opérations réalisées pendant la session (module 64 : « opérations réalisées à la voix ») : consultation,
+   * référence de paiement, quittances, vérification, liste des points, blocage de carte, contestation.
+   */
+  operations?: ChannelOperation[];
 }
+
+export type ChannelOperation = 'CONSULTATION' | 'REFERENCE' | 'QUITTANCES' | 'VERIFICATION' | 'POINTS' | 'BLOCAGE_CARTE' | 'CONTESTATION';
+export const CHANNEL_OPERATIONS: ChannelOperation[] = ['CONSULTATION', 'REFERENCE', 'QUITTANCES', 'VERIFICATION', 'POINTS', 'BLOCAGE_CARTE', 'CONTESTATION'];
 
 /** Entrée du journal de session : la saisie d'un code secret est toujours masquée. */
 export interface SessionJournalEntry {
@@ -201,7 +209,8 @@ export interface PaymentPoint {
   referencedAt: string;
   activatedBy?: string;
   activatedAt?: string;
-  suspension?: { by: string; at: string; motif: string; proposalId?: string };
+  /** `automatic` : suspension conservatoire au dépassement du délai de règlement (module 66), levée par des personnes. */
+  suspension?: { by: string; at: string; motif: string; proposalId?: string; automatic?: boolean; exceptionId?: string };
   /** Demande de rétablissement en attente : un second membre du Trésor (R17), distinct du demandeur, décide (quatre yeux). */
   reinstatementRequest?: { by: string; at: string; motif: string };
   history: { at: string; by: string; action: string; motif?: string }[];

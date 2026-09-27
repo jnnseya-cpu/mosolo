@@ -30,6 +30,24 @@ export type AppealDecision = 'ACCEPTEE' | 'PARTIELLEMENT_ACCEPTEE' | 'REJETEE';
  */
 definePolicy('appeals:submit.assisted', { R12: GRANTS.always });
 
+/**
+ * Propriétaire du recours (Document maître FR 2, nouvelle version, § 23 : « Chaque recours a un propriétaire, un délai
+ * légal, un état et une décision motivée ») : à son dépôt, le recours est affecté au service compétent (entité qui
+ * administre la recette) ; la direction de la régie le confie ensuite nommément à un agent de contentieux (R20).
+ * Le non-respect du délai est suivi au tableau de bord de la direction de la régie et de l'audit interne.
+ */
+definePolicy('appeals:assign', { R06: GRANTS.sameEntity, R07: GRANTS.sameEntity });
+definePolicy('appeals:indicators.read', { R06: GRANTS.always, R07: GRANTS.always, R20: GRANTS.always, R21: GRANTS.always, R22: GRANTS.always, R23: GRANTS.always });
+
+export interface AppealOwner {
+  /** Service compétent (entité administrant la recette contestée). */
+  entity: string;
+  /** Agent nommément propriétaire ; absent = « file du service », en attente d'affectation. */
+  userId?: string;
+  assignedBy?: string;
+  assignedAt: string;
+}
+
 export interface AssistedSubmission {
   channel: 'GUICHET' | 'SVI' | 'USSD';
   consent: {
@@ -110,8 +128,16 @@ export interface Appeal {
   /** Voie de recours suivante, indiquée avec la décision. */
   nextRemedy?: { hierarchical: string; judicial: string; status: 'A_VERIFIER' };
   slaBreachNotifiedAt?: string;
+  /**
+   * Affectation dès le dépôt (Document maître FR 2, ch. 42 : « horodaté, affecté et suivi jusqu'à décision motivée ») :
+   * file d'instruction de l'entité qui administre l'obligation (agents de contentieux R20) ; l'instructeur nommé est
+   * celui qui instruit (instructorId), la décision revient à une autre personne (R21).
+   */
+  affectation?: { entity: string; file: 'INSTRUCTION_RECOURS'; roles: ['R20']; at: string; basis: string };
   /** Dépôt sans écrit (guichet ou SVI) : canal, agent et preuve du consentement. */
   assisted?: AssistedSubmission & { agentId?: string };
+  /** Propriétaire du recours (§ 23) : service compétent dès le dépôt, puis agent nommément désigné. */
+  owner?: AppealOwner;
 }
 
 export type AppealView = Appeal & { deadlines: AppealDeadlines };
@@ -168,7 +194,7 @@ export class AppealService {
   }
 
   view(a: Appeal): AppealView {
-    return { ...a, deadlines: this.deadlines(a) };
+    return { ...a, owner: this.ownerOf(a), deadlines: this.deadlines(a) };
   }
 
   /** Liste filtrée (le contrôle d'accès est fait par l'appelant). */
@@ -240,14 +266,17 @@ export class AppealService {
       documents,
       suspensiveEffect,
       acknowledgement: { number: `AR-${id}`, at: now, contentHash: sha256Hex(canonicalJson(ackContent)) },
+      affectation: { entity: obligation.entity, file: 'INSTRUCTION_RECOURS', roles: ['R20'], at: now, basis: `Entité administratrice de l’obligation ${obligation.id} (${obligation.ruleCode} v${obligation.ruleVersion})` },
       ...(assisted ? { assisted: { ...assisted, ...(assisted.channel === 'GUICHET' ? { agentId: user.id } : {}) } } : {}),
+      // Affecté au service compétent dès le dépôt (§ 13.4 « affectée au service compétent », § 23 « un propriétaire »).
+      owner: { entity: obligation.entity, assignedAt: now },
       history: [
         { at: now, action: 'appeal.submitted', by: user.id, detail: `Type : ${input.type ?? 'AUTRE'}${documents.length ? ` — ${documents.length} pièce(s)` : ''}${assisted ? ` — sans écrit (${assisted.channel === 'GUICHET' ? 'guichet, consentement ' + (assisted.consent.method === 'TEMOIN' ? 'devant témoin' : 'oral enregistré')   : `${assisted.channel}, confirmation par touche`})` : ''}` },
         ...(input.requestSuspensiveEffect ? [{ at: now, action: 'appeal.suspensive_effect.requested', by: user.id }] : []),
       ],
     });
     this.assessment.setStatus(obligation.id, 'CONTESTEE');
-    this.audit.append({ actor: assisted && assisted.channel !== 'GUICHET' ? { kind: 'public', id: user.id } : { kind: 'user', id: user.id, roles: user.roles }, action: 'appeal.submitted', resourceType: 'appeal', resourceId: appeal.id, details: { obligationId: obligation.id, type: appeal.type, documents: documents.length, suspensiveEffectRequested: !!input.requestSuspensiveEffect, ...(assisted ? { channel: assisted.channel, consentMethod: assisted.consent.method, sessionId: assisted.consent.sessionId ?? null } : {}) } });
+    this.audit.append({ actor: assisted && assisted.channel !== 'GUICHET' ? { kind: 'public', id: user.id } : { kind: 'user', id: user.id, roles: user.roles }, action: 'appeal.submitted', resourceType: 'appeal', resourceId: appeal.id, details: { obligationId: obligation.id, type: appeal.type, affectation: obligation.entity, documents: documents.length, suspensiveEffectRequested: !!input.requestSuspensiveEffect, ...(assisted ? { channel: assisted.channel, consentMethod: assisted.consent.method, sessionId: assisted.consent.sessionId ?? null } : {}) } });
     this.comms.publish('appeal.submitted', [taxpayerRecipient(this.taxpayers.get(obligation.taxpayerId))], { reference: appeal.id }, { entity: 'CONTENTIEUX' });
     return this.view(appeal);
   }
@@ -292,6 +321,74 @@ export class AppealService {
     return this.view(updated);
   }
 
+  /** Propriétaire effectif : celui qui est enregistré, sinon le service compétent de l'obligation (recours antérieurs). */
+  ownerOf(a: Appeal): AppealOwner {
+    return a.owner ?? { entity: this.assessment.obligations.get(a.obligationId)?.entity ?? 'NON_AFFECTE', ...(a.instructorId ? { userId: a.instructorId } : {}), assignedAt: a.submittedAt };
+  }
+
+  /**
+   * Affectation nominative par la direction de la régie (même entité) à un agent de contentieux (R20) sans lien
+   * avec le contribuable. Réaffectation possible tant que le recours n'est pas décidé ; historique conservé.
+   */
+  assign(user: User, id: string, input: { assigneeId: string; reason: string }, users: UserDirectory): AppealView {
+    const appeal = this.get(id);
+    const owner = this.ownerOf(appeal);
+    authorize(user, 'appeals:assign', { entity: owner.entity });
+    if (appeal.decision) throw conflict('APPEAL_CLOSED', 'Recours décidé : aucune réaffectation.');
+    const assignee = users.get(input.assigneeId);
+    if (!assignee || !assignee.roles.includes('R20')) throw unprocessable('ASSIGNEE_NOT_ELIGIBLE', 'Le propriétaire désigné doit être un agent de contentieux (R20).');
+    if (assignee.entity !== owner.entity) throw unprocessable('ASSIGNEE_NOT_ELIGIBLE', `Le propriétaire désigné doit appartenir au service compétent (${owner.entity}).`);
+    assertNotRelated(assignee, appeal.taxpayerId, 'Conflit d’intérêts : l’agent désigné est lié au contribuable réclamant.');
+    const now = this.clock.now().toISOString();
+    const updated = this.appeals.update({
+      ...appeal,
+      owner: { entity: owner.entity, userId: assignee.id, assignedBy: user.id, assignedAt: now },
+      history: this.event(appeal, 'appeal.assigned', user.id, `Propriétaire : ${assignee.name}${owner.userId ? ` (précédent : ${owner.userId})` : ''} — ${input.reason}`),
+    });
+    this.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'appeal.assigned', resourceType: 'appeal', resourceId: id, details: { assignee: assignee.id, previous: owner.userId ?? null, entity: owner.entity, reason: input.reason } });
+    return this.view(updated);
+  }
+
+  /**
+   * Indicateurs du respect des délais (§ 23) pour le tableau de bord de la direction de la régie et de l'audit interne :
+   * agrégats et références de dossiers, sans nom de contribuable.
+   */
+  indicators(): {
+    asOf: string; open: number; overdue: number; approaching: number; unassigned: number; decided: number; decidedLate: number;
+    decidedWithinDeadlineRate: string | null;
+    byOwner: { entity: string; userId: string | null; open: number; overdue: number }[];
+    overdueItems: { id: string; entity: string; ownerUserId: string | null; decisionDueBy: string; daysLate: number; status: Appeal['status'] }[];
+    basis: string;
+  } {
+    const all = this.appeals.all().map((a) => ({ a, d: this.deadlines(a), o: this.ownerOf(a) }));
+    const open = all.filter((x) => !x.a.decision);
+    const decided = all.filter((x) => x.a.decision);
+    const late = decided.filter((x) => x.d.state === 'DECIDE_HORS_DELAI').length;
+    const byOwner = new Map<string, { entity: string; userId: string | null; open: number; overdue: number }>();
+    for (const x of open) {
+      const k = `${x.o.entity}|${x.o.userId ?? ''}`;
+      const e = byOwner.get(k) ?? { entity: x.o.entity, userId: x.o.userId ?? null, open: 0, overdue: 0 };
+      e.open++;
+      if (x.d.state === 'DELAI_DEPASSE') e.overdue++;
+      byOwner.set(k, e);
+    }
+    return {
+      asOf: kinshasaDate(this.clock.now()),
+      open: open.length,
+      overdue: open.filter((x) => x.d.state === 'DELAI_DEPASSE').length,
+      approaching: open.filter((x) => x.d.state === 'ECHEANCE_PROCHE').length,
+      unassigned: open.filter((x) => !x.o.userId).length,
+      decided: decided.length,
+      decidedLate: late,
+      decidedWithinDeadlineRate: decided.length ? `${Math.round(((decided.length - late) / decided.length) * 100)} %` : null,
+      byOwner: [...byOwner.values()].sort((p, q) => q.overdue - p.overdue || q.open - p.open),
+      overdueItems: open.filter((x) => x.d.state === 'DELAI_DEPASSE')
+        .map((x) => ({ id: x.a.id, entity: x.o.entity, ownerUserId: x.o.userId ?? null, decisionDueBy: x.d.decisionDueBy, daysLate: -(x.d.daysRemaining ?? 0), status: x.a.status }))
+        .sort((p, q) => q.daysLate - p.daysLate),
+      basis: APPEAL_PROCEDURE.source,
+    };
+  }
+
   /**
    * Suivi des délais de réponse : signale une fois chaque réclamation hors délai (`appeal.sla_breach`)
    * à la direction de la régie (R06) et à l'audit interne (R22). Aucun effet sur le fond du dossier.
@@ -322,10 +419,13 @@ export class AppealService {
       if (input.proposedAmount.currency !== ob.amount.currency) throw badRequest('CURRENCY_MISMATCH', `Montant proposé attendu en ${ob.amount.currency}.`);
       if (Money.fromJSON(input.proposedAmount).isNegative()) throw unprocessable('INVALID_RECTIFIED_AMOUNT', 'Le montant proposé ne peut être négatif.');
     }
+    const currentOwner = this.ownerOf(appeal);
     const updated = this.appeals.update({
       ...appeal,
       status: 'PROPOSITION',
       instructorId: user.id,
+      // Recours encore « en file du service » : l'instructeur en devient le propriétaire nominatif.
+      owner: currentOwner.userId ? currentOwner : { ...currentOwner, userId: user.id, assignedBy: user.id, assignedAt: this.clock.now().toISOString() },
       history: this.event(appeal, 'appeal.instructed', user.id, `Proposition : ${input.proposal}`),
       proposal: {
         decision: input.proposal, analysis: input.analysis, at: this.clock.now().toISOString(),

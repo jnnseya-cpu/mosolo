@@ -9,7 +9,7 @@
  * mêmes règles que les lectures d'objet et d'obligation (périmètre territorial, accès minimal sans nom ni montant pour
  * l'agent de terrain, contribuable limité à ses propres dossiers). Chaque consultation est journalisée.
  */
-import { Money, type MoneyJSON } from '@mosolo/shared';
+import { Money, normalizePlate, type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { AuditActor, AuditRecord } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
@@ -119,6 +119,63 @@ export class ChaineService {
     return { accuracyM: null, source: 'DECLARATION' as const, findingId: null, measuredAt: o.createdAt, plausible: null };
   }
 
+  /**
+   * Contrôles des verticales rattachés à l'objet, par ordre chronologique : scan de plaque (NFIU, étal, emprise…),
+   * contrôle d'événement, contrôle d'un titre (RakaPay, wewa, étal) payé sur une obligation de l'objet, contrôle par
+   * plaque d'une session de stationnement de l'objet. Lecture seule, par duck typing des modules chargés.
+   */
+  private verticalControls(o: FiscalObject): { id: string; type: string; label: string; at: string; audit?: AuditRecord }[] {
+    const out: { id: string; type: string; label: string; at: string; audit?: AuditRecord }[] = [];
+    const byId = this.ctx.audit.list({ resourceId: o.id, limit: Number.MAX_SAFE_INTEGER }).items;
+    for (const r of byId) {
+      if (r.action === 'vertical.event.controlled') out.push({ id: r.id, type: 'event_control', label: 'contrôle de jauge sur place', at: r.at, audit: r });
+      if (r.action === 'object.plate.agent_scan') out.push({ id: r.id, type: 'plate_scan', label: 'scan de la plaque par un agent', at: r.at, audit: r });
+    }
+    for (const r of this.ctx.audit.list({ action: 'vertical.plate.scanned', limit: Number.MAX_SAFE_INTEGER }).items) {
+      if (r.details.objectId === o.id) out.push({ id: r.id, type: 'plate_scan', label: `scan de la plaque ${r.resourceId}`, at: r.at, audit: r });
+    }
+    const obligationIds = new Set(this.ctx.assessment.obligations.find((ob) => ob.objectId === o.id).map((ob) => ob.id));
+    type Ctl = { id: string; credentialId?: string; at: string; module?: string };
+    const titres = this.ctx.ext.titres as { controls?: { all(): Ctl[] }; credentials?: { get(id: string): { obligationId?: string } | undefined } } | undefined;
+    if (titres?.controls && titres.credentials && obligationIds.size) {
+      for (const e of titres.controls.all()) {
+        const c = e.credentialId ? titres.credentials.get(e.credentialId) : undefined;
+        if (c?.obligationId && obligationIds.has(c.obligationId)) {
+          out.push({ id: e.id, type: 'credential_control', label: `contrôle du titre${e.module ? ` (module ${e.module})` : ''}`, at: e.at, audit: this.lastAudit(e.id, 'titres.control.recorded', 'titres.control.offline_reconciled') });
+        }
+      }
+    }
+    type Sess = { plate: string; objectId: string; zoneId: string };
+    type Chk = { id: string; plate: string; zoneId: string | null; at: string };
+    const parking = this.ctx.ext.parking as { sessions?: { find(f: (s: Sess) => boolean): Sess[] }; checks?: { all(): Chk[] } } | undefined;
+    if (parking?.sessions && parking.checks) {
+      const sessions = parking.sessions.find((s) => s.objectId === o.id);
+      if (sessions.length) {
+        const plates = new Set(sessions.map((s) => s.plate));
+        for (const k of parking.checks.all()) {
+          if (plates.has(k.plate)) out.push({ id: k.id, type: 'parking_check', label: `contrôle par plaque ${k.plate}`, at: k.at });
+        }
+      }
+    }
+    // Contrôle d'un véhicule par plaque (modules 11, 12, 25) : journalisé sur la plaque normalisée de l'objet.
+    const rawPlate = o.attributes.immatriculation ?? o.attributes.plaque ?? o.attributes.plate;
+    if (typeof rawPlate === 'string' && rawPlate) {
+      const plate = normalizePlate(rawPlate);
+      for (const r of this.ctx.audit.list({ action: 'verticales.vehicle.controlled', limit: Number.MAX_SAFE_INTEGER }).items) {
+        if (r.resourceId === plate) out.push({ id: r.id, type: 'vehicle_control', label: `contrôle du véhicule ${plate}`, at: r.at, audit: r });
+      }
+    }
+    // Inspection publicitaire (module 77) d'un dispositif rattaché à l'objet.
+    type Insp = { id: string; deviceId: string; observedAt: string; finding: string };
+    const pub = this.ctx.ext.publicite as { inspections?: { all(): Insp[] }; devices?: { get(id: string): { objectId?: string } | undefined } } | undefined;
+    if (pub?.inspections && pub.devices) {
+      for (const i of pub.inspections.all()) {
+        if (pub.devices.get(i.deviceId)?.objectId === o.id) out.push({ id: i.id, type: 'ad_inspection', label: `inspection publicitaire (${i.finding})`, at: i.observedAt, audit: this.lastAudit(i.id, 'publicite.inspection.recorded') });
+      }
+    }
+    return out.sort((a, b) => a.at.localeCompare(b.at));
+  }
+
   private objectLinks(o: FiscalObject): Partial<Record<MaillonCode, Draft>> {
     const declared = this.firstAudit(o.id, 'object.declared');
     const recenser = draft('FAIT', `Objet ${o.id} ${o.status === 'VALIDE' ? 'recensé et vérifié' : 'recensé (provisoire tant qu’il n’est pas vérifié)'} — ${o.probativeStatus}.`, {
@@ -158,6 +215,14 @@ export class ChaineService {
     } else if (observations.length) {
       const last = observations.at(-1)!;
       controler = draft('FAIT', `${observations.length} observation(s) terrain synchronisée(s) (appareil enrôlé).`, { at: last.receivedAt, actor: { kind: 'device', id: last.deviceId }, evidence: [{ type: 'observation', id: last.id }] });
+    } else if (this.verticalControls(o).length) {
+      // Contrôles des verticales (Partie V) : scan de plaque, contrôle de titre, contrôle par plaque du stationnement,
+      // contrôle d'événement — chacun journalisé ; l'agent constate, il n'encaisse pas.
+      const vc = this.verticalControls(o);
+      const last = vc.at(-1)!;
+      controler = draft('FAIT', `${vc.length} contrôle(s) de verticale journalisé(s) — dernier : ${last.label}.`, {
+        at: last.at, ...fromAudit(last.audit), evidence: vc.slice(-5).map((c) => ({ type: c.type, id: c.id })),
+      });
     } else if (openMission) {
       controler = draft('EN_ATTENTE', `Mission ${openMission.id} (${openMission.kind}) prévue au ${openMission.dueDate}.`);
     } else {

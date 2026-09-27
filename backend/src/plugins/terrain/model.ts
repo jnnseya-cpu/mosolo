@@ -204,6 +204,8 @@ export interface Finding {
   photoSha256?: string;
   capturedAt: string;
   receivedAt: string;
+  /** Catégorie déclarée d'un objet non enregistré (Document maître FR 2, ch. 43). */
+  category?: 'PARCELLE' | 'BATIMENT' | 'UNITE_LOCATIVE' | 'ACTIVITE' | 'VEHICULE' | 'PANNEAU' | 'AUTRE';
   reference: { kind: 'OBJET' | 'ZONE_MISSION'; lat: number; lon: number };
   distanceM: number;
   toleranceM: number;

@@ -5,6 +5,9 @@ import { INVENTORY_ATTRIBUTES, REVENUE_REFERENCE, type InventoryKey } from '@mos
 import { requireUser } from '../../core/auth.js';
 import { parse } from '../../core/http.js';
 import type { ReferentielService } from './service.js';
+import { authorize } from '../../core/policy.js';
+import { dataModelView } from './modele-donnees.js';
+import { roleMatrixView } from './matrice-roles.js';
 
 const keys = INVENTORY_ATTRIBUTES.map((a) => a.key) as [InventoryKey, ...InventoryKey[]];
 
@@ -18,6 +21,17 @@ export function registerReferentielRoutes(app: FastifyInstance, svc: Referentiel
   }));
 
   app.get('/v1/referentiel/recettes', async (req) => ({ items: svc.lines(requireUser(req)) }));
+
+  // Document maître FR 2 (nouvelle version) : modèle de données conceptuel (ch. 30) et matrice d'habilitations (ch. 12),
+  // évalués en direct (états réellement portés par le code, effectifs sans donnée personnelle ; interdits refusés).
+  app.get('/v1/referentiel/modele-donnees', async (req) => {
+    authorize(requireUser(req), 'referentiel:conformite.read');
+    return dataModelView(svc.ctx);
+  });
+  app.get('/v1/referentiel/matrice-habilitations', async (req) => {
+    authorize(requireUser(req), 'referentiel:conformite.read');
+    return roleMatrixView();
+  });
   app.get<{ Params: { code: string } }>('/v1/referentiel/recettes/:code', async (req) => {
     const user = requireUser(req);
     const line = svc.lines(user).find((l) => l.code === req.params.code);

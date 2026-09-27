@@ -16,6 +16,7 @@ import { api, describeError } from '../../lib/api';
 import { DemoNote, FiscalTabs, ReasonAction, useViewer } from './common';
 import type { Exemption, FiscalObjectView, Reference } from './types';
 import './fiscal.css';
+import { RegistreExonerations } from './RegistreExonerations';
 
 const STATUS: Record<string, { label: string; tone: Tone }> = {
   DEMANDEE: { label: 'Demandée — à instruire', tone: 'neutral' }, INSTRUITE: { label: 'Instruite — visa juridique attendu', tone: 'info' },
@@ -163,6 +164,7 @@ export default function Exonerations() {
           {objs.data ? <RequestForm objects={objs.data.filter((o) => o.holder && o.holder !== 'autre')} onDone={list.reload} /> : <Loading />}
         </section>
       )}
+      {!isTaxpayer && agent && <RegistreExonerations />}
       {!isTaxpayer && list.data && list.data.alerts.length > 0 && (
         <div className="callout callout-warn" role="note"><Icon name="alert" size={18} /><div>{list.data.alerts.map((a) => <p key={a.key}>{a.message}</p>)}<p className="small muted">Alerte de concentration : proposition d’examen pour l’audit, aucune mesure automatique.</p></div></div>
       )}

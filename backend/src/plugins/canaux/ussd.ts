@@ -10,11 +10,12 @@ import type { AppContext } from '../../context.js';
 import { hmacSha256Hex, randomSecret } from '../../core/crypto.js';
 import { ApiError, conflict, notFound } from '../../core/errors.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
+import { taxpayerRecipient } from '../../modules/identity/recipients.js';
 import type { CardRegistry } from './cards.js';
 import { normalizeCardNumber } from './cards.js';
 import {
   MAX_PIN_ATTEMPTS, PIN_LOCK_MS, PILOT_COMMUNES, SESSION_TIMEOUT_MS, maskMsisdn,
-  type ChannelSession, type ScreenOut, type SessionChannel, type SessionJournalEntry,
+  type ChannelOperation, type ChannelSession, type ScreenOut, type SessionChannel, type SessionJournalEntry,
 } from './model.js';
 import { issueOrReuseReference, type PaymentPointService } from './points.js';
 import { moneyToFrenchWords } from './words.js';
@@ -72,6 +73,8 @@ const CONTEST_REASONS: { key: string; type: 'MONTANT_ERRONE' | 'BIEN_NON_DETENU'
   { key: '4', type: 'ACTIVITE_FERMEE', label: 'Activité fermée' },
   { key: '5', type: 'AUTRE', label: 'Autre motif' },
 ];
+/** Inscription gratuite : proposée aux seuls numéros inconnus (module 2). */
+const ENROL_OPTION: Opt = { key: '10', label: 'S’inscrire', voice: 'créer votre compte MOSOLO gratuitement' };
 const BACK: Opt[] = [{ key: '9', label: 'Menu', voice: 'revenir au menu' }, { key: '0', label: 'Quitter', voice: 'quitter' }];
 
 export class ChannelEngine {
@@ -80,6 +83,14 @@ export class ChannelEngine {
   private readonly ids = new IdGenerator();
   private readonly pepper = randomSecret();
   referencesIssued = 0;
+  /**
+   * Numéro appelant des sessions d'abonnés INCONNUS, gardé en mémoire vive le temps de la session seulement (jamais
+   * dans le journal ni dans le dépôt des sessions) : il sert uniquement à l'inscription gratuite par USSD / SVI
+   * (module 2 — démarrer un parcours selon le canal ; le numéro est attesté par le réseau de l'opérateur).
+   */
+  private readonly appelants = new Map<string, string>();
+  enrolmentsCreated = 0;
+  private readonly noms = new Map<string, string>();
 
   constructor(
     private readonly ctx: AppContext,
@@ -105,7 +116,8 @@ export class ChannelEngine {
       actor: { kind: 'public', id: `canal-${channel.toLowerCase()}` }, action: 'canaux.session.started', resourceType: 'channel_session', resourceId: session.id,
       details: { channel, msisdnMasked: session.msisdnMasked, knownSubscriber: !!tp },
     });
-    return this.emit(session, null, this.mainMenu(true));
+    if (!tp && msisdn) this.appelants.set(session.id, msisdn);
+    return this.emit(session, null, this.mainMenu(true, !tp));
   }
 
   input(channel: SessionChannel, sessionId: string, rawInput: string): ScreenOut {
@@ -118,7 +130,7 @@ export class ChannelEngine {
       throw conflict('SESSION_EXPIRED', 'Session expirée après inactivité : recomposez le code.');
     }
     const input = rawInput.trim().slice(0, 40);
-    const masked = s.node === 'PIN' ? '••••' : input;
+    const masked = s.node === 'PIN' ? '••••' : s.node === 'ENROL_NAME' ? '[nom saisi]' : input;
     let screen: Screen;
     try {
       screen = this.route(s, input);
@@ -143,6 +155,7 @@ export class ChannelEngine {
       output: s.channel === 'USSD' ? text : prompts.join(' | '), end: !!screen.end,
     });
     if (screen.end) {
+      this.appelants.delete(s.id);
       this.ctx.audit.append({ actor: { kind: 'public', id: `canal-${s.channel.toLowerCase()}` }, action: 'canaux.session.ended', resourceType: 'channel_session', resourceId: s.id, details: { steps: updated.steps, lastNode: screen.node } });
     }
     return {
@@ -158,9 +171,11 @@ export class ChannelEngine {
 
   // ---------- Écrans ----------
 
-  private mainMenu(welcome = false): Screen {
+  private mainMenu(welcome = false, inscription = false): Screen {
     return {
-      node: 'MAIN', title: welcome ? 'MOSOLO - service gratuit' : 'MOSOLO - menu', options: [...MAIN_OPTIONS, { key: '0', label: 'Quitter', voice: 'quitter' }],
+      // Écran de 182 caractères : titre court lorsque l'inscription s'ajoute au menu.
+      node: 'MAIN', title: inscription ? 'MOSOLO' : welcome ? 'MOSOLO - service gratuit' : 'MOSOLO - menu',
+      options: [...MAIN_OPTIONS, ...(inscription ? [ENROL_OPTION] : []), { key: '0', label: 'Quitter', voice: 'quitter' }],
       ...(welcome ? { voiceLines: ['Bienvenue sur MOSOLO, service gratuit de la Ville de Kinshasa. Aucun agent ne vous demandera d’espèces.'] } : {}),
     };
   }
@@ -170,8 +185,8 @@ export class ChannelEngine {
   }
 
   private route(s: ChannelSession, input: string): Screen {
-    if (input === '0' && !['PIN', 'ID_CARD', 'VERIFY_INPUT'].includes(s.node)) return this.goodbye();
-    if (input === '9' && !['PIN', 'ID_CARD', 'VERIFY_INPUT'].includes(s.node)) return this.mainMenu();
+    if (input === '0' && !['PIN', 'ID_CARD', 'VERIFY_INPUT', 'ENROL_NAME'].includes(s.node)) return this.goodbye();
+    if (input === '9' && !['PIN', 'ID_CARD', 'VERIFY_INPUT', 'ENROL_NAME'].includes(s.node)) return this.mainMenu(false, this.appelants.has(s.id));
     switch (s.node) {
       case 'MAIN':
       case 'ERROR':
@@ -189,6 +204,7 @@ export class ChannelEngine {
       case 'VERIFY_INPUT':
         return this.onVerify(s, input);
       case 'POINTS_COMMUNE':
+        this.op(s, 'POINTS');
         return this.onPointsCommune(input);
       case 'LANG':
         return this.onLang(s, input);
@@ -200,9 +216,19 @@ export class ChannelEngine {
         return this.onContestReason(s, input);
       case 'CONTEST_CONFIRM':
         return this.onContestConfirm(s, input);
+      case 'ENROL_NAME':
+        return this.onEnrolName(s, input);
+      case 'ENROL_CONFIRM':
+        return this.onEnrolConfirm(s, input);
       default:
         return this.mainMenu();
     }
+  }
+
+  /** Consigne une opération réalisée dans la session (indicateur « opérations réalisées à la voix », module 64). */
+  private op(s: ChannelSession, kind: ChannelOperation): void {
+    const cur = this.sessions.get(s.id);
+    if (cur) this.sessions.update({ ...cur, operations: [...(cur.operations ?? []), kind] });
   }
 
   private invalid(screen: Screen): Screen {
@@ -227,22 +253,89 @@ export class ChannelEngine {
         return this.requireAuth(s, 'CARD_LOST');
       case '8':
         return this.requireAuth(s, 'CONTEST');
+      case ENROL_OPTION.key:
+        if (!this.appelants.has(s.id)) return { node: 'MAIN', title: 'Ce numéro a déjà un compte MOSOLO.', options: BACK };
+        return { node: 'ENROL_NAME', title: 'Inscription gratuite. Saisissez votre nom complet', inputHint: 'Saisissez votre nom complet sur le clavier, puis validez.' };
       default:
-        return this.invalid(this.mainMenu());
+        return this.invalid(this.mainMenu(false, this.appelants.has(s.id)));
     }
+  }
+
+  // ---------- Inscription gratuite (module 2 : parcours démarré par USSD ou SVI) ----------
+
+  private onEnrolName(s: ChannelSession, input: string): Screen {
+    const name = input.replace(/\s+/g, ' ').trim();
+    if (name.length < 3 || /\d/.test(name)) return { node: 'ENROL_NAME', title: 'Nom illisible. Saisissez votre nom complet (lettres)', inputHint: 'Saisissez votre nom complet, en lettres.' };
+    // Le nom n'est pas une donnée de navigation : il reste en mémoire vive le temps de la confirmation.
+    this.noms.set(s.id, name);
+    return {
+      node: 'ENROL_CONFIRM', title: `Créer votre compte MOSOLO gratuit pour le ${s.msisdnMasked} ?`,
+      lines: ['Déclarer un profil ne crée ni dette ni propriété.'],
+      options: [{ key: '1', label: 'Oui, créer', voice: 'confirmer la création de votre compte' }, { key: '2', label: 'Non', voice: 'annuler' }],
+    };
+  }
+
+  private onEnrolConfirm(s: ChannelSession, input: string): Screen {
+    const msisdn = this.appelants.get(s.id);
+    const name = this.noms.get(s.id);
+    if (input === '2' || !msisdn || !name) { this.noms.delete(s.id); return this.mainMenu(false, !!msisdn); }
+    if (input !== '1') return this.invalid({ node: 'ENROL_CONFIRM', title: 'Tapez 1 pour créer, 2 pour annuler', options: [{ key: '1', label: 'Oui' }, { key: '2', label: 'Non' }] });
+    const tp = this.ctx.taxpayers.register({ phone: msisdn, fullName: name, language: s.lang, situation: 'other', kind: 'PERSONNE_PHYSIQUE' });
+    // Numéro attesté par le réseau de l'opérateur (session ouverte depuis ce numéro) : téléphone vérifié (N0).
+    this.ctx.taxpayers.markPhoneVerified(tp.id);
+    this.appelants.delete(s.id);
+    this.noms.delete(s.id);
+    this.enrolmentsCreated += 1;
+    // Récapitulatif d'enrôlement par SMS (et dans l'espace) : identifiant du compte, sans lien (module 2).
+    this.ctx.comms.publish('account.registration.requested', [taxpayerRecipient(this.ctx.taxpayers.get(tp.id))], { reference: tp.iuc }, { entity: 'GOUVERNORAT' });
+    this.sessions.update({ ...this.sessions.get(s.id)!, taxpayerId: tp.id });
+    this.ctx.audit.append({
+      actor: { kind: 'public', id: `canal-${s.channel.toLowerCase()}` }, action: 'canaux.session.enrolled', resourceType: 'taxpayer', resourceId: tp.id,
+      details: { sessionId: s.id, channel: s.channel, consent: 'CONFIRMATION_CLAVIER', level: 'N0' },
+    });
+    return {
+      node: 'ENROL_DONE', end: true, title: `Compte créé. Identifiant ${tp.iuc}`,
+      lines: ['Récapitulatif envoyé par SMS. Code secret et carte : guichet MOSOLO, gratuit.'],
+      voiceLines: [`Votre compte est créé. Votre identifiant est ${spell(tp.iuc)}. Un récapitulatif vous est envoyé par SMS. L’inscription est gratuite.`],
+    };
   }
 
   private requireAuth(s: ChannelSession, intent: string): Screen {
     if (s.authenticated) return this.goIntent(s, intent);
     this.sessions.update({ ...s, pendingIntent: intent });
     if (s.taxpayerId) return { node: 'PIN', title: 'Saisissez votre code secret (4 chiffres)', inputHint: 'Saisissez votre code secret à quatre chiffres.' };
-    return { node: 'ID_CARD', title: 'Saisissez le numéro de votre carte MOSOLO (12 chiffres)', inputHint: 'Saisissez les douze chiffres de votre carte MOSOLO.' };
+    return { node: 'ID_CARD', title: 'Saisissez le numéro de votre carte MOSOLO (12 chiffres) ou le numéro de votre objet', inputHint: 'Saisissez les douze chiffres de votre carte MOSOLO, ou le numéro de votre objet.' };
+  }
+
+  /**
+   * Objet désigné par son numéro (module 64 : « consultation par numéro de carte ou d'objet ») : identifiant de l'objet
+   * ou code IGF, saisis au clavier (lettres et séparateurs ignorés à la comparaison). Divulgation minimale : le code
+   * secret du titulaire reste exigé avant toute lecture.
+   */
+  private objectByNumber(input: string): { id: string; taxpayerId: string } | undefined {
+    const key = input.toUpperCase().replace(/[^0-9A-Z]/g, '');
+    if (key.length < 4) return undefined;
+    const digits = key.replace(/[^0-9]/g, '');
+    const o = this.ctx.objects.objects.findOne((x) => {
+      if (!x.taxpayerId) return false;
+      const id = x.id.toUpperCase().replace(/[^0-9A-Z]/g, '');
+      const igf = (x.igf?.code ?? '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+      return id === key || (!!igf && igf === key) || (/^\d{6,}$/.test(key) && !!igf && igf.replace(/[^0-9]/g, '') === digits);
+    });
+    return o?.taxpayerId ? { id: o.id, taxpayerId: o.taxpayerId } : undefined;
   }
 
   private onCard(s: ChannelSession, input: string): Screen {
     const n = normalizeCardNumber(input);
     const card = n ? this.cards.byNumber(n) : undefined;
-    if (!card) return { node: 'ID_CARD', title: 'Numéro de carte incorrect. Saisissez à nouveau les 12 chiffres', inputHint: 'Numéro incorrect. Saisissez à nouveau les douze chiffres.' };
+    if (!card) {
+      const obj = this.objectByNumber(input);
+      if (obj && s.pendingIntent !== 'CARD_LOST') {
+        this.sessions.update({ ...s, taxpayerId: obj.taxpayerId, data: { ...s.data, objectId: obj.id } });
+        return { node: 'PIN', title: 'Objet reconnu. Saisissez le code secret du titulaire (4 chiffres)', inputHint: 'Objet reconnu. Saisissez le code secret à quatre chiffres du titulaire.' };
+      }
+      return { node: 'ID_CARD', title: 'Numéro de carte ou d’objet incorrect. Saisissez à nouveau', inputHint: 'Numéro incorrect. Saisissez à nouveau les douze chiffres de la carte ou le numéro de l’objet.' };
+    }
     if (card.status !== 'ACTIVE' && s.pendingIntent !== 'CARD_LOST') {
       return { node: 'FIN', title: card.status === 'REVOQUEE' ? 'Carte révoquée. Présentez-vous au guichet MOSOLO.' : 'Carte bloquée. Présentez-vous au guichet MOSOLO.', end: true };
     }
@@ -271,7 +364,10 @@ export class ChannelEngine {
   private goIntent(s: ChannelSession, intent: string): Screen {
     const tpId = s.taxpayerId!;
     if (intent === 'BALANCE') {
-      const dues = this.points.payableObligations(tpId);
+      this.op(s, 'CONSULTATION');
+      // Consultation par numéro d'objet : les seules obligations de cet objet.
+      const objectId = s.data.objectId;
+      const dues = this.points.payableObligations(tpId).filter((d) => !objectId || this.ctx.assessment.obligations.get(d.obligationId)?.objectId === objectId);
       if (dues.length === 0) return { node: 'BALANCE', title: 'Aucune somme à payer à ce jour.', options: BACK };
       const totals = new Map<string, Money>();
       for (const d of dues) {
@@ -288,7 +384,8 @@ export class ChannelEngine {
       };
     }
     if (intent === 'PAY') {
-      const dues = this.points.payableObligations(tpId).slice(0, 3);
+      const objectId = s.data.objectId;
+      const dues = this.points.payableObligations(tpId).filter((d) => !objectId || this.ctx.assessment.obligations.get(d.obligationId)?.objectId === objectId).slice(0, 3);
       if (dues.length === 0) return { node: 'BALANCE', title: 'Aucune somme à payer à ce jour.', options: BACK };
       const data: Record<string, string> = {};
       dues.forEach((d, i) => { data[`o${i + 1}`] = d.obligationId; });
@@ -299,13 +396,20 @@ export class ChannelEngine {
       };
     }
     if (intent === 'RECEIPTS') {
+      this.op(s, 'QUITTANCES');
       const rs = this.ctx.receipts.byTaxpayer(tpId).sort((a, b) => b.issuedAt.localeCompare(a.issuedAt)).slice(0, 3);
       if (rs.length === 0) return { node: 'RECEIPTS', title: 'Aucune quittance.', options: BACK };
       const label = (st: string) => (st === 'DEFINITIVE' ? 'VALIDE' : st === 'PROVISOIRE' ? 'EN ATTENTE' : st);
       return {
         node: 'RECEIPTS', title: 'Dernières quittances',
         lines: rs.map((r) => `…${r.code.slice(-6)} ${label(r.status)} ${ussdAmount(r.amount)}`),
-        voiceLines: rs.map((r) => `Quittance terminant par ${spell(r.code.slice(-6))}, ${label(r.status).toLowerCase()}, ${moneyToFrenchWords(r.amount)}, du ${shortDate(r.paidAt)}.`),
+        // Confirmation vocale (module 64) : montant, objet, période et numéro de quittance.
+        voiceLines: rs.map((r) => {
+          const ob = this.ctx.assessment.obligations.get(r.obligationId);
+          const objet = ob ? `${ob.label}, objet ${spell(ob.objectId.slice(-6))}` : r.revenueCategory;
+          const periode = ob ? `période du ${shortDate(ob.createdAt)} à l’échéance du ${shortDate(ob.dueDate)}` : '';
+          return `Quittance numéro ${spell(r.number)}, ${label(r.status).toLowerCase()}, ${moneyToFrenchWords(r.amount)}, ${objet}${periode ? `, ${periode}` : ''}, payée le ${shortDate(r.paidAt)}. Code terminant par ${spell(r.code.slice(-6))}.`;
+        }),
         options: BACK,
       };
     }
@@ -349,6 +453,7 @@ export class ChannelEngine {
     if (input !== '1' || !s.data.selected) return this.invalid(this.mainMenu());
     const order = issueOrReuseReference(this.ctx, s.taxpayerId!, s.data.selected, s.channel === 'USSD' ? 'USSD' : 'MOBILE_MONEY');
     this.referencesIssued += 1;
+    this.op(s, 'REFERENCE');
     this.ctx.audit.append({
       actor: { kind: 'public', id: `canal-${s.channel.toLowerCase()}` }, action: 'canaux.session.reference_issued', resourceType: 'payment_order', resourceId: order.id,
       details: { sessionId: s.id, paymentReference: order.paymentReference },
@@ -395,6 +500,7 @@ export class ChannelEngine {
       grounds: `Contestation sans écrit par ${s.channel} (${CONTEST_REASONS.find((r) => r.type === type)!.label}) — session ${s.id}, confirmée par touche après lecture du résumé.`,
     }, { channel: s.channel === 'USSD' ? 'USSD' : 'SVI', consent: { method: 'CONFIRMATION_CLAVIER', summaryReadBack: true, at: this.ctx.clock.now().toISOString(), sessionId: s.id } });
     this.ctx.audit.append({ actor: { kind: 'public', id: `canal-${s.channel.toLowerCase()}` }, action: 'canaux.session.appeal_submitted', resourceType: 'appeal', resourceId: appeal.id, details: { sessionId: s.id, obligationId: s.data.contest, type } });
+    this.op(s, 'CONTESTATION');
     const ack = appeal.acknowledgement?.number ?? appeal.id;
     return {
       node: 'CONTEST_DONE', end: true, title: `Contestation enregistrée : ${ack}`,
@@ -411,6 +517,7 @@ export class ChannelEngine {
       if (e instanceof ApiError && e.status === 429) return { node: 'VERIFY_RESULT', title: 'Trop de vérifications. Réessayez plus tard.', end: true };
       throw e;
     }
+    this.op(s, 'VERIFICATION');
     const detail = out.amount ? [`${ussdAmount(out.amount)}${out.date ? ` du ${shortDate(out.date)}` : ''}`] : [];
     return {
       node: 'VERIFY_RESULT', title: `${out.status} : ${out.message}`, lines: detail,
@@ -443,6 +550,7 @@ export class ChannelEngine {
   private onCardLost(s: ChannelSession, input: string): Screen {
     if (input !== '1' || !s.cardNumber) return this.mainMenu();
     this.cards.block({ kind: 'public', id: `canal-${s.channel.toLowerCase()}:${s.taxpayerId}` }, s.cardNumber, `Perte ou vol déclaré par ${s.channel}`);
+    this.op(s, 'BLOCAGE_CARTE');
     return { node: 'FIN', title: 'Carte bloquée. Réémission gratuite au guichet MOSOLO.', end: true };
   }
 

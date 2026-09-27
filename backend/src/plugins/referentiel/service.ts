@@ -14,7 +14,7 @@ import type { AppContext } from '../../context.js';
 import { actorOf } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { badRequest, conflict, notFound } from '../../core/errors.js';
-import { authorize, definePolicy, GRANTS } from '../../core/policy.js';
+import { allAgentRoles, authorize, definePolicy, GRANTS } from '../../core/policy.js';
 import { InMemoryRepository } from '../../core/repository.js';
 import { VERTICALS } from '../verticales/catalogue.js';
 
@@ -27,6 +27,9 @@ export function registerReferentielPolicies(): void {
   // Réservation d'un code par le juriste rédacteur ou vérificateur ; retrait par le vérificateur ou l'autorité de publication.
   definePolicy('referentiel:code.reserve', { R13: always, R14: always });
   definePolicy('referentiel:code.retire', { R14: always, R16: always });
+  // Modèle de données (ch. 30) et matrice d'habilitations (ch. 12) du Document maître FR 2 : agrégats et règles, sans
+  // donnée personnelle ; lecture par tout agent public (R01 à R29) et par les observateurs de l'audit externe.
+  definePolicy('referentiel:conformite.read', { ...allAgentRoles(always) });
 }
 
 export const CODE_FORMAT = /^[A-Z0-9][A-Z0-9-]{2,39}$/;
@@ -55,7 +58,7 @@ export class ReferentielService {
   readonly codes = new InMemoryRepository<RevenueCode>();
   readonly inventory = new InMemoryRepository<InventoryRecord>();
 
-  constructor(private readonly ctx: AppContext) {
+  constructor(readonly ctx: AppContext) {
     const at = ctx.clock.now().toISOString();
     for (const l of [...REVENUE_REFERENCE, ...ADMINISTRATIVE_REVENUES]) {
       if (!this.codes.get(l.code)) this.codes.insert({ id: l.code, code: l.code, label: l.label, origin: 'REFERENTIEL', status: 'ACTIF', reservedBy: 'referentiel-cahier-ch7', reservedAt: at });

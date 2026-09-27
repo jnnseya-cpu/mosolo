@@ -1,3 +1,4 @@
+import { MesPenalites } from '../modules/rakapay/Billetterie';
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import type { MoneyJSON } from '@mosolo/shared';
@@ -477,6 +478,7 @@ export default function RakaPay() {
             </ol>
           </section>
           <PassengerCheck />
+          <MesPenalites />
           <ReportForm />
         </aside>
       </div>

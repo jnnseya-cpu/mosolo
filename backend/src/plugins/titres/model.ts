@@ -50,6 +50,32 @@ export interface ValidityPolicy {
 export const SUPPORTS = ['QR_DYNAMIQUE', 'QR_STATIQUE', 'PLAQUE', 'GILET', 'AUTOCOLLANT', 'CARTE', 'SMS', 'USSD', 'CODE_COURT'] as const;
 export type Support = (typeof SUPPORTS)[number];
 
+/**
+ * Visuels par module (module 70) : couleur d'accent, pictogramme et préfixe propres au service, pour qu'un titre ne
+ * puisse pas être présenté pour un autre service. La couleur d'accent n'est JAMAIS une couleur de statut (vert, ambre,
+ * rouge, bleu, gris, noir) : le statut reste porté par sa couleur, son icône et son texte.
+ */
+export interface ModuleVisual { color: string; colorName: string; pictogram: string; prefix: string }
+const VISUALS_BY_PREFIX: Record<string, Omit<ModuleVisual, 'prefix'>> = {
+  VIG: { color: '#5C3D99', colorName: 'violet', pictogram: 'car' },
+  TSC: { color: '#5C3D99', colorName: 'violet', pictogram: 'car' },
+  LIC: { color: '#00838F', colorName: 'sarcelle', pictogram: 'bus' },
+  PAT: { color: '#8D5A2B', colorName: 'brun', pictogram: 'store' },
+  PEA: { color: '#6B7B1E', colorName: 'olive', pictogram: 'ticket' },
+  CAR: { color: '#795548', colorName: 'terre', pictogram: 'crane' },
+  EMB: { color: '#283593', colorName: 'indigo', pictogram: 'anchor' },
+  ACC: { color: '#006064', colorName: 'bleu pétrole', pictogram: 'anchor' },
+  WEW: { color: '#C4561A', colorName: 'orange brûlé', pictogram: 'moto' },
+  RKP: { color: '#AD1457', colorName: 'framboise', pictogram: 'bus' },
+  STA: { color: '#3949AB', colorName: 'bleu roi', pictogram: 'parking' },
+  PKS: { color: '#3949AB', colorName: 'bleu roi', pictogram: 'parking' },
+  IFA: { color: '#1A237E', colorName: 'bleu nuit', pictogram: 'plane' },
+};
+export function visualFor(prefix: string): ModuleVisual {
+  const v = VISUALS_BY_PREFIX[prefix.toUpperCase()] ?? { color: '#455A64', colorName: 'ardoise', pictogram: 'ticket' };
+  return { ...v, prefix: prefix.toUpperCase() };
+}
+
 /** Statut de l'acte fondant le type de titre (J21, J28) : aucun type n'est activable sans acte. */
 export type LegalActStatus = 'ACTE_REQUIS' | 'CERTIFIE' | 'DEMONSTRATION';
 
@@ -221,6 +247,11 @@ export interface VerificationEvent {
   presented: string;
   controllerId: string;
   deviceId?: string;
+  /**
+   * Terminal enregistré (module 71) : terminal enrôlé, actif et affecté au contrôleur au moment du contrôle.
+   * `false` : contrôle fait depuis un navigateur sans terminal enregistré (signalé dans les indicateurs).
+   */
+  registeredTerminal?: boolean;
   place: UsePlace;
   at: string;
   offline: boolean;
@@ -257,12 +288,32 @@ export interface Constat {
   controllerId: string;
   place: UsePlace;
   at: string;
-  status: 'OUVERT' | 'CLASSE' | 'TRANSMIS';
+  /** RETENU (module 76) : pénalité liquidée par décision motivée, au pourcentage réglementaire du ticket (règle ACTIVE). */
+  status: 'OUVERT' | 'CLASSE' | 'TRANSMIS' | 'RETENU';
+  /** Effet juridique AU CONSTAT : jamais un montant ; seule la décision RETENU d'une personne habilitée en produit un. */
   legalEffect: 'AUCUN_MONTANT';
   notice: string;
   duringGrace: boolean;
-  decision?: { by: string; at: string; outcome: 'CLASSE' | 'TRANSMIS'; motif: string };
+  decision?: { by: string; at: string; outcome: 'CLASSE' | 'TRANSMIS' | 'RETENU'; motif: string };
+  /** Pénalité décidée : règle du registre (pourcentage), ticket de référence et son prix issu de sa propre règle. */
+  penalty?: ConstatPenalty;
+  /** Contestations du redevable (recours par le circuit commun des réclamations). */
+  contests?: { appealId: string; by: string; at: string; grounds: string }[];
 }
+
+export interface ConstatPenalty {
+  ruleCode: string;
+  ruleVersion: number;
+  referenceTypeCode: string;
+  ticketPrice: { amount: string; currency: string };
+  percentage: string;
+  amount: { amount: string; currency: string };
+  obligationId: string;
+  holderTaxpayerId: string;
+}
+
+/** Clé du registre de la pénalité d'un module de titres : pourcentage réglementaire du ticket (formule `prix_ticket`). */
+export const penaltyRuleCode = (module: string): string => `PEN-TITRE-${module}`;
 
 export interface Revocation {
   id: string;

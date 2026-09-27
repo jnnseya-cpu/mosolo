@@ -1,3 +1,4 @@
+import type { FieldDeliveryView } from './RemiseTerrain';
 /** Types du contrat d'API « recouvrement » (backend/src/plugins/recouvrement) et aides d'affichage. */
 import type { MoneyJSON } from '@mosolo/shared';
 import type { Tone } from '../../components/StatusBadge';
@@ -96,6 +97,8 @@ export interface NoticeProof {
   notice: { id: string; number: string; kind: string; issuedAt: string; contentHash: string; eventCode: string };
   deliveries: { id: string; at: string; channel: string; status: string; provider: string; providerMode: string; recipientMasked: string; contentHash: string }[];
   readAcknowledgement: { at: string; by: string } | null;
+  /** Remise en personne (§ 15.2) : signature ou refus enregistré. */
+  fieldDelivery?: FieldDeliveryView | null;
 }
 
 export interface Appeal {

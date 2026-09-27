@@ -281,7 +281,10 @@ describe('Catalogue des API — paiement, confirmation, règlement, rapprochemen
 
     const statement = { statementId: 'REL-CAT-0001', lines: [{ accountAlias: DEMO.dgipkAlias, amount: ob.amount, valueDate: '2026-09-26', paymentReference: order.paymentReference }] };
     expect((await env.req('POST', '/v1/reglements/import', 'u-contribuable', statement)).statusCode).toBe(403);
-    const st = await env.req('POST', '/v1/reglements/import', 'u-tresor', statement);
+    // Double validation (module 29) : la route française PROPOSE l'import (202, rien d'écrit), une seconde personne valide.
+    const prop = await env.req('POST', '/v1/reglements/import', 'u-tresor', statement);
+    expect(prop.statusCode).toBe(202);
+    const st = await env.req('POST', '/v1/settlements/statements/REL-CAT-0001/validation', 'u-analyste-rappro', { approve: true, motif: 'Relevé vérifié ligne à ligne (test).' });
     expect(st.statusCode).toBe(201);
     expect(st.json().matched).toHaveLength(1);
     // Relevé rejoué : idempotent (200), aucun double effet.
@@ -290,6 +293,7 @@ describe('Catalogue des API — paiement, confirmation, règlement, rapprochemen
 
     // Ligne inconnue ⇒ exception visible dans la file (lecture seule, rôles du Trésor et du contrôle).
     await env.req('POST', '/v1/reglements/import', 'u-tresor', { statementId: 'REL-CAT-0002', lines: [{ accountAlias: DEMO.dgipkAlias, amount: { amount: '7.00', currency: 'USD' }, valueDate: '2026-09-26', paymentReference: 'PR-INCONNUE' }] });
+    await env.req('POST', '/v1/settlements/statements/REL-CAT-0002/validation', 'u-analyste-rappro', { approve: true, motif: 'Relevé vérifié ligne à ligne (test).' });
     const ex = await env.req('GET', '/v1/rapprochements/exceptions', 'u-analyste-rappro');
     expect(ex.statusCode).toBe(200);
     expect(ex.json()).toEqual((await env.req('GET', '/v1/reconciliation/exceptions', 'u-analyste-rappro')).json());

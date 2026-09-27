@@ -99,3 +99,15 @@ export async function publishCertifiedRule(env: TestEnv, overrides: Record<strin
 }
 
 export { DEMO };
+
+/**
+ * Import d'un relevé en DOUBLE VALIDATION (module 29) : proposition par `proposer`, puis validation par une autre
+ * personne habilitée (analyste de rapprochement ou comptable public). Réponse finale : résultat de l'application (201),
+ * rejeu (200) ou erreur de la proposition / de la validation.
+ */
+export async function postStatement(env: Pick<TestEnv, 'req'>, proposer: string, body: { statementId: string; lines: unknown[] }, validator?: string) {
+  const p = await env.req('POST', '/v1/settlements/statements', proposer, body);
+  if (p.statusCode !== 202) return p;
+  const v = validator ?? (proposer === 'u-analyste-rappro' ? 'u-tresor' : 'u-analyste-rappro');
+  return env.req('POST', `/v1/settlements/statements/${encodeURIComponent(body.statementId)}/validation`, v, { approve: true, motif: 'Relevé vérifié ligne à ligne (test).' });
+}

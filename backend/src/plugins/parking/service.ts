@@ -23,7 +23,9 @@ import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../
 import { assertDistinctPerson, assertNotRelated, authorize, evaluate, hasAnyGrant } from '../../core/policy.js';
 import { validityView } from '../../core/validity.js';
 import { distanceToZoneM, ParkingField, PHOTO_WINDOW_MINUTES, presenceOk, type AgentFix } from './field.js';
+import { TarificationDynamique } from './tarification-dynamique.js';
 import { ParkSmart, type PREMIUM_CATEGORIES } from './smart.js';
+import { ParkingComplements } from './stationnement-14.js';
 import { sampleForCounterCheck, withOverdue } from '../sanctions/service.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
@@ -126,7 +128,7 @@ export interface ControlCheck {
   commune: string | null;
   light: Light;
   /** TITRE : abonnement, pré-réservation ou titre événement du moteur de titres (§ 19A), lié à la plaque. */
-  title: 'SESSION' | 'RESERVATION' | 'TITRE' | null;
+  title: 'SESSION' | 'RESERVATION' | 'TITRE' | 'EXEMPTION' | null;
   agentId: string;
   at: string;
   /** Position du terminal de l'agent au contrôle (facultative) et distance à la zone contrôlée. */
@@ -264,10 +266,16 @@ export class ParkingService {
   readonly field: ParkingField;
   /** Compléments du chapitre 11A : grilles tarifaires, occupation, surréservation, plaque, affectation, déploiement (smart.ts). */
   readonly smart: ParkSmart;
+  /** Module 14 (Spécification fonctionnelle) : sessions par USSD ou SMS, exemptions, titres actifs d'une plaque. */
+  readonly complements: ParkingComplements;
+  /** Module 75 : tarification dynamique automatique dans les fourchettes de l'acte (tarification-dynamique.ts). */
+  readonly tarification: TarificationDynamique;
 
   constructor(private readonly ctx: AppContext) {
     this.field = new ParkingField(ctx, this);
     this.smart = new ParkSmart(ctx, this);
+    this.complements = new ParkingComplements(ctx, this);
+    this.tarification = new TarificationDynamique(ctx, this, this.smart);
   }
 
   now(): Date {
@@ -449,7 +457,7 @@ export class ParkingService {
   private liquidate(user: User, z: ParkingZone, taxpayerId: string, objectId: string, minutes: number, places: number) {
     const rule = this.openZoneRule(z);
     // Entrées déduites de la situation et limitées à celles de la formule (heure de pointe lue dans la table de la règle).
-    const inputs = this.smart.tariffInputs(rule, { minutes, places, at: this.now() });
+    const inputs = this.smart.tariffInputs(rule, { minutes, places, at: this.now(), zone: z });
     const { obligation } = this.ctx.assessment.calculate(user, { ruleId: rule.id, taxpayerId, objectId, inputs, simulate: false });
     return obligation!;
   }
@@ -471,6 +479,9 @@ export class ParkingService {
     this.checkDuration(input.durationMinutes, z);
     this.openZoneRule(z);
     const now = this.now();
+    // Module 14 : un véhicule exempté (véhicule officiel ou cas prévu par la règle) ne se voit vendre aucune session.
+    const exempt = this.complements.exemptionFor(plate, z.id, now);
+    if (exempt) throw unprocessable('PLATE_EXEMPTED', `Véhicule exempté dans cette zone (${exempt.category === 'VEHICULE_OFFICIEL' ? 'véhicule officiel' : exempt.exemptionBasis}) jusqu’au ${exempt.validUntil} : aucune session due.`, { exemptionId: exempt.id });
     const running = this.sessions.find((s) => s.plate === plate && s.zoneId === z.id).find((s) => {
       const st = this.sessionDerived(s, now).status;
       return st === 'ACTIVE' || st === 'EN_ATTENTE_PAIEMENT';
@@ -749,6 +760,9 @@ export class ParkingService {
   /** Titre valide d'une plaque (session payée ou réservation confirmée) — heure du serveur. */
   titleFor(plate: string, zoneId: string | null, now: Date): { light: Light; title: ControlCheck['title']; validFrom: string | null; validUntil: string | null; zoneId: string | null; titleNumber?: string } {
     let best: { light: Light; title: ControlCheck['title']; validFrom: string | null; validUntil: string | null; zoneId: string | null; titleNumber?: string } = { light: 'ROUGE', title: null, validFrom: null, validUntil: null, zoneId };
+    // Module 14 : exemption en vigueur (véhicule officiel, cas prévu par la règle) — titre VERT sans paiement.
+    const exempt = this.complements.exemptionFor(plate, zoneId, now);
+    if (exempt) return { light: 'VERT', title: 'EXEMPTION', validFrom: exempt.validFrom, validUntil: exempt.validUntil, zoneId, titleNumber: exempt.id };
     for (const s of this.sessions.find((x) => x.plate === plate && (!zoneId || x.zoneId === zoneId))) {
       const d = this.sessionDerived(s, now);
       if (d.status !== 'ACTIVE') continue;
@@ -799,6 +813,8 @@ export class ParkingService {
     const penalties = this.field.penaltiesFor({ plate, taxpayerId: holder?.taxpayerId ?? null });
     if (penalties.length) this.ctx.audit.append({ actor: actorOf(user), action: 'parking.penalties.viewed', resourceType: 'plate', resourceId: plate, details: { checkId: check.id, count: penalties.length } });
     const result = {
+      // Module 14 : tous les titres actifs de la plaque (sessions, réservations, titres § 19A, exemptions), heure du serveur.
+      activeTitles: this.complements.activeTitles(plate, now),
       penalties, penaltiesUnpaid: penalties.filter((p) => p.unpaid).length,
       checkId: check.id, plate, zone: z ? { id: z.id, code: z.code, name: z.name } : null, light: t.light, title: t.title,
       validFrom: t.validFrom, validUntil: t.validUntil, validity: t.validUntil ? validityView(t.validFrom, t.validUntil, now) : null, checkedAt: check.at, guidance: guidance[t.light],

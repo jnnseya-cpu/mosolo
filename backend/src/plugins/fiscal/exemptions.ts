@@ -15,7 +15,7 @@ import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import { declaredReductionTerms, recordReductionGranted, remissionHeadroom } from '../../modules/assessment/reductions.js';
 import type { AssessmentAdjuster, AssessmentAdjustment } from '../../modules/assessment/service.js';
 import { PAYABLE_STATUSES } from '../../modules/assessment/service.js';
-import { taxpayerRecipient } from '../../modules/identity/recipients.js';
+import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
 import { actorOf, pctToBasis, type FiscalDeps } from './common.js';
 
 export type ExemptionKind = 'EXONERATION' | 'REMISE';
@@ -58,8 +58,14 @@ export interface Exemption {
   rectifiedObligationId?: string;
 }
 
+/** Rappel d'échéance (jours avant la fin de validité) et périodicité de révision sans échéance — PAR DÉFAUT, à confirmer. */
+export const EXEMPTION_REMINDER_DAYS = 30;
+export const EXEMPTION_REVIEW_MONTHS = 12;
+export interface ExemptionReminder { id: string; exemptionId: string; kind: 'ECHEANCE_PROCHE' | 'EXPIREE' | 'REVISION_DUE'; dueDate: string; at: string; notified: string[] }
+
 export class ExemptionService {
   readonly exemptions = new InMemoryRepository<Exemption>();
+  readonly reminders = new InMemoryRepository<ExemptionReminder>();
   private readonly ids = new IdGenerator();
 
   constructor(private readonly d: FiscalDeps) {}
@@ -339,19 +345,79 @@ export class ExemptionService {
    * Alerte de concentration (M57-S1) : un décideur ou une commune concentrant la majorité des exonérations
    * accordées. Proposition d'examen pour l'audit — aucune mesure automatique.
    */
-  concentrationAlerts(): { dimension: 'DECIDEUR' | 'COMMUNE'; key: string; count: number; total: number; message: string }[] {
+  concentrationAlerts(): { dimension: 'DECIDEUR' | 'COMMUNE' | 'AGENT'; key: string; count: number; total: number; message: string }[] {
     const granted = this.exemptions.find((x) => x.status === 'APPROUVEE' || x.status === 'REVOQUEE');
     const total = granted.length;
-    const out: { dimension: 'DECIDEUR' | 'COMMUNE'; key: string; count: number; total: number; message: string }[] = [];
+    const out: { dimension: 'DECIDEUR' | 'COMMUNE' | 'AGENT'; key: string; count: number; total: number; message: string }[] = [];
     if (total < 3) return out;
-    const tally = (dim: 'DECIDEUR' | 'COMMUNE', keyOf: (x: Exemption) => string | undefined) => {
+    const tally = (dim: 'DECIDEUR' | 'COMMUNE' | 'AGENT', keyOf: (x: Exemption) => string | undefined) => {
       const m = new Map<string, number>();
       for (const x of granted) { const k = keyOf(x); if (k) m.set(k, (m.get(k) ?? 0) + 1); }
-      for (const [k, n] of m) if (n >= 3 && n * 2 > total) out.push({ dimension: dim, key: k, count: n, total, message: `${n} exonérations sur ${total} concentrées (${dim === 'DECIDEUR' ? 'même décideur' : 'même commune'}) : examen proposé à l’audit.` });
+      for (const [k, n] of m) if (n >= 3 && n * 2 > total) out.push({ dimension: dim, key: k, count: n, total, message: `${n} exonérations sur ${total} concentrées (${dim === 'DECIDEUR' ? 'même décideur' : dim === 'AGENT' ? 'même agent instructeur' : 'même commune'}) : examen proposé à l’audit.` });
     };
     tally('DECIDEUR', (x) => x.steps.find((s) => s.step === 'DECISION')?.userId);
     tally('COMMUNE', (x) => (x.objectId ? this.d.ctx.objects.objects.get(x.objectId)?.commune : undefined));
+    // Concentration sur un AGENT (module 57) : l'agent qui a instruit les demandes accordées.
+    tally('AGENT', (x) => x.steps.find((s) => s.step === 'INSTRUCTION')?.userId);
     return out;
+  }
+
+  /** Date de révision : échéance de validité, sinon révision périodique depuis la date d'effet (par défaut 12 mois). */
+  reviewDate(x: Exemption): string {
+    if (x.validTo) return x.validTo;
+    const d = new Date(`${x.validFrom}T00:00:00Z`);
+    const today = this.d.today();
+    while (d.toISOString().slice(0, 10) <= today) d.setUTCMonth(d.getUTCMonth() + EXEMPTION_REVIEW_MONTHS);
+    return d.toISOString().slice(0, 10);
+  }
+
+  /**
+   * Échéance et révision AUTOMATIQUES (module 57) : rappel au contribuable et aux services d'assiette avant l'échéance,
+   * constat de l'expiration, et révision due des exonérations sans échéance — une fois par exonération et par
+   * échéance (idempotent). Aucun effet sur les droits : la révision est décidée par une personne (révocation motivée).
+   */
+  runReminders(): ExemptionReminder[] {
+    const today = this.d.today();
+    const soon = new Date(Date.parse(`${today}T00:00:00Z`) + EXEMPTION_REMINDER_DAYS * 86_400_000).toISOString().slice(0, 10);
+    const agents = ['R06', 'R07', 'R11'].flatMap((r) => this.d.ctx.users.withRole(r as 'R06')).filter((u) => u.entity === 'DGIPK');
+    const out: ExemptionReminder[] = [];
+    const push = (x: Exemption, kind: ExemptionReminder['kind'], dueDate: string) => {
+      const id = `RAP-${x.id}-${kind}-${dueDate}`;
+      if (this.reminders.get(id)) return;
+      const notified: string[] = [];
+      const tp = this.d.ctx.taxpayers.taxpayers.get(x.taxpayerId);
+      if (tp && kind !== 'REVISION_DUE') { this.d.ctx.comms.publish('exemption.expiring', [taxpayerRecipient(tp)], { reference: x.id, date: dueDate }, { entity: 'DGIPK' }); notified.push(x.taxpayerId); }
+      if (agents.length) { this.d.ctx.comms.publish('approval.reminder', agents.map(userRecipient), { objet: `exonération ${x.id} — ${kind === 'REVISION_DUE' ? 'révision due' : kind === 'EXPIREE' ? 'échue le' : 'échéance le'} ${dueDate}` }, { entity: 'DGIPK' }); notified.push(...agents.map((u) => u.id)); }
+      const r = this.reminders.insert({ id, exemptionId: x.id, kind, dueDate, at: this.d.ctx.clock.now().toISOString(), notified });
+      this.d.ctx.audit.append({ actor: { kind: 'system', id: 'exonerations:echeancier' }, action: 'exemption.reminder', resourceType: 'exemption', resourceId: x.id, details: { kind, dueDate, automaticEffect: 'AUCUN' } });
+      out.push(r);
+    };
+    for (const x of this.exemptions.find((e) => e.status === 'APPROUVEE')) {
+      if (x.validTo) {
+        if (x.validTo < today) push(x, 'EXPIREE', x.validTo);
+        else if (x.validTo <= soon) push(x, 'ECHEANCE_PROCHE', x.validTo);
+      } else {
+        const review = this.reviewDate(x);
+        if (review <= soon) push(x, 'REVISION_DUE', review);
+      }
+    }
+    return out;
+  }
+
+  /** Indicateurs du module 57 : exonérations actives ; montants (remises et réductions appliquées) ; anomalies. */
+  indicators() {
+    const active = this.exemptions.all().filter((x) => this.effectiveStatus(x) === 'APPROUVEE');
+    const ids = new Set(this.exemptions.all().filter((x) => x.status === 'APPROUVEE' || x.status === 'REVOQUEE').map((x) => x.id));
+    const totals = new Map<string, Money>();
+    const add = (m: MoneyJSON) => totals.set(m.currency, (totals.get(m.currency) ?? Money.zero(m.currency)).add(Money.fromJSON(m)));
+    for (const x of this.exemptions.all()) if (x.kind === 'REMISE' && ids.has(x.id) && x.amount) add(x.amount);
+    for (const o of this.d.ctx.assessment.obligations.all()) for (const a of o.explanation.adjustments ?? []) if (ids.has(a.sourceId)) add(a.reduction);
+    const alerts = this.concentrationAlerts();
+    return [
+      { code: 'EXONERATIONS_ACTIVES', label: 'Exonérations et remises actives', measured: true, value: String(active.length), unit: 'décisions', detail: { exonerations: active.filter((x) => x.kind === 'EXONERATION').length, remises: active.filter((x) => x.kind === 'REMISE').length } },
+      { code: 'MONTANTS', label: 'Montants exonérés ou remis (appliqués)', measured: true, value: [...totals.values()].map((m) => `${m.toDecimalString()} ${m.currency}`).join(' · ') || '0', unit: '', amounts: [...totals.values()].map((m) => m.toJSON()) },
+      { code: 'ANOMALIES', label: 'Anomalies (concentrations sur un décideur, un agent ou une zone)', measured: true, value: String(alerts.length), unit: 'alertes' },
+    ];
   }
 
   list(filter: { taxpayerId?: string; status?: string }): Exemption[] {

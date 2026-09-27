@@ -15,10 +15,12 @@ import { api } from '../../lib/api';
 import { currentQuarter, Section } from './shared';
 import { Area, Callout, Choice, Field, hasRole, moneyText, Notice, useRunner } from './planif';
 import './pilotage.css';
+import { EnveloppesBudget, type Envelope } from './EnveloppesBudget';
+import type { Indicator } from '../decision/commun';
 
 interface Project { id: string; code: string; title: string; domain: string; communes: string[]; beneficiaries: string; expectedResult: string; maturity: string; cost: MoneyJSON; recurringCost: MoneyJSON; procurement: string; risks: string; approvalAuthority: string; legalFundSource: string; status: string; progressPct?: string; funding?: { decisionReference: string }; example?: boolean }
 interface FundScenario { id: string; label: string; variant: string; period: string; available: MoneyJSON; availableBasis: string; unallocated: MoneyJSON; status: string; notice: string; items: { projectId: string; code: string; title: string; communes: string[]; proposedAmount: MoneyJSON; rank: number; maturity: string; recurringCost: MoneyJSON; procurement: string; beneficiaries: string; approvalAuthority: string; factors: { label: string; value: string }[] }[]; decision?: { by: string; motif: string } }
-interface ListResponse { domains: Record<string, string>; maturity: Record<string, number>; procurement: Record<string, string>; items: Project[]; scenarios: FundScenario[] }
+interface ListResponse { domains: Record<string, string>; maturity: Record<string, number>; procurement: Record<string, string>; items: Project[]; scenarios: FundScenario[]; envelopes?: Envelope[]; indicators?: Indicator[] }
 
 export const PROJECT_STATUS: Record<string, { label: string; tone: Tone }> = {
   PROPOSE: { label: 'Proposé', tone: 'info' }, RETENU: { label: 'Retenu', tone: 'warning' }, ECARTE: { label: 'Écarté', tone: 'neutral' },
@@ -41,6 +43,7 @@ export default function Projets() {
       <Notice msg={r.msg} />
       {q.loading && !q.data ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : q.data && (
         <div className="dash-grid">
+          <EnveloppesBudget envelopes={q.data.envelopes ?? []} indicators={q.data.indicators ?? []} roles={user?.roles} userId={user?.id} onDone={q.reload} />
           <Section title="Projets" sub="Fiches complètes du § 27.2 : bénéficiaires, impact géographique, résultat, maturité, coût récurrent, passation, risques, autorité">
             <DataTable caption="Projets" rows={q.data.items} rowKey={(x) => x.id} empty={<EmptyState title="Aucun projet" icon="building" />} columns={[
               { key: 't', label: 'Projet', primary: true, render: (x) => <><strong>{x.title}</strong><span className="small muted" style={{ display: 'block' }}>{x.code} · {q.data!.domains[x.domain] ?? x.domain} · {x.communes.join(', ')}{x.example ? ' · donnée de démonstration non contractuelle' : ''}</span></> },
