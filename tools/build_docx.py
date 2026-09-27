@@ -63,10 +63,13 @@ def render_mermaid(md: str) -> str:
     cfg.close()
     pconf = os.environ.get("PUPPETEER_CONFIG")
 
+    used: set[str] = set()
+
     def repl(m: re.Match) -> str:
         code = m.group(1)
         h = hashlib.sha1(code.encode()).hexdigest()[:12]
         png = os.path.join(FIG, f"mmd-{h}.png")
+        used.add(os.path.basename(png))
         if not os.path.exists(png):
             with tempfile.NamedTemporaryFile("w", suffix=".mmd", delete=False) as t:
                 t.write(code)
@@ -79,7 +82,12 @@ def render_mermaid(md: str) -> str:
                 return m.group(0)
         return f"![](figures/mermaid/{os.path.basename(png)})"
 
-    return re.sub(r"```mermaid\n(.*?)```", repl, md, flags=re.S)
+    out = re.sub(r"```mermaid\n(.*?)```", repl, md, flags=re.S)
+    # Rendus périmés (diagramme modifié ou supprimé) : retirés pour ne pas alourdir le dépôt.
+    for f in os.listdir(FIG):
+        if f.startswith("mmd-") and f.endswith(".png") and f not in used:
+            os.remove(os.path.join(FIG, f))
+    return out
 
 
 def reference_docx(path: str) -> None:

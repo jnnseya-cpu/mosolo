@@ -1,11 +1,11 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **582 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **586 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
 | extension acces | 63 |
-| extension canaux | 36 |
+| extension canaux | 39 |
 | extension fiscal | 39 |
 | extension ia | 28 |
 | extension integrite | 52 |
@@ -33,7 +33,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **582 routes** dans 35
 | module fx | 1 |
 | module identity | 2 |
 | module objects | 2 |
-| module payments | 7 |
+| module payments | 8 |
 | module receipts | 2 |
 | module rules | 14 |
 | module system | 3 |
@@ -112,7 +112,6 @@ Généré depuis le code source (`tools/gen_routes.py`) : **582 routes** dans 35
 
 | Méthode | Chemin |
 |---|---|
-| POST | `${base}/:id/input` |
 | GET | `/v1/agents/assist/payables` |
 | POST | `/v1/agents/assist/payment-orders` |
 | GET | `/v1/agents/assist/payment-orders/:reference` |
@@ -122,6 +121,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **582 routes** dans 35
 | POST | `/v1/assisted-enrolments/batches` |
 | GET | `/v1/channel-sessions` |
 | GET | `/v1/channels/indicators` |
+| POST | `/v1/ivr/sessions` |
+| POST | `/v1/ivr/sessions/:id/input` |
 | GET | `/v1/mosolo-cards/:number` |
 | POST | `/v1/mosolo-cards/:number/block` |
 | POST | `/v1/mosolo-cards/:number/pin` |
@@ -148,6 +149,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **582 routes** dans 35
 | GET | `/v1/public/payment-points` |
 | GET | `/v1/public/pictograms` |
 | GET | `/v1/public/short-codes/:code` |
+| POST | `/v1/ussd/sessions` |
+| POST | `/v1/ussd/sessions/:id/input` |
 
 ## Extension fiscal
 
@@ -740,10 +743,11 @@ Généré depuis le code source (`tools/gen_routes.py`) : **582 routes** dans 35
 | POST | `/v1/obligations/:id/payment-orders` |
 | POST | `/v1/payment-orders/:reference/provider-resolution` |
 | POST | `/v1/payment-orders/:reference/provider-verification-evidence` |
-| POST | `/v1/providers/${provider}/webhooks` |
 | POST | `/v1/providers/:provider/callbacks` |
 | POST | `/v1/providers/:provider/sandbox-simulate` |
+| POST | `/v1/providers/bitripay/webhooks` |
 | GET | `/v1/providers/connectors` |
+| POST | `/v1/providers/koda/webhooks` |
 
 ## Module receipts
 

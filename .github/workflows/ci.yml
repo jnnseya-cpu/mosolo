@@ -39,6 +39,10 @@ jobs:
       - name: Installation (npm ci)
         run: npm ci --no-audit --no-fund
 
+      # Le catalogue des routes est généré depuis le code : il doit être à jour.
+      - name: Catalogue des routes à jour
+        run: python3 tools/gen_routes.py && git diff --exit-code specs/routes-api.md
+
       - name: Contrôle de types — shared
         run: npm run typecheck -w shared
       - name: Contrôle de types — backend

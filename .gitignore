@@ -16,3 +16,15 @@ data/osm/
 
 # Arbres de travail temporaires des agents (jamais versionnés)
 .claude/worktrees/
+*.tsbuildinfo
+.vite/
+__pycache__/
+*.pyc
+.DS_Store
+.idea/
+.vscode/
+# Fichiers intermédiaires des outils de documentation et de captures
+docs/document-maitre/_build.md
+presentation-ecrans.html
+gallery/
+liste.json

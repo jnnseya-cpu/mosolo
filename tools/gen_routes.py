@@ -13,8 +13,22 @@ for dp, _, fs in os.walk(SRC):
         rel = os.path.relpath(p, SRC)
         parts = rel.split(os.sep)
         mod = ('module ' + parts[1]) if parts[0] == 'modules' else ('extension ' + parts[1]) if parts[0] == 'plugins' else 'socle'
-        for m in pat.finditer(open(p, encoding='utf-8').read()):
-            rows[mod].append((m.group(1).upper(), m.group(2)))
+        text = open(p, encoding='utf-8').read()
+        # Routes déclarées dans une boucle : `for (const [x, base] of [['…', '/v1/…'], …])` et `for (const provider of CONNECTOR_IDS)`.
+        loops = {}
+        for lm in re.finditer(r"for \(const \[\w+, (\w+)\] of \[(.*?)\] as const\)", text, re.S):
+            loops[lm.group(1)] = re.findall(r"'(/v1/[^']+)'", lm.group(2))
+        if 'of CONNECTOR_IDS' in text:
+            types = open(os.path.join(SRC, 'modules', 'payments', 'connectors', 'types.ts'), encoding='utf-8').read()
+            loops['provider'] = re.findall(r"'(\w+)'", re.search(r"CONNECTOR_IDS = \[(.*?)\]", types).group(1))
+        for m in pat.finditer(text):
+            path = m.group(2)
+            var = re.search(r"\$\{(\w+)\}", path)
+            for v in (loops.get(var.group(1), []) if var else [None]):
+                rows[mod].append((m.group(1).upper(), path.replace('${' + var.group(1) + '}', v) if var else path))
+        for lm in re.finditer(r"app\.(get|post|put|patch|delete)\((\w+),", text):
+            for v in loops.get(lm.group(2), []):
+                rows[mod].append((lm.group(1).upper(), v))
 total = sum(len(v) for v in rows.values())
 out = ['# Catalogue des routes de l\'API KINSHASA MOSOLO', '',
        f'Généré depuis le code source (`tools/gen_routes.py`) : **{total} routes** dans {len(rows)} modules. '
