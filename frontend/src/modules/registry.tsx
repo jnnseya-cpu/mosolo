@@ -183,6 +183,16 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/integrite/detecteurs', element: lazy(() => import('./integrite/Detecteurs')), nav: { label: 'Détecteurs anti-fraude', short: 'Détecteurs', icon: 'analysis', group: 'operations', roles: ['R22', 'R23', 'R24', 'R28', 'R06'] } },
   { path: '/controle/calcu/organe', element: lazy(() => import('./verticales/CalcuOrgane')), nav: { label: 'CALCU — organe de contrôle', short: 'Organe CALCU', icon: 'bank', group: 'pilotage', roles: ['R01', 'R05', 'R08', 'R15', 'R17', 'R22', 'R23'] } },
 
+  // Chaîne véhicule RFCK (modules 82 à 84 — n° 59–61 dans le catalogue du maître d'ouvrage du 27/09/2026)
+  { path: '/vehicules/controle-technique', element: lazy(() => import('./vehicules-controle/ControleTechnique')), nav: { label: 'Contrôle technique et vignette sécurisée', short: 'Contrôle technique', icon: 'car', group: 'operations', roles: ['R01', 'R02', 'R04', 'R05', 'R06', 'R07', 'R08', 'R11', 'R22', 'R23', 'R24', 'R34'] } },
+  { path: '/vehicules/scan', element: lazy(() => import('./vehicules-controle/ScanVehicule')), nav: { label: 'Scan unique du véhicule', short: 'Scan véhicule', icon: 'qr', group: 'operations', roles: ['R09', 'R10', 'R11'] } },
+  { path: '/vehicules/fourrieres', element: lazy(() => import('./vehicules-controle/Fourrieres')), nav: { label: 'Fourrières, enlèvement et gardiennage', short: 'Fourrières', icon: 'parking', group: 'operations', roles: ['R04', 'R06', 'R07', 'R10', 'R11', 'R17', 'R21', 'R22', 'R23', 'R24', 'R35'] } },
+  { path: '/vehicules/centres-agrees', element: lazy(() => import('./vehicules-controle/CentresAgrees')), nav: { label: 'Centres agréés et tiers de confiance', short: 'Centres agréés', icon: 'building', group: 'operations', roles: ['R01', 'R04', 'R06', 'R07', 'R22', 'R23', 'R24', 'R34', 'R35'] } },
+  { path: '/vehicules/rfck', element: lazy(() => import('./vehicules-controle/RaccordementRfck')), nav: { label: 'Raccordement RFCK et domaine officiel', short: 'RFCK', icon: 'sync', group: 'pilotage', roles: ['R01', 'R02', 'R04', 'R05', 'R06', 'R07', 'R08', 'R17', 'R22', 'R23', 'R25', 'R26', 'R27', 'R28'] } },
+  { path: '/vehicules/mes-vehicules', element: lazy(() => import('./vehicules-controle/MesVehicules')), nav: { label: 'Mes véhicules', short: 'Véhicules', icon: 'car', group: 'public', roles: ['R30', 'R31'] } },
+  { path: '/vehicules/verifier', element: lazy(() => import('./vehicules-controle/VerifierVignette')), nav: { label: 'Vérifier une vignette technique ou un centre', short: 'Vignette technique', icon: 'shieldCheck', group: 'public', roles: [] } },
+  { path: '/v/ct/:numero', element: lazy(() => import('./vehicules-controle/VerifierVignette')) },
+
   // IA : liens directs
   { path: '/ia/autonomie', element: lazy(() => import('./ia/AutonomyPage')) },
   { path: '/ia/memoire', element: lazy(() => import('./ia/MemoryPage')) },

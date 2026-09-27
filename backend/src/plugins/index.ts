@@ -32,6 +32,7 @@ import { chainePlugin } from './chaine/plugin.js';
 import { juridiquePlugin } from './juridique/plugin.js';
 import { integriteDetecteursPlugin } from './integrite/detecteurs/plugin.js';
 import { catalogueApiPlugin } from './catalogue-api/plugin.js';
+import { vehiculesControlePlugin } from './vehicules-controle/plugin.js';
 
 /**
  * Ordre : `acces` en tête (garde des revendications, mandats), puis `fiscal` (il branche les exonérations sur la liquidation), `titres` avant `rakapay`,
@@ -49,6 +50,8 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   parkingPlugin,
   publicitePlugin,
   verticalesPlugin,
+  // Chaîne véhicule RFCK (modules 82 à 84) : après titres, fiscal et verticales (vignette, quitus, objet véhicule).
+  vehiculesControlePlugin,
   referentielPlugin,
   canauxPlugin,
   // Apprentissage (§ 24) avant terrain : garde « certification avant affectation » et certificats de démonstration.

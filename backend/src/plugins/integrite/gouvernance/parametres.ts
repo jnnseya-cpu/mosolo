@@ -42,6 +42,7 @@ import {
 } from '../../pilotage/repartition/model.js';
 import { ATYPICAL_CANCELLATIONS_MIN, ATYPICAL_SALES_FACTOR, ATYPICAL_SALES_MIN } from '../../rakapay/operateurs.js';
 import { PARAMETRES_SECURITE } from './parametres-securite.js';
+import { PARAMETRES_VEHICULES } from '../../vehicules-controle/parametres.js';
 
 export type ParamValue = number | boolean;
 export type ParamOwner = 'CODE' | 'REGISTRE';
@@ -195,6 +196,8 @@ export const PARAMETRES_CODE: ParamDefinition[] = [
   C('ia.decisions_min', 'IA : décisions minimales pour mesurer dérive ou biais', 'Suivi des modèles d’IA', IA_DECISIONS_MIN, 'décisions', code('plugins/ia/modeles.ts', 'IA_DECISIONS_MIN')),
   // Rapprochement proposé, sous-traitance terrain, détecteurs complémentaires (§ 15A.5, § 20.1, § 25).
   ...PARAMETRES_COMPLEMENTAIRES,
+  // Chaîne véhicule (modules 82 à 84) : délais et seuils d'alerte, jamais de tarif.
+  ...PARAMETRES_VEHICULES,
 ];
 
 export const ALL_PARAMETERS: ParamDefinition[] = [...REGISTRE_DEFAUTS, ...PARAMETRES_CODE];
