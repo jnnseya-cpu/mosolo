@@ -14,7 +14,7 @@ export interface PointJuridique {
   verrou: string;
   /** Données ou actes requis pour trancher (J1–J16). */
   donnees?: string;
-  source: 'Document maître § 6.13' | 'Annexe H.3.2';
+  source: 'Document maître § 6.13' | 'Annexe H.3.2' | 'Document maître FR 2, annexe B';
 }
 
 export const POINTS_JURIDIQUES: PointJuridique[] = [
@@ -48,6 +48,13 @@ export const POINTS_JURIDIQUES: PointJuridique[] = [
   { code: 'J28', question: 'Pass wewa : base légale, redevable, tarif, articulation avec vignette, autorisation de transport et prélèvements communaux, gilets et autocollants, coopératives, pouvoirs de contrôle', autorite: 'Ministère provincial des Transports ; Finances ; communes', hypothese: 'Enregistrement gratuit des motos et conducteurs (recensement) ; aucun pass payant ni contrôle avant acte', verrou: 'Règle du pass ACTE_REQUIS ; période de grâce paramétrable', source: 'Annexe H.3.2' },
   { code: 'J29', question: 'Financement des moyens physiques ; prise en charge des frais d’USSD, de SVI et de SMS « gratuits pour l’appelant »', autorite: 'Gouvernement provincial ; opérateurs ; partenaires', hypothese: 'Conventions avec les opérateurs financées sur le budget du programme', verrou: 'Canal gratuit non annoncé au public tant que la convention n’est pas signée', source: 'Annexe H.3.2' },
   { code: 'J30', question: 'Base légale et cadrage sectoriel des verticales ports et fluvial', autorite: 'Transports ; autorités portuaires ; régies', hypothese: 'Recensement des embarcations et quais sans liquidation', verrou: 'Modules 13 et 24 non activables avant certification', source: 'Annexe H.3.2' },
+  // Document maître FR 2 (27/09/2026), annexe B, points 9 à 13 : questions nouvelles (textes cités mot pour mot). Autorité,
+  // hypothèse et verrou : PAR_DEFAUT — à confirmer par le maître d'ouvrage (mêmes verrous prudents que J1–J30).
+  { code: 'J31', question: 'Texte de création et statuts de la RFCK, et articulation précise de ses compétences avec celles de la régie fiscale provinciale et du service des transports', autorite: 'Service juridique provincial ; ministère provincial des Transports [PAR_DEFAUT — à confirmer]', hypothese: 'Aucune compétence propre de la RFCK n’est présumée ; une seule revendication par fait générateur (§ 10.3)', verrou: 'Aucune règle administrée par la RFCK activable sans texte certifié (instrument au statut A_VERIFIER)', source: 'Document maître FR 2, annexe B' },
+  { code: 'J32', question: 'Arrêté ministériel du 12 novembre 2025 : texte intégral, périodicité du contrôle technique, tarifs applicables et procédure encadrant l’immobilisation puis la disposition des véhicules non conformes', autorite: 'Ministère provincial des Transports ; service juridique provincial [PAR_DEFAUT — à confirmer]', hypothese: 'Aucune périodicité ni aucun tarif paramétré ; aucune immobilisation ni disposition automatique', verrou: 'Types de titres correspondants non activables sans référence d’acte certifiée (J21) ; toute mesure décidée par une personne', source: 'Document maître FR 2, annexe B' },
+  { code: 'J33', question: 'Base légale et barèmes des redevances d’enlèvement et de gardiennage en fourrière, et régime des recettes non fiscales correspondantes', autorite: 'Ministère provincial des Transports ; Finances ; juridique [PAR_DEFAUT — à confirmer]', hypothese: 'Aucune redevance de fourrière liquidée avant certification (voir aussi J24)', verrou: 'Règles de fourrière ACTE_REQUIS', source: 'Document maître FR 2, annexe B' },
+  { code: 'J34', question: 'Nom de domaine officiel de la Ville Province destiné aux services publics de vérification, et titularité de son enregistrement et de son certificat', autorite: 'Gouvernement provincial ; autorité du numérique [PAR_DEFAUT — à confirmer]', hypothese: 'Les liens de vérification sont servis par la plateforme ; aucun domaine officiel n’est présumé', verrou: '—', source: 'Document maître FR 2, annexe B' },
+  { code: 'J35', question: 'Valeur probante de la vignette électronique et de la vérification en ligne, au regard du Code du numérique et des textes régissant le contrôle technique', autorite: 'Services juridiques ; autorité (intérimaire) du numérique [PAR_DEFAUT — à confirmer]', hypothese: 'Double preuve : titre électronique vérifiable et preuve imprimable (comme J7 et J21)', verrou: 'Vérification affichée comme informative tant que le point n’est pas tranché', source: 'Document maître FR 2, annexe B' },
 ];
 
 /** Les sept points juridiques du § 6.4 du Cahier (question, autorité, effet si non tranchée) et leur rattachement. */
@@ -106,3 +113,41 @@ export const FONCTIONS_CONDITIONNEES = {
   RECOUPEMENT_DONNEES: { label: 'Recoupement avec les données des partenaires (énergie, eau, opérateurs)', points: ['J13', 'J8'], attente: 'Ingestion de données partenaires en attente de protocole et de base légale' },
 } as const;
 export type FonctionConditionnee = keyof typeof FONCTIONS_CONDITIONNEES;
+
+/**
+ * Document maître FR 2 (27/09/2026), annexe B — treize points à vérifier avant mise en production, cités mot pour mot
+ * et rattachés aux points juridiques (1 à 8 : déjà couverts par J1–J10 ; 9 à 13 : J31 à J35, ajoutés).
+ */
+export const ANNEXE_B_FR2: { point: number; objet: string; points: string[]; note?: string }[] = [
+  { point: 1, objet: 'Texte consolidé de la nomenclature provinciale et des ordonnances-lois de 1969 après modifications.', points: ['J1'] },
+  { point: 2, objet: 'Objet exact et statut de la Loi n° 18/014 du 9 juillet 2018, non confirmés à ce stade.', points: ['J2'] },
+  { point: 3, objet: 'Arrêtés provinciaux fixant les taux de l’impôt foncier, de l’impôt sur les revenus locatifs et de la taxe sur les véhicules pour l’exercice en cours.', points: ['J3'] },
+  { point: 4, objet: 'Texte intégral de l’édit budgétaire en vigueur de la Ville de Kinshasa.', points: ['J3'] },
+  { point: 5, objet: 'Dispositions du Code du numérique sur la résidence des données, la signature électronique et la protection des données personnelles.', points: ['J7', 'J8'] },
+  { point: 6, objet: 'Conditions d’habilitation des agrégateurs et prestataires de paiement auprès de la Banque Centrale du Congo.', points: ['J9'] },
+  { point: 7, objet: 'Textes créant la DGRFK et la DGTK, et répartition définitive des compétences.', points: ['J5'], note: 'J5 cite la DGIPK : dénomination à harmoniser selon les textes (DGRFK / DGIPK).' },
+  { point: 8, objet: 'Régime légal des primes de performance des agents publics sur recettes fiscales.', points: ['J10'] },
+  { point: 9, objet: 'Texte de création et statuts de la RFCK, et articulation précise de ses compétences avec celles de la régie fiscale provinciale et du service des transports.', points: ['J31'] },
+  { point: 10, objet: 'Arrêté ministériel du 12 novembre 2025 : texte intégral, périodicité du contrôle technique, tarifs applicables et procédure encadrant l’immobilisation puis la disposition des véhicules non conformes.', points: ['J32'] },
+  { point: 11, objet: 'Base légale et barèmes des redevances d’enlèvement et de gardiennage en fourrière, et régime des recettes non fiscales correspondantes.', points: ['J33', 'J24'] },
+  { point: 12, objet: 'Nom de domaine officiel de la Ville Province destiné aux services publics de vérification, et titularité de son enregistrement et de son certificat.', points: ['J34'] },
+  { point: 13, objet: 'Valeur probante de la vignette électronique et de la vérification en ligne, au regard du Code du numérique et des textes régissant le contrôle technique.', points: ['J35', 'J21', 'J7'] },
+];
+
+/**
+ * Document maître FR 2, annexe A — sources consultées et niveau de fiabilité (cités mot pour mot). Rattachement aux
+ * instruments du registre des textes et aux points juridiques : une source n'active jamais rien par elle-même.
+ */
+export const SOURCES_ANNEXE_A: { rang: number; source: string; usage: string; fiabilite: string; instruments: string[]; points: string[] }[] = [
+  { rang: 1, source: 'Ordonnance-loi n° 18/004 du 13 mars 2018 (bases documentaires juridiques internationales)', usage: 'Nomenclature provinciale en vigueur, abrogation de l’Ordonnance-loi n° 13/001', fiabilite: 'Élevée, à confirmer sur le Journal officiel', instruments: ['ol-18-004', 'ol-13-001'], points: ['J1'] },
+  { rang: 2, source: 'Ordonnance-loi n° 18/003 du 13 mars 2018', usage: 'Nomenclature du pouvoir central, exclusion des doublons', fiabilite: 'Élevée', instruments: ['ol-18-003'], points: [] },
+  { rang: 3, source: 'Restitution de l’évaluation TADAT de la DGRK, septembre 2025', usage: 'Diagnostic des faiblesses administratives', fiabilite: 'Élevée, presse spécialisée', instruments: [], points: [] },
+  { rang: 4, source: 'Communiqués et campagnes fiscales de la Ville, janvier à mars 2026', usage: 'Taux IF et IRL, retenues par rang, échéances, quitus fiscal, télédéclaration', fiabilite: 'Moyenne à élevée, à confirmer par les arrêtés', instruments: ['arrete-taux-irl-2026', 'arrete-taux-if-2026'], points: ['J3', 'J6'] },
+  { rang: 5, source: 'Matinée fiscale FEC–DGRK, mars 2026', usage: 'Innovations de l’édit budgétaire 2026', fiabilite: 'Moyenne, à confirmer par le texte de l’édit', instruments: ['edit-budgetaire-kinshasa'], points: ['J3'] },
+  { rang: 6, source: 'Atelier du 14 mai 2026 sur la création de la DGRFK et de la DGTK', usage: 'Réforme institutionnelle en cours', fiabilite: 'Moyenne, presse partiellement générée automatiquement, à confirmer par les textes', instruments: [], points: ['J5'] },
+  { rang: 7, source: 'Contrat de performance de la DGRK et recettes IF/IRL de janvier 2026', usage: 'Ordre de grandeur des assignations et du réalisé', fiabilite: 'Moyenne, presse', instruments: [], points: [] },
+  { rang: 8, source: 'Taux budgétaire moyen 2025 (2 859,2 CDF par dollar)', usage: 'Conversions indicatives', fiabilite: 'Moyenne à élevée', instruments: [], points: [] },
+  { rang: 9, source: 'Note de projet KIN-RECETTES transmise le 22 septembre 2026', usage: 'Concept initial, exemples d’interfaces, chaîne opératoire', fiabilite: 'Document de travail interne', instruments: [], points: [] },
+  { rang: 10, source: 'Communiqués de la RFCK et couverture de presse, mars à septembre 2026', usage: 'Mandat de la régie, arrêté du 12 novembre 2025, vignette à code QR, phases de contrôle, réseau des centres agréés', fiabilite: 'Moyenne : communiqués et presse ; à confirmer par les textes', instruments: [], points: ['J31', 'J32', 'J35'] },
+  { rang: 11, source: 'Site institutionnel de la RFCK', usage: 'Siège, contacts, profil du Directeur général, missions déclarées, vérification de plaque en ligne, compteurs publiés', fiabilite: 'Source institutionnelle, sans valeur juridique propre ; pages inachevées et compteurs à confirmer par la régie', instruments: [], points: ['J31', 'J35'] },
+];

@@ -110,6 +110,12 @@ export interface Appeal {
   /** Voie de recours suivante, indiquée avec la décision. */
   nextRemedy?: { hierarchical: string; judicial: string; status: 'A_VERIFIER' };
   slaBreachNotifiedAt?: string;
+  /**
+   * Affectation dès le dépôt (Document maître FR 2, ch. 42 : « horodaté, affecté et suivi jusqu'à décision motivée ») :
+   * file d'instruction de l'entité qui administre l'obligation (agents de contentieux R20) ; l'instructeur nommé est
+   * celui qui instruit (instructorId), la décision revient à une autre personne (R21).
+   */
+  affectation?: { entity: string; file: 'INSTRUCTION_RECOURS'; roles: ['R20']; at: string; basis: string };
   /** Dépôt sans écrit (guichet ou SVI) : canal, agent et preuve du consentement. */
   assisted?: AssistedSubmission & { agentId?: string };
 }
@@ -240,6 +246,7 @@ export class AppealService {
       documents,
       suspensiveEffect,
       acknowledgement: { number: `AR-${id}`, at: now, contentHash: sha256Hex(canonicalJson(ackContent)) },
+      affectation: { entity: obligation.entity, file: 'INSTRUCTION_RECOURS', roles: ['R20'], at: now, basis: `Entité administratrice de l’obligation ${obligation.id} (${obligation.ruleCode} v${obligation.ruleVersion})` },
       ...(assisted ? { assisted: { ...assisted, ...(assisted.channel === 'GUICHET' ? { agentId: user.id } : {}) } } : {}),
       history: [
         { at: now, action: 'appeal.submitted', by: user.id, detail: `Type : ${input.type ?? 'AUTRE'}${documents.length ? ` — ${documents.length} pièce(s)` : ''}${assisted ? ` — sans écrit (${assisted.channel === 'GUICHET' ? 'guichet, consentement ' + (assisted.consent.method === 'TEMOIN' ? 'devant témoin' : 'oral enregistré')   : `${assisted.channel}, confirmation par touche`})` : ''}` },
@@ -247,7 +254,7 @@ export class AppealService {
       ],
     });
     this.assessment.setStatus(obligation.id, 'CONTESTEE');
-    this.audit.append({ actor: assisted && assisted.channel !== 'GUICHET' ? { kind: 'public', id: user.id } : { kind: 'user', id: user.id, roles: user.roles }, action: 'appeal.submitted', resourceType: 'appeal', resourceId: appeal.id, details: { obligationId: obligation.id, type: appeal.type, documents: documents.length, suspensiveEffectRequested: !!input.requestSuspensiveEffect, ...(assisted ? { channel: assisted.channel, consentMethod: assisted.consent.method, sessionId: assisted.consent.sessionId ?? null } : {}) } });
+    this.audit.append({ actor: assisted && assisted.channel !== 'GUICHET' ? { kind: 'public', id: user.id } : { kind: 'user', id: user.id, roles: user.roles }, action: 'appeal.submitted', resourceType: 'appeal', resourceId: appeal.id, details: { obligationId: obligation.id, type: appeal.type, affectation: obligation.entity, documents: documents.length, suspensiveEffectRequested: !!input.requestSuspensiveEffect, ...(assisted ? { channel: assisted.channel, consentMethod: assisted.consent.method, sessionId: assisted.consent.sessionId ?? null } : {}) } });
     this.comms.publish('appeal.submitted', [taxpayerRecipient(this.taxpayers.get(obligation.taxpayerId))], { reference: appeal.id }, { entity: 'CONTENTIEUX' });
     return this.view(appeal);
   }

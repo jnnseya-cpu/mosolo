@@ -861,3 +861,30 @@ Les routes du noyau du Cahier (chapitre 31) existent désormais sous leur nom fr
 | 20 | `POST /v1/affectations/scenarios` | Générer des scénarios d'affectation | Finances | Aucune exécution de dépense | `POST /v1/pilotage/projets/recommandations` |
 
 Ajouts au socle : filtre facultatif `objectId` sur `GET /v1/obligations` (refus explicite sans droit sur l'objet, puis filtrage de chaque obligation par rôle et territoire) ; contrôle « règle publiée uniquement » propre à la simulation du catalogue (journalisé `assessment.simulation.refused`). Tests : `backend/test/catalogue-api.test.ts` (16 tests : chaque route, rôle non habilité refusé, même personne refusée à la publication, simulation sans obligation, rejeu idempotent de l'ordre de paiement, signature du rappel vérifiée sur le corps brut et rejeu refusé, vérification publique minimale, débit compté une fois, corrélation d'audit).
+
+
+## I.21 Programme : risques, recette, versions, 100 premiers jours, décisions (Document maître FR 2, ch. 41–48)
+
+Module d'extension « programme » (`backend/src/plugins/pilotage/programme/`), voisin de la planification. Il en réutilise
+le circuit des instructions sans le modifier. Aucune action financière, aucune décision automatique.
+
+| Écran | Route | Contenu |
+|---|---|---|
+| Registre des risques (`/pilotage/risques`) | `GET /v1/pilotage/programme/risques` ; revues et propriétaire | 13 risques cités ; carte de chaleur ; mesures reliées au code et aux tests ; revue par une personne, retard signalé |
+| Recette — critères d'acceptation (`/pilotage/recette`) | `GET /v1/pilotage/programme/recette` ; suivis du monde réel | 15 critères (dont 5 à relier à la fusion du lot « postes de décision ») ; 10 récits ; 9 points de stratégie ; 8 suivis externes |
+| Plan de livraison par versions (`/pilotage/versions`) | `GET /v1/pilotage/programme/versions` ; état de mise en service | V0.1 à V3.0, modules livrés vérifiés à l'exécution |
+| Plan des 100 premiers jours (`/pilotage/cent-jours`) | `GET /v1/pilotage/programme/cent-jours` ; jour 1 ; actions ; instruction | 6 périodes, 18 actions, responsables |
+| Décisions du Gouvernement provincial (`/pilotage/decisions-gouvernement`) | `GET /v1/pilotage/programme/decisions` ; enregistrement ; validation (second facteur) | 10 décisions, acte et empreinte, deux personnes, verrous calculés, contradiction du § 37A signalée, synthèse 48.2 |
+| Carte des écarts (`/pilotage/assignations`) | `GET /v1/pilotage/assignations/ecarts/export` | Exportation signée (écarts et six états par commune), carte schématique des 24 communes |
+
+Tests :
+
+- `backend/test/recette-programme.test.ts` : textes cités mot pour mot, existence de chaque preuve citée, parcours complets ;
+- `backend/test/recette-criteres.test.ts` : un test par critère du ch. 42, plus les tests de paiement de bout en bout et
+  d'élévation de privilèges ;
+- `backend/test/carnet-recits.test.ts` : un test par récit du ch. 43 ;
+- `frontend/test/recette-programme.test.tsx` : pages, accessibilité et navigation ;
+- `frontend/test/recette-hors-ligne.test.ts` : journée complète hors réseau.
+
+Script de charge : `tools/charge/pic-fin-janvier.mjs`, Node seul, jamais lancé en intégration continue. La matrice de
+couverture est dans `couverture-ch41-48.md`.

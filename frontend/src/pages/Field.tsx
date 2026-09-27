@@ -36,12 +36,19 @@ interface Capture {
   gpsSource?: PreciseFix['source'];
   photoHash: string; photoName: string; photoSize: number;
   observations: string; occupancy: string; justification: string;
+  /** Catégorie d'un objet non enregistré (Document maître FR 2, ch. 43) — absente des saisies antérieures. */
+  category?: string;
 }
 const EMPTY: Capture = { outcome: '', lat: '', lon: '', accuracy: '', gpsAt: '', photoHash: '', photoName: '', photoSize: 0, observations: '', occupancy: '', justification: '' };
 
 type QState = 'pending' | 'synced' | 'flagged' | 'rejected' | 'conflict';
 interface Queued { id: string; ownerId: string; missionId?: string; objectId: string | null; observedAt: string; data: Capture; state: QState; note?: string }
 const QUEUE_KEY = 'mosolo.fieldQueue.v2';
+/** Catégories d'objets du registre (mêmes codes que le serveur). */
+const OBJECT_CATEGORY_LABELS: [string, string][] = [
+  ['PARCELLE', 'Parcelle'], ['BATIMENT', 'Bâtiment'], ['UNITE_LOCATIVE', 'Unité locative'], ['ACTIVITE', 'Activité (commerce, atelier…)'],
+  ['VEHICULE', 'Véhicule'], ['PANNEAU', 'Panneau publicitaire'], ['AUTRE', 'Autre'],
+];
 const STATE: Record<QState, { tone: Tone; label: string }> = {
   pending: { tone: 'warning', label: 'En attente' }, synced: { tone: 'good', label: 'Transmis' }, flagged: { tone: 'serious', label: 'Transmis — à vérifier' },
   rejected: { tone: 'critical', label: 'Refusé' }, conflict: { tone: 'serious', label: 'Conflit' },
@@ -121,6 +128,16 @@ function CaptureForm({ mission, objectId, onSaved }: { mission: Mission; objectI
         {hashing && <p className="small muted">{tr('field.hashing')}</p>}
         {v.photoHash && <p className="small"><Icon name="lock" size={14} /> SHA-256 <span className="mono hash">{v.photoHash}</span> · {v.photoName} · {Math.round(v.photoSize / 1024)} Ko</p>}
       </div>
+      {!objectId && (
+        <div className="field">
+          <label className="label" htmlFor="f-cat">Catégorie de l’objet non enregistré</label>
+          <select id="f-cat" value={v.category ?? ''} onChange={(e) => draft.setValue((d) => ({ ...d, category: e.target.value }))}>
+            <option value="">{tr('field.choose')}</option>
+            {OBJECT_CATEGORY_LABELS.map(([c, l]) => <option key={c} value={c}>{l}</option>)}
+          </select>
+          <span className="hint">Objet provisoire : aucun effet fiscal avant sa qualification par une personne distincte.</span>
+        </div>
+      )}
       {objectId && (
         <div className="field">
           <label className="label" htmlFor="f-occ">{tr('field.occupancy')}</label>
@@ -227,7 +244,7 @@ export default function Field() {
             method: 'POST',
             body: {
               clientRef: c.id, ...(c.objectId ? { objectId: c.objectId } : {}), outcome: d.outcome || 'CONSTATE', observations: d.observations,
-              gps: { lat: Number(d.lat), lon: Number(d.lon), accuracyM: Number(d.accuracy || 25), source: d.gpsSource ?? 'GPS' }, ...(d.photoHash ? { photoSha256: d.photoHash } : {}),
+              gps: { lat: Number(d.lat), lon: Number(d.lon), accuracyM: Number(d.accuracy || 25), source: d.gpsSource ?? 'GPS' }, ...(d.photoHash ? { photoSha256: d.photoHash } : {}), ...(!c.objectId && d.category ? { category: d.category } : {}),
               capturedAt: c.observedAt, ...(device.id ? { deviceId: device.id } : {}), ...(d.justification.trim() ? { justification: d.justification.trim() } : {}),
             },
           });

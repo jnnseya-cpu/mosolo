@@ -14,12 +14,20 @@ import { COMMUNES, Section } from './shared';
 import { Callout, Field, hasRole, Notice, useRunner } from './planif';
 import './pilotage.css';
 
-interface Criterion { code: string; label: string; threshold: string; pilot: { value: string | null; unit: string; met: boolean | null; note?: string }; controls: { value: string | null; unit: string; note?: string }; gapPoints: string | null; status: string; note: string }
+interface Indicateur40 { code: string; label: string; unit: string; targetLabel: string | null; pilot: string | null; controls: string | null; pilotStatus: string; gapPoints: string | null }
+interface Criterion { code: string; label: string; threshold: string; pilot: { value: string | null; unit: string; met: boolean | null; note?: string }; controls: { value: string | null; unit: string; note?: string }; gapPoints: string | null; status: string; note: string; texte46?: string; indicateurs40?: Indicateur40[] }
+/** Document maître FR 2, ch. 46 : communes (raison, objets prioritaires), séquence en cinq étapes, communes témoins. */
+export interface Chapitre46 {
+  communes: readonly { commune: string; raison: string; objets: string }[];
+  sequence: { etape: number; semaines: readonly number[]; texte: string; enCours: boolean }[];
+  semaine: number | null; temoins: string[] | null; note: string;
+}
 export interface PilotBoard {
   day: number | null; period: { from: string; to: string }; protocol: string;
   config: { startDate: string | null; communes: string[]; controls: string[]; setBy: string | null; motif: string | null };
   milestones: { milestone: string; days: number; dueDate: string | null; reached: boolean; signed: { id: string; takenAt: string; sha256: string } | null }[];
   criteria: Criterion[]; baseline: { id: string; period: string } | null;
+  chapitre46?: Chapitre46;
   snapshots: { id: string; milestone: string; takenAt: string; takenBy: string; sha256: string }[];
 }
 
@@ -27,6 +35,21 @@ const STATUS: Record<string, { label: string; tone: 'good' | 'critical' | 'neutr
   ATTEINT: { label: 'Atteint', tone: 'good' }, NON_ATTEINT: { label: 'Non atteint', tone: 'critical' }, NON_MESURE: { label: 'Non mesuré', tone: 'neutral' }, A_APPRECIER: { label: 'À apprécier (évaluation indépendante)', tone: 'info' },
 };
 const val = (v: string | null, unit: string) => (v === null ? '—' : `${v}${unit === '%' ? ' %' : unit === 's' ? ' s' : ''}`);
+
+/** Communes pilotes (raison du choix, objets prioritaires) et séquence en cinq étapes (Document maître FR 2, ch. 46). */
+export function Chapitre46View({ c }: { c: Chapitre46 }) {
+  return (
+    <Section title="Pilote de 180 jours — Document maître FR 2, ch. 46" sub={c.semaine ? `Semaine ${c.semaine} du pilote` : 'Pilote non démarré'}>
+      <DataTable caption="Communes proposées" rows={[...c.communes]} rowKey={(x) => x.commune} columns={[
+        { key: 'c', label: 'Commune', primary: true, render: (x) => <strong>{x.commune}</strong> },
+        { key: 'r', label: 'Raison du choix', render: (x) => x.raison },
+        { key: 'o', label: 'Objets prioritaires', render: (x) => x.objets },
+      ]} />
+      <ol className="small">{c.sequence.map((s) => <li key={s.etape}>{s.enCours ? <strong>{s.texte} (en cours)</strong> : s.texte}</li>)}</ol>
+      <p className="small">Communes témoins : {c.temoins?.length ? c.temoins.join(', ') : 'aucune désignée'}. {c.note}</p>
+    </Section>
+  );
+}
 
 export function PilotView({ b, onDone }: { b: PilotBoard; onDone: () => void }) {
   const { user } = useApp();
@@ -42,13 +65,15 @@ export function PilotView({ b, onDone }: { b: PilotBoard; onDone: () => void }) 
       </Section>
       <Section title="Critères de succès (§ 45.3)" sub="Seuils du Cahier ; valeurs calculées sur les données réelles de chaque groupe">
         <DataTable caption="Critères du pilote" rows={b.criteria} rowKey={(c) => c.code} columns={[
-          { key: 'l', label: 'Critère', primary: true, render: (c) => <><strong>{c.label}</strong><span className="small muted" style={{ display: 'block' }}>Seuil : {c.threshold}</span></> },
+          { key: 'l', label: 'Critère', primary: true, render: (c) => <><strong>{c.label}</strong><span className="small muted" style={{ display: 'block' }}>Seuil : {c.threshold}</span>{c.texte46 && <span className="small" style={{ display: 'block' }}>Ch. 46 : « {c.texte46} »</span>}</> },
           { key: 'p', label: 'Communes pilotes', num: true, render: (c) => val(c.pilot.value, c.pilot.unit) },
           { key: 't', label: 'Communes témoins', num: true, render: (c) => val(c.controls.value, c.controls.unit) },
           { key: 'g', label: 'Écart (points)', num: true, render: (c) => c.gapPoints ?? '—' },
           { key: 's', label: 'Statut', render: (c) => <><StatusBadge tone={STATUS[c.status]?.tone ?? 'neutral'} label={STATUS[c.status]?.label ?? c.status} />{c.note && <span className="small muted" style={{ display: 'block' }}>{c.note}</span>}</> },
+          { key: 'i', label: 'Indicateurs du § 40 (pilotes / témoins)', full: true, render: (c) => (c.indicateurs40?.length ? <ul className="small">{c.indicateurs40.map((i) => <li key={i.code}><strong>{i.label}</strong> : {val(i.pilot, i.unit)} / {val(i.controls, i.unit)}{i.gapPoints !== null ? ` (écart ${i.gapPoints})` : ''}{i.targetLabel ? ` — cible ${i.targetLabel}` : ''}</li>)}</ul> : '—') },
         ]} />
       </Section>
+      {b.chapitre46 && <Chapitre46View c={b.chapitre46} />}
       <Section title="Revues signées (J30 … J180)" sub="Instantané figé et signé à chaque jalon ; vérifiable par l’outil de vérification des exports">
         <Notice msg={r.msg} />
         <DataTable caption="Jalons" rows={b.milestones} rowKey={(m) => m.milestone} columns={[

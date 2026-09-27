@@ -10,7 +10,7 @@ import { ALL_PARAMETERS } from '../src/plugins/integrite/gouvernance/parametres.
 import { DEFAULT_PLUGINS } from '../src/plugins/index.js';
 import { CLASSIFICATION, classer, purgeInterdite } from '../src/plugins/juridique/classification.js';
 import { etatFonction, pointJuridiqueTranche, recoupementDonneesAutorise } from '../src/plugins/juridique/gates.js';
-import { ANNEXE_B_29, POINTS_JURIDIQUES, SEPT_QUESTIONS_6_4 } from '../src/plugins/juridique/points.js';
+import { ANNEXE_B_29, ANNEXE_B_FR2, POINTS_JURIDIQUES, SEPT_QUESTIONS_6_4, SOURCES_ANNEXE_A } from '../src/plugins/juridique/points.js';
 import { EFFACE } from '../src/plugins/juridique/service.js';
 import { TEXTES_REFERENCE_6_1 } from '../src/modules/rules/textes.js';
 import { DEMO, publishCertifiedRule, setup, type TestEnv } from './helpers.js';
@@ -191,7 +191,12 @@ describe('Registre des textes (§ 6.1) : complétude, OL 13/001 abrogée', () =>
 
 describe('Registre des points juridiques J1–J30 (§ 6.4, annexe B) et conditionnement', () => {
   it('catalogue complet et cohérent', () => {
-    expect(POINTS_JURIDIQUES.map((p) => p.code)).toEqual(Array.from({ length: 30 }, (_, i) => `J${i + 1}`));
+    // J1–J30 conservés dans l'ordre ; J31–J35 ajoutés (Document maître FR 2, annexe B, points 9 à 13).
+    expect(POINTS_JURIDIQUES.slice(0, 30).map((p) => p.code)).toEqual(Array.from({ length: 30 }, (_, i) => `J${i + 1}`));
+    expect(POINTS_JURIDIQUES.map((p) => p.code)).toEqual(Array.from({ length: 35 }, (_, i) => `J${i + 1}`));
+    expect(ANNEXE_B_FR2.map((a) => a.point)).toEqual(Array.from({ length: 13 }, (_, i) => i + 1));
+    expect(SOURCES_ANNEXE_A).toHaveLength(11);
+    for (const x of [...ANNEXE_B_FR2, ...SOURCES_ANNEXE_A]) for (const c of x.points) expect(POINTS_JURIDIQUES.some((p) => p.code === c)).toBe(true);
     expect(SEPT_QUESTIONS_6_4).toHaveLength(7);
     expect(ANNEXE_B_29.map((a) => a.point)).toEqual(Array.from({ length: 29 }, (_, i) => i + 1));
     const codes = new Set(POINTS_JURIDIQUES.map((p) => p.code));
@@ -206,8 +211,10 @@ describe('Registre des points juridiques J1–J30 (§ 6.4, annexe B) et conditio
     ctx.users.add({ id: 'u-jur-ministre', name: 'Juriste et ministre (test)', roles: ['R13', 'R05'], entity: 'MINFIN' });
     const reg = await env.req('GET', '/v1/juridique/points', 'u-controleur');
     expect(reg.statusCode).toBe(200);
-    expect(reg.json()).toMatchObject({ summary: { total: 30, ouverts: 30, tranches: 0 } });
+    expect(reg.json()).toMatchObject({ summary: { total: 35, ouverts: 35, tranches: 0 } });
     expect(reg.json().annexeB).toHaveLength(29);
+    expect(reg.json().annexeBFr2).toHaveLength(13);
+    expect(reg.json().annexeA.find((a: { rang: number }) => a.rang === 1).instrumentsStatut).toEqual([{ id: 'ol-18-004', statut: expect.any(String) }, { id: 'ol-13-001', statut: 'ABROGE' }]);
     expect((await env.req('GET', '/v1/juridique/points', 'u-contribuable')).statusCode).toBe(403);
     // Public : état d'une fonction conditionnée (aucune donnée personnelle).
     const pub = await env.req('GET', '/v1/public/juridique/fonctions/COMMISSIONS_VERSEMENT');
