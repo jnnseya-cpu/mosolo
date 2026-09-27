@@ -10,7 +10,7 @@ import { useApp } from '../../context';
 import { ActionError, hasRole, Kpi, StateBadge, useAction } from './shared';
 import './integrite.css';
 
-interface Item { id: string; userId: string; userName: string; entity: string; role: string; roleLabel: string; privileged: boolean; decision: string; reason?: string; decidedBy?: string }
+interface Item { id: string; userId: string; userName: string; entity: string; role: string; roleLabel: string; privileged: boolean; decision: string; reason?: string; decidedBy?: string; elevations?: { id: string; role: string; motif: string; actions: number }[] }
 interface Campaign {
   id: string; label: string; launchedBy: string; launchedAt: string; dueAt: string; nextReviewAt: string; status: string; items: Item[];
   progress: { total: number; decided: number; toRemove: number; privileged: number }; overdue: boolean;
@@ -27,7 +27,9 @@ export default function RevueAcces() {
   const [label, setLabel] = useState('Revue trimestrielle T4 2026');
   const [closed, setClosed] = useState<{ removals: { userId: string; role: string; reason?: string }[]; execution: string } | null>(null);
   const a = useAction();
-  const camp = list.data?.[0];
+  // Plusieurs campagnes possibles (revue complète, revue mensuelle des accès privilégiés) : la plus récente par défaut.
+  const [campId, setCampId] = useState<string | null>(null);
+  const camp = list.data?.find((c) => c.id === campId) ?? list.data?.[0];
   const rows = useMemo(() => (camp?.items ?? []).filter((i) => filter === 'all' || (filter === 'todo' ? i.decision === 'A_CONFIRMER' : i.privileged)), [camp, filter]);
 
   if (!allowed) {
@@ -70,6 +72,21 @@ export default function RevueAcces() {
           </div>
         </section>
       )}
+      {isRssi && list.data && (
+        <section className="panel ig-launch">
+          <h2 className="panel-title">Revue mensuelle des accès privilégiés</h2>
+          <p className="small muted">Rôles privilégiés et élévations juste-à-temps du mois ; ouverte automatiquement le 1er du mois (paramètre du registre).</p>
+          <button type="button" className="btn btn-secondary" disabled={a.busy} onClick={async () => { if (await a.run(() => api('/v1/integrite/access-reviews/privileged', { method: 'POST', body: {} }))) { setCampId(null); list.reload(); } }}>Ouvrir la revue du mois</button>
+        </section>
+      )}
+      {list.data && list.data.length > 1 && (
+        <div className="field">
+          <label htmlFor="rv-camp" className="label">Campagne</label>
+          <select id="rv-camp" value={camp?.id ?? ''} onChange={(e) => setCampId(e.target.value)}>
+            {list.data.map((c) => <option key={c.id} value={c.id}>{c.label} — {c.status === 'OUVERTE' ? 'ouverte' : 'clôturée'}</option>)}
+          </select>
+        </div>
+      )}
       {camp && (
         <>
           <div className="kpi-row ig-kpis">
@@ -88,7 +105,7 @@ export default function RevueAcces() {
           <DataTable rows={rows} rowKey={(i) => i.id} caption="Accès à revoir" empty={<EmptyState title="Rien à confirmer" icon="check" />}
             columns={[
               { key: 'u', label: 'Personne', primary: true, render: (i) => <><span className="row-title">{i.userName}</span><span className="account-code">{i.userId} · {i.entity}</span></> },
-              { key: 'r', label: 'Rôle', render: (i) => <span className="small">{i.role} — {i.roleLabel}{i.privileged && <span className="ig-tag">Privilégié</span>}</span> },
+              { key: 'r', label: 'Rôle', render: (i) => <span className="small">{i.role} — {i.roleLabel}{i.privileged && <span className="ig-tag">Privilégié</span>}{i.elevations?.length ? <span className="ig-tag">{i.elevations.length} élévation(s) : {i.elevations.map((e) => `${e.id} (${e.actions} action(s))`).join(', ')}</span> : null}</span> },
               { key: 'd', label: 'Décision', render: (i) => <span className="ig-inline"><StateBadge value={i.decision} />{i.decidedBy && <span className="small muted">{i.decidedBy}</span>}</span> },
               {
                 key: 'a', label: 'Action', full: true, render: (i) => (camp.status === 'OUVERTE' && canDecide && i.decision === 'A_CONFIRMER' && i.userId !== user?.id ? (

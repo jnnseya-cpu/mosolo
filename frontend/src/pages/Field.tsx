@@ -18,7 +18,7 @@ import { Icon } from '../components/Icon';
 import { GpsQualityLine, MapCheck } from '../components/GpsQuality';
 import { usePreciseGps, type PreciseFix } from '../lib/geo';
 import { api, describeError, safeGet, safeSet } from '../lib/api';
-import { queueKey, readQueue, updateQueue } from '../lib/offlineQueue';
+import { onQueueChange, purgeExpiredQueues, queueKey, readQueue, updateQueue } from '../lib/offlineQueue';
 import { hmacSha256Hex, sha256Hex, uid } from '../lib/crypto';
 import type { UIKey } from '../lib/i18n';
 import type { FieldSyncResult } from '../lib/types';
@@ -193,6 +193,10 @@ export default function Field() {
   const qKey = queueKey(QUEUE_KEY, user?.id);
   const [queue, setQueue] = useState<Queued[]>(() => readQueue<Queued>(qKey));
   useEffect(() => { setQueue(readQueue<Queued>(qKey)); }, [qKey]);
+  // File chiffrée relue (déchiffrement asynchrone) ou modifiée ailleurs : rafraîchissement.
+  useEffect(() => onQueueChange(qKey, () => setQueue(readQueue<Queued>(qKey))), [qKey]);
+  // Données de mission expirées (72 h, ARB-68) purgées à l’ouverture de l’application terrain.
+  useEffect(() => { purgeExpiredQueues(); }, []);
   const [device, setDevice] = useState(() => ({ id: safeGet('mosolo.deviceId') ?? 'dev-terrain-001', key: safeGet('mosolo.deviceKey') ?? 'demo-device-key-001' }));
   const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);

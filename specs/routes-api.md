@@ -1,14 +1,14 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **656 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
-| extension acces | 63 |
+| extension acces | 68 |
 | extension canaux | 45 |
 | extension fiscal | 44 |
 | extension ia | 28 |
-| extension integrite | 58 |
+| extension integrite | 68 |
 | extension parking | 36 |
 | extension pilotage | 17 |
 | extension preuves | 14 |
@@ -16,7 +16,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | extension rakapay | 23 |
 | extension recouvrement | 37 |
 | extension sanctions | 8 |
-| extension socle | 14 |
+| extension socle | 24 |
 | extension terrain | 47 |
 | extension titres | 20 |
 | extension tresor | 27 |
@@ -60,6 +60,11 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | GET | `/v1/acces/consultations/:id/dossier` |
 | POST | `/v1/acces/consultations/:id/review` |
 | GET | `/v1/acces/duplicates` |
+| GET | `/v1/acces/elevations` |
+| POST | `/v1/acces/elevations` |
+| POST | `/v1/acces/elevations/:id/decision` |
+| POST | `/v1/acces/elevations/:id/end` |
+| GET | `/v1/acces/elevations/:id/session` |
 | GET | `/v1/acces/entities` |
 | POST | `/v1/acces/entities` |
 | POST | `/v1/acces/entities/:id/suspend` |
@@ -248,10 +253,13 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | POST | `/v1/integrite/access-reviews` |
 | POST | `/v1/integrite/access-reviews/:id/close` |
 | POST | `/v1/integrite/access-reviews/:id/items/:itemId/decision` |
+| POST | `/v1/integrite/access-reviews/privileged` |
 | GET | `/v1/integrite/alerts` |
 | POST | `/v1/integrite/alerts/:id/examine` |
 | POST | `/v1/integrite/alerts/:id/propose-closure` |
 | POST | `/v1/integrite/alerts/:id/validate-closure` |
+| GET | `/v1/integrite/appareils` |
+| POST | `/v1/integrite/appareils/:id/attestation` |
 | GET | `/v1/integrite/cases` |
 | POST | `/v1/integrite/cases` |
 | GET | `/v1/integrite/cases/:id` |
@@ -263,6 +271,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | GET | `/v1/integrite/collusion` |
 | POST | `/v1/integrite/collusion/run` |
 | POST | `/v1/integrite/detection/run` |
+| GET | `/v1/integrite/gps/anomalies` |
+| POST | `/v1/integrite/gps/plausibilite` |
 | GET | `/v1/integrite/incidents` |
 | POST | `/v1/integrite/incidents` |
 | POST | `/v1/integrite/incidents/:id/assign` |
@@ -277,6 +287,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | POST | `/v1/integrite/mystery-checks/:id/follow-up` |
 | POST | `/v1/integrite/mystery-checks/:id/result` |
 | POST | `/v1/integrite/observations` |
+| GET | `/v1/integrite/plafonds-references` |
 | GET | `/v1/integrite/privacy/access-log` |
 | GET | `/v1/integrite/privacy/registry` |
 | POST | `/v1/integrite/privacy/registry` |
@@ -293,6 +304,10 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | POST | `/v1/integrite/reports/:id/messages` |
 | POST | `/v1/integrite/reports/:id/qualify` |
 | POST | `/v1/integrite/reports/intake` |
+| GET | `/v1/integrite/scellement` |
+| POST | `/v1/integrite/scellement/controles` |
+| POST | `/v1/integrite/scellement/copie` |
+| POST | `/v1/integrite/scellement/racines` |
 | GET | `/v1/integrite/thresholds` |
 | POST | `/v1/integrite/thresholds/change-requests` |
 | POST | `/v1/integrite/thresholds/change-requests/:id/decision` |
@@ -519,11 +534,21 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | GET | `/v1/auth/me` |
 | POST | `/v1/auth/otp` |
 | GET | `/v1/auth/passkeys` |
+| POST | `/v1/auth/passkeys/:id/revoke` |
+| POST | `/v1/auth/passkeys/authentication/options` |
+| POST | `/v1/auth/passkeys/authentication/verify` |
 | POST | `/v1/auth/passkeys/registration` |
+| POST | `/v1/auth/passkeys/registration/verify` |
 | POST | `/v1/auth/refresh` |
 | GET | `/v1/auth/sessions` |
 | POST | `/v1/auth/sessions/:id/revoke` |
 | POST | `/v1/socle/exports` |
+| GET | `/v1/socle/exports/requests` |
+| POST | `/v1/socle/exports/requests` |
+| POST | `/v1/socle/exports/requests/:id/committee` |
+| POST | `/v1/socle/exports/requests/:id/data-owner` |
+| POST | `/v1/socle/exports/requests/:id/package` |
+| POST | `/v1/socle/exports/requests/:id/withdraw` |
 | GET | `/v1/socle/status` |
 
 ## Extension terrain

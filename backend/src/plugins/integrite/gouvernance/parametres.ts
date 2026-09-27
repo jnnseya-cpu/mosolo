@@ -30,6 +30,7 @@ import { DEFAULT_GPS_TOLERANCE_M, MIN_SAMPLE_RATE } from '../../terrain/model.js
 import { DYNAMIC_GRACE_SECONDS, DYNAMIC_WINDOW_SECONDS } from '../../titres/tokens.js';
 import { EXCEPTION_SLA_HOURS, PROVIDER_SETTLEMENT_DELAY_DAYS, REFUND_EXTRA_APPROVAL_THRESHOLDS, SUSPENSE_MAX_DAYS, SUSPENSE_SLA_DAYS } from '../../tresor/service.js';
 import { DETECTION_PARAMS } from '../service.js';
+import { PARAMETRES_SECURITE } from './parametres-securite.js';
 
 export type ParamValue = number | boolean;
 export type ParamOwner = 'CODE' | 'REGISTRE';
@@ -88,6 +89,8 @@ export const REGISTRE_DEFAUTS: ParamDefinition[] = [
   R('rotation.fenetre_jours', 'Fenêtre glissante du plafond de rotation', 'Rotation obligatoire', 30, 'jours', { min: 1, max: 365 }),
   R('cles.longueur_min', 'Longueur minimale d’une clé symétrique (HMAC, sauvegarde)', 'Gestion des clés', 32, 'caractères', { min: 16, max: 256 }),
   R('cles.age_max_jours', 'Âge maximal d’une clé avant rotation recommandée', 'Gestion des clés', 365, 'jours', { min: 30, max: 3650 }),
+  // Sécurité, accès et audit (élévation, extraction massive, DLP, appareils, GPS, plafonds, clés d'accès, scellement).
+  ...PARAMETRES_SECURITE,
 ];
 
 /** Paramètres anti-fraude du code (constantes importées : la valeur affichée est TOUJOURS celle du code en service). */

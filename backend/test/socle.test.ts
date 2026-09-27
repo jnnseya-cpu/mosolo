@@ -386,10 +386,12 @@ describe('Authentification — fournisseur local compatible OIDC', () => {
     expect(replay.statusCode).toBe(401);
     // Le jeton agent ouvre les routes de son rôle.
     expect((await env.req('GET', '/v1/ledger/entries', { token: tok.accessToken })).statusCode).not.toBe(401);
+    // Clés d'accès désormais raccordées (WebAuthn) : l'ancienne réponse 501 « [À RACCORDER] » est remplacée par le défi
+    // d'enregistrement (parcours complet : test/securite-acces-audit.test.ts).
     const pk = await env.req('POST', '/v1/auth/passkeys/registration', { token: tok.accessToken, body: {} });
-    expect(pk.statusCode).toBe(501);
-    expect(pk.json()).toMatchObject({ code: 'PASSKEY_NOT_WIRED' });
-    expect(((await env.req('GET', '/v1/auth/passkeys', { token: tok.accessToken })).json() as { status: string }).status).toBe('A_RACCORDER');
+    expect(pk.statusCode).toBe(200);
+    expect(pk.json()).toMatchObject({ challengeId: expect.any(String), options: { rp: { id: 'localhost' } } });
+    expect(((await env.req('GET', '/v1/auth/passkeys', { token: tok.accessToken })).json() as { status: string }).status).toBe('RACCORDE');
     await env.app.close();
   });
 

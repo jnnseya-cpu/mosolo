@@ -10,6 +10,10 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { useApp } from '../../context';
 import { api, describeError, readStoredSession, safeSet, writeStoredSession } from '../../lib/api';
 import { purgeUserQueues } from '../../lib/offlineQueue';
+import {
+  browserSupportsWebAuthn, startAuthentication, startRegistration,
+  type PublicKeyCredentialCreationOptionsJSON, type PublicKeyCredentialRequestOptionsJSON,
+} from '@simplewebauthn/browser';
 import './socle.css';
 
 /** File d'enrôlement assisté (noms, téléphones de tiers) : effacée à la déconnexion. */
@@ -49,6 +53,8 @@ interface SessionRow {
   current?: boolean;
   revokedAt?: string;
 }
+
+interface PasskeyRow { id: string; label: string; createdAt: string; lastUsedAt?: string; active: boolean }
 
 interface DemoAccounts {
   password: string;
@@ -103,6 +109,11 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [demo, setDemo] = useState<DemoAccounts | null>(null);
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
+  const [fallbackReason, setFallbackReason] = useState('');
+  const [passkeyNeeded, setPasskeyNeeded] = useState(false);
+  const [passkeys, setPasskeys] = useState<PasskeyRow[] | null>(null);
+  const [passkeyMsg, setPasskeyMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const webauthn = typeof window !== 'undefined' && browserSupportsWebAuthn();
   const remaining = useCountdown(challenge?.expiresAt);
 
   // Comptes fictifs (mode démonstration) ; rechargés à chaque défi pour afficher un code TOTP courant.
@@ -142,12 +153,15 @@ export default function Login() {
     try {
       const body = mode === 'contribuable'
         ? { method: 'phone', phone: phone.replace(/\s/g, '') }
-        : { method: 'password', login: login.trim(), password };
+        : { method: 'password', login: login.trim(), password, ...(fallbackReason.trim() ? { fallbackReason: fallbackReason.trim() } : {}) };
       setChallenge(await api<Challenge>('/v1/auth/login', { method: 'POST', body }));
       setCode('');
       if (mode === 'agent') loadDemo();
     } catch (err) {
-      setError(describeError(err).message);
+      const d = describeError(err);
+      // Rôle sensible muni d'une clé d'accès : connexion par la clé, ou secours TOTP motivé.
+      if (d.code === 'PASSKEY_REQUIRED') setPasskeyNeeded(true);
+      setError(d.message);
     } finally {
       setBusy(false);
     }
@@ -174,6 +188,50 @@ export default function Login() {
     }
   }
 
+  /** Connexion par clé d'accès (FIDO2 / WebAuthn) : niveau résistant au hameçonnage. */
+  async function passkeyLogin() {
+    setBusy(true); setError(null);
+    try {
+      const o = await api<{ challengeId: string; options: PublicKeyCredentialRequestOptionsJSON }>('/v1/auth/passkeys/authentication/options', { method: 'POST', body: login.trim() ? { login: login.trim() } : {} });
+      const response = await startAuthentication({ optionsJSON: o.options });
+      const t = await api<TokenResponse>('/v1/auth/passkeys/authentication/verify', { method: 'POST', body: { challengeId: o.challengeId, response } });
+      const stored: StoredSession = { ...t, obtainedAt: new Date().toISOString() };
+      writeStoredSession(JSON.stringify(stored), t.session.sharedDevice);
+      setSession(stored);
+      setPasskeyNeeded(false); setPassword(''); setFallbackReason('');
+    } catch (err) {
+      setError(err instanceof Error && err.name === 'NotAllowedError' ? 'Opération annulée ou clé d’accès indisponible.' : describeError(err).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Enregistrement d'une clé d'accès depuis la session ouverte (mot de passe + TOTP). */
+  async function registerPasskey() {
+    if (!session) return;
+    setBusy(true); setPasskeyMsg(null);
+    try {
+      const o = await api<{ challengeId: string; options: PublicKeyCredentialCreationOptionsJSON }>('/v1/auth/passkeys/registration', { method: 'POST', headers: bearer(session), body: {} });
+      const response = await startRegistration({ optionsJSON: o.options });
+      await api('/v1/auth/passkeys/registration/verify', { method: 'POST', headers: bearer(session), body: { challengeId: o.challengeId, response, label: 'Clé de cet appareil' } });
+      setPasskeyMsg({ ok: true, text: 'Clé d’accès enregistrée : utilisez-la à la prochaine connexion.' });
+      void refreshPasskeys(session);
+    } catch (err) {
+      setPasskeyMsg({ ok: false, text: err instanceof Error && err.name === 'NotAllowedError' ? 'Enregistrement annulé.' : describeError(err).message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const refreshPasskeys = useCallback(async (s: StoredSession | null) => {
+    if (!s) { setPasskeys(null); return; }
+    try {
+      const r = await api<{ registered: PasskeyRow[] }>('/v1/auth/passkeys', { headers: bearer(s) });
+      setPasskeys(r.registered);
+    } catch { setPasskeys(null); }
+  }, []);
+  useEffect(() => { void refreshPasskeys(session); }, [session, refreshPasskeys]);
+
   async function logout() {
     if (!session) return;
     setBusy(true);
@@ -181,6 +239,8 @@ export default function Login() {
       await api('/v1/auth/logout', { method: 'POST', headers: bearer(session) });
     } catch { /* session déjà close côté serveur */ }
     writeStoredSession(null);
+    // Toutes les files hors ligne de l’utilisateur (terrain, enrôlement, titres) et leur clé de chiffrement (§ 15.4).
+    purgeUserQueues(session.user.id);
     purgeUserQueues(session.user.id, [ENROL_QUEUE]);
     safeSet(ENROL_QUEUE, null); // ancienne file non rattachée à un utilisateur
     setSession(null);
@@ -217,7 +277,22 @@ export default function Login() {
             {session.passkeyRequired && (
               <div className="callout callout-warn">
                 <Icon name="lock" size={18} />
-                <p>Votre rôle est sensible : le document maître exige une clé d’accès résistante au hameçonnage (passkey / FIDO2). Son enregistrement est <strong>à raccorder</strong> à l’IdP souverain ; la session actuelle repose sur mot de passe + TOTP.</p>
+                <p>Votre rôle est sensible : une clé d’accès résistante au hameçonnage (FIDO2) est exigée. Une fois enregistrée, la connexion par mot de passe et code TOTP ne reste possible qu’en secours motivé, journalisé et signalé à la sécurité.</p>
+              </div>
+            )}
+            {session.user.roles.some((r) => r !== 'R30') && (
+              <div className="socle-passkeys">
+                <h3 className="small">Clés d’accès (FIDO2)</h3>
+                {passkeys && passkeys.filter((p) => p.active).length > 0 ? (
+                  <ul className="plain-list small">
+                    {passkeys.filter((p) => p.active).map((p) => <li key={p.id}><Icon name="lock" size={14} /> {p.label} — enregistrée le {fmtDate(p.createdAt, true)}{p.lastUsedAt ? `, utilisée le ${fmtDate(p.lastUsedAt, true)}` : ''}</li>)}
+                  </ul>
+                ) : <p className="muted small">Aucune clé enregistrée.</p>}
+                {passkeyMsg && <p className={`notice ${passkeyMsg.ok ? 'notice-ok' : 'notice-err'}`} role="status">{passkeyMsg.text}</p>}
+                <button type="button" className="btn btn-secondary" onClick={() => void registerPasskey()} disabled={busy || !webauthn}>
+                  <Icon name="lock" size={16} /> Enregistrer une clé d’accès sur cet appareil
+                </button>
+                {!webauthn && <p className="hint">Ce navigateur ne prend pas en charge les clés d’accès (WebAuthn).</p>}
               </div>
             )}
             <div className="row-actions">
@@ -285,12 +360,24 @@ export default function Login() {
                     <input id="socle-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
                     <span className="hint">Après 5 échecs, la connexion est suspendue 15 minutes ; vous en êtes informé.</span>
                   </div>
+                  {passkeyNeeded && (
+                    <div className="field">
+                      <label htmlFor="socle-fallback" className="label">Motif de connexion de secours (sans clé d’accès)</label>
+                      <input id="socle-fallback" value={fallbackReason} onChange={(e) => setFallbackReason(e.target.value)} maxLength={300} placeholder="Ex. clé oubliée, appareil en réparation" />
+                      <span className="hint">10 caractères minimum. La connexion par code sera journalisée et signalée au responsable sécurité.</span>
+                    </div>
+                  )}
                 </>
               )}
               {error && <p className="notice notice-err" role="alert">{error}</p>}
               <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
                 {busy ? 'Envoi…' : mode === 'contribuable' ? 'Recevoir un code' : 'Continuer'}
               </button>
+              {mode === 'agent' && webauthn && (
+                <button type="button" className="btn btn-secondary btn-block" onClick={() => void passkeyLogin()} disabled={busy}>
+                  <Icon name="lock" size={16} /> Se connecter avec une clé d’accès (FIDO2)
+                </button>
+              )}
             </form>
           ) : (
             <form className="form" onSubmit={(e) => void verify(e)} noValidate>
@@ -357,7 +444,7 @@ export default function Login() {
                     <p className="small">Scannez avec une application d’authentification (TOTP, 30 s), ou utilisez le code courant :</p>
                     <p className="mono socle-current">{demoAgent.currentCode}</p>
                     <p className="hint">Code valable au chargement de cet écran ; un code déjà utilisé est refusé.</p>
-                    {demoAgent.sensitive && <p className="hint"><Icon name="lock" size={14} /> Rôle sensible : clé d’accès exigée à terme (à raccorder).</p>}
+                    {demoAgent.sensitive && <p className="hint"><Icon name="lock" size={14} /> Rôle sensible : clé d’accès (FIDO2) exigée dès qu’elle est enregistrée ; code TOTP en secours motivé.</p>}
                   </div>
                 </div>
               )}

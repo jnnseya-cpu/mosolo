@@ -104,8 +104,32 @@ export async function apiBlob(path: string): Promise<Blob> {
   return res.blob();
 }
 
+/** Identifiant de corrélation d'une requête (§ 30.1 X-Request-Id), repris dans chaque enregistrement d'audit du serveur. */
+export function newRequestId(): string {
+  const r = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  return `web-${r}`;
+}
+
+/**
+ * Empreinte d'installation de l'application (§ 25.1 « empreinte d'appareil ») : identifiant aléatoire propre à ce
+ * navigateur, sans aucune donnée personnelle ; permet au serveur de repérer un appareil servant plusieurs comptes.
+ */
+const DEVICE_KEY = 'mosolo.appareil';
+export function deviceFingerprint(): string | null {
+  let v = safeGet(DEVICE_KEY);
+  if (!v) {
+    v = newRequestId().replace(/^web-/, 'nav-');
+    safeSet(DEVICE_KEY, v);
+  }
+  return safeGet(DEVICE_KEY) ? v : null;
+}
+
 export async function api<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json', ...authHeaders(), ...opts.headers };
+  headers['X-Request-Id'] ??= newRequestId();
+  // Sessions réelles seulement : le sélecteur d'utilisateurs de démonstration change de compte sur le même navigateur.
+  const fp = headers.Authorization ? deviceFingerprint() : null;
+  if (fp) headers['x-mosolo-device-fingerprint'] = fp;
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
   if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
   let res: Response;

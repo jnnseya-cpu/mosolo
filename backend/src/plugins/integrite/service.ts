@@ -1215,7 +1215,8 @@ export class IntegriteService {
 
   launchReview(p: Principal | 'system', label: string) {
     if (p !== 'system') authorize(p, 'integrite:access-review.launch');
-    if (this.reviews.findOne((c) => c.status === 'OUVERTE')) throw conflict('REVIEW_ALREADY_OPEN', 'Une campagne de revue est déjà ouverte : clôturez-la d’abord.');
+    // Une campagne complète à la fois ; la revue mensuelle des accès privilégiés a sa propre file (portée distincte).
+    if (this.reviews.findOne((c) => c.status === 'OUVERTE' && (c.scope ?? 'COMPLETE') === 'COMPLETE')) throw conflict('REVIEW_ALREADY_OPEN', 'Une campagne de revue est déjà ouverte : clôturez-la d’abord.');
     const now = this.now;
     const id = this.kit.ids.next('REV', 4);
     const items = this.ctx.users.all().flatMap((u) => u.roles.filter(isInternalRole).map((role) => ({
@@ -1229,6 +1230,50 @@ export class IntegriteService {
     this.kit.audit(p, 'integrite.access_review.launched', 'access-review', id, { items: items.length });
     this.ctx.comms.publish('audit.access_review.due', [...this.ctx.users.withRole('R08'), ...this.ctx.users.withRole('R28')].map(userRecipient), {}, { entity: 'PLATEFORME' });
     return this.reviewView(c);
+  }
+
+  /**
+   * Revue MENSUELLE des accès privilégiés (§ 12.5 « revue mensuelle des accès privilégiés ») : même campagne, même
+   * circuit de décision (personne distincte, retrait motivé, clôture) que la revue complète, restreinte aux rôles
+   * privilégiés et enrichie des élévations juste-à-temps obtenues dans le mois (module acces). Une par mois.
+   */
+  launchPrivilegedReview(p: Principal | 'system', month?: string) {
+    if (p !== 'system') authorize(p, 'integrite:access-review.launch');
+    const period = month ?? this.now.slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(period)) throw badRequest('BAD_PERIOD', 'Mois attendu au format AAAA-MM.');
+    if (this.reviews.findOne((c) => c.scope === 'PRIVILEGIES' && c.period === period)) throw conflict('PRIVILEGED_REVIEW_EXISTS', `La revue des accès privilégiés de ${period} existe déjà.`);
+    if (this.reviews.findOne((c) => c.status === 'OUVERTE' && c.scope === 'PRIVILEGIES')) throw conflict('REVIEW_ALREADY_OPEN', 'La revue des accès privilégiés du mois précédent est encore ouverte : clôturez-la d’abord.');
+    const acces = this.ctx.ext.acces as { elevations?: { elevationsOfPeriod(period: string): { id: string; userId: string; role: RoleCode; motif: string; decidedBy?: string; startsAt?: string; endedAt?: string; actions: number }[] } } | undefined;
+    const elevations = acces?.elevations?.elevationsOfPeriod(period) ?? [];
+    const id = this.kit.ids.next('REVP', 4);
+    const items: AccessReviewCampaign['items'] = this.ctx.users.all().flatMap((u) => u.roles.filter((r) => isInternalRole(r) && PRIVILEGED_ROLES.includes(r)).map((role) => ({
+      id: `${id}-${u.id}-${role}`, userId: u.id, userName: u.name, entity: u.entity, role, roleLabel: ROLES[role],
+      privileged: true, decision: 'A_CONFIRMER' as const,
+      elevations: elevations.filter((e) => e.userId === u.id).map((e) => ({ id: e.id, role: e.role, motif: e.motif, ...(e.decidedBy ? { approvedBy: e.decidedBy } : {}), ...(e.startsAt ? { startedAt: e.startsAt } : {}), ...(e.endedAt ? { endedAt: e.endedAt } : {}), actions: e.actions })),
+    })));
+    // Personnes ayant obtenu une élévation sans détenir de rôle privilégié permanent : revues elles aussi.
+    for (const e of elevations) {
+      if (items.some((i) => i.userId === e.userId)) continue;
+      const u = this.ctx.users.get(e.userId);
+      items.push({
+        id: `${id}-${e.userId}-JIT`, userId: e.userId, userName: u?.name ?? e.userId, entity: u?.entity ?? 'PLATEFORME', role: e.role, roleLabel: `${ROLES[e.role]} (élévation temporaire)`,
+        privileged: true, decision: 'A_CONFIRMER' as const,
+        elevations: elevations.filter((x) => x.userId === e.userId).map((x) => ({ id: x.id, role: x.role, motif: x.motif, ...(x.decidedBy ? { approvedBy: x.decidedBy } : {}), ...(x.startsAt ? { startedAt: x.startsAt } : {}), ...(x.endedAt ? { endedAt: x.endedAt } : {}), actions: x.actions })),
+      });
+    }
+    const c = this.reviews.insert({
+      id, label: `Revue mensuelle des accès privilégiés — ${period}`, launchedBy: p === 'system' ? 'système' : p.id, launchedAt: this.now,
+      dueAt: this.kit.plus(DELAYS.accessReviewDays * DAY), nextReviewAt: this.kit.plus(30 * DAY), status: 'OUVERTE', items, scope: 'PRIVILEGIES', period,
+    });
+    this.kit.audit(p, 'integrite.access_review.launched', 'access-review', id, { items: items.length, scope: 'PRIVILEGIES', period, elevations: elevations.length });
+    this.ctx.comms.publish('audit.access_review.due', this.ctx.users.withRole('R28').map(userRecipient), {}, { entity: 'PLATEFORME' });
+    return this.reviewView(c);
+  }
+
+  /** La revue mensuelle du mois courant est-elle à ouvrir ? (planificateur du lot sécurité). */
+  privilegedReviewDue(): boolean {
+    const period = this.now.slice(0, 7);
+    return !this.reviews.findOne((c) => c.scope === 'PRIVILEGIES' && (c.period === period || c.status === 'OUVERTE'));
   }
 
   listReviews(p: Principal) {
