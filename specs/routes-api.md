@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1035 routes** dans 40 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1036 routes** dans 40 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -25,7 +25,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1035 routes** dans 4
 | extension terrain | 50 |
 | extension titres | 22 |
 | extension tresor | 39 |
-| extension verticales | 129 |
+| extension verticales | 130 |
 | module ai | 3 |
 | module alerts | 1 |
 | module appeals | 9 |
@@ -1095,6 +1095,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1035 routes** dans 4
 | POST | `/v1/verticales/secteurs/:module/releves` |
 | GET | `/v1/verticales/secteurs/antennes/liquidation-annuelle` |
 | POST | `/v1/verticales/secteurs/antennes/liquidation-annuelle` |
+| POST | `/v1/verticales/secteurs/antennes/liquidation-annuelle/automatique` |
 | GET | `/v1/verticales/secteurs/declarations` |
 | POST | `/v1/verticales/secteurs/declarations` |
 | GET | `/v1/verticales/secteurs/declarations/:id` |

@@ -57,10 +57,13 @@ export class EntreprisesService {
         applicable: true, liquidatedObligationId: null,
         action: certificate ? `Autorisation ${certificate.code} (${this.vx.certificateStatus(certificate)}) vérifiable par QR.` : 'Démarche « Demander une autorisation d’exploitation » à déposer.',
       });
+      // Statut réel lu au registre (clé R72-CONSO-BAT), jamais figé dans le code.
+      const bat = this.vx.ruleByCode('R72-CONSO-BAT');
+      const batActive = !!bat && bat.status === 'ACTIVE';
       items.push({
         code: 'VOLUMES_BAT', label: 'Taxe de consommation — déclaration mensuelle des volumes (module 17)', module: 17,
-        criteres: { activite, lieu: o.commune, categorie }, ruleCode: 'R72-CONSO-BAT', ruleStatus: 'ACTE_REQUIS', demo: false, applicable: false, liquidatedObligationId: null,
-        action: 'Acte requis (J1, J13) : déclaration des volumes possible, aucun montant.',
+        criteres: { activite, lieu: o.commune, categorie }, ruleCode: 'R72-CONSO-BAT', ruleStatus: bat?.status ?? 'ACTE_REQUIS', demo: bat?.demo === true, applicable: batActive && !ceased, liquidatedObligationId: null,
+        action: batActive ? 'Règle ACTIVE : déclaration mensuelle des volumes, liquidation par une personne habilitée.' : 'Acte requis (J1, J13) : déclaration des volumes possible, aucun montant.',
       });
     }
     return {
