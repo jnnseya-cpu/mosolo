@@ -17,6 +17,8 @@ import { api } from '../../lib/api';
 import { hasRole, ReasonDrawer, useFeedback } from './common';
 import { AGENT_STATUS, MODULE_LABEL, moduleLabel, ST_STATUS } from './labels';
 import type { FieldAgent, Lot, MysteryCheck, Remuneration, Subcontractor } from './types';
+import { AideContextuelle } from '../apprentissage/AideContextuelle';
+import { EtatCertification } from '../apprentissage/EtatCertification';
 import './terrain.css';
 
 const addDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
@@ -86,6 +88,7 @@ function HabilitationForm({ agent, st, onDone }: { agent: FieldAgent; st?: Subco
     <form className="form" onSubmit={(e) => void submit(e)}>
       {fb.node}
       <p className="small">Habilitation de <strong>{agent.displayName}</strong>{st ? ` (${st.name})` : ' (équipe interne)'} — décision de la régie, jamais du sous-traitant.</p>
+      <EtatCertification userId={agent.id} profil="RECENSEUR" />
       <div className="tr-checks">
         <label><input type="checkbox" checked={f.identityVerified} onChange={(e) => setF({ ...f, identityVerified: e.target.checked })} />Identité vérifiée sur pièce</label>
         <label><input type="checkbox" checked={f.ethicsSigned} onChange={(e) => setF({ ...f, ethicsSigned: e.target.checked })} />Engagement déontologique signé (aucun encaissement, aucune décision fiscale)</label>
@@ -379,7 +382,7 @@ export default function Subcontractors() {
   if (!user) return <div className="page"><EmptyState title="Choisissez un utilisateur de démonstration (direction de régie, responsable de module, sous-traitant…)" icon="users" /></div>;
   return (
     <div className="page page-wide">
-      <PageHead eyebrow="Opérations de terrain" title="Sous-traitants et équipes" lead="Accréditation par module et pour une durée limitée, période probatoire sur lot réduit, agents inactifs jusqu’à l’habilitation par la régie, suspension sur décision motivée." />
+      <PageHead eyebrow="Opérations de terrain" title="Sous-traitants et équipes" lead="Accréditation par module et pour une durée limitée, période probatoire sur lot réduit, agents inactifs jusqu’à l’habilitation par la régie, suspension sur décision motivée."><AideContextuelle cle="terrain.habilitation" libelle="Aide : habiliter un agent de terrain" /></PageHead>
       <div className="callout callout-danger" role="note"><Icon name="cash" size={20} /><p><strong>Ni agent, ni sous-traitant, ni responsable de module ne touche l’argent public</strong>, ne crée de dette hors règle ou ne valide seul ses propres résultats. La rémunération des sous-traitants est contractuelle, sur livrables vérifiés, payée sur crédit budgétaire hors plateforme.</p></div>
       <ExampleNotice text="Sous-traitants, agents et prix unitaires de démonstration : données fictives." />
       {subs.loading ? <Loading /> : subs.error ? <ErrorState error={subs.error} onRetry={subs.reload} /> : (

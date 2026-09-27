@@ -15,6 +15,7 @@ import { api, describeError } from '../../lib/api';
 import { sha256Hex } from '../../lib/crypto';
 import { DemoNote, FiscalTabs, ReasonAction, useViewer } from './common';
 import type { FiscalObjectView } from './types';
+import { AideContextuelle } from '../apprentissage/AideContextuelle';
 import './fiscal.css';
 
 export interface ObjectCorrection {
@@ -223,7 +224,7 @@ export default function Corrections() {
   const open = (objs.data ?? []).find((o) => o.id === openId) ?? null;
   return (
     <div className="page page-wide fs-page">
-      <PageHead eyebrow="Fiscalité" title="Corrections d’objets" lead="Rang de localité et attributs de base (surface…) : proposition motivée, approbation par une seconde personne, historique conservé et obligations ouvertes réévaluées." />
+      <PageHead eyebrow="Fiscalité" title="Corrections d’objets" lead="Rang de localité et attributs de base (surface…) : proposition motivée, approbation par une seconde personne, historique conservé et obligations ouvertes réévaluées."><AideContextuelle cle="fiscal.corrections" libelle="Aide : proposer une correction" /></PageHead>
       <FiscalTabs />
       <section className="panel fs-corr-queue" aria-label="Corrections en attente">
         <div className="panel-head"><div><p className="panel-title">Corrections en attente d’approbation</p><p className="panel-sub">{canApprove ? 'Tous objets de votre périmètre ; vous ne pouvez pas approuver votre propre proposition.' : 'Suivi des propositions ; l’approbation revient au chef de service ou à la direction.'}</p></div></div>

@@ -19,6 +19,7 @@ import { validityView } from '../../core/validity.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { userRecipient } from '../../modules/identity/recipients.js';
 import { pct } from '../../core/percent.js';
+import { certificationValide } from '../apprentissage/garde.js';
 import { distanceM, type LatLon } from './geo.js';
 import {
   DEFAULT_GPS_TOLERANCE_M, MIN_SAMPLE_RATE, PROBATION_MAX_AGENTS,
@@ -411,6 +412,9 @@ export class TerrainService {
     const today = this.today();
     if (!input.identityVerified) throw unprocessable('IDENTITY_NOT_VERIFIED', 'Identité non vérifiée : habilitation refusée.');
     if (!input.trainingCertificateRef.trim() || input.trainingValidUntil < today) throw unprocessable('TRAINING_NOT_CERTIFIED', 'Certification de formation absente ou expirée : habilitation refusée (module 50).');
+    // Certification « agent recenseur » AVANT affectation (§ 24, module d'apprentissage) : garde additive, inactive sans le module.
+    const certif = certificationValide(this.ctx, agentId, 'RECENSEUR');
+    if (!certif.valide) throw unprocessable('CERTIFICATION_APPRENTISSAGE_MANQUANTE', `Certification « agent recenseur » non valide : ${certif.manquants.join(' ; ')}. Habilitation refusée (§ 24).`, { manquants: certif.manquants });
     if (!input.ethicsSigned) throw unprocessable('ETHICS_NOT_SIGNED', 'Engagement déontologique non signé : habilitation refusée.');
     if (input.validUntil < today) throw badRequest('INVALID_PERIOD', 'Fin d’habilitation passée.');
     if (agent.subcontractorId) {

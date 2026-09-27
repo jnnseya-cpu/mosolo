@@ -117,6 +117,10 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   // Terrain : supervision, sous-traitants, badges
   { path: '/terrain/supervision', element: lazy(() => import('./terrain/Supervision')), nav: { label: 'Supervision terrain', short: 'Supervision', icon: 'gauge', group: 'operations', roles: ['R06', 'R07', 'R09', 'R11', 'R22', 'R23', 'R24', 'R35'] } },
   { path: '/terrain/sous-traitants', element: lazy(() => import('./terrain/Subcontractors')), nav: { label: 'Sous-traitants et équipes', short: 'Sous-traitants', icon: 'users', group: 'operations', roles: ['R06', 'R07', 'R08', 'R09', 'R11', 'R17', 'R22', 'R23', 'R24', 'R35'] } },
+  // Apprentissage et environnement de travail (§ 24) : espace par rôle, mes certificats, administration des certifications
+  { path: '/apprentissage', element: lazy(() => import('./apprentissage/Espace')), nav: { label: 'Espace d’apprentissage', short: 'Apprendre', icon: 'question', group: 'operations', roles: [] } },
+  { path: '/apprentissage/mes-certificats', element: lazy(() => import('./apprentissage/MesCertificats')) },
+  { path: '/apprentissage/certifications', element: lazy(() => import('./apprentissage/Certifications')), nav: { label: 'Certifications et contenus d’apprentissage', short: 'Certifications', icon: 'shieldCheck', group: 'pilotage', roles: ['R06', 'R07', 'R08', 'R09', 'R17', 'R22', 'R23', 'R24', 'R26', 'R28', 'R01', 'R02', 'R03', 'R05'] } },
   { path: '/verifier-agent', element: lazy(() => import('./terrain/VerifyAgent')), nav: { label: 'Vérifier un agent', short: 'Agent', icon: 'shieldCheck', group: 'public', roles: [] } },
   { path: '/verifier-agent/:code', element: lazy(() => import('./terrain/VerifyAgent')) },
 

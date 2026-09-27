@@ -1,10 +1,11 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **881 routes** dans 39 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **897 routes** dans 40 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
 | extension acces | 68 |
+| extension apprentissage | 16 |
 | extension canaux | 46 |
 | extension chaine | 3 |
 | extension fiscal | 80 |
@@ -116,6 +117,27 @@ Généré depuis le code source (`tools/gen_routes.py`) : **881 routes** dans 39
 | GET | `/v1/acces/validations` |
 | POST | `/v1/acces/validations/:id/decision` |
 | GET | `/v1/acces/validations/mine` |
+
+## Extension apprentissage
+
+| Méthode | Chemin |
+|---|---|
+| GET | `/v1/apprentissage/aide/:cle` |
+| GET | `/v1/apprentissage/certifications` |
+| GET | `/v1/apprentissage/certifications/:userId` |
+| POST | `/v1/apprentissage/certificats` |
+| POST | `/v1/apprentissage/certificats/:id/retrait` |
+| GET | `/v1/apprentissage/contenus` |
+| POST | `/v1/apprentissage/contenus` |
+| POST | `/v1/apprentissage/contenus/:id/publication/decision` |
+| POST | `/v1/apprentissage/contenus/:id/publication/propose` |
+| POST | `/v1/apprentissage/contenus/:id/versions` |
+| GET | `/v1/apprentissage/echantillon/:userId` |
+| GET | `/v1/apprentissage/espace` |
+| POST | `/v1/apprentissage/evaluations` |
+| GET | `/v1/apprentissage/indicateurs` |
+| GET | `/v1/apprentissage/mes-certificats` |
+| POST | `/v1/apprentissage/modules/:id/epreuve` |
 
 ## Extension canaux
 
