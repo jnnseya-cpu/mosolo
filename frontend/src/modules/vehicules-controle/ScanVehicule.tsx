@@ -103,18 +103,21 @@ export default function ScanVehicule() {
       <PageHead eyebrow="Chaîne véhicule · module 82" title="Scan unique du véhicule" lead="Plaque, QR de la vignette fiscale ou QR de la vignette technique : une seule vue. Affichage seulement — aucune sanction n’est prise par la plateforme." />
       {!user ? <p className="notice">Connectez-vous avec un compte de contrôleur.</p> : (
         <>
-          <div className="vc-row">
+          {/* Formulaire : Entrée dans le champ lance la vérification (clavier seul, lecteur de code qui termine par Entrée). */}
+          <form className="vc-row" onSubmit={(e) => { e.preventDefault(); if (saisie.trim()) void run(); }}>
             <label className="vc-form" style={{ flex: 1 }}><span>Plaque ou contenu du QR</span><input value={saisie} onChange={(e) => setSaisie(e.target.value)} placeholder="KN-0000-AB ou QR" /></label>
             <label className="vc-form"><span>Commune du contrôle</span><input value={commune} onChange={(e) => setCommune(e.target.value)} placeholder="Gombe" /></label>
-            <button type="button" className="btn btn-primary" onClick={() => void run()} disabled={!saisie.trim()}>Vérifier</button>
+            <button type="submit" className="btn btn-primary" disabled={!saisie.trim()}>Vérifier</button>
             <button type="button" className="btn btn-secondary" onClick={() => setScan(true)}>Scanner un QR</button>
-          </div>
+          </form>
           {scan && <QrScanner onResult={(raw) => { setScan(false); setSaisie(raw); void run(raw); }} onClose={() => setScan(false)} />}
           <p className="small">
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => void loadPack()}>Charger le statut hors ligne</button>{' '}
             {pack ? <span role="status">Statut hors ligne chargé {ageText(pack.generatedAt)} ({pack.entries.length} véhicules) — domaine officiel : {pack.officialDomain}</span> : <span className="muted">Aucun statut hors ligne chargé.</span>}
           </p>
           {msg && <p className={msg.ok ? 'notice notice-ok' : 'notice notice-err'} role={msg.ok ? 'status' : 'alert'}>{msg.text}</p>}
+          {/* Annonce du résultat aux lecteurs d'écran (deuxième passe adverse, 27/09/2026) : le résultat s'affichait sans être lu. */}
+          <p className="sr-only" role="status" aria-live="polite">{view ? `Résultat du contrôle ${view.plate} : vignette fiscale ${view.vignetteFiscale.label} ; contrôle technique ${view.controleTechnique.label} ; quitus ${view.quitus.label}.` : ''}</p>
           {view && (
             <>
               <ScanResult v={view} />

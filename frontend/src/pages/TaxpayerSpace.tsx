@@ -329,10 +329,12 @@ export default function TaxpayerSpace() {
                 {
                   key: 'actions', label: tr('space.col.actions'), full: true, render: (o) => (
                     <div className="row-actions">
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPanel({ kind: 'explain', ob: o })}><Icon name="info" size={16} /> {tr('taxpayer.explain')}</button>
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPanel({ kind: 'chaine', ob: o })}><Icon name="sync" size={16} /> Sept questions</button>
-                      {o.status !== 'SOLDEE' && o.status !== 'ANNULEE' && <button type="button" className="btn btn-primary btn-sm" onClick={() => setPanel({ kind: 'pay', ob: o })}>{tr('taxpayer.pay')}</button>}
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPanel({ kind: 'contest', ob: o })}>{tr('taxpayer.contest')}</button>
+                      {/* Nom accessible complété par l'obligation (lecteur d'écran : six « Payer » identiques sinon) —
+                          le texte visible reste en tête du nom (WCAG 2.5.3). */}
+                      <button type="button" className="btn btn-ghost btn-sm" aria-label={`${tr('taxpayer.explain')} — ${o.label ?? o.ruleCode ?? o.id}`} onClick={() => setPanel({ kind: 'explain', ob: o })}><Icon name="info" size={16} /> {tr('taxpayer.explain')}</button>
+                      <button type="button" className="btn btn-ghost btn-sm" aria-label={`Sept questions — ${o.label ?? o.ruleCode ?? o.id}`} onClick={() => setPanel({ kind: 'chaine', ob: o })}><Icon name="sync" size={16} /> Sept questions</button>
+                      {o.status !== 'SOLDEE' && o.status !== 'ANNULEE' && <button type="button" className="btn btn-primary btn-sm" aria-label={`${tr('taxpayer.pay')} — ${o.label ?? o.ruleCode ?? o.id}${o.period ? ` (${o.period})` : ''}`} onClick={() => setPanel({ kind: 'pay', ob: o })}>{tr('taxpayer.pay')}</button>}
+                      <button type="button" className="btn btn-secondary btn-sm" aria-label={`${tr('taxpayer.contest')} — ${o.label ?? o.ruleCode ?? o.id}`} onClick={() => setPanel({ kind: 'contest', ob: o })}>{tr('taxpayer.contest')}</button>
                     </div>
                   ),
                 },

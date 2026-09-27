@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiBlob } from '../../lib/api';
 import { Icon } from '../../components/Icon';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 export interface EvidencePhotoMeta {
   id: string; slot: string; slotLabel: string; sha256: string; url: string; lat: number; lon: number; accuracyM: number | null;
@@ -42,6 +43,8 @@ function Thumb({ p, onOpen }: { p: EvidencePhotoMeta; onOpen: (src: string) => v
 /** Agrandissement modal : focus sur « Fermer » à l'ouverture, Échap ferme, le focus revient à la vignette. */
 function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
   const close = useRef<HTMLButtonElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  useFocusTrap(box, true);
   useEffect(() => {
     const prev = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     close.current?.focus();
@@ -50,7 +53,7 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
     return () => { document.removeEventListener('keydown', onKey); prev?.focus(); };
   }, [onClose]);
   return (
-    <div className="ev-lightbox" role="dialog" aria-modal="true" aria-label="Photo de preuve" onClick={onClose}>
+    <div ref={box} className="ev-lightbox" role="dialog" aria-modal="true" aria-label="Photo de preuve" onClick={onClose}>
       <img src={src} alt="Photo de preuve agrandie" />
       <button ref={close} type="button" className="btn btn-secondary" onClick={onClose}><Icon name="close" size={16} /> Fermer</button>
     </div>

@@ -57,8 +57,10 @@
 .ps-alertes, .ps-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .ps-alertes li, .ps-liste li { border-bottom: 1px solid var(--line-soft); padding-bottom: 8px; display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
 .ps-vignette { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; text-decoration: none; }
-.ps-commune { display: inline-grid; place-items: center; min-height: 26px; border-radius: 4px; font-size: 10.5px; font-weight: 600; color: #fff; background: #8a8fa3; padding: 0 4px; }
-.ps-commune.c-vert { background: #1E8C3A; } .ps-commune.c-orange { background: #b98300; } .ps-commune.c-rouge { background: #d03b3b; } .ps-commune.c-gris { background: #8a8fa3; }
+/* Contraste texte blanc ≥ 4,5:1 (WCAG 1.4.3 ; deuxième passe adverse, 27/09/2026) : gris 3,21 → 5,87 ; orange 3,33 → 5,93 ;
+   vert 4,31 → 5,42 ; rouge 4,80 inchangé. Mêmes teintes, plus sombres. */
+.ps-commune { display: inline-grid; place-items: center; min-height: 26px; border-radius: 4px; font-size: 10.5px; font-weight: 600; color: #fff; background: #5f6477; padding: 0 4px; }
+.ps-commune.c-vert { background: #1a7a33; } .ps-commune.c-orange { background: #8a5a00; } .ps-commune.c-rouge { background: #d03b3b; } .ps-commune.c-gris { background: #5f6477; }
 
 .ps-illustration { border: 1px dashed var(--line); border-radius: var(--r); padding: 6px 10px; font-size: 13px; background: var(--surface); }
 .ps-illustration summary { cursor: pointer; font-weight: 600; color: var(--ink-2); }

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useApp } from '../context';
 import { useOnline } from '../hooks/useOnline';
@@ -9,6 +9,8 @@ import { Icon } from './Icon';
 import { CurrencySelector, DemoUserSelector, LanguageSelector } from './Selectors';
 import { MODULE_ROUTES } from '../modules/registry';
 import { menuMasque } from '@mosolo/shared';
+import { focusables, useFocusTrap } from '../hooks/useFocusTrap';
+import { ID_ANNONCES } from '../lib/annonce';
 
 export interface NavItem { to: string; key: UIKey; icon: string; group: 'public' | 'pilotage' | 'operations'; label?: string; short?: string; roles?: string[] }
 
@@ -196,7 +198,17 @@ function BottomNav() {
   const bottom = hasMore ? items.slice(0, 4) : items;
   const [more, setMore] = useState(false);
   const loc = useLocation();
+  const sheet = useRef<HTMLDivElement>(null);
+  useFocusTrap(sheet, more);
   useEffect(() => setMore(false), [loc.pathname]);
+  // Ouverture de la feuille « Plus » : focus dans la feuille ; Échap la ferme (clavier seul).
+  useEffect(() => {
+    if (!more) return;
+    focusables(sheet.current ?? document.body)[0]?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMore(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [more]);
   return (
     <>
       <nav className="bottom-nav" aria-label={tr('nav.main')} style={{ gridTemplateColumns: `repeat(${bottom.length + (hasMore ? 1 : 0)}, 1fr)` }}>
@@ -214,7 +226,7 @@ function BottomNav() {
       </nav>
       {more && (
         <div className="sheet-backdrop" onClick={() => setMore(false)}>
-          <div className="sheet" id="more-sheet" role="dialog" aria-modal="true" aria-label={tr('nav.more')} onClick={(e) => e.stopPropagation()}>
+          <div ref={sheet} className="sheet" id="more-sheet" role="dialog" aria-modal="true" aria-label={tr('nav.more')} onClick={(e) => e.stopPropagation()}>
             {GROUPS.filter((g) => items.some((n) => n.group === g.id)).map((g) => (
               <div key={g.id} className="sheet-group">
                 <p className="side-label">{tr(g.key)}</p>
@@ -258,6 +270,7 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className={`app ${immersive ? 'app-immersive' : ''}`}>
       <a href="#main" className="skip-link">{tr('a11y.skip')}</a>
+      <div id={ID_ANNONCES} className="sr-only" role="status" aria-live="polite" aria-atomic="true" />
       <Header />
       <OfflineBanner />
       <div className="app-body">

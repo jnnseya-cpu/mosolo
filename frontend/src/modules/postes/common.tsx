@@ -10,6 +10,7 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../../context';
 import { api, describeError, NetworkError, safeGet, safeSet } from '../../lib/api';
 import { StatusBadge, type Tone } from '../../components/StatusBadge';
+import { annoncer } from '../../lib/annonce';
 import { Icon } from '../../components/Icon';
 import './postes.css';
 
@@ -189,6 +190,11 @@ export function FicheCard({ f, onDone, lienDetail = true }: { f: Fiche; onDone?:
   const [busy, setBusy] = useState(false);
   const idMotif = useId();
   const action = f.actions.find((a) => a.code === ouverte);
+  // Clavier seul (deuxième passe adverse, 27/09/2026) : à l'ouverture d'une issue, le focus va au motif à saisir au
+  // lieu de rester sur le bouton (sinon trois boutons à traverser avant d'atteindre le champ).
+  useEffect(() => {
+    if (ouverte) document.getElementById(idMotif)?.focus();
+  }, [ouverte, idMotif]);
   useEffect(() => {
     if (ouverte !== 'DELEGUER' || !f.categorie) return;
     api<{ items: { id: string; nom: string; roles: string[] }[] }>(`/v1/postes/delegations/candidats?categorie=${f.categorie.code}`).then((r) => setCandidats(r.items), () => setCandidats([]));
@@ -200,7 +206,12 @@ export function FicheCard({ f, onDone, lienDetail = true }: { f: Fiche; onDone?:
     setBusy(true); setMsg(null);
     try {
       await api(`/v1/postes/fiches/${encodeURIComponent(f.id)}/action`, { method: 'POST', body: { action: action.code, motif, ...(action.code === 'DELEGUER' ? { delegataireId: deleg.userId, jusquau: deleg.jusquau } : {}) } });
-      setMsg({ ok: true, text: `${action.libelle} : enregistré et journalisé.` }); setOuverte(null); setMotif(''); onDone?.();
+      const text = `${action.libelle} : enregistré et journalisé.`;
+      setMsg({ ok: true, text }); setOuverte(null); setMotif('');
+      // La fiche décidée peut quitter la corbeille au rechargement : annonce globale et focus sur le contenu principal
+      // (sinon message et focus perdus avec la carte — constaté au clavier le 27/09/2026).
+      annoncer(`${f.objet} — ${text}`);
+      if (onDone) { onDone(); document.getElementById('main')?.focus(); }
     } catch (e) {
       const d = describeError(e); setMsg({ ok: false, text: d.message + (d.code ? ` (${d.code})` : '') });
     } finally { setBusy(false); }

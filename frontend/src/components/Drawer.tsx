@@ -1,11 +1,13 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useApp } from '../context';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { Icon } from './Icon';
 
 /** Panneau latéral (plein écran sur mobile) avec piège de focus simple et fermeture Échap. */
 export function Drawer({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
   const { tr } = useApp();
   const ref = useRef<HTMLDivElement>(null);
+  useFocusTrap(ref, open);
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
