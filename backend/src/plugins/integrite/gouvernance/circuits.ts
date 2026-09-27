@@ -218,6 +218,11 @@ export const CIRCUITS: Circuit[] = [
     guard: { url: '/v1/pilotage/assignations/:id/certification', key: (p) => p.id!, refusal: approveFalse },
   },
   {
+    // Porte de sortie de phase (Cahier nouvelle version § 35.1) : demande → décision du comité de pilotage.
+    code: 'PILOTAGE_PORTE_PHASE', label: 'Porte de sortie de phase de la feuille de route (demande → décision du comité de pilotage)',
+    proposals: ['pilotage.roadmap.gate_requested'], approvals: ['pilotage.roadmap.gate_passed'], refusals: ['pilotage.roadmap.gate_refused'],
+  },
+  {
     code: 'IA_MODELE_MISE_EN_SERVICE', label: 'Mise en service d’une version de modèle d’IA (§ 23.1)',
     proposals: ['ia.model.promotion_proposed'], approvals: ['ia.model.promoted'], refusals: ['ia.model.promotion_rejected'],
     key: detail('versionKey'),

@@ -23,7 +23,7 @@ import { collectReductions } from '../reductions.js';
 import type { PilotagePlanningHooks, PilotageService, Query } from '../service.js';
 import { MIN_CONTRIBUTORS, type FundedProjectsSection } from '../transparency.js';
 import {
-  addDays, amountsOf, BASELINE_METRICS, dayCount, HYPOTHESIS_VARIABLES, INSTRUCTION_ORIGINS, MATURITY, meetsThreshold, moneyOfMinor, parseEntriesCsv,
+  additionalGrossMinor, addDays, amountsOf, EXEMPLE_ILLUSTRATIF, BASELINE_METRICS, dayCount, HYPOTHESIS_VARIABLES, INSTRUCTION_ORIGINS, MATURITY, meetsThreshold, moneyOfMinor, parseEntriesCsv,
   pickHypothesis, PILOT_COMMUNES, PILOT_CRITERIA, PILOT_MILESTONES, PROCUREMENT, PROJECT_DOMAINS, prorate, RANV_COMPONENTS, SCENARIO_CODES, SCENARIOS,
   selectEntries, SLA_KINDS, tenths, validateEntry,
   type BaselineEntry, type BaselineSet, type FundScenario, type FundScenarioItem, type Hypothesis, type HypothesisVariable, type Instruction, type InstructionOrigin,
@@ -428,7 +428,7 @@ export class PlanificationService implements PilotagePlanningHooks {
         if (!t) { missing.push(`Taux de conformité cible — ${b.revenue}`); return { revenue: b.revenue, available: false as const, reason: 'Hypothèse de conformité cible non renseignée.' }; }
         if (b.compliance === null) return { revenue: b.revenue, available: false as const, reason: 'Aucune obligation échue : conformité actuelle non mesurable.' };
         const dPts = tenths(t.value) - tenths(b.compliance); // points × 10
-        const gross = b.potential.map((p) => moneyOfMinor((minorOf(p) * dPts / 1000n) * frac / 12n, p.currency));
+        const gross = b.potential.map((p) => moneyOfMinor(additionalGrossMinor(minorOf(p), dPts, frac), p.currency));
         const costCdf = cost ? Money.of(cost.value, 'CDF').minor : 0n;
         const perPoint = b.potential.map((p) => moneyOfMinor((minorOf(p) / 100n) * frac / 12n, p.currency));
         const grossCdf = gross.reduce<bigint | null>((a, m) => { const v = toCdf(m); return a === null || v === null ? null : a + v; }, 0n);
@@ -464,6 +464,32 @@ export class PlanificationService implements PilotagePlanningHooks {
       formula: 'Recette additionnelle = potentiel × (conformité cible − conformité actuelle) × (12 − délai des protocoles) / 12 − coût marginal ; potentiel = objets × montant légal moyen dû (§ 38.2).',
       equivalence: { PRUDENT: 'conservateur', TRANSFORMATIONNEL: 'ambitieux' }, variables: HYPOTHESIS_VARIABLES,
       base, scenarios,
+    };
+  }
+
+  /**
+   * Exemple illustratif du Cahier (§ 39.3), en lecture seule : chaque ligne est recalculée avec la formule du
+   * simulateur (potentiel × (cible − actuelle), sans coût marginal) et comparée au chiffre arrondi du Cahier.
+   * Rien n'est enregistré : l'exemple n'alimente ni le registre des hypothèses, ni les scénarios, ni les tableaux.
+   */
+  illustrativeExample(user: User) {
+    this.gate(user, 'scenario.read');
+    const lignes = EXEMPLE_ILLUSTRATIF.lignes.map((l) => {
+      const potentiel = BigInt(l.objets) * Money.of(l.montantAnnuel, 'USD').minor;
+      const ecart = tenths(l.cible) - tenths(l.actuelle);
+      const gain = additionalGrossMinor(potentiel, ecart);
+      const million = 100_000_000n; // 1 M USD en unités mineures
+      const arrondi = Number((gain + million / 2n) / million);
+      return {
+        ...l, marque: '[EXEMPLE] hypothèse', potentiel: moneyOfMinor(potentiel, 'USD'), ecartPoints: `${ecart / 10n}.${ecart % 10n}`,
+        gainCalcule: moneyOfMinor(gain, 'USD'), gainMillionsCalcule: arrondi, concordance: arrondi === l.gainMillionsCahier,
+      };
+    });
+    this.audit(user, 'pilotage.viewed', 'dashboard', 'exemple-illustratif', {});
+    return {
+      ...EXEMPLE_ILLUSTRATIF, lignes, example: true, nonContractual: true, stored: false,
+      formula: 'Gain illustratif = objets × montant annuel moyen × (conformité cible − conformité actuelle) — même fonction que le simulateur (§ 38.2), sans coût marginal.',
+      concordance: lignes.every((l) => l.concordance),
     };
   }
 

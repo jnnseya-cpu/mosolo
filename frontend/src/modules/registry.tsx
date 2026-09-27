@@ -153,6 +153,8 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   // Planification et pilotage stratégique : base de référence et RANV, pilote, scénarios, assignations, instructions, accords, projets, partage légal
   { path: '/pilotage/base-reference', element: lazy(() => import('./pilotage/BaseReference')), nav: { label: 'Base de référence et RANV', short: 'RANV', icon: 'gauge', group: 'pilotage', roles: [...DASH, 'R15'] } },
   { path: '/pilotage/pilote', element: lazy(() => import('./pilotage/Pilote')), nav: { label: 'Pilote de 180 jours', short: 'Pilote', icon: 'chart', group: 'pilotage', roles: [...DASH, 'R15', 'R36'] } },
+  // Conduite du programme (Cahier nouvelle version ch. 35 à 37) : phases et portes, plans d'action datés, modèle opérationnel, gouvernance
+  { path: '/pilotage/feuille-de-route', element: lazy(() => import('./pilotage/FeuilleDeRoute')), nav: { label: 'Feuille de route et modèle opérationnel', short: 'Feuille de route', icon: 'clock', group: 'pilotage', roles: [...DASH, 'R13', 'R14', 'R15', 'R25', 'R26', 'R27', 'R28', 'R36'] } },
   { path: '/pilotage/scenarios', element: lazy(() => import('./pilotage/Scenarios')), nav: { label: 'Simulateur de scénarios', short: 'Scénarios', icon: 'analysis', group: 'pilotage', roles: [...DASH, 'R15'] } },
   { path: '/pilotage/assignations', element: lazy(() => import('./pilotage/Assignations')), nav: { label: 'Assignations et écarts', short: 'Assignations', icon: 'scale', group: 'pilotage', roles: [...DASH, 'R15'] } },
   { path: '/pilotage/instructions', element: lazy(() => import('./pilotage/Instructions')), nav: { label: 'Instructions et suivi', short: 'Instructions', icon: 'check', group: 'pilotage', roles: [...DASH, 'R09', 'R11', 'R13', 'R14', 'R15', 'R16', 'R20', 'R21'] } },

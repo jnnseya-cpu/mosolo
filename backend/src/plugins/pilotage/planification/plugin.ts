@@ -135,6 +135,7 @@ export const planificationPlugin = definePlugin<PlanificationService>({
     // Scénarios (§ 38.3–38.4)
     app.get('/v1/pilotage/scenarios', async (req) => svc.simulate(requireUser(req), q(req.query)));
     app.post('/v1/pilotage/scenarios/simulation', async (req) => svc.simulate(requireUser(req), {}, parse(simSchema, req.body).hypotheses));
+    app.get('/v1/pilotage/scenarios/exemple-illustratif', async (req) => svc.illustrativeExample(requireUser(req)));
     app.get('/v1/pilotage/scenarios/hypotheses', async (req) => svc.listHypotheses(requireUser(req)));
     app.post('/v1/pilotage/scenarios/hypotheses', async (req, reply) => reply.code(201).send(svc.recordHypothesis(requireUser(req), parse(hypSchema, req.body))));
     // Assignations budgétaires (§ 26.1)
