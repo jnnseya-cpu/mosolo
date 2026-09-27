@@ -193,6 +193,19 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/vehicules/mes-vehicules', element: lazy(() => import('./vehicules-controle/MesVehicules')), nav: { label: 'Mes véhicules', short: 'Véhicules', icon: 'car', group: 'public', roles: ['R30', 'R31'] } },
   { path: '/vehicules/verifier', element: lazy(() => import('./vehicules-controle/VerifierVignette')), nav: { label: 'Vérifier une vignette technique ou un centre', short: 'Vignette technique', icon: 'shieldCheck', group: 'public', roles: [] } },
   { path: '/v/ct/:numero', element: lazy(() => import('./vehicules-controle/VerifierVignette')) },
+  // Parcours du citoyen — modules 1 à 12 de la Spécification fonctionnelle (application Android et iOS, portail public,
+  // relations, cadastre, locatif, patentes, véhicules, transport, indicateurs).
+  { path: '/application', element: lazy(() => import('./citoyen/Application')), nav: { label: 'Application mobile (Android et iOS)', short: 'Application', icon: 'phone', group: 'public', roles: [] } },
+  { path: '/simulateurs', element: lazy(() => import('./citoyen/PortailPublic')), nav: { label: 'Informations et simulateurs', short: 'Simuler', icon: 'analysis', group: 'public', roles: [] } },
+  { path: '/citoyen/pieces', element: lazy(() => import('./citoyen/Pieces')), nav: { label: 'Contrôle des pièces (enrôlement)', short: 'Pièces', icon: 'shieldCheck', group: 'operations', roles: ['R07', 'R09', 'R10', 'R11', 'R12', 'R22', 'R30', 'R31'] } },
+  { path: '/mon-espace/situation', element: lazy(() => import('./citoyen/Situation')), nav: { label: 'Attestation de situation', short: 'Situation', icon: 'file', group: 'public', roles: ['R30', 'R31', 'R12'] } },
+  { path: '/citoyen/relations', element: lazy(() => import('./citoyen/Relations')), nav: { label: 'Relations : revue à la date d’effet', short: 'Relations', icon: 'replace', group: 'operations', roles: ['R06', 'R07', 'R11', 'R22'] } },
+  { path: '/citoyen/cadastre', element: lazy(() => import('./citoyen/Cadastre')), nav: { label: 'Cadastre fiscal géospatial', short: 'Cadastre', icon: 'pin', group: 'operations', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24'] } },
+  { path: '/citoyen/locatif', element: lazy(() => import('./citoyen/Locatif')), nav: { label: 'Intelligence locative (IRL)', short: 'Locatif', icon: 'building', group: 'operations', roles: ['R01', 'R05', 'R06', 'R07', 'R09', 'R11', 'R22', 'R24'] } },
+  { path: '/citoyen/activites', element: lazy(() => import('./citoyen/Activites')), nav: { label: 'Activités et patentes', short: 'Patentes', icon: 'store', group: 'operations', roles: ['R01', 'R05', 'R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24', 'R30', 'R31'] } },
+  { path: '/citoyen/vehicules', element: lazy(() => import('./citoyen/Vehicules')), nav: { label: 'Véhicules et circulation', short: 'Véhicules', icon: 'car', group: 'operations', roles: ['R01', 'R05', 'R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24', 'R35'] } },
+  { path: '/citoyen/transport', element: lazy(() => import('./citoyen/Transport')), nav: { label: 'Autorisations de transport', short: 'Transport', icon: 'bus', group: 'operations', roles: ['R01', 'R05', 'R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24', 'R30', 'R31'] } },
+  { path: '/citoyen/indicateurs', element: lazy(() => import('./citoyen/Indicateurs')), nav: { label: 'Indicateurs des modules 1 à 12', short: 'KPI citoyen', icon: 'gauge', group: 'pilotage', roles: [...DASH, 'R11'] } },
 
   // IA : liens directs
   { path: '/ia/autonomie', element: lazy(() => import('./ia/AutonomyPage')) },

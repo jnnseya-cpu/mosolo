@@ -1,0 +1,4 @@
+/* Écrans « parcours du citoyen » (modules 1 à 12). */
+.cit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: var(--space-4, 16px); }
+.cit-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: var(--space-4, 16px); }
+.cit-inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

@@ -810,7 +810,8 @@ export class PaymentService {
     this.audit.append({ actor, action: 'payment.confirmed', resourceType: 'payment_order', resourceId: order.id, details: { providerTxnId: n.providerTxnId, receipt: receipt.number, confirmationMethod: n.confirmationMethod } });
     const vars = { reference: order.paymentReference };
     this.comms.publish('payment.confirmed', [taxpayerRecipient(tp)], vars, { entity: obligation.entity });
-    this.comms.publish('receipt.issued_provisional', [taxpayerRecipient(tp)], { reference: receipt.number }, { entity: obligation.entity });
+    // Module 6 : quittance par SMS — numéro de quittance et code de vérification (vérifiable par le code court USSD).
+    this.comms.publish('receipt.issued_provisional', [taxpayerRecipient(tp)], { reference: receipt.number, numero: receipt.number, code: receipt.code }, { entity: obligation.entity });
     if (payerAmount) this.comms.publish('payment.currency_converted', [taxpayerRecipient(tp)], vars, { entity: obligation.entity });
     return record('CONFIRME', {
       status: 'CONFIRME', paymentReference: order.paymentReference, receiptNumber: receipt.number, receiptCode: receipt.code, receiptStatus: receipt.status,

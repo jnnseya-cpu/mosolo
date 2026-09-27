@@ -33,6 +33,7 @@ import { juridiquePlugin } from './juridique/plugin.js';
 import { integriteDetecteursPlugin } from './integrite/detecteurs/plugin.js';
 import { catalogueApiPlugin } from './catalogue-api/plugin.js';
 import { vehiculesControlePlugin } from './vehicules-controle/plugin.js';
+import { citoyenPlugin } from './citoyen/plugin.js';
 
 /**
  * Ordre : `acces` en tête (garde des revendications, mandats), puis `fiscal` (il branche les exonérations sur la liquidation), `titres` avant `rakapay`,
@@ -75,5 +76,7 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   integriteDetecteursPlugin,
   // Routes françaises du catalogue des API (Cahier, ch. 31) : relais vers les routes canoniques de tous les modules.
   catalogueApiPlugin,
+  // Parcours du citoyen (modules 1 à 12) : après fiscal, titres, verticales, canaux et terrain qu'il relit.
+  citoyenPlugin,
   soclePlugin,
 ];

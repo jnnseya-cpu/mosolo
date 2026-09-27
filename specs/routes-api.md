@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1179 routes** dans 42 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1239 routes** dans 43 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -9,6 +9,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1179 routes** dans 4
 | extension canaux | 46 |
 | extension catalogue-api | 20 |
 | extension chaine | 3 |
+| extension citoyen | 60 |
 | extension fiscal | 80 |
 | extension ia | 39 |
 | extension integrite | 70 |
@@ -224,6 +225,71 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1179 routes** dans 4
 | GET | `/v1/integrite/chaine/ruptures` |
 | GET | `/v1/objects/:id/sept-questions` |
 | GET | `/v1/obligations/:id/chaine` |
+
+## Extension citoyen
+
+| Méthode | Chemin |
+|---|---|
+| GET | `/v1/citoyen/activites` |
+| GET | `/v1/citoyen/activites/:id/obligations` |
+| POST | `/v1/citoyen/activites/detection` |
+| POST | `/v1/citoyen/activites/recoupements` |
+| GET | `/v1/citoyen/activites/signaux` |
+| POST | `/v1/citoyen/activites/signaux` |
+| POST | `/v1/citoyen/activites/signaux/:id/decision` |
+| POST | `/v1/citoyen/activites/signaux/:id/mission` |
+| GET | `/v1/citoyen/application/indicateurs` |
+| GET | `/v1/citoyen/cadastre/cas` |
+| POST | `/v1/citoyen/cadastre/cas` |
+| POST | `/v1/citoyen/cadastre/cas/:id/decision` |
+| GET | `/v1/citoyen/cadastre/chaleur` |
+| GET | `/v1/citoyen/cadastre/couches` |
+| GET | `/v1/citoyen/cadastre/couverture` |
+| GET | `/v1/citoyen/cadastre/indicateurs` |
+| POST | `/v1/citoyen/cadastre/objets/:id/geometries` |
+| GET | `/v1/citoyen/cadastre/objets/:id/hierarchie` |
+| GET | `/v1/citoyen/cadastre/objets/:id/historique` |
+| GET | `/v1/citoyen/cadastre/superpositions` |
+| POST | `/v1/citoyen/cadastre/superpositions/:id/decision` |
+| POST | `/v1/citoyen/enrolement/pieces` |
+| POST | `/v1/citoyen/enrolement/pieces/:id/decision` |
+| GET | `/v1/citoyen/enrolement/pieces/revues` |
+| GET | `/v1/citoyen/indicateurs` |
+| GET | `/v1/citoyen/locatif/calcul` |
+| GET | `/v1/citoyen/locatif/couverture` |
+| GET | `/v1/citoyen/locatif/indicateurs` |
+| GET | `/v1/citoyen/relations/indicateurs` |
+| GET | `/v1/citoyen/relations/revues` |
+| POST | `/v1/citoyen/relations/revues/:id/decision` |
+| POST | `/v1/citoyen/situation/attestations` |
+| GET | `/v1/citoyen/transport/autorisations` |
+| POST | `/v1/citoyen/transport/autorisations` |
+| POST | `/v1/citoyen/transport/autorisations/:id/activation` |
+| POST | `/v1/citoyen/transport/autorisations/:id/cartes` |
+| POST | `/v1/citoyen/transport/autorisations/:id/renouvellement` |
+| POST | `/v1/citoyen/transport/autorisations/:id/suspension` |
+| POST | `/v1/citoyen/transport/autorisations/:id/suspension/decision` |
+| POST | `/v1/citoyen/transport/controles` |
+| GET | `/v1/citoyen/transport/indicateurs` |
+| POST | `/v1/citoyen/transport/rappels` |
+| GET | `/v1/citoyen/vehicules` |
+| GET | `/v1/citoyen/vehicules/:plaque/controle` |
+| POST | `/v1/citoyen/vehicules/:plaque/mutation-verification` |
+| GET | `/v1/citoyen/vehicules/immatriculations` |
+| POST | `/v1/citoyen/vehicules/immatriculations` |
+| POST | `/v1/citoyen/vehicules/immatriculations/:id/ecarts` |
+| POST | `/v1/citoyen/vehicules/liquidations` |
+| POST | `/v1/public/application/installations` |
+| POST | `/v1/public/application/installations/:id/avis` |
+| POST | `/v1/public/application/installations/:id/integrite` |
+| GET | `/v1/public/attestations-situation/:id` |
+| GET | `/v1/public/cadastre/couches` |
+| GET | `/v1/public/defi` |
+| GET | `/v1/public/informations` |
+| GET | `/v1/public/simulateurs` |
+| POST | `/v1/public/simulations` |
+| GET | `/v1/public/transport/cartes/:id` |
+| POST | `/v1/public/visites` |
 
 ## Extension fiscal
 

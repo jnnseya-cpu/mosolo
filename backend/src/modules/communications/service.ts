@@ -15,7 +15,7 @@ import {
   InAppProvider, PROVIDER_ENV_KEYS, QueuedExternalProvider, SandboxProvider,
   type ChannelProvider, type DeliveryStatus, type MessageAttachment, type ProviderMode,
 } from './providers.js';
-import { fillPlaceholders, renderText } from './templates.js';
+import { fillPlaceholders, renderText, smsText } from './templates.js';
 
 export interface RecipientPrefs {
   optedOut?: boolean;
@@ -104,7 +104,7 @@ export class CommunicationService {
         const provider = this.providers.get(channel)!;
         const attachments = channel === 'email' && opts.attachments?.length ? opts.attachments : undefined;
         const res = provider.send({
-          channel, recipientId: r.id, eventCode, subject: fillPlaceholders(event.objet, vars), body, entity, lang: r.lang, mandatory: event.obligatoire,
+          channel, recipientId: r.id, eventCode, subject: fillPlaceholders(event.objet, vars), body: channel === 'sms' ? smsText(body) : body, entity, lang: r.lang, mandatory: event.obligatoire,
           ...(attachments ? { attachments } : {}),
         });
         const d = this.log(event, r, channel, res.status, provider.name, provider.mode, entity, contentHash, attachments);

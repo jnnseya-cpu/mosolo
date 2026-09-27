@@ -10,6 +10,7 @@ import type { AppContext } from '../../context.js';
 import { hmacSha256Hex, randomSecret } from '../../core/crypto.js';
 import { ApiError, conflict, notFound } from '../../core/errors.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
+import { taxpayerRecipient } from '../../modules/identity/recipients.js';
 import type { CardRegistry } from './cards.js';
 import { normalizeCardNumber } from './cards.js';
 import {
@@ -72,6 +73,8 @@ const CONTEST_REASONS: { key: string; type: 'MONTANT_ERRONE' | 'BIEN_NON_DETENU'
   { key: '4', type: 'ACTIVITE_FERMEE', label: 'Activité fermée' },
   { key: '5', type: 'AUTRE', label: 'Autre motif' },
 ];
+/** Inscription gratuite : proposée aux seuls numéros inconnus (module 2). */
+const ENROL_OPTION: Opt = { key: '10', label: 'S’inscrire', voice: 'créer votre compte MOSOLO gratuitement' };
 const BACK: Opt[] = [{ key: '9', label: 'Menu', voice: 'revenir au menu' }, { key: '0', label: 'Quitter', voice: 'quitter' }];
 
 export class ChannelEngine {
@@ -80,6 +83,14 @@ export class ChannelEngine {
   private readonly ids = new IdGenerator();
   private readonly pepper = randomSecret();
   referencesIssued = 0;
+  /**
+   * Numéro appelant des sessions d'abonnés INCONNUS, gardé en mémoire vive le temps de la session seulement (jamais
+   * dans le journal ni dans le dépôt des sessions) : il sert uniquement à l'inscription gratuite par USSD / SVI
+   * (module 2 — démarrer un parcours selon le canal ; le numéro est attesté par le réseau de l'opérateur).
+   */
+  private readonly appelants = new Map<string, string>();
+  enrolmentsCreated = 0;
+  private readonly noms = new Map<string, string>();
 
   constructor(
     private readonly ctx: AppContext,
@@ -105,7 +116,8 @@ export class ChannelEngine {
       actor: { kind: 'public', id: `canal-${channel.toLowerCase()}` }, action: 'canaux.session.started', resourceType: 'channel_session', resourceId: session.id,
       details: { channel, msisdnMasked: session.msisdnMasked, knownSubscriber: !!tp },
     });
-    return this.emit(session, null, this.mainMenu(true));
+    if (!tp && msisdn) this.appelants.set(session.id, msisdn);
+    return this.emit(session, null, this.mainMenu(true, !tp));
   }
 
   input(channel: SessionChannel, sessionId: string, rawInput: string): ScreenOut {
@@ -118,7 +130,7 @@ export class ChannelEngine {
       throw conflict('SESSION_EXPIRED', 'Session expirée après inactivité : recomposez le code.');
     }
     const input = rawInput.trim().slice(0, 40);
-    const masked = s.node === 'PIN' ? '••••' : input;
+    const masked = s.node === 'PIN' ? '••••' : s.node === 'ENROL_NAME' ? '[nom saisi]' : input;
     let screen: Screen;
     try {
       screen = this.route(s, input);
@@ -143,6 +155,7 @@ export class ChannelEngine {
       output: s.channel === 'USSD' ? text : prompts.join(' | '), end: !!screen.end,
     });
     if (screen.end) {
+      this.appelants.delete(s.id);
       this.ctx.audit.append({ actor: { kind: 'public', id: `canal-${s.channel.toLowerCase()}` }, action: 'canaux.session.ended', resourceType: 'channel_session', resourceId: s.id, details: { steps: updated.steps, lastNode: screen.node } });
     }
     return {
@@ -158,9 +171,11 @@ export class ChannelEngine {
 
   // ---------- Écrans ----------
 
-  private mainMenu(welcome = false): Screen {
+  private mainMenu(welcome = false, inscription = false): Screen {
     return {
-      node: 'MAIN', title: welcome ? 'MOSOLO - service gratuit' : 'MOSOLO - menu', options: [...MAIN_OPTIONS, { key: '0', label: 'Quitter', voice: 'quitter' }],
+      // Écran de 182 caractères : titre court lorsque l'inscription s'ajoute au menu.
+      node: 'MAIN', title: inscription ? 'MOSOLO' : welcome ? 'MOSOLO - service gratuit' : 'MOSOLO - menu',
+      options: [...MAIN_OPTIONS, ...(inscription ? [ENROL_OPTION] : []), { key: '0', label: 'Quitter', voice: 'quitter' }],
       ...(welcome ? { voiceLines: ['Bienvenue sur MOSOLO, service gratuit de la Ville de Kinshasa. Aucun agent ne vous demandera d’espèces.'] } : {}),
     };
   }
@@ -170,8 +185,8 @@ export class ChannelEngine {
   }
 
   private route(s: ChannelSession, input: string): Screen {
-    if (input === '0' && !['PIN', 'ID_CARD', 'VERIFY_INPUT'].includes(s.node)) return this.goodbye();
-    if (input === '9' && !['PIN', 'ID_CARD', 'VERIFY_INPUT'].includes(s.node)) return this.mainMenu();
+    if (input === '0' && !['PIN', 'ID_CARD', 'VERIFY_INPUT', 'ENROL_NAME'].includes(s.node)) return this.goodbye();
+    if (input === '9' && !['PIN', 'ID_CARD', 'VERIFY_INPUT', 'ENROL_NAME'].includes(s.node)) return this.mainMenu(false, this.appelants.has(s.id));
     switch (s.node) {
       case 'MAIN':
       case 'ERROR':
@@ -200,6 +215,10 @@ export class ChannelEngine {
         return this.onContestReason(s, input);
       case 'CONTEST_CONFIRM':
         return this.onContestConfirm(s, input);
+      case 'ENROL_NAME':
+        return this.onEnrolName(s, input);
+      case 'ENROL_CONFIRM':
+        return this.onEnrolConfirm(s, input);
       default:
         return this.mainMenu();
     }
@@ -227,9 +246,51 @@ export class ChannelEngine {
         return this.requireAuth(s, 'CARD_LOST');
       case '8':
         return this.requireAuth(s, 'CONTEST');
+      case ENROL_OPTION.key:
+        if (!this.appelants.has(s.id)) return { node: 'MAIN', title: 'Ce numéro a déjà un compte MOSOLO.', options: BACK };
+        return { node: 'ENROL_NAME', title: 'Inscription gratuite. Saisissez votre nom complet', inputHint: 'Saisissez votre nom complet sur le clavier, puis validez.' };
       default:
-        return this.invalid(this.mainMenu());
+        return this.invalid(this.mainMenu(false, this.appelants.has(s.id)));
     }
+  }
+
+  // ---------- Inscription gratuite (module 2 : parcours démarré par USSD ou SVI) ----------
+
+  private onEnrolName(s: ChannelSession, input: string): Screen {
+    const name = input.replace(/\s+/g, ' ').trim();
+    if (name.length < 3 || /\d/.test(name)) return { node: 'ENROL_NAME', title: 'Nom illisible. Saisissez votre nom complet (lettres)', inputHint: 'Saisissez votre nom complet, en lettres.' };
+    // Le nom n'est pas une donnée de navigation : il reste en mémoire vive le temps de la confirmation.
+    this.noms.set(s.id, name);
+    return {
+      node: 'ENROL_CONFIRM', title: `Créer votre compte MOSOLO gratuit pour le ${s.msisdnMasked} ?`,
+      lines: ['Déclarer un profil ne crée ni dette ni propriété.'],
+      options: [{ key: '1', label: 'Oui, créer', voice: 'confirmer la création de votre compte' }, { key: '2', label: 'Non', voice: 'annuler' }],
+    };
+  }
+
+  private onEnrolConfirm(s: ChannelSession, input: string): Screen {
+    const msisdn = this.appelants.get(s.id);
+    const name = this.noms.get(s.id);
+    if (input === '2' || !msisdn || !name) { this.noms.delete(s.id); return this.mainMenu(false, !!msisdn); }
+    if (input !== '1') return this.invalid({ node: 'ENROL_CONFIRM', title: 'Tapez 1 pour créer, 2 pour annuler', options: [{ key: '1', label: 'Oui' }, { key: '2', label: 'Non' }] });
+    const tp = this.ctx.taxpayers.register({ phone: msisdn, fullName: name, language: s.lang, situation: 'other', kind: 'PERSONNE_PHYSIQUE' });
+    // Numéro attesté par le réseau de l'opérateur (session ouverte depuis ce numéro) : téléphone vérifié (N0).
+    this.ctx.taxpayers.markPhoneVerified(tp.id);
+    this.appelants.delete(s.id);
+    this.noms.delete(s.id);
+    this.enrolmentsCreated += 1;
+    // Récapitulatif d'enrôlement par SMS (et dans l'espace) : identifiant du compte, sans lien (module 2).
+    this.ctx.comms.publish('account.registration.requested', [taxpayerRecipient(this.ctx.taxpayers.get(tp.id))], { reference: tp.iuc }, { entity: 'GOUVERNORAT' });
+    this.sessions.update({ ...this.sessions.get(s.id)!, taxpayerId: tp.id });
+    this.ctx.audit.append({
+      actor: { kind: 'public', id: `canal-${s.channel.toLowerCase()}` }, action: 'canaux.session.enrolled', resourceType: 'taxpayer', resourceId: tp.id,
+      details: { sessionId: s.id, channel: s.channel, consent: 'CONFIRMATION_CLAVIER', level: 'N0' },
+    });
+    return {
+      node: 'ENROL_DONE', end: true, title: `Compte créé. Identifiant ${tp.iuc}`,
+      lines: ['Récapitulatif envoyé par SMS. Code secret et carte : guichet MOSOLO, gratuit.'],
+      voiceLines: [`Votre compte est créé. Votre identifiant est ${spell(tp.iuc)}. Un récapitulatif vous est envoyé par SMS. L’inscription est gratuite.`],
+    };
   }
 
   private requireAuth(s: ChannelSession, intent: string): Screen {

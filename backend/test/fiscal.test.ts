@@ -206,13 +206,15 @@ describe('Fiscal — déclarations pré-remplies', () => {
     expect(pre.statusCode).toBe(200);
     const rent = pre.json().fields.find((f: { name: string }) => f.name === 'loyers_percus');
     expect(rent).toMatchObject({ value: '5400.00', probativeStatus: 'DECLARE' });
-    expect(pre.json().rule).toMatchObject({ code: 'IRL-KIN-R234', executable: false });
+    // Décision du maître d'ouvrage : la simulation non opposable utilise la version 2 (22 % à tous les rangs, retenue 15 %).
+    expect(pre.json().rule).toMatchObject({ code: 'IRL-KIN-R234', version: 2, executable: false });
     // Déclaration déposée par le seed : accusé de réception, simulation non opposable.
     const list = (await env.req('GET', '/v1/fiscal/declarations', 'u-contribuable')).json();
     const irl = list.find((x: { kind: string }) => x.kind === 'IRL');
     expect(irl.acknowledgement.number).toMatch(/^ACR-2026-/);
     expect(irl.liquidation.mode).toBe('SIMULATION_NON_OPPOSABLE');
-    expect(irl.liquidation.trace).toMatchObject({ nonOpposable: true, result: { amount: '918.00', currency: 'USD' } });
+    expect(irl.liquidation.trace).toMatchObject({ nonOpposable: true, result: { amount: '1188.00', currency: 'USD' } });
+    expect(irl.ruleVersion).toBe(2);
     expect(irl.liquidation.obligationId).toBeUndefined();
     // Un second dépôt pour la même période est refusé : il faut une correction.
     const dup = await env.req('POST', '/v1/fiscal/declarations', 'u-contribuable', { objectId: DEMO.unitId, kind: 'IRL', period: '2026', inputs: {}, attest: true });

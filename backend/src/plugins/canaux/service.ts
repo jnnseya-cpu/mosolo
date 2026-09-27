@@ -73,6 +73,14 @@ export class CanauxService {
       const pv = this.ctx.ext.preuves as { svc: { lookup(c: string): { found: boolean; kindLabel: string; stateLabel: string; validity: { text: string } | null; message: string } } } | undefined;
       const r = pv?.svc.lookup(code);
       if (r?.found) return done({ kind: r.kindLabel, status: r.stateLabel.toUpperCase(), message: r.validity ? r.validity.text : r.message }, false);
+      // Module 6 : situation minimale d'un véhicule par sa plaque (vignette payée ou non régularisée, sans nom).
+      const vh = (this.ctx.ext.citoyen as { vehicules?: { parPlaque(p: string): unknown; situation(p: string): { vignette: { statut: string; exigible: boolean }; dernierPaiement: string | null } } } | undefined)?.vehicules;
+      if (vh?.parPlaque(code)) {
+        const st = vh.situation(code);
+        this.ctx.audit.append({ actor: { kind: 'public', id: `canal-${channel.toLowerCase()}` }, action: 'vehicule.plate.consulted', resourceType: 'vehicle_plate', resourceId: code.toUpperCase(), details: { motif: 'verification_publique', channel } });
+        const message = !st.vignette.exigible ? 'Vignette non exigible : acte requis.' : st.vignette.statut === 'PAYEE' ? 'Vignette payée.' : 'Vignette non régularisée.';
+        return done({ kind: 'VEHICULE', status: st.vignette.statut === 'PAYEE' ? 'PAYÉE' : 'NON RÉGULARISÉE', message, ...(st.dernierPaiement ? { date: st.dernierPaiement.slice(0, 10) } : {}) }, false);
+      }
       return done({ kind: 'INCONNU', status: 'INCONNU', message: 'Code non reconnu : vérifiez la saisie.' }, true);
     }
     const r = this.ctx.receipts.publicVerify(receiptCode, { clientKey: key });
