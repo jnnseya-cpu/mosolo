@@ -58,7 +58,7 @@ export const PARCOURS: Record<string, ParcoursVerticale> = {
       e(2, 'Déclaration du bail par le locataire ou le bailleur', [9], '/fiscal/baux', 'POST /v1/leases'),
       e(3, 'Calcul de la retenue et de l’IRL', [9, 27], '/fiscal/declarations', 'POST /v1/fiscal/declarations'),
       e(4, 'Attestation de bail enregistré au locataire', [9], '/fiscal/baux', 'POST /v1/fiscal/leases/:id/attestations'),
-      e(5, 'Campagne préremplie de février et rapprochement annuel', [32, 9], '/recouvrement/campagnes', 'POST /v1/campagnes'),
+      e(5, 'Campagne préremplie de février et rapprochement annuel', [32, 9], '/recouvrement/campagnes', 'POST /v1/campagnes/:id/pre-remplissage'),
     ],
     reglesPropres: [
       'Aucune dette sur simple signal.',
@@ -93,7 +93,7 @@ export const PARCOURS: Record<string, ParcoursVerticale> = {
     etapes: [
       e(1, 'Délimitation des zones (Gombe, artères)', [14, 75], '/stationnement/regie', 'POST /v1/parking/zones'),
       e(2, 'Achat ou prolongation d’un ticket lié à la plaque', [75, 76], '/stationnement', 'POST /v1/parking/sessions'),
-      e(3, 'Rappel ambre avant expiration', [70, 75], '/stationnement', 'GET /v1/parking/sessions/:id'),
+      e(3, 'Rappel ambre avant expiration', [70, 75], '/stationnement', 'GET /v1/parking/sessions/mine'),
       e(4, 'Contrôle par plaque ou caméra', [70, 75], '/stationnement/controle', 'GET /v1/parking/control/:plate'),
       e(5, 'Constat réglementaire et recours', [75, 22], '/stationnement/controle', 'POST /v1/parking/violations'),
     ],
@@ -115,7 +115,7 @@ export const PARCOURS: Record<string, ParcoursVerticale> = {
     etapes: [
       e(1, 'Import des listes de sites', [16], '/services/telecom', 'POST /v1/verticales/telecom/cases'),
       e(2, 'Rapprochement sites déclarés / observés', [16], '/verticales/console', 'GET /v1/verticales/telecom/reconciliation'),
-      e(3, 'Avis annuel automatique', [16, 27], '/verticales/secteurs', 'GET /v1/verticales/secteurs/antennes/liquidation-annuelle'),
+      e(3, 'Avis annuel automatique', [16, 27], '/verticales/secteurs', 'POST /v1/verticales/secteurs/antennes/liquidation-annuelle'),
       e(4, 'Suivi par la cellule grands redevables', [56], '/verticales/secteurs', 'POST /v1/verticales/secteurs/grands-redevables'),
     ],
     reglesPropres: ['Peu de redevables, rendement élevé.', 'Données opérateurs sous protocole.'],
@@ -154,7 +154,7 @@ export const PARCOURS: Record<string, ParcoursVerticale> = {
     nomPartieV: 'MOSOLO Ports', finalite: 'Tracer embarcations, quais et départs.', modules: [13, 24],
     etapes: [
       e(1, 'Registre des embarcations et quais', [24], '/services/ports', 'POST /v1/verticales/ports/cases'),
-      e(2, 'Titre d’embarquement à usage unique', [13, 76], '/titres/catalogue', 'POST /v1/titres', 'Cadrage sectoriel requis (J30) : type non activable'),
+      e(2, 'Titre d’embarquement à usage unique', [13, 76], '/titres/catalogue', 'GET /v1/titres/types', 'Cadrage sectoriel requis (J30) : type EMB-CARTE non activable'),
       e(3, 'Manifestes', [13, 24], '/services/ports', 'POST /v1/verticales/ports/cases'),
       e(4, 'Rapprochement mouvements / titres / paiements', [24, 52], '/verticales/secteurs', 'POST /v1/verticales/secteurs/24/releves'),
     ],
@@ -167,7 +167,7 @@ export const PARCOURS: Record<string, ParcoursVerticale> = {
       e(2, 'IFA dans le QR de la carte d’embarquement', [78], '/verticales/console', 'POST /v1/public/verticales/avia/ifa/verify'),
       e(3, 'Scan RVA et validation DGM', [78], '/verticales/console', 'POST /v1/verticales/avia/rrh/passenger-events'),
       e(4, 'Rapprochement mensuel', [52, 78], '/verticales/console', 'POST /v1/verticales/avia/rrh/reconciliations'),
-      e(5, 'Facturation des écarts', [62, 78], '/verticales/console', 'POST /v1/verticales/avia/declarations/:id/gap-decision', 'Mesures contraignantes seulement après arrêté (J23, D21)'),
+      e(5, 'Facturation des écarts', [62, 78], '/verticales/console', 'POST /v1/verticales/avia/auto/run', 'Mesures contraignantes seulement après arrêté (J23, D21) : avant, proposition ; après, facturation ou compensation automatique, contradictoire maintenu'),
     ],
     reglesPropres: ['Mesures contraignantes seulement après arrêté.', 'Aucune interférence avec Go-Pass.'],
   },
@@ -177,7 +177,7 @@ export const PARCOURS: Record<string, ParcoursVerticale> = {
       e(1, 'Demande d’autorisation', [21], '/services/evenements', 'POST /v1/verticales/evenements/cases'),
       e(2, 'Déclaration de billetterie', [21, 76], '/services/evenements', 'POST /v1/verticales/evenements/events/:objectId/ticketing'),
       e(3, 'Certificat QR sur le lieu', [21, 71], '/verifier-plaque', 'GET /v1/public/verticales/certificates/:code'),
-      e(4, 'Liquidation et contrôle', [21, 27, 70], '/verticales/console', 'POST /v1/verticales/evenements/events/:objectId/controls'),
+      e(4, 'Liquidation et contrôle', [21, 27, 70], '/verticales/console', 'POST /v1/verticales/evenements/objects/:objectId/liquidate'),
     ],
     reglesPropres: ['Autorisation refusée sans enregistrement.'],
   },
@@ -216,7 +216,7 @@ export const PARCOURS: Record<string, ParcoursVerticale> = {
     nomPartieV: 'MOSOLO Recovery', finalite: 'Recouvrer équitablement et au meilleur rendement net.', modules: [32, 33, 36],
     etapes: [
       e(1, 'Segmentation des arriérés', [32], '/recouvrement', 'GET /v1/recouvrement/arrieres'),
-      e(2, 'Campagnes graduées', [32, 33], '/recouvrement/campagnes', 'POST /v1/recouvrement/dossiers/:id/rappel'),
+      e(2, 'Campagnes graduées', [32, 33], '/recouvrement', 'POST /v1/recouvrement/dossiers/:id/propositions'),
       e(3, 'Plans d’apurement autorisés', [33], '/mes-arrieres', 'POST /v1/recouvrement/echeanciers'),
       e(4, 'Mesures légales et clôture', [36], '/recouvrement', 'POST /v1/recouvrement/propositions/:id/decision'),
     ],
