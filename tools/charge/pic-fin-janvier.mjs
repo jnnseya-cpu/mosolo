@@ -126,10 +126,16 @@ async function main() {
   const toutes = [...stats.values()];
   const total = toutes.reduce((a, s) => a + s.n, 0);
   const erreurs = toutes.reduce((a, s) => a + s.erreurs, 0);
-  const p95 = Math.round(percentile(toutes.flatMap((s) => s.durees), 95) ?? 0);
+  const durees = toutes.flatMap((s) => s.durees);
+  const p95 = Math.round(percentile(durees, 95) ?? 0);
+  const protections = toutes.reduce((a, s) => a + s.protections, 0);
+  const dureeS = (Date.now() - debut) / 1000;
   const rapport = {
     base: BASE, hypotheses: { VU_MOYEN, PIC_FACTEUR, PALIER_S, statut: 'par défaut — à confirmer par le maître d’ouvrage' },
-    dureeS: Math.round((Date.now() - debut) / 1000), total, tauxErreur: total ? erreurs / total : 0, p95ms: p95, seuils: SEUILS, parcours,
+    dureeS: Math.round(dureeS), total, tauxErreur: total ? erreurs / total : 0,
+    // Compléments (audit de préparation à la production) : médiane, 99e centile, débit, protections (429 et refus attendus).
+    p50ms: Math.round(percentile(durees, 50) ?? 0), p95ms: p95, p99ms: Math.round(percentile(durees, 99) ?? 0),
+    debitReqS: dureeS ? Math.round((total / dureeS) * 10) / 10 : 0, protections, seuils: SEUILS, parcours,
   };
   const ok = rapport.tauxErreur < SEUILS.tauxErreurMax && p95 < SEUILS.p95MaxMs;
   console.log(JSON.stringify({ ...rapport, resultat: ok ? 'SEUILS_TENUS' : 'SEUILS_DEPASSES' }, null, JSON_ONLY ? 0 : 2));
