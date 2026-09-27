@@ -17,7 +17,7 @@ import { DEFAULT_RATE_LIMITS } from '../src/plugins/socle/rate-limit.js';
 import { terrainPlugin } from '../src/plugins/terrain/plugin.js';
 import { titresPlugin, type TitresService } from '../src/plugins/titres/plugin.js';
 import type { MosoloPlugin } from '../src/plugins/types.js';
-import { callbackHeaders, DEMO, demoObligationId, payDemoObligation, PROVIDER_SECRET, publishCertifiedRule, setup, type TestEnv } from './helpers.js';
+import { postStatement, callbackHeaders, DEMO, demoObligationId, payDemoObligation, PROVIDER_SECRET, publishCertifiedRule, setup, type TestEnv } from './helpers.js';
 
 async function withPlugins(plugins: MosoloPlugin<unknown>[]): Promise<TestEnv> {
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
@@ -212,16 +212,16 @@ describe('Carnet de développement (ch. 43) — récits de bout en bout', () => 
         { accountAlias: DEMO.dgipkAlias, amount: { amount: '42.00', currency: 'USD' }, valueDate: '2026-09-26', paymentReference: 'PR-SANS-ORDRE-7' },
       ],
     };
-    const r = await env.req('POST', '/v1/settlements/statements', 'u-tresor', statement);
+    const r = await postStatement(env, 'u-tresor', statement);
     expect(r.statusCode).toBe(201);
     // Appariement automatique et file d'exception.
     expect(r.json().matched).toHaveLength(1);
     expect(r.json().exceptions.map((e: { type: string }) => e.type)).toEqual(['ORPHAN_CREDIT']);
     expect(env.app.ctx.receipts.byPaymentOrder(order.paymentOrderId)!.status).toBe('DEFINITIVE');
     // Aucune modification silencieuse : même relevé rejoué = même résultat ; contenu différent = refus explicite.
-    const again = await env.req('POST', '/v1/settlements/statements', 'u-tresor', statement);
+    const again = await postStatement(env, 'u-tresor', statement);
     expect(again.statusCode).toBeLessThan(300);
-    const changed = await env.req('POST', '/v1/settlements/statements', 'u-tresor', { ...statement, lines: [{ ...statement.lines[1]!, amount: { amount: '43.00', currency: 'USD' } }] });
+    const changed = await postStatement(env, 'u-tresor', { ...statement, lines: [{ ...statement.lines[1]!, amount: { amount: '43.00', currency: 'USD' } }] });
     expect(changed.json().code).toBe('STATEMENT_ALREADY_IMPORTED');
     expect(env.app.ctx.ledger.balance().balanced).toBe(true);
     expect(env.app.ctx.audit.list({ action: 'settlement.received' }).total).toBeGreaterThanOrEqual(1);
@@ -233,7 +233,7 @@ describe('Carnet de développement (ch. 43) — récits de bout en bout', () => 
   it('R43-08 — Gouverneur : écart assignation / rapproché par commune, six états distingués, exportation signée vérifiable', async () => {
     const env = await withPlugins([pilotagePlugin, planificationPlugin, recetteProgrammePlugin] as MosoloPlugin<unknown>[]);
     const { order } = await payDemoObligation(env);
-    await env.req('POST', '/v1/settlements/statements', 'u-tresor', { statementId: 'REL-RECIT-8', lines: [{ accountAlias: DEMO.dgipkAlias, amount: order.amount, valueDate: '2026-09-26', paymentReference: order.paymentReference }] });
+    await postStatement(env, 'u-tresor', { statementId: 'REL-RECIT-8', lines: [{ accountAlias: DEMO.dgipkAlias, amount: order.amount, valueDate: '2026-09-26', paymentReference: order.paymentReference }] });
     const t = (await env.req('POST', '/v1/pilotage/assignations', 'u-validateur-financier', {
       fiscalYear: '2026', label: 'Assignations 2026 (fictives, récit 8)', act: { reference: 'CONTRAT-PERF-2026 (fictif)', title: 'Contrat de performance (fictif)' },
       entries: [{ commune: 'Limete', category: '*', amount: { amount: '600.00', currency: 'USD' } }, { commune: 'Gombe', category: '*', amount: { amount: '100.00', currency: 'USD' } }],
@@ -262,7 +262,7 @@ describe('Carnet de développement (ch. 43) — récits de bout en bout', () => 
     const env = await withPlugins([pilotagePlugin as MosoloPlugin<unknown>]);
     const { order } = await payDemoObligation(env);
     env.clock.advance(60_000);
-    await env.req('POST', '/v1/settlements/statements', 'u-tresor', { statementId: 'REL-RECIT-9', lines: [{ accountAlias: DEMO.dgipkAlias, amount: order.amount, valueDate: '2026-09-26', paymentReference: order.paymentReference }] });
+    await postStatement(env, 'u-tresor', { statementId: 'REL-RECIT-9', lines: [{ accountAlias: DEMO.dgipkAlias, amount: order.amount, valueDate: '2026-09-26', paymentReference: order.paymentReference }] });
     const r = await env.req('GET', `/v1/pilotage/piste-audit/${DEMO.parcelId}`, 'u-auditeur');
     expect(r.statusCode).toBe(200);
     const t = r.json();

@@ -12,7 +12,7 @@ import { accesPlugin } from '../src/plugins/acces/plugin.js';
 import { pilotagePlugin } from '../src/plugins/pilotage/plugin.js';
 import { terrainPlugin } from '../src/plugins/terrain/plugin.js';
 import type { MosoloPlugin } from '../src/plugins/types.js';
-import { callbackBody, createOrder, DEMO, demoObligationId, payDemoObligation, PROVIDER_SECRET, publishCertifiedRule, setup, signedCallback, type TestEnv } from './helpers.js';
+import { postStatement, callbackBody, createOrder, DEMO, demoObligationId, payDemoObligation, PROVIDER_SECRET, publishCertifiedRule, setup, signedCallback, type TestEnv } from './helpers.js';
 
 async function withPlugins(plugins: MosoloPlugin<unknown>[]): Promise<TestEnv> {
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
@@ -190,7 +190,7 @@ describe('Recette — critères d’acceptation du ch. 42', () => {
   it('C42-07 — le rapprochement quotidien produit des files d’exception exploitables et traçables', async () => {
     const env = await setup();
     const { order } = await payDemoObligation(env);
-    const st = await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+    const st = await postStatement(env, 'u-tresor', {
       statementId: 'REL-RECETTE-C42-07', lines: [
         { accountAlias: DEMO.dgipkAlias, amount: { amount: '99.00', currency: 'USD' }, valueDate: '2026-09-26', paymentReference: 'PR-INCONNUE-01' },
         { accountAlias: DEMO.dgipkAlias, amount: order.amount, valueDate: '2026-09-26', paymentReference: order.paymentReference },
