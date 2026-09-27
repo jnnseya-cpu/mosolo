@@ -339,6 +339,9 @@ function seedSingleUseDemoTypes(ctx: AppContext): void {
   def({ code: SINGLE_USE_DEMO.types.carnet, module: '25', moduleLabel: 'Péage provincial', label: `Péage — carnet de ${SINGLE_USE_DEMO.carnetUses} passages — DÉMONSTRATION [EXEMPLE]`, prefix: 'PEA', entity: 'DGTK',
     validity: { ...once, model: 'CARNET_USAGES', periodDays: 365, uses: SINGLE_USE_DEMO.carnetUses }, transferable: false, plateBound: true, supports: ['PLAQUE', 'QR_STATIQUE', 'SMS'],
     pricing: { ruleCode: SINGLE_USE_DEMO.rules.peage, inputs: { unites: String(SINGLE_USE_DEMO.carnetUses) } }, legalAct: act('J1'), demo: true });
+}
+
+/**
  * Patrimoine provincial (Partie V, MOSOLO Assets) — gestionnaire et chef du service du patrimoine (MINFIN, démo), et un
  * actif inventorié [EXEMPLE] sans évaluation ni appel : aucune valeur, aucune mise à prix, aucune redevance semée.
  */

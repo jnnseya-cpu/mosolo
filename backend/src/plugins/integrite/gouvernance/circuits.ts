@@ -297,6 +297,7 @@ export const CIRCUITS: Circuit[] = [
   {
     code: 'DOMAINE_OFFICIEL_VERIFICATION', label: 'Domaine officiel de vérification (QR des vignettes)',
     proposals: ['domaine.official.proposed'], approvals: ['domaine.official.validated'], refusals: ['domaine.official.rejected'],
+  },
   // Spécification fonctionnelle, modules 27 à 40 : circuits à deux personnes ajoutés.
   {
     code: 'TRESOR_IMPORT_RELEVE', label: 'Import d’un relevé bancaire ou d’opérateur (double validation, module 29)',

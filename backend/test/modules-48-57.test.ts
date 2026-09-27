@@ -7,7 +7,7 @@ import { fiscalPlugin } from '../src/plugins/fiscal/plugin.js';
 import type { ModelRegistryService } from '../src/plugins/ia/modeles.js';
 import type { IaService } from '../src/plugins/ia/service.js';
 import { DEMO } from '../src/seed.js';
-import { callbackHeaders } from './helpers.js';
+import { postStatement, callbackHeaders } from './helpers.js';
 
 async function full(plugins?: NonNullable<Parameters<typeof buildApp>[0]>['plugins']) {
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
@@ -26,7 +26,7 @@ async function payAndReconcile(env: Awaited<ReturnType<typeof full>>, key: strin
   const order = (await env.req('POST', `/v1/obligations/${ob.id}/payment-orders`, 'u-guichet', { channel: 'MOBILE_MONEY' }, { 'idempotency-key': `cle-${key}-000001` })).json();
   const raw = JSON.stringify({ providerTxnId: `TXN-${key}`, paymentReference: order.paymentReference, amount: order.amount, status: 'SUCCESS', completedAt: env.clock.now().toISOString() });
   expect((await env.req('POST', '/v1/providers/mm-operator-a/callbacks', undefined, raw, callbackHeaders('s', raw, env.clock.now()))).json().status).toBe('CONFIRME');
-  await env.req('POST', '/v1/settlements/statements', 'u-tresor', { statementId: `REL-${key}`, lines: [{ accountAlias: DEMO.dgipkAlias, amount: order.amount, valueDate: env.clock.now().toISOString().slice(0, 10), paymentReference: order.paymentReference }] });
+  await postStatement(env, 'u-tresor', { statementId: `REL-${key}`, lines: [{ accountAlias: DEMO.dgipkAlias, amount: order.amount, valueDate: env.clock.now().toISOString().slice(0, 10), paymentReference: order.paymentReference }] });
   return order as { amount: { amount: string; currency: string } };
 }
 

@@ -23,9 +23,7 @@ import { taxpayerRecipient } from '../../modules/identity/recipients.js';
 import type { PaymentChannel } from '../../modules/payments/service.js';
 import { isCommune } from '../../reference/kinshasa.js';
 import {
-  KINSHASA_OFFSET_MS, VALIDITY_MODEL_LABELS, visualFor,
-  type Constat, type ControlMethod, type ControlResult, type Credential, type CredentialPlace, type CredentialState, type CredentialSubject,
-  KINSHASA_OFFSET_MS, penaltyRuleCode, VALIDITY_MODEL_LABELS,
+  KINSHASA_OFFSET_MS, penaltyRuleCode, VALIDITY_MODEL_LABELS, visualFor,
   type Constat, type ConstatPenalty, type ControlMethod, type ControlResult, type Credential, type CredentialPlace, type CredentialState, type CredentialSubject,
   type CredentialType, type DisplayStatus, type Issuance, type IssuanceItem, type IssuancePayment, type Revocation, type UsageEvent,
   type UsePlace, type VerificationEvent,

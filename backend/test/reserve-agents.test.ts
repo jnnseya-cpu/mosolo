@@ -17,7 +17,7 @@ import type { SanctionsService } from '../src/plugins/sanctions/service.js';
 import type { TerrainService } from '../src/plugins/terrain/service.js';
 import type { Finding } from '../src/plugins/terrain/model.js';
 import { DEMO } from '../src/seed.js';
-import { callbackBody, PROVIDER_SECRET, signedCallback, type TestEnv } from './helpers.js';
+import { postStatement, callbackBody, PROVIDER_SECRET, signedCallback, type TestEnv } from './helpers.js';
 
 async function fullApp() {
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
@@ -41,7 +41,7 @@ async function payAndReconcile(env: TestEnv, obligationId: string) {
   const order = (await env.req('POST', `/v1/obligations/${obligationId}/payment-orders`, user, { channel: 'MOBILE_MONEY' }, { 'idempotency-key': randomUUID() })).json();
   expect(order.paymentReference, JSON.stringify(order)).toBeTruthy();
   await signedCallback(env, callbackBody(env, order.paymentReference, order.amount));
-  const st = await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+  const st = await postStatement(env, 'u-tresor', {
     statementId: `REL-${randomUUID().slice(0, 8)}`,
     lines: [{ accountAlias: order.beneficiaryAlias, amount: order.amount, valueDate: env.app.ctx.clock.now().toISOString().slice(0, 10), paymentReference: order.paymentReference }],
   });

@@ -4,7 +4,7 @@ import { ManualClock } from '../src/core/clock.js';
 import { drawSample } from '../src/plugins/decision/audit-missions.js';
 import { taxFamilyOf } from '../src/plugins/decision/regie-taxes.js';
 import { DEMO } from '../src/seed.js';
-import { callbackHeaders } from './helpers.js';
+import { callbackHeaders, postStatement } from './helpers.js';
 
 /** Application complète (tous les modules d'extension, données de démonstration semées). */
 async function full() {
@@ -283,7 +283,7 @@ describe('Module 54 — transparence publique (compléments)', () => {
     const order = (await req('POST', `/v1/obligations/${obligationId}/payment-orders`, 'u-guichet', { channel: 'MOBILE_MONEY' }, { 'idempotency-key': 'cle-transparence-0001' })).json();
     const raw = JSON.stringify({ providerTxnId: 'TXN-TRANSP-1', paymentReference: order.paymentReference, amount: order.amount, status: 'SUCCESS', completedAt: clock.now().toISOString() });
     expect((await req('POST', '/v1/providers/mm-operator-a/callbacks', undefined, raw, callbackHeaders('s', raw, clock.now()))).json().status).toBe('CONFIRME');
-    expect((await req('POST', '/v1/settlements/statements', 'u-tresor', { statementId: 'REL-TRANSP-1', lines: [{ accountAlias: DEMO.dgipkAlias, amount: order.amount, valueDate: clock.now().toISOString().slice(0, 10), paymentReference: order.paymentReference }] })).statusCode).toBe(201);
+    expect((await postStatement({ req }, 'u-tresor', { statementId: 'REL-TRANSP-1', lines: [{ accountAlias: DEMO.dgipkAlias, amount: order.amount, valueDate: clock.now().toISOString().slice(0, 10), paymentReference: order.paymentReference }] })).statusCode).toBe(201);
     clock.advance(120 * 86_400_000);
     const late = (await req('GET', '/v1/decision/transparence', 'u-ministre-finances')).json();
     expect(late.quarters[0]).toMatchObject({ period: '2026-T3', due: '2026-11-14', publishedAt: null, onTime: false });

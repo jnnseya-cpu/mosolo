@@ -166,11 +166,6 @@ export class CommunicationService {
       for (const channel of channels) {
         tried.add(channel);
         const attachments = channel === 'email' && opts.attachments?.length ? opts.attachments : undefined;
-        const res = provider.send({
-          channel, recipientId: r.id, eventCode, subject: fillPlaceholders(event.objet, vars), body: channel === 'sms' ? smsText(body) : body, entity, lang: r.lang, mandatory: event.obligatoire,
-          ...(attachments ? { attachments } : {}),
-        });
-        const d = this.log(event, r, channel, res.status, provider.name, provider.mode, entity, contentHash, attachments);
         const d = this.sendOne(event, r, channel, { subject, body, entity, contentHash, attachments, meta });
         out.push(d);
         if (d.status === 'echoue') out.push(...this.fallback(event, r, d, tried, { subject, body, entity, contentHash, meta }));
@@ -190,7 +185,7 @@ export class CommunicationService {
     let status: DeliveryStatus;
     try {
       status = provider.send({
-        channel, recipientId: r.id, eventCode: event.code, subject: m.subject, body: m.body, entity: m.entity, lang: r.lang, mandatory: event.obligatoire,
+        channel, recipientId: r.id, eventCode: event.code, subject: m.subject, body: channel === 'sms' ? smsText(m.body) : m.body, entity: m.entity, lang: r.lang, mandatory: event.obligatoire,
         ...(m.attachments ? { attachments: m.attachments } : {}),
       }).status;
     } catch {

@@ -17,7 +17,7 @@ import { PARCOURS } from '../src/plugins/verticales/parcours.js';
 import type { VerticalesService } from '../src/plugins/verticales/plugin.js';
 import { VX_DEMO } from '../src/plugins/verticales/seed.js';
 import { DEMO } from '../src/seed.js';
-import type { TestEnv } from './helpers.js';
+import { postStatement, type TestEnv } from './helpers.js';
 import { exampleRule, idem, payObligation, setupApp } from './partie5-helpers.js';
 
 const HASH = 'd'.repeat(64);
@@ -523,7 +523,7 @@ describe('Partie V — verticales de bout en bout (une verticale = un test)', ()
       expect(order.statusCode, order.body).toBe(201);
       await signedCallback(env, callbackBody(env, order.json().paymentReference, order.json().amount));
       // Règlement au compte public constaté par le Trésor (relevé bancaire).
-      const st = await env.req('POST', '/v1/settlements/statements', 'u-tresor', { statementId: `REL-EX-${i}`, lines: [{ accountAlias: env.app.ctx.assessment.get(obl).beneficiaryAccountAlias, amount: order.json().amount, valueDate: '2026-09-26', paymentReference: order.json().paymentReference }] });
+      const st = await postStatement(env, 'u-tresor', { statementId: `REL-EX-${i}`, lines: [{ accountAlias: env.app.ctx.assessment.get(obl).beneficiaryAccountAlias, amount: order.json().amount, valueDate: '2026-09-26', paymentReference: order.json().paymentReference }] });
       expect(st.statusCode, st.body).toBe(201);
     }
     expect(env.app.ctx.assessment.get(obl).status).toBe('SOLDEE');

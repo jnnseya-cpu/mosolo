@@ -19,7 +19,7 @@ import { AUTO_EXECUTOR_ID, KEY_ID, type RepartitionService } from '../src/plugin
 import { tresorPlugin } from '../src/plugins/tresor/plugin.js';
 import type { TresorService } from '../src/plugins/tresor/service.js';
 import { DEMO } from '../src/seed.js';
-import { callbackBody, PROVIDER_SECRET, publishCertifiedRule, signedCallback, type TestEnv } from './helpers.js';
+import { postStatement, callbackBody, PROVIDER_SECRET, publishCertifiedRule, signedCallback, type TestEnv } from './helpers.js';
 
 async function setupRep() {
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
@@ -45,7 +45,7 @@ async function payAndReconcile(env: Env, valueDate = '2026-09-26') {
   const ob = env.app.ctx.assessment.byTaxpayer(DEMO.taxpayerId)[0]!.id;
   const order = (await env.req('POST', `/v1/obligations/${ob}/payment-orders`, 'u-contribuable', { channel: 'MOBILE_MONEY' }, { 'idempotency-key': randomUUID() })).json();
   await signedCallback(env, callbackBody(env, order.paymentReference));
-  const st = await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+  const st = await postStatement(env, 'u-tresor', {
     statementId: `REL-${randomUUID().slice(0, 8)}`,
     lines: [{ accountAlias: DEMO.dgipkAlias, amount: { amount: '150.00', currency: 'USD' }, valueDate, paymentReference: order.paymentReference }],
   });

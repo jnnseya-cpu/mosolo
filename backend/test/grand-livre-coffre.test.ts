@@ -11,7 +11,7 @@ import type { InMemoryAppendOnlyRepository } from '../src/core/repository.js';
 import type { LedgerEntry } from '../src/modules/treasury/ledger.js';
 import { tresorPlugin } from '../src/plugins/tresor/plugin.js';
 import { DEMO } from '../src/seed.js';
-import { callbackBody, PROVIDER_SECRET, setup, signedCallback, type TestEnv } from './helpers.js';
+import { postStatement, callbackBody, PROVIDER_SECRET, setup, signedCallback, type TestEnv } from './helpers.js';
 
 async function setupTresor(): Promise<TestEnv> {
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
@@ -34,7 +34,7 @@ async function payAndReconcile(env: TestEnv, extraLine = false) {
   const lines = [{ accountAlias: DEMO.dgipkAlias, amount: { amount: '150.00', currency: 'USD' }, valueDate: '2026-09-26', paymentReference: order.paymentReference }];
   // Ligne orpheline (crédit sans référence connue) : reste en exception, explique l'écart grand livre / relevés.
   if (extraLine) lines.push({ accountAlias: DEMO.dgipkAlias, amount: { amount: '20.00', currency: 'USD' }, valueDate: '2026-09-26', paymentReference: 'PR-ZZZZ-ZZZZ' });
-  const st = await env.req('POST', '/v1/settlements/statements', 'u-tresor', { statementId: `REL-${randomUUID().slice(0, 8)}`, lines });
+  const st = await postStatement(env, 'u-tresor', { statementId: `REL-${randomUUID().slice(0, 8)}`, lines });
   expect(st.statusCode, st.body).toBeLessThan(300);
 }
 
