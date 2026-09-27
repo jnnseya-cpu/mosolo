@@ -7,11 +7,14 @@
  */
 import type { TresorService } from '../tresor/service.js';
 import { definePlugin } from '../types.js';
+import { ResultPointsService, registerResultPointsRoutes } from './points-resultats.js';
 import { declareTerrainPolicies } from './policy.js';
 import { TerrainQualityService } from './qualite-fraude.js';
 import { registerTerrainQualityRoutes } from './routes-qualite.js';
 import { registerTerrainRoutes } from './routes.js';
 import { TerrainService } from './service.js';
+import { InspectionService } from './inspection.js';
+import { registerInspectionRoutes } from './routes-inspection.js';
 
 export const terrainPlugin = definePlugin<TerrainService>({
   name: 'terrain',
@@ -21,12 +24,17 @@ export const terrainPlugin = definePlugin<TerrainService>({
     svc.qualite = new TerrainQualityService(ctx, svc);
     const tresor = ctx.ext.tresor as TresorService | undefined;
     if (tresor) svc.qualite.attachTreasury(tresor);
+    // Inspection et constat (module 35) : dossiers préparés, paquet hors ligne, procès-verbaux selon les pouvoirs.
+    svc.inspection = new InspectionService(ctx, svc);
     return svc;
   },
   seed: (_ctx, svc) => svc.seedDemo(),
   routes: (app, ctx, svc) => {
     registerTerrainRoutes(app, ctx, svc);
     registerTerrainQualityRoutes(app, svc.qualite!);
+    // Module 67 : rémunération par points de résultats vérifiés (§ 37A.5), quote-part indicative de la réserve.
+    registerResultPointsRoutes(app, new ResultPointsService(ctx, svc));
+    registerInspectionRoutes(app, svc.inspection!);
   },
 });
 

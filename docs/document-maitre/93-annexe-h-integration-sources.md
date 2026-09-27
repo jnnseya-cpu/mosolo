@@ -1285,6 +1285,8 @@ La convention unique demandée par le Cahier (« à arrêter en phase 1 ») est 
 | `GET /v1/previsions` | — | `POST /v1/forecasts:run` |
 | `POST /v1/affectations/scenarios` | — | `POST /v1/allocation-scenarios` |
 
+**Mise en œuvre (27/09/2026).** Les 20 routes sources en français de la première colonne sont construites comme **alias réels** des routes effectivement construites (module `catalogue-api`, § 30.4) : `POST /v1/registrations`, circuit des preuves d'identité du module « acces », `POST /v1/fiscal-objects`, `POST /v1/leases`, `GET /v1/obligations?objectId=`, `POST /v1/assessments/calculate` (simulation, règle publiée uniquement), `POST /v1/legal-rules` et `…/approve`, `POST /v1/obligations/{id}/payment-orders`, `POST /v1/providers/{provider}/callbacks`, `POST /v1/settlements/statements`, `GET /v1/reconciliation/exceptions`, `GET /v1/public/receipts/{code}`, `POST /v1/field-sync/batches`, `POST /v1/terrain/missions/{id}/findings`, `POST /v1/appeals`, `GET /v1/integrite/alerts`, `GET /v1/tableaux/{profil}`, `GET /v1/pilotage/scenarios`, `POST /v1/pilotage/projets/recommandations`. La convention retenue (ARB-43) n'est pas modifiée : les alias relaient, ils ne dupliquent aucune règle ; leur maintien au-delà de la période de transition des partenaires relève du maître d'ouvrage.
+
 Routes **à ajouter** à la spécification OpenAPI (`specs/openapi.yaml`) pour les modules intégrés ; mêmes normes que le § 30.1 (OAuth 2.1, mTLS pour partenaires et terminaux, `Idempotency-Key` pour tout effet financier, limites de débit, audit).
 
 | Route v3.0 (convention retenue) | Route source | Acteur | Contrôles |

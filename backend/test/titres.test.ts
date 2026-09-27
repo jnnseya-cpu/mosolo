@@ -431,6 +431,33 @@ describe('Décisions humaines motivées', () => {
     expect((await s.env.req('GET', '/v1/titres/indicateurs', 'u-contribuable')).statusCode).toBe(403);
     expect((await s.env.req('GET', '/v1/titres/indicateurs', 'u-gouverneur')).json().renewals.total).toBe(1);
   });
+
+  it('module 70 : rappel ambre UNIQUE au titulaire (heure du serveur) ; renouvellement en phase ambre compté ; aucune pénalité à l’expiration', async () => {
+    const s = await setup();
+    defineType(s.svc, 'TST-AMB', { model: 'DUREE_COURTE', durationMinutes: 60, maxDurationMinutes: 240, amberMinutes: 15 });
+    const c = await buyAndPay(s, 'TST-AMB', { plate: 'KN 7 A' });
+    s.svc.sync();
+    expect(s.ctx.audit.list({ action: 'titres.credential.amber_reminder', resourceId: c.id }).total).toBe(0);
+    s.clock.advance(50 * 60_000); // 10 min avant l'échéance : phase ambre
+    s.svc.sync();
+    const sent = s.ctx.comms.deliveries.find((d) => d.eventCode === 'ticket.expiring').length;
+    expect(sent).toBeGreaterThan(0);
+    s.svc.sync();
+    expect(s.ctx.audit.list({ action: 'titres.credential.amber_reminder', resourceId: c.id }).total).toBe(1);
+    expect(s.ctx.comms.deliveries.find((d) => d.eventCode === 'ticket.expiring')).toHaveLength(sent);
+    // Prolongation pendant la phase ambre : renouvellement « avant expiration ».
+    const ext = await s.env.req('POST', `/v1/titres/${c.id}/prolongations`, 'u-contribuable', { channel: 'USSD', durationMinutes: 60 }, { 'idempotency-key': 'prolongation-ambre-01' });
+    expect(ext.statusCode).toBe(201);
+    await pay(s.env, ext.json().payments[0].paymentReference);
+    s.svc.sync();
+    const ind = (await s.env.req('GET', '/v1/titres/indicateurs', 'u-gouverneur')).json();
+    expect(ind.renewals).toMatchObject({ total: 1, beforeExpiry: 1 });
+    // Expiration du titre renouvelé plus tard : aucune obligation ni pénalité automatique.
+    const obligations = s.ctx.assessment.obligations.count();
+    s.clock.advance(5 * 3_600_000);
+    s.svc.sync();
+    expect(s.ctx.assessment.obligations.count()).toBe(obligations);
+  });
 });
 
 async function sendBatch(s: Awaited<ReturnType<typeof setup>>, batchId: string, controls: Record<string, unknown>[]) {

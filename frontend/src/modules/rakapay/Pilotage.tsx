@@ -14,6 +14,7 @@ import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import './rakapay.css';
+import { ConstatsPanel, GracePanel } from './Billetterie';
 
 interface StationCov { stationId: string; code: string; name: string; commune: string; registered: number; drivers: number; estimated: number | null; coverageRate: string | null; green: number; complianceNow: string }
 interface Indicators {
@@ -21,8 +22,8 @@ interface Indicators {
   coverage: { registeredMotos: number; registeredDrivers: number; byStation: StationCov[]; byCommune: { commune: string; registered: number; estimated: number; green: number }[] };
   compliance: { controlled: number; green: number; rate: string; constats: { total: number; open: number; classified: number; transmitted: number } };
   digitalPayment: { passesIssued: number; paidDigitally: number; rate: string; target: string; byChannel: Record<string, number>; groupPaid: number; cashOnRoad: number };
-  complaints: { total: number; open: number; closed: number; averageHandlingHours: string | null; confirmedShare: string | null; byCommune: { commune: string; count: number }[] };
-  tickets: { sold: number; active: number; controls: number; reuseAttempts: number };
+  complaints: { total: number; open: number; closed: number; averageHandlingHours: string | null; confirmedShare: string | null; byCommune: { commune: string; count: number }[]; irregularLevies?: number; irregularLeviesConfirmed?: number };
+  tickets: { sold: number; active: number; controls: number; reuseAttempts: number; penaltiesRetained?: number; penaltiesContested?: number };
   revenueByCommune: { commune: string; basis: string; amounts: MoneyJSON[] }[];
   titres: { wewa: { credentials: { active: number }; controls: { redShare: string; reuseAttempts: number; offline: number }; renewals: { total: number; beforeExpiry: number } } };
 }
@@ -139,6 +140,8 @@ export default function Pilotage() {
                   <div><dt>Constats ouverts / total</dt><dd>{d.compliance.constats.open} / {d.compliance.constats.total} <span className="small muted">— aucun montant</span></dd></div>
                   <div><dt>Renouvellements avant échéance</dt><dd>{d.titres.wewa.renewals.beforeExpiry} / {d.titres.wewa.renewals.total}</dd></div>
                   <div><dt>Tickets urbains vendus</dt><dd>{d.tickets.sold} · {d.tickets.controls} contrôles · {d.tickets.reuseAttempts} réutilisation(s) détectée(s)</dd></div>
+                  <div><dt>Pénalités retenues / contestées</dt><dd>{d.tickets.penaltiesRetained ?? 0} / {d.tickets.penaltiesContested ?? 0}</dd></div>
+                  <div><dt>Plaintes de prélèvements irréguliers</dt><dd>{d.complaints.irregularLevies ?? 0} <span className="small muted">({d.complaints.irregularLeviesConfirmed ?? 0} confirmée(s))</span></dd></div>
                 </dl>
               </section>
               <section className="panel" aria-labelledby="rkp-rev">
@@ -153,6 +156,7 @@ export default function Pilotage() {
             </div>
           </div>
           <Complaints />
+          {user?.roles.some((r) => r === 'R06' || r === 'R07' || r === 'R05') && <><GracePanel /><ConstatsPanel module="81" /><ConstatsPanel module="76" /></>}
           <p className="small muted" style={{ marginTop: 12 }}>Calculé à l’heure serveur le {fmtDate(d.serverTime, true)}.</p>
         </>
       )}

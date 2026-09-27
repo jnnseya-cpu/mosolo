@@ -131,6 +131,9 @@ export class IntegriteService {
   readonly reviews = new InMemoryRepository<AccessReviewCampaign>();
   private readonly exports = new Map<string, Record<string, unknown>>();
 
+  /** Détecteurs complémentaires branchés par d'autres modules d'extension (alertes seulement, aucun effet). */
+  readonly extraDetectors: ((raise: (a: Omit<FraudAlert, 'id' | 'status' | 'automaticEffect' | 'raisedAt' | 'history'>) => void) => void)[] = [];
+
   constructor(readonly ctx: AppContext) {
     this.kit = new Kit(ctx);
   }
@@ -639,6 +642,9 @@ export class IntegriteService {
         subjects: [{ kind: 'ALERTE_SOCLE', ref: a.id }],
       }, p));
     }
+    // 9. Signaux complémentaires (module 40 : réutilisation d'appareils, constats hors zone, doublons de paiement,
+    // annulations et exonérations anormales, quittances manipulées) — mêmes alertes, même circuit d'examen.
+    for (const detector of this.extraDetectors) detector((a) => push(this.raiseAlert(a, p)));
     this.kit.audit(p, 'integrite.detection.run', 'fraud-alert', '*', { raised: raised.length });
     return { raised: raised.length, alerts: raised, params: DETECTION_PARAMS, automaticEffect: 'AUCUN' as const };
   }

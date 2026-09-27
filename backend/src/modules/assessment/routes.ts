@@ -6,6 +6,7 @@ import { forbidden } from '../../core/errors.js';
 import { decimalString, parse } from '../../core/http.js';
 import { authorize, evaluate, hasAnyGrant } from '../../core/policy.js';
 import { obligationDetail, obligationSummary } from './views.js';
+import { motifConsultation } from '../../core/consultation.js';
 
 const calculateSchema = z.object({
   ruleId: z.string(),
@@ -54,13 +55,20 @@ export function registerAssessmentRoutes(app: FastifyInstance, ctx: AppContext):
     return ctx.assessment.decideBaseOverride(requireUser(req), req.params.id, parse(baseOverrideDecisionSchema, req.body));
   });
 
-  app.get<{ Querystring: { taxpayerId?: string } }>('/v1/obligations', async (req) => {
+  app.get<{ Querystring: { taxpayerId?: string; objectId?: string } }>('/v1/obligations', async (req) => {
     const user = requireUser(req);
     if (!hasAnyGrant(user, 'obligation.read')) {
       throw forbidden('FORBIDDEN', 'Ce rôle ne peut consulter que des agrégats, jamais des obligations nominatives.');
     }
     const taxpayerId = req.query.taxpayerId ?? (user.roles.includes('R30') ? user.taxpayerId : undefined);
-    const candidates = taxpayerId ? ctx.assessment.byTaxpayer(taxpayerId) : ctx.assessment.obligations.all();
+    let candidates = taxpayerId ? ctx.assessment.byTaxpayer(taxpayerId) : ctx.assessment.obligations.all();
+    // Filtre facultatif par objet (catalogue des API : GET /v1/objets/:id/obligations) : refus explicite sans droit sur l'objet.
+    if (req.query.objectId !== undefined) {
+      const obj = ctx.objects.get(req.query.objectId);
+      const ofObject = ctx.assessment.obligations.find((o) => o.objectId === obj.id);
+      authorize(user, 'obligation.read', { taxpayerId: obj.taxpayerId, entities: [...new Set(['DGIPK', ...ofObject.map((o) => o.entity)])], communes: [obj.commune] });
+      candidates = candidates.filter((o) => o.objectId === obj.id);
+    }
     if (taxpayerId) {
       // Refus explicite si le demandeur n'a aucun droit sur ce contribuable.
       const objs = ctx.objects.byTaxpayer(taxpayerId);
@@ -79,7 +87,7 @@ export function registerAssessmentRoutes(app: FastifyInstance, ctx: AppContext):
     const obj = ctx.objects.objects.get(o.objectId);
     const access = authorize(user, 'obligation.read', { taxpayerId: o.taxpayerId, entity: o.entity, communes: obj ? [obj.commune] : [] });
     if (access === 'minimal') return obligationSummary(o, 'minimal');
-    ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'obligation.viewed', resourceType: 'obligation', resourceId: o.id });
+    ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'obligation.viewed', resourceType: 'obligation', resourceId: o.id, details: motifConsultation(req.headers, user, user.taxpayerId === o.taxpayerId || (user.mandants ?? []).includes(o.taxpayerId)) });
     return {
       ...obligationDetail(o),
       paymentOrders: ctx.payments.byObligation(o.id).map((p) => ({ paymentOrderId: p.id, paymentReference: p.paymentReference, status: p.status, createdAt: p.createdAt, expiresAt: p.expiresAt })),

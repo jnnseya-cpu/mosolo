@@ -20,19 +20,25 @@ definePolicy('fiscal:dependency.approve', { R16: always, R05: always });
 
 export const DEPENDENT_SERVICES = ['PERMIS_DE_BATIR', 'MUTATION_FONCIERE', 'MUTATION_VEHICULE', 'MARCHE_PUBLIC', 'AUTORISATION_TRANSPORT'] as const;
 export type DependentService = (typeof DEPENDENT_SERVICES)[number];
-export const CONDITION_KINDS = ['QUITUS_VALIDE', 'VIGNETTE_VALIDE'] as const;
+export const CONDITION_KINDS = ['QUITUS_VALIDE', 'VIGNETTE_VALIDE', 'CONTROLE_TECHNIQUE_VALIDE'] as const;
 export type ConditionKind = (typeof CONDITION_KINDS)[number];
 
 export const SERVICE_LABELS: Record<DependentService, string> = {
   PERMIS_DE_BATIR: 'Permis de bâtir', MUTATION_FONCIERE: 'Mutation foncière', MUTATION_VEHICULE: 'Mutation de véhicule',
   MARCHE_PUBLIC: 'Soumission à un marché public', AUTORISATION_TRANSPORT: 'Autorisation de transport',
 };
-export const CONDITION_LABELS: Record<ConditionKind, string> = { QUITUS_VALIDE: 'Quitus fiscal valide', VIGNETTE_VALIDE: 'Vignette du véhicule valide' };
+export const CONDITION_LABELS: Record<ConditionKind, string> = {
+  QUITUS_VALIDE: 'Quitus fiscal valide', VIGNETTE_VALIDE: 'Vignette du véhicule valide',
+  // Chaîne véhicule (module 82) : informative jusqu'à l'acte (arrêté du 12 novembre 2025 à vérifier).
+  CONTROLE_TECHNIQUE_VALIDE: 'Contrôle technique valide',
+};
 
 /** Démarches des verticales rattachées à un service dépendant (le moteur y ajoute ses conditions). */
 export const PROCEDURE_SERVICES: Record<string, DependentService> = {
   'construction:DEMANDE_AUTORISATION_CHANTIER': 'PERMIS_DE_BATIR',
   'mobilite:DEMANDE_AUTORISATION_TRANSPORT': 'AUTORISATION_TRANSPORT',
+  // Module 11 : la mutation d'un véhicule est bloquée sans quitus lorsque la règle l'exige (mode BLOQUANT).
+  'mobilite:DECLARATION_MUTATION': 'MUTATION_VEHICULE',
   'actifs:MANIFESTATION_INTERET': 'MARCHE_PUBLIC',
 };
 
@@ -88,6 +94,7 @@ export class DependencyService {
       ['DEP-MUTATION-VEHICULE-QUITUS', 'MUTATION_VEHICULE', 'TRANSPORTS', 'QUITUS_VALIDE', 'DGIPK', 'J6'],
       ['DEP-MARCHE-PUBLIC-QUITUS', 'MARCHE_PUBLIC', 'MARCHES_PUBLICS', 'QUITUS_VALIDE', 'DGIPK', 'J6'],
       ['DEP-TRANSPORT-VIGNETTE', 'AUTORISATION_TRANSPORT', 'TRANSPORTS', 'VIGNETTE_VALIDE', 'DGRK', 'J1'],
+      ['DEP-MUTATION-VEHICULE-CT', 'MUTATION_VEHICULE', 'TRANSPORTS', 'CONTROLE_TECHNIQUE_VALIDE', 'RFCK', 'ARRETE-CT-2025-11-12'],
     ];
     for (const [code, service, serviceEntity, condition, conditionEntity, jPoint] of base) {
       if (this.dependencies.findOne((x) => x.code === code)) continue;
@@ -124,6 +131,15 @@ export class DependencyService {
     return { ok: valid, detail: valid ? 'Vignette valide pour cette plaque.' : 'Aucune vignette valide pour cette plaque.' };
   }
 
+  /** Contrôle technique (module « vehicules-controle ») : procès-verbal favorable et échéance non dépassée. */
+  private controleTechniqueFor(plate: string | undefined): { ok: boolean; detail: string } {
+    if (!plate) return { ok: false, detail: 'Plaque non renseignée : contrôle technique non vérifiable.' };
+    const vc = this.d.ctx.ext['vehicules-controle'] as { ct?: { status(p: string): { state: string; label: string } } } | undefined;
+    if (!vc?.ct) return { ok: false, detail: 'Module du contrôle technique absent : condition non vérifiable.' };
+    const st = vc.ct.status(plate);
+    return { ok: st.state === 'A_JOUR' || st.state === 'BIENTOT_ECHU', detail: st.label };
+  }
+
   private evaluateOne(x: ServiceDependency, taxpayerId: string, ctx: { plate?: string }): ConditionResult {
     let satisfied: boolean;
     let detail: string;
@@ -132,6 +148,10 @@ export class DependencyService {
       const st = c ? this.clearances.statusOf(c) : null;
       satisfied = st === 'VALIDE' || st === 'BIENTOT_EXPIRE';
       detail = satisfied ? `Quitus ${c!.number} valide jusqu’au ${c!.validUntil}.` : 'Aucun quitus fiscal valide : demandez-le depuis votre espace.';
+    } else if (x.condition === 'CONTROLE_TECHNIQUE_VALIDE') {
+      const v = this.controleTechniqueFor(ctx.plate);
+      satisfied = v.ok;
+      detail = v.detail;
     } else {
       const v = this.vignetteFor(ctx.plate);
       satisfied = v.ok;

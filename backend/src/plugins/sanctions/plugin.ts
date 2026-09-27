@@ -1,6 +1,7 @@
 /**
  * Module d'extension « sanctions » : registre transversal des pénalités impayées (visible après un contrôle, avec le
- * montant) et commission de 10 % des agents de TOUS les modules.
+ * montant) et commission de 10 % des agents de TOUS les modules — vue de la réserve des agents par module (module 67,
+ * § 37A.5 : points de résultats vérifiés × note de qualité, décision du maître d'ouvrage du 27/09/2026).
  */
 import { requireUser } from '../../core/auth.js';
 import { forbidden } from '../../core/errors.js';
@@ -64,6 +65,22 @@ export const sanctionsPlugin = definePlugin<SanctionsService>({
     app.get<{ Querystring: { status?: string } }>('/v1/agents/commission-validations', async (req) => svc.validations.queue(requireUser(req), req.query.status));
     app.post<{ Params: { id: string } }>('/v1/agents/commission-validations/:id/decision', async (req) =>
       svc.validations.decide(requireUser(req), req.params.id, parse(decisionBody, req.body)));
+    // Réserve des agents et sous-traitants (module 67, § 37A.5) : points de résultats vérifiés × note de qualité,
+    // quote-part par agent, équipe et sous-traitant ; reprises de points fictifs ou frauduleux à deux personnes.
+    const periodQuery = z.object({ period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'mois AAAA-MM attendu').optional() }).strict();
+    app.get('/v1/agents/reserve', async (req) => svc.reserve.view(requireUser(req), parse(periodQuery, req.query).period));
+    app.get('/v1/agents/me/reserve', async (req) => {
+      const user = requireUser(req);
+      if (user.roles.every((r) => NON_AGENT.has(r))) throw forbidden('NOT_AN_AGENT', 'Réserve des agents : réservée aux agents publics et aux agents des sous-traitants.');
+      return svc.reserve.mine(user, parse(periodQuery, req.query).period);
+    });
+    app.post('/v1/agents/reserve/reprises', async (req, reply) => reply.code(201).send(svc.reserve.proposeClawback(requireUser(req), parse(z.object({
+      pointKeys: z.array(z.string().min(3).max(200)).min(1).max(200),
+      grounds: z.enum(['POINT_FICTIF', 'POINT_FRAUDULEUX']),
+      motif: z.string().trim().min(10, 'motif d’au moins 10 caractères').max(2000),
+      evidenceSha256: z.array(z.string().regex(/^[0-9a-f]{64}$/)).max(20).default([]),
+    }).strict(), req.body))));
+    app.post<{ Params: { id: string } }>('/v1/agents/reserve/reprises/:id/decision', async (req) => svc.reserve.decideClawback(requireUser(req), req.params.id, parse(decisionBody, req.body)));
     // Contre-vérification aléatoire des constats retenus : file et résultat (superviseur non intervenu).
     app.get<{ Querystring: { status?: string } }>('/v1/agents/counter-checks', async (req) => ({ items: svc.counterChecks.list(requireUser(req), req.query.status) }));
     app.post<{ Params: { id: string } }>('/v1/agents/counter-checks/:id/record', async (req) =>

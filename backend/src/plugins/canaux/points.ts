@@ -7,7 +7,10 @@
  *   autres prestataires (rappel HMAC, nonce, horodatage — PaymentService.handleCallback) ; aucune quittance
  *   n'existe hors de cette confirmation, et un point non actif n'a plus de secret de signature ;
  * - clôture de caisse journalière et versement bancaire au compte public du coffre, rapprochés : tout écart ou
- *   retard ouvre une exception et une PROPOSITION de suspension ; seul le Trésor (R17) décide, avec motif (ARB-12).
+ *   retard ouvre une exception et une PROPOSITION de suspension ; seul le Trésor (R17) décide, avec motif (ARB-12) ;
+ * - décision du maître d'ouvrage du 27/09/2026 : le dépassement du délai contractuel de RÈGLEMENT entraîne une
+ *   suspension CONSERVATOIRE automatique (encaissement bloqué, audit et opérateur alertés) ; la levée et la pénalité
+ *   finale restent décidées par des personnes (rétablissement à quatre yeux, pénalité du contrat).
  */
 import { Money, type CurrencyCode, type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
@@ -55,6 +58,8 @@ export function holdsPublicAgentRole(roles: readonly string[]): boolean {
 
 /** Délai laissé au relevé bancaire pour constater un versement déclaré, au-delà du délai contractuel (heures). */
 export const BANK_CONFIRMATION_GRACE_HOURS = 48;
+/** Auteur inscrit sur une suspension conservatoire automatique (aucune personne ne l'a décidée ; levée à quatre yeux). */
+export const AUTO_SUSPENSION_ACTOR = 'SYSTEME:SUSPENSION_CONSERVATOIRE';
 /** Approbateur inscrit sur une constatation appariée automatiquement à l'import du relevé (aucune personne ne l'a décidée). */
 export const AUTO_MATCH_ACTOR = 'SYSTEME:RAPPROCHEMENT_AUTOMATIQUE';
 /** Encaissement confirmé non rapproché au relevé au-delà de ce nombre de jours : exception de vieillissement. */
@@ -845,7 +850,7 @@ export class PaymentPointService {
    * Balayage (à chaque consultation, à chaque déclaration et périodiquement) :
    * - versement non déclaré après l'échéance, ou déclaré mais non constaté au relevé après l'échéance + délai de relevé ;
    * - encaissements confirmés non rapprochés au-delà de N jours (vieillissement).
-   * Exception + proposition, jamais de suspension automatique.
+   * Exception + proposition ; retard de règlement : suspension conservatoire automatique (levée par des personnes).
    */
   scanOverdue(): void {
     const now = this.clock();
@@ -910,7 +915,40 @@ export class PaymentPointService {
       const prop = this.proposals.insert({ id: this.ids.next('PROPSUSP'), pointId: p.id, reason: type, detail, exceptionId: ex.id, status: 'PROPOSEE', proposedAt: now });
       this.ctx.audit.append({ actor: { kind: 'system', id: 'canaux:rapprochement-points' }, action: 'canaux.point.suspension_proposed', resourceType: 'payment_point', resourceId: p.id, details: { proposalId: prop.id, reason: type, decision: 'EN_ATTENTE_DU_TRESOR' } });
     }
+    // Délai contractuel de règlement dépassé : suspension CONSERVATOIRE automatique (décision du maître d'ouvrage du
+    // 27/09/2026) ; un écart de montant ou un vieillissement reste une proposition soumise au Trésor.
+    if (type === 'VERSEMENT_EN_RETARD') this.suspendAutomatically(p.id, ex, detail);
     return ex;
+  }
+
+  /**
+   * Suspension CONSERVATOIRE automatique d'un point en retard de règlement (module 66) : encaissement bloqué et
+   * habilitation de signature retirée immédiatement, audit et opérateur alertés. Ce n'est pas une sanction : la levée
+   * (rétablissement à quatre yeux) et toute pénalité finale (contrat du point, § 18A.2) sont décidées par des personnes.
+   */
+  private suspendAutomatically(pointId: string, ex: PointException, detail: string): void {
+    const p = this.points.get(pointId);
+    if (!p || p.status !== 'ACTIF') return;
+    const now = this.clock().toISOString();
+    const motif = `Suspension conservatoire automatique : délai contractuel de règlement de ${p.settlementDelayHours} h dépassé (${ex.day}). ${detail}`;
+    const prop = this.proposals.findOne((x) => x.pointId === p.id && x.status === 'PROPOSEE');
+    const updated = this.points.update({
+      ...p, status: 'SUSPENDU',
+      suspension: { by: AUTO_SUSPENSION_ACTOR, at: now, motif, automatic: true, exceptionId: ex.id, ...(prop ? { proposalId: prop.id } : {}) },
+      history: [...p.history, { at: now, by: AUTO_SUSPENSION_ACTOR, action: 'SUSPENSION_CONSERVATOIRE', motif }],
+    });
+    this.revokeHabilitation(updated);
+    if (prop) this.proposals.update({ ...prop, status: 'DECIDEE_SUSPENSION', decidedBy: AUTO_SUSPENSION_ACTOR, decidedAt: now, motif });
+    this.ctx.audit.append({
+      actor: { kind: 'system', id: 'canaux:suspension-conservatoire' }, action: 'canaux.point.suspended_automatically', resourceType: 'payment_point', resourceId: p.id,
+      details: { exceptionId: ex.id, day: ex.day, settlementDelayHours: p.settlementDelayHours, decision: 'CONSERVATOIRE_AUTOMATIQUE', lifting: 'RETABLISSEMENT_QUATRE_YEUX', penalty: 'DECISION_HUMAINE' },
+    });
+    this.ctx.alerts.raise({
+      type: 'PAYMENT_POINT_SUSPENDED_AUTO', severity: 'HIGH', source: 'canaux:points',
+      detail: `${p.name} (${p.id}) suspendu à titre conservatoire : règlement du ${ex.day} en retard. Encaissement bloqué ; levée et pénalité décidées par le Trésor.`,
+      context: { pointId: p.id, exceptionId: ex.id }, notifyRoles: ['R17', 'R22'],
+    });
+    this.ctx.comms.publish('payment_point.suspended', [...this.operatorRecipients(p), ...this.ctx.users.withRole('R17').map(userRecipient)], { point: p.name, reference: p.id }, { entity: 'TRESOR' });
   }
 
   private operatorRecipients(p: PaymentPoint) {

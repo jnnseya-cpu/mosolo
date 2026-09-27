@@ -8,7 +8,10 @@
  *   non publiée) ou ACTE_REQUIS (aucune règle). Abonnements et permis = TITRES du moteur § 19A liés à la plaque.
  * - Cible d'occupation 15–25 % de places libres : indicateur par zone et par heure (sessions, réservations, flux capteur),
  *   alerte hors cible et RECOMMANDATION tarifaire, jamais appliquée : un changement de tarif est une nouvelle version de
- *   règle approuvée par le circuit à quatre visas.
+ *   règle approuvée par le circuit à quatre visas. Décision du maître d'ouvrage (27/09/2026), ajoutée par-dessus :
+ *   lorsque l'acte (règle ACTIVE) fixe des fourchettes par zone et par heure, le tarif est ajusté AUTOMATIQUEMENT à
+ *   l'intérieur de ces fourchettes (`tarification-dynamique.ts`) ; hors fourchette ou sans acte, la recommandation
+ *   ci-dessous reste la seule voie.
  * - § 11A.3 Sources de recettes (catalogue), zones premium, données urbaines agrégées et anonymisées (seuil k, sans plaque).
  * - § 11A.4 / 11A.6 Plaque identifiant central : historique, profil de récidive, score de conformité EXPLICABLE, servant
  *   uniquement à prioriser les patrouilles et les propositions ; blocage et fourrière relèvent de l'autorité compétente
@@ -324,8 +327,10 @@ export class ParkSmart {
    * Entrées d'une formule tarifaire, déduites de la situation (durée, places, heure de pointe selon la TABLE de la règle,
    * jours, mois, heures). Seules les entrées requises par la formule sont fournies (aucune entrée non autorisée).
    */
-  tariffInputs(rule: RuleRecord, ctx: { minutes: number; places: number; at: Date; days?: number; months?: number }): Record<string, string> {
+  tariffInputs(rule: RuleRecord, ctx: { minutes: number; places: number; at: Date; days?: number; months?: number; zone?: ParkingZone }): Record<string, string> {
     const required = new Set(this.ctx.rules.requiredInputs(rule));
+    // Module 75 : tarif dynamique en vigueur à l'heure (fourchettes de l'acte), fixé automatiquement — jamais saisi.
+    const dynamic: Record<string, string> = required.has('tarif_dynamique') && ctx.zone ? { tarif_dynamique: this.svc.tarification.currentRate(ctx.zone, rule, ctx.at) } : {};
     const hh = String(kinshasaHour(ctx.at)).padStart(2, '0');
     const known: Record<string, string> = {
       duree_minutes: String(ctx.minutes),
@@ -334,6 +339,7 @@ export class ParkSmart {
       jours: String(ctx.days ?? Math.max(1, Math.ceil(ctx.minutes / (24 * 60)))),
       mois: String(ctx.months ?? 1),
       pointe: rule.rateTable[`heure_pointe_${hh}`] === '1' ? '1' : '0',
+      ...dynamic,
     };
     return Object.fromEntries([...required].filter((k) => k in known).map((k) => [k, known[k]!]));
   }
@@ -351,7 +357,7 @@ export class ParkSmart {
     const at = input.at ? new Date(input.at) : this.now();
     if (Number.isNaN(at.getTime())) throw badRequest('INVALID_DATE', 'Date invalide.');
     const rule = usable.rule!;
-    const inputs = this.tariffInputs(rule, { minutes: input.durationMinutes, places: input.places ?? 1, at, ...(input.days ? { days: input.days } : {}), ...(input.months ? { months: input.months } : {}) });
+    const inputs = this.tariffInputs(rule, { minutes: input.durationMinutes, places: input.places ?? 1, at, zone: z, ...(input.days ? { days: input.days } : {}), ...(input.months ? { months: input.months } : {}) });
     const ev = this.ctx.rules.evaluate(rule, inputs, z.localityRank);
     return {
       mode: input.mode, zoneId: z.id, executable: true, status: 'ACTIVE' as const, gridId: usable.g.id,
@@ -500,6 +506,26 @@ export class ParkSmart {
       this.ctx.audit.append({ actor: { kind: 'system', id: 'parksmart-recommandations' }, action: 'parking.pricing.recommendation_prepared', resourceType: 'parking_zone', resourceId: z.zoneId, details: { recommendationId: rec.id, direction, applied: false } });
     }
     return { created, items: this.recommendations.all().sort((a, b) => b.createdAt.localeCompare(a.createdAt)) };
+  }
+
+  /**
+   * Recommandation ciblée préparée par la tarification dynamique (module 75) quand l'ajustement automatique n'est pas
+   * possible (hors fourchette de l'acte, sans acte, sans pas d'ajustement) : même dépôt, même décision humaine, jamais
+   * appliquée. Une seule recommandation PROPOSÉE par zone.
+   */
+  prepareRecommendation(zoneId: string, input: { date: string; hour: number; direction: PricingRecommendation['direction']; basis: string; freeRate: string | null }): PricingRecommendation | null {
+    if (this.recommendations.findOne((r) => r.zoneId === zoneId && r.status === 'PROPOSEE')) return null;
+    const zone = this.svc.getZone(zoneId);
+    const rule = activeRule(this.ctx, zone.tariffRuleCode);
+    const rec = this.recommendations.insert({
+      id: this.ids.next('PKREC', 4), zoneId, date: input.date, observedHours: 1,
+      hoursSaturated: input.direction === 'HAUSSE_A_ETUDIER' ? 1 : 0, hoursUnderused: input.direction === 'BAISSE_A_ETUDIER' ? 1 : 0,
+      direction: input.direction, tariffRuleCode: zone.tariffRuleCode, tariffRuleVersion: rule?.version ?? null,
+      basis: `${zone.code}, ${String(input.hour).padStart(2, '0')} h le ${input.date} : ${input.freeRate ?? '—'} % de places libres. ${input.basis}`,
+      status: 'PROPOSEE', applied: false, createdAt: this.now().toISOString(),
+    });
+    this.ctx.audit.append({ actor: { kind: 'system', id: 'parksmart-tarification' }, action: 'parking.pricing.recommendation_prepared', resourceType: 'parking_zone', resourceId: zoneId, details: { recommendationId: rec.id, direction: rec.direction, applied: false, source: 'TARIFICATION_DYNAMIQUE' } });
+    return rec;
   }
 
   listRecommendations(user: User) {

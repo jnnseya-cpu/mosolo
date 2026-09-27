@@ -159,6 +159,11 @@ describe('Ligne de signalement — qualification, transmission, protection', () 
     expect(t.status).toBe('CLOS');
     expect(t.outcome.code).toBe('FONDE');
     expect(t.messages.at(-1).text).toContain('permis d’agir');
+    // Module 69 : délai de traitement et part confirmée mesurés sur les signalements clos (données réelles).
+    const ind = (await env.req('GET', '/v1/integrite/indicators', 'u-gouverneur')).json().signalements;
+    const all = env.svc.reports.all().filter((r) => r.closure);
+    expect(ind.delaiMoyenJours).not.toBeNull();
+    expect(ind.partConfirmee).toBe(`${Math.round((all.filter((r) => r.closure!.outcome === 'FONDE').length / all.length) * 100)} %`);
   });
 
   it('la personne mise en cause ne voit jamais le signalement, même avec le rôle d’enquêteur', async () => {

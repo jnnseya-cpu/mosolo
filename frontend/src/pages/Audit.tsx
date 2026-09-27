@@ -8,6 +8,7 @@ import { Icon } from '../components/Icon';
 import { api, asList } from '../lib/api';
 import type { AuditEvent, AuditVerify } from '../lib/types';
 import { auditActionLabel } from '../lib/labels';
+import { AppealDeadlinesPanel, type AppealIndicators } from '../components/AppealDeadlinesPanel';
 
 type Ev = Omit<AuditEvent, 'actor'> & { resourceType?: string; resourceId?: string; outcome?: string; actor?: string | { id?: string; kind?: string } };
 
@@ -15,6 +16,7 @@ export default function Audit() {
   const { tr, fmtDate, user, lang } = useApp();
   const v = useApi(() => api<AuditVerify>('/v1/audit/verify'), [user?.id]);
   const ev = useApi(async () => asList<Ev>(await api<unknown>('/v1/audit/events'), 'events', 'records'), [user?.id]);
+  const appeals = useApi(() => api<AppealIndicators>('/v1/appeals/indicateurs'), [user?.id]);
   const events = (ev.data ?? []).slice().reverse();
   const actor = (e: Ev) => (typeof e.actor === 'string' ? e.actor : e.actor?.id ?? '—');
   return (
@@ -39,6 +41,7 @@ export default function Audit() {
           </div>
         )}
       </section>
+      {appeals.data && <AppealDeadlinesPanel data={appeals.data} />}
       <section className="section" aria-labelledby="ev-title">
         <div className="section-head"><h2 id="ev-title">{tr('audit.events')}</h2>{ev.data && <span className="count">{ev.data.length}</span>}</div>
         {ev.loading && <Loading />}

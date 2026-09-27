@@ -398,6 +398,8 @@ describe('canaux — points de paiement agréés (R32)', () => {
     const p2 = await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/collections/${collection.id}/print`, 'canaux-op-limete');
     expect(p2.json().duplicata).toBe(true);
     expect(p2.json().receiptNumber).toBe(receipt.receiptNumber);
+    // Module 66 : preuve par SMS au titulaire (en plus du reçu imprimé à QR).
+    expect(c.env.app.ctx.comms.deliveries.find((d) => d.eventCode === 'payment_point.cash_receipt').length).toBeGreaterThan(0);
   });
 
   it('référence liée à un prestataire connecté : jamais encaissée en espèces ni réutilisée au point, contribuable orienté', async () => {
@@ -497,7 +499,7 @@ describe('canaux — points de paiement agréés (R32)', () => {
     const sup = await c.env.req('GET', '/v1/payment-points', 'u-tresor');
     const prop = sup.json().proposals.find((p: { pointId: string; status: string }) => p.pointId === 'PA-LIMETE-MM01' && p.status === 'PROPOSEE');
     expect(prop).toBeDefined();
-    // Jamais de suspension automatique.
+    // Écart de montant : jamais de suspension automatique (seul le retard de règlement suspend, à titre conservatoire).
     expect(c.svc.points.get('PA-LIMETE-MM01').status).toBe('ACTIF');
     expect((await c.env.req('POST', '/v1/payment-points/PA-LIMETE-MM01/suspend', 'canaux-op-limete', { motif: 'tentative par le point lui-même' })).statusCode).toBe(403);
     expect((await c.env.req('POST', '/v1/payment-points/PA-LIMETE-MM01/suspend', 'u-tresor', { motif: 'court' })).statusCode).toBe(400);
@@ -527,11 +529,34 @@ describe('canaux — points de paiement agréés (R32)', () => {
     expect(after.collections[0].receiptStatus).toBe('DEFINITIVE');
   });
 
-  it('versement manquant au-delà du délai : exception et proposition, point toujours actif', async () => {
+  it('versement manquant au-delà du délai : exception et SUSPENSION CONSERVATOIRE automatique (décision du 27/09/2026) ; levée par deux personnes', async () => {
     c.clock.advanceHours(72);
     const sup = await c.env.req('GET', '/v1/payment-points', 'u-tresor');
     expect(sup.json().exceptions.some((e: { type: string; pointId: string }) => e.type === 'VERSEMENT_EN_RETARD' && e.pointId === 'PA-LIMETE-MM01')).toBe(true);
-    expect(c.svc.points.get('PA-LIMETE-MM01').status).toBe('ACTIF');
+    const p = c.svc.points.get('PA-LIMETE-MM01');
+    expect(p.status).toBe('SUSPENDU');
+    expect(p.suspension).toMatchObject({ by: 'SYSTEME:SUSPENSION_CONSERVATOIRE', automatic: true });
+    expect(p.suspension!.motif).toMatch(/délai contractuel de règlement/);
+    // Encaissement bloqué ; plus d'habilitation de signature (aucune preuve valable).
+    expect((await c.env.req('GET', `/v1/payment-points/PA-LIMETE-MM01/cards/${demoCard(c)}`, 'canaux-op-limete')).statusCode).toBe(403);
+    const ref = await cardReference(c, 'PA-GOMBE-AB01', 'canaux-op-gombe');
+    const blocked = await collect(c, ref.paymentReference);
+    expect(blocked.statusCode).toBe(403);
+    expect(blocked.json().code).toBe('POINT_NOT_ACTIVE');
+    expect(c.env.app.ctx.secrets.providerSecrets[p.providerId]).toBeUndefined();
+    // Audit et opérateur alertés ; la proposition du Trésor est close par la suspension conservatoire.
+    expect(c.env.app.ctx.audit.list({ action: 'canaux.point.suspended_automatically', resourceId: 'PA-LIMETE-MM01' }).total).toBe(1);
+    expect(c.env.app.ctx.alerts.list().some((a) => a.type === 'PAYMENT_POINT_SUSPENDED_AUTO' && a.context.pointId === 'PA-LIMETE-MM01')).toBe(true);
+    expect(c.svc.points.proposals.find((x) => x.pointId === 'PA-LIMETE-MM01').every((x) => x.status !== 'PROPOSEE')).toBe(true);
+    expect(c.env.app.ctx.comms.deliveries.find((d) => d.eventCode === 'payment_point.suspended' && d.recipientId === 'canaux-op-limete').length).toBeGreaterThan(0);
+    // Un seul balayage de plus ne ressuspend rien (idempotent).
+    c.svc.points.scanOverdue();
+    expect(c.env.app.ctx.audit.list({ action: 'canaux.point.suspended_automatically', resourceId: 'PA-LIMETE-MM01' }).total).toBe(1);
+    // Levée : décidée par des personnes (demande motivée puis décision d'un second R17).
+    const base = '/v1/payment-points/PA-LIMETE-MM01/reinstatement-request';
+    expect((await c.env.req('POST', base, 'u-analyste-rappro', { motif: 'Versement effectué, bordereau et relevé joints.' })).statusCode).toBe(201);
+    const done = await c.env.req('POST', `${base}/decision`, 'u-tresor', { approve: true, motif: 'Versement constaté au relevé du compte public.' });
+    expect(done.json().status).toBe('ACTIF');
   });
 
   // ---------- Espèces : fraudes rejouées (clôture tardive, versement fictif, rétablissement solitaire, référence morte) ----------

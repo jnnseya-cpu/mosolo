@@ -142,6 +142,12 @@ export const CIRCUITS: Circuit[] = [
     guard: { url: '/v1/pilotage/repartition/cles/:id/activation/decision', key: (p) => p.id!, refusal: approveFalse },
   },
   {
+    // Module 67 : reprise des points fictifs ou frauduleux de la réserve des agents (contrôle qualité → régie).
+    code: 'RESERVE_REPRISE_POINTS', label: 'Reprise de points de la réserve des agents (§ 37A.5)',
+    proposals: ['agents.reserve.clawback_proposed'], approvals: ['agents.reserve.clawback_decided'], refusals: ['agents.reserve.clawback_rejected'],
+    guard: { url: '/v1/agents/reserve/reprises/:id/decision', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
     code: 'RAKAPAY_AGREMENT_OPERATEUR', label: 'Agrément d’un opérateur de billetterie RakaPay',
     proposals: ['rakapay.operator.approval_proposed'], approvals: ['rakapay.operator.approved'], refusals: ['rakapay.operator.refused'],
   },
@@ -218,6 +224,11 @@ export const CIRCUITS: Circuit[] = [
     guard: { url: '/v1/pilotage/assignations/:id/certification', key: (p) => p.id!, refusal: approveFalse },
   },
   {
+    // Porte de sortie de phase (Cahier nouvelle version § 35.1) : demande → décision du comité de pilotage.
+    code: 'PILOTAGE_PORTE_PHASE', label: 'Porte de sortie de phase de la feuille de route (demande → décision du comité de pilotage)',
+    proposals: ['pilotage.roadmap.gate_requested'], approvals: ['pilotage.roadmap.gate_passed'], refusals: ['pilotage.roadmap.gate_refused'],
+  },
+  {
     code: 'IA_MODELE_MISE_EN_SERVICE', label: 'Mise en service d’une version de modèle d’IA (§ 23.1)',
     proposals: ['ia.model.promotion_proposed'], approvals: ['ia.model.promoted'], refusals: ['ia.model.promotion_rejected'],
     key: detail('versionKey'),
@@ -266,6 +277,39 @@ export const CIRCUITS: Circuit[] = [
     code: 'CALCU_LIGNE_BUDGETAIRE', label: 'CALCU — validation d’une ligne budgétaire',
     proposals: ['calcu.budget_line.declared'], approvals: ['calcu.budget_line.validated'], refusals: [],
     guard: { url: '/v1/verticales/calcu/lignes-budgetaires/:id/validation', key: (p) => p.id! },
+  },
+  // Chaîne véhicule (modules 82 à 84 — n° 59–61 dans le catalogue du maître d'ouvrage du 27/09/2026).
+  {
+    code: 'CENTRE_AGREMENT', label: 'Agrément d’un centre agréé ou d’un tiers de confiance (RFCK)',
+    proposals: ['centres.agrement.proposed'], approvals: ['centres.agrement.approved'], refusals: ['centres.agrement.rejected'],
+    guard: { url: '/v1/centres-agrees/:id/decision', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'CENTRE_RETABLISSEMENT', label: 'Rétablissement d’un centre agréé suspendu (RFCK)',
+    proposals: ['centres.reinstatement.requested'], approvals: ['centres.reinstated'], refusals: ['centres.reinstatement.rejected'],
+    guard: { url: '/v1/centres-agrees/:id/retablissement-decision', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'FOURRIERE_ECRITURE_CONTRAIRE', label: 'Écriture contraire sur un horodatage de fourrière (compteur de jours)',
+    proposals: ['fourriere.correction.proposed'], approvals: ['fourriere.correction.approved'], refusals: ['fourriere.correction.rejected'],
+    guard: { url: '/v1/fourrieres/dossiers/:id/ecritures-contraires/:cid/decision', key: (p) => p.cid!, refusal: approveFalse },
+  },
+  {
+    code: 'DOMAINE_OFFICIEL_VERIFICATION', label: 'Domaine officiel de vérification (QR des vignettes)',
+    proposals: ['domaine.official.proposed'], approvals: ['domaine.official.validated'], refusals: ['domaine.official.rejected'],
+  },
+  // Spécification fonctionnelle, modules 27 à 40 : circuits à deux personnes ajoutés.
+  {
+    code: 'TRESOR_IMPORT_RELEVE', label: 'Import d’un relevé bancaire ou d’opérateur (double validation, module 29)',
+    proposals: ['settlement.import.proposed'], approvals: ['settlement.import.validated'], refusals: ['settlement.import.rejected'],
+    key: detail('statementId'),
+    guard: { url: '/v1/settlements/statements/:statementId/validation', key: (p) => p.statementId!, refusal: approveFalse },
+  },
+  // Document maître FR 2, ch. 48 : décisions du Gouvernement provincial (enregistrement → validation par une autre personne).
+  {
+    code: 'DECISION_GOUVERNEMENT', label: 'Décision du Gouvernement provincial enregistrée sur acte (ch. 48)',
+    proposals: ['programme.decision.recorded'], approvals: ['programme.decision.validated'], refusals: ['programme.decision.rejected'],
+    guard: { url: '/v1/pilotage/programme/decisions/:numero/validation', key: (p) => `D${p.numero ?? ''}`, refusal: approveFalse },
   },
 ];
 

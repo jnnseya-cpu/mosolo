@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { EXEMPTION_CATEGORIES, TEXT_CHANNELS } from './stationnement-14.js';
 import { z } from 'zod';
 import type { AppContext } from '../../context.js';
 import { requireUser } from '../../core/auth.js';
@@ -204,6 +205,38 @@ export function registerParkingRoutes(app: FastifyInstance, ctx: AppContext, svc
 
   // Tableau de bord (agrégats)
   app.get('/v1/parking/indicators', async (req) => svc.indicators(requireUser(req)));
+
+  // Module 14 : exemptions (véhicules officiels, cas prévus par la règle), titres actifs, sessions par USSD ou SMS.
+  const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date AAAA-MM-JJ attendue');
+  app.get('/v1/parking/exemptions', async (req) => ({ items: svc.complements.listExemptions(requireUser(req)) }));
+  app.post('/v1/parking/exemptions', async (req, reply) => {
+    const body = parse(z.object({
+      plate, category: z.enum(EXEMPTION_CATEGORIES), holder: z.string().trim().min(3).max(200), ruleCode: z.string().trim().min(2).max(64).optional(),
+      exemptionBasis: z.string().trim().min(2).max(300).optional(), zoneIds: z.array(z.string().max(64)).max(50).default([]), validFrom: date, validUntil: date,
+      documents: z.array(z.string().regex(sha256Hex64, 'empreinte SHA-256 hexadécimale attendue')).max(10).default([]), motif: reason,
+    }).strict(), req.body);
+    return reply.code(201).send(svc.complements.requestExemption(requireUser(req), body));
+  });
+  app.post<{ Params: { id: string } }>('/v1/parking/exemptions/:id/decide', async (req) =>
+    svc.complements.decideExemption(requireUser(req), req.params.id, parse(z.object({ approve: z.boolean(), motif: reason }).strict(), req.body)));
+  app.post<{ Params: { id: string } }>('/v1/parking/exemptions/:id/revoke', async (req) =>
+    svc.complements.revokeExemption(requireUser(req), req.params.id, parse(z.object({ motif: reason }).strict(), req.body).motif));
+  app.get<{ Params: { plate: string } }>('/v1/parking/plates/:plate/active-titles', async (req) => {
+    const user = requireUser(req);
+    authorize(user, 'parking:control', { communes: user.territory ?? [] });
+    const p = svc.plate(req.params.plate);
+    ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'parking.plate.titles_viewed', resourceType: 'plate', resourceId: p, details: {} });
+    return { plate: p, serverTime: svc.now().toISOString(), items: svc.complements.activeTitles(p, svc.now()) };
+  });
+  // Passerelle opérateur (signée) — [À RACCORDER — convention requise] — et simulateur authentifié (démonstration).
+  app.post<{ Params: { operator: string } }>('/v1/parking/canal-texte/passerelle/:operator', async (req) => {
+    const raw = req.rawBody ?? '';
+    const h = (k: string) => { const v = req.headers[k]; return typeof v === 'string' ? v : undefined; };
+    return svc.complements.gateway(req.params.operator, { signature: h('x-signature'), nonce: h('x-nonce'), timestamp: h('x-timestamp') }, raw);
+  });
+  app.post('/v1/parking/canal-texte/simulateur', async (req) =>
+    svc.complements.simulate(requireUser(req), parse(z.object({ channel: z.enum(TEXT_CHANNELS), text: z.string().trim().min(1).max(160) }).strict(), req.body)));
+  app.get('/v1/parking/canal-texte/statistiques', async (req) => svc.complements.channelStats(requireUser(req)));
 
   // Chapitre 11A : grilles, occupation, recettes, plaque, surréservation, espaces, affectation, déploiement.
   registerParkSmartRoutes(app, svc);

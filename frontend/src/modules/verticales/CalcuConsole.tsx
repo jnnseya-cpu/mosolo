@@ -19,7 +19,7 @@ interface Overview {
   accounts: { declared: number; validated: number }; accountsList?: Account[]; transactions?: Tx[]; reports?: Report[];
 }
 
-const SCORE_LABEL = { VERT: 'Conforme', AMBRE: 'Correspondance partielle', ROUGE: 'Anomalie' } as const;
+const SCORE_LABEL = { VERT: 'Vert — conforme', AMBRE: 'Orange — correspondance partielle', ROUGE: 'Rouge — anomalie' } as const;
 
 function ReportRow({ r, canAct, onChange }: { r: Report; canAct: boolean; onChange: () => void }) {
   const { fmtDate } = useApp();

@@ -108,6 +108,18 @@ export function seedApprentissage(ctx: AppContext, svc: ApprentissageService): v
     }, { demo: true });
     publier(c.id, m.publics);
   }
+  // Base de procédures versionnée (module 50) : une procédure publiée en deux versions successives [EXEMPLE].
+  const proc = svc.creerContenu(user(circuit(['RECENSEUR', 'CONTROLEUR'])[0])!, {
+    type: 'PROCEDURE', cle: 'procedure.constat-terrain', publics: ['RECENSEUR', 'CONTROLEUR'], titre: 'Procédure du constat sur le terrain',
+    corps: '1. Présenter son badge. 2. Photographier l’objet et relever la position. 3. Informer la personne de ses droits. Aucun paiement n’est encaissé sur place. [EXEMPLE — démonstration]',
+  }, { demo: true });
+  publier(proc.id, ['RECENSEUR', 'CONTROLEUR']);
+  svc.nouvelleVersion(user(circuit(['RECENSEUR', 'CONTROLEUR'])[0])!, proc.id, {
+    titre: 'Procédure du constat sur le terrain',
+    corps: '1. Présenter son badge et proposer sa vérification (QR). 2. Photographier l’objet et relever la position. 3. Informer la personne de ses droits et du délai de réclamation. Aucun paiement n’est encaissé sur place. [EXEMPLE — démonstration, version 2]',
+  });
+  publier(proc.id, ['RECENSEUR', 'CONTROLEUR']);
+
   // Une fiche en attente de publication : illustre le circuit à deux personnes.
   const attente = svc.creerContenu(user('u-admin-entite')!, {
     type: 'FICHE', cle: 'canaux.enrolement', publics: ['GUICHET', 'RECENSEUR'], titre: 'Enrôler un contribuable accompagné',

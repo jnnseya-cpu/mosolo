@@ -9,6 +9,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { AppContext } from '../../context.js';
 import { ApiError } from '../../core/errors.js';
+import { isAliasRoute } from '../../core/alias.js';
 
 export interface RateLimitTier {
   /** Requêtes autorisées par fenêtre. */
@@ -132,6 +133,9 @@ export function installRateLimit(app: FastifyInstance, ctx: AppContext, config: 
     if (req.method === 'OPTIONS') return;
     const path = req.url.split('?')[0] ?? req.url;
     if (config.exempt.includes(path)) return;
+    // Route-alias du catalogue des API (routes françaises) : la requête relayée vers la route canonique est seule
+    // comptée, avec le palier de la route canonique (public, authentification ou global) — jamais deux fois.
+    if (isAliasRoute(req)) return;
     const now = ctx.clock.now().getTime();
     const tiers: ('auth' | 'public' | 'global')[] = tierOf(req.url) === 'global' ? ['global'] : [tierOf(req.url), 'global'];
     for (const t of tiers) {

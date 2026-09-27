@@ -135,6 +135,18 @@ export function registerRecoveryRoutes(app: FastifyInstance, ctx: AppContext, sv
     return svc.noticeProof(requireUser(req), req.params.id);
   });
 
+  // Remise en personne d'un avis formel (§ 15.2) : signature (empreinte) ou refus enregistré, position de l'agent.
+  app.post<{ Params: { id: string } }>('/v1/recouvrement/avis/:id/remise', async (req) => {
+    const body = parse(z.object({
+      outcome: z.enum(['SIGNE', 'REFUS']),
+      signatureSha256: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+      refusalNote: z.string().trim().min(5).max(1000).optional(),
+      witness: z.string().trim().min(2).max(200).optional(),
+      position: z.object({ lat: z.number().min(-5.2).max(-3.9), lon: z.number().min(15).max(16.6), accuracyM: z.number().min(0).max(5000).optional() }).strict(),
+    }).strict(), req.body);
+    return svc.recordFieldDelivery(requireUser(req), req.params.id, body);
+  });
+
   app.post<{ Params: { id: string } }>('/v1/recouvrement/avis/:id/lecture', async (req) => {
     return svc.acknowledgeRead(requireUser(req), req.params.id);
   });

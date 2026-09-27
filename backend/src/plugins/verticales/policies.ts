@@ -62,6 +62,23 @@ export const P = {
   sectorLargeTaxpayer: 'verticales:sector.large-taxpayer',
   vehicleControl: 'verticales:vehicle.control',
   domainPlan: 'verticales:domain.plan',
+  // Fiches sectorielles 13 à 25 (fiches.ts) et module 18 (plastique.ts).
+  sectorConfigure: 'verticales:sector.configure',
+  sectorReference: 'verticales:sector.reference',
+  sectorRegister: 'verticales:sector.register',
+  sectorLiquidate: 'verticales:sector.liquidate',
+  departDeclare: 'verticales:port.departure.declare',
+  departRead: 'verticales:port.departure.read',
+  boatControl: 'verticales:port.boat.control',
+  tollPassage: 'verticales:toll.passage',
+  telecomImport: 'verticales:telecom.import',
+  siteMutation: 'verticales:telecom.mutation',
+  beverageDeliveries: 'verticales:beverage.deliveries',
+  beverageSensitive: 'verticales:beverage.sensitive',
+  forestRead: 'verticales:forest.read',
+  plasticRead: 'verticales:plastic.read',
+  plasticStudy: 'verticales:plastic.study',
+  plasticDeclare: 'verticales:plastic.declare',
 } as const;
 
 export function registerVerticalPolicies(): void {
@@ -128,4 +145,26 @@ export function registerVerticalPolicies(): void {
   // Contrôle d'un véhicule par plaque : réponse minimale (titres, autorisations), jamais le nom du propriétaire.
   definePolicy(P.vehicleControl, { R09: inTerritory('minimal'), R10: inTerritory('minimal'), R11: always, R35: inTerritory('minimal') });
   definePolicy(P.domainPlan, { R06: sameEntity, R07: sameEntity, R09: always, R10: inTerritory('minimal'), R11: sameEntity, R22: always });
+
+  // Fiches sectorielles : la régie configure (règle, type de titre, avec l'acte) ; l'instructeur tient les registres et
+  // propose les liquidations ; une autre personne (R06/R07) décide ; l'opérateur déclare ses départs et manifestes.
+  definePolicy(P.sectorConfigure, { R06: sameEntity });
+  // (directeur de la régie DGTK : vx-directeur-dgtk en démonstration)
+  definePolicy(P.sectorReference, { R11: sameEntity, R07: sameEntity, R06: sameEntity });
+  definePolicy(P.sectorRegister, { R30: ownTaxpayer, R31: mandant, R11: sameEntity, R07: sameEntity, R10: sameEntityInTerritory('full') });
+  definePolicy(P.sectorLiquidate, { R11: sameEntity });
+  definePolicy(P.departDeclare, { R30: ownTaxpayer, R31: mandant, R11: sameEntity });
+  definePolicy(P.departRead, { R30: ownTaxpayer, R31: mandant, R06: sameEntity, R07: sameEntity, R11: sameEntity, R09: always, R10: inTerritory('minimal'), R22: always, R24: always });
+  definePolicy(P.boatControl, { R09: inTerritory('minimal'), R10: inTerritory('minimal'), R11: always, R35: inTerritory('minimal') });
+  definePolicy(P.tollPassage, { R10: inTerritory('full'), R11: sameEntity, R35: inTerritory('full') });
+  definePolicy(P.telecomImport, { R34: always, R30: ownTaxpayer, R11: sameEntity });
+  definePolicy(P.siteMutation, { R30: ownTaxpayer, R31: mandant, R11: sameEntity });
+  // Boissons (17) : données commerciales sensibles — régie de l'entité et contrôle seulement (ni terrain, ni tableaux de bord).
+  definePolicy(P.beverageDeliveries, { R34: always });
+  definePolicy(P.beverageSensitive, { R06: sameEntity, R07: sameEntity, R11: sameEntity, R22: always, R24: always });
+  // Forêts (23) : accès limité aux services compétents.
+  definePolicy(P.forestRead, { R06: sameEntity, R07: sameEntity, R11: sameEntity, R22: always });
+  definePolicy(P.plasticRead, { R01: always, R02: always, R05: always, R06: sameEntity, R07: sameEntity, R11: sameEntity, R22: always });
+  definePolicy(P.plasticStudy, { R11: sameEntity, R06: sameEntity });
+  definePolicy(P.plasticDeclare, { R30: ownTaxpayer, R31: mandant });
 }

@@ -176,9 +176,38 @@ export const PILOT_CRITERIA = [
   { code: 'ESPECES_AGENTS', label: 'Encaissement d’espèces par un agent', threshold: 'aucun', kpi: 'ESPECES_AGENTS', op: '=', value: '0' },
   { code: 'ECART_RAPPROCHEMENT', label: 'Écart de rapprochement', threshold: '< 1 %', kpi: 'ECART_RAPPROCHEMENT_J2', op: '<', value: '1' },
   { code: 'DELAI_QUITTANCE', label: 'Délai moyen de quittance', threshold: '< 1 minute', kpi: 'DELAI_QUITTANCE', op: '<', value: '60' },
-  { code: 'CONTESTATIONS_DELAI', label: 'Contestations traitées dans le délai légal', threshold: '> 90 %', kpi: null, op: '>', value: '90' },
+  // Harmonisé avec le § 40 (FR 2) : mesuré par l'indicateur RECOURS_DANS_DELAI (délai légal de conception, à vérifier).
+  { code: 'CONTESTATIONS_DELAI', label: 'Contestations traitées dans le délai légal', threshold: '> 90 %', kpi: 'RECOURS_DANS_DELAI', op: '>', value: '90' },
   { code: 'PROGRESSION_RECETTES', label: 'Progression des recettes pilotes vs communes témoins', threshold: 'significativement supérieure', kpi: null, op: '>', value: '0' },
 ] as const;
+
+/**
+ * Document maître FR 2, ch. 46 (nouvelle numérotation de l'ancien § 45) — ajouts, cités mot pour mot : raisons du
+ * choix et objets prioritaires des communes (46.1), séquence en cinq étapes (46.2), critères de succès (46.3) et
+ * indicateurs du § 40 qui les mesurent (la comparaison aux communes témoins est calculée pour chacun).
+ */
+export const PILOT_COMMUNES_46 = [
+  { commune: 'Gombe', raison: 'Localité de premier rang, bureaux, forte valeur locative, publicité, point fluvial', objets: 'IRL, IF, publicité, embarquement' },
+  { commune: 'Limete', raison: 'Tissu industriel et logistique, entrepôts, poids lourds', objets: 'IF, patente, véhicules, domaine public' },
+  { commune: 'Kalamu', raison: 'Commerce dense de Matonge, habitat locatif compact', objets: 'IRL, patente, débits de boissons' },
+  { commune: 'Ngaliema', raison: 'Habitat résidentiel de valeur élevée, bailleurs institutionnels', objets: 'IRL, IF' },
+] as const;
+export const PILOT_SEQUENCE_46 = [
+  { etape: 1, semaines: [1, 4], texte: 'Semaines 1 à 4 : paramétrage du référentiel des recettes pilotes, conventions de données, recrutement et certification des agents.' },
+  { etape: 2, semaines: [5, 12], texte: 'Semaines 5 à 12 : recensement locatif et commercial, création des objets, plaques QR sur les commerces et panneaux.' },
+  { etape: 3, semaines: [13, 16], texte: 'Semaines 13 à 16 : ouverture des paiements électroniques, quittance vérifiable, assistance en centres communaux.' },
+  { etape: 4, semaines: [17, 22], texte: 'Semaines 17 à 22 : campagne de déclaration pré-remplie calée sur l’échéance de début février, relances graduées.' },
+  { etape: 5, semaines: [23, 26], texte: 'Semaines 23 à 26 : évaluation indépendante, comparaison avec les communes non pilotes, décision d’extension.' },
+] as const;
+export const PILOT_CRITERIA_46: Record<(typeof PILOT_CRITERIA)[number]['code'], { texte: string; indicateurs40: string[] }> = {
+  COUVERTURE_OBJETS: { texte: 'Couverture des objets prioritaires supérieure à 80 % dans les zones traitées', indicateurs40: ['COUVERTURE_RECENSEMENT'] },
+  PART_ELECTRONIQUE: { texte: 'part électronique des encaissements supérieure à 90 % sur le périmètre', indicateurs40: ['PART_ELECTRONIQUE_RECETTES'] },
+  ESPECES_AGENTS: { texte: 'aucun encaissement d’espèces par un agent', indicateurs40: ['ESPECES_AGENTS'] },
+  ECART_RAPPROCHEMENT: { texte: 'écart de rapprochement inférieur à 1 %', indicateurs40: ['ECART_RAPPROCHEMENT_J2', 'DELAI_PAIEMENT_RAPPROCHEMENT'] },
+  DELAI_QUITTANCE: { texte: 'délai moyen de quittance inférieur à une minute', indicateurs40: ['DELAI_PAIEMENT_QUITTANCE'] },
+  CONTESTATIONS_DELAI: { texte: 'taux de contestation traité dans le délai légal supérieur à 90 %', indicateurs40: ['RECOURS_DANS_DELAI'] },
+  PROGRESSION_RECETTES: { texte: 'progression des recettes des communes pilotes significativement supérieure à celle des communes témoins', indicateurs40: ['BAUX_ENREGISTRES'] },
+};
 
 export function meetsThreshold(op: string, value: string, v: string | null): boolean | null {
   if (v === null) return null;
@@ -235,6 +264,35 @@ export function tenths(pct: string): bigint {
 }
 
 export const moneyOfMinor = (minor: bigint, c: CurrencyCode): MoneyJSON => Money.fromMinor(minor, c).toJSON();
+
+/**
+ * Recette additionnelle brute (§ 38.2) = potentiel × (conformité cible − conformité actuelle) × (mois utiles / 12),
+ * en unités mineures ; l'écart de conformité est exprimé en points × 10 (voir `tenths`). Fonction unique, utilisée
+ * par le simulateur de scénarios et par l'exemple illustratif (§ 39.3) ; le coût marginal est retranché à part.
+ */
+export function additionalGrossMinor(potentialMinor: bigint, deltaTenths: bigint, monthsUseful = 12n): bigint {
+  return (potentialMinor * deltaTenths / 1000n) * monthsUseful / 12n;
+}
+
+// ————————————————————————— exemple illustratif (Cahier nouvelle version § 39.3) —————————————————————————
+
+/**
+ * « Exemple illustratif, à remplacer par les données du pilote » : tableau du Cahier repris mot pour mot. Données de
+ * lecture seule, jamais enregistrées comme hypothèses, jamais utilisées par les scénarios ni par les tableaux de bord.
+ */
+export const EXEMPLE_ILLUSTRATIF = {
+  titre: 'Exemple illustratif, à remplacer par les données du pilote',
+  source: 'Cahier nouvelle version § 39.3',
+  colonnes: ['Ligne', 'Objets (hypothèse)', 'Montant annuel moyen (hypothèse)', 'Conformité actuelle → cible (hypothèse)', 'Gain illustratif'],
+  lignes: [
+    { ligne: 'Revenus locatifs', objetsTexte: '2 000 000 unités louées', objets: '2000000', montantTexte: '158 USD (22 % d\'un loyer de 60 USD par mois)', montantAnnuel: '158', conformiteTexte: '8 % → 35 %', actuelle: '8', cible: '35', gainTexte: '≈ 85 M USD', gainMillionsCahier: 85 },
+    { ligne: 'Impôt foncier', objetsTexte: '1 200 000 parcelles', objets: '1200000', montantTexte: '40 USD', montantAnnuel: '40', conformiteTexte: '15 % → 50 %', actuelle: '15', cible: '50', gainTexte: '≈ 17 M USD', gainMillionsCahier: 17 },
+    { ligne: 'Véhicules et circulation', objetsTexte: '600 000 véhicules', objets: '600000', montantTexte: '60 USD', montantAnnuel: '60', conformiteTexte: '35 % → 70 %', actuelle: '35', cible: '70', gainTexte: '≈ 13 M USD', gainMillionsCahier: 13 },
+    { ligne: 'Patente et débits de boissons', objetsTexte: '400 000 établissements', objets: '400000', montantTexte: '50 USD', montantAnnuel: '50', conformiteTexte: '10 % → 40 %', actuelle: '10', cible: '40', gainTexte: '≈ 6 M USD', gainMillionsCahier: 6 },
+    { ligne: 'Publicité et antennes', objetsTexte: '15 000 objets', objets: '15000', montantTexte: '900 USD', montantAnnuel: '900', conformiteTexte: '30 % → 80 %', actuelle: '30', cible: '80', gainTexte: '≈ 7 M USD', gainMillionsCahier: 7 },
+  ],
+  avertissement: 'Les valeurs du tableau ci-dessus sont des hypothèses de travail destinées à illustrer la mécanique de calcul. Elles ne constituent ni une prévision, ni un engagement. Elles doivent être remplacées par les comptages du recensement pilote et par les tarifs officiels des arrêtés en vigueur avant toute présentation budgétaire.',
+} as const;
 
 // ————————————————————————— assignations, instructions, accords, projets —————————————————————————
 

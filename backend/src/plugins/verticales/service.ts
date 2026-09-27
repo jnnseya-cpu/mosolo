@@ -34,6 +34,12 @@ import { AviaCadreService } from './avia-cadre.js';
 import { CalcuService } from './calcu.js';
 import { SecteursService } from './secteurs.js';
 import { P } from './policies.js';
+import { PARCOURS } from './parcours.js';
+import type { ActifsService } from './actifs.js';
+import type { AviaAutoService } from './avia-auto.js';
+import type { NfiuService } from './nfiu.js';
+import type { EnvironnementService } from './environnement.js';
+import type { EntreprisesService } from './entreprises.js';
 import { distanceM, presenceOk } from '../parking/field.js';
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -169,6 +175,24 @@ export const VX_DEMO_RULES: Record<string, string> = {
   mobilite: 'DEMO-VX-VIG',
 };
 
+/**
+ * Clés du registre juridique des verticales sans règle de démonstration semée (Partie V) : le code sous lequel le Comité
+ * juridique et tarifaire publie la règle (quatre visas, texte en vigueur). Tant qu'aucune règle ACTIVE ne porte ce code,
+ * la liquidation est refusée (« NO_RULE ») : aucun montant, aucun taux par défaut.
+ */
+export const VX_REGISTRY_RULES: Record<string, string> = {
+  entreprises: 'VX-ENT-PATENTE',
+  telecom: 'VX-TEL-SITES',
+  'domaine-public': 'VX-DP-OCCUPATION',
+  actifs: 'VX-ACT-REDEVANCE',
+  environnement: 'VX-ENV-PLASTIQUE',
+};
+
+/** Code de la règle du registre qui liquide la verticale (démonstration semée, sinon clé du registre). */
+export function ruleCodeFor(slug: string): string | undefined {
+  return VX_DEMO_RULES[slug] ?? VX_REGISTRY_RULES[slug];
+}
+
 export const DEMO_RULE_NOTICE = 'Règle fictive de démonstration, non opposable';
 
 const COMMUNE_CODES: Record<string, string> = {
@@ -211,6 +235,19 @@ export class VerticalesService {
   readonly calcu: CalcuService;
   /** Modules sectoriels « acte requis » (11, 13, 16, 17, 21, 22, 23, 24, 25, 56) sur le socle commun. */
   readonly secteurs: SecteursService;
+  /** Fiches sectorielles 13 à 25 (fiches.ts) et module 18 (plastique.ts), branchées par le module d'extension. */
+  fiches?: import('./fiches.js').FichesService;
+  plastique?: import('./plastique.js').PlastiqueService;
+  /** Partie V — Patrimoine provincial (inventaire, évaluation, appel, revenus domaniaux) : branché par le plugin. */
+  actifs?: ActifsService;
+  /** Partie V — Environnement (registre des assujettis, simulation d'impact) : branché par le plugin. */
+  environnement?: EnvironnementService;
+  /** Partie V — Entreprises (détermination des obligations d'un établissement) : branché par le plugin. */
+  entreprises?: EntreprisesService;
+  /** AVIA — exécution automatique des écarts mensuels après arrêté (modules 62, 78) : branchée par le plugin. */
+  aviaAuto?: AviaAutoService;
+  /** Module 79 — habilitation NFIU, situation complète, rapports journaliers des agents : branché par le plugin. */
+  nfiu?: NfiuService;
 
   constructor(readonly ctx: AppContext) {
     this.avia = new AviaService(ctx);
@@ -296,7 +333,7 @@ export class VerticalesService {
   }
 
   activeRuleFor(slug: string): RuleRecord | undefined {
-    const code = VX_DEMO_RULES[slug];
+    const code = ruleCodeFor(slug);
     if (!code) return undefined;
     const rules = this.ctx.rules.list().filter((r) => r.code === code && isRuleExecutable(r, this.now()).ok);
     return rules.sort((a, b) => b.version - a.version)[0];
@@ -314,7 +351,7 @@ export class VerticalesService {
   }
 
   catalogueDetail(v: VerticalDef) {
-    const code = VX_DEMO_RULES[v.slug];
+    const code = ruleCodeFor(v.slug);
     const rule = code ? this.ruleByCode(code) : undefined;
     return {
       ...this.catalogueSummary(v),
@@ -323,6 +360,7 @@ export class VerticalesService {
       procedures: v.procedures,
       pendingLevies: v.pendingLevies,
       rights: v.rights,
+      parcours: PARCOURS[v.slug] ?? null,
       rules: rule
         ? [{
             code: rule.code, version: rule.version, label: rule.label, status: rule.status, demo: rule.demo === true,
@@ -869,9 +907,12 @@ export class VerticalesService {
       stallTitle: stall ? this.currentTitle(stall.id) : null,
       notice: 'Lecture seule : aucun montant ne peut être modifié, négocié ou estimé sur place. Aucun encaissement par l’agent.',
     };
-    if (access === 'minimal') return base;
+    // Module 79 (décision du maître d'ouvrage) : l'agent HABILITÉ NFIU, comme le contrôleur, voit la situation complète
+    // d'une plaque fiscale immobilière (lecture seule) ; l'agent non habilité garde l'accès minimal, inchangé.
+    const full = p.kind === 'NFIU' && this.nfiu?.canSeeFull(user, p.commune) ? this.nfiu.fullSituation(user, p) : null;
+    if (access === 'minimal' && !full) return base;
     const obligations = this.ctx.assessment.obligations.find((ob) => ob.objectId === o.id && ob.status !== 'ANNULEE').map((ob) => this.obligationView(ob));
-    return { ...base, obligations };
+    return { ...base, access: 'full' as const, obligations, ...(full ? { situationComplete: full } : {}) };
   }
 
   /** Guichet / banque sans smartphone : obligations payables d'un objet sur présentation de la plaque. */
@@ -895,6 +936,9 @@ export class VerticalesService {
       platesReplaced: issued.filter((p) => p.issuedBy === id && this.plates.findOne((x) => x.replacedBy === p.code)).length,
       scans: scans.filter((s) => s.by === id).length,
       communes: [...new Set(issued.filter((p) => p.issuedBy === id).map((p) => p.commune))],
+      // Module 79 : situations révélées au scan et présence attestée (sans montant).
+      bySituation: (['red', 'amber', 'green', 'grey'] as const).reduce((m, c) => ({ ...m, [c]: scans.filter((s) => s.by === id && (s.situation ?? 'grey') === c).length }), {} as Record<'red' | 'amber' | 'green' | 'grey', number>),
+      presenceVerified: scans.filter((s) => s.by === id && s.presenceVerified).length,
     }));
     return { date, generatedAt: this.now().toISOString(), totals: { platesIssued: issued.length, scans: scans.length }, agents: rows };
   }
@@ -1052,7 +1096,7 @@ export class VerticalesService {
       this.ctx.audit.append({ actor: actorOf(user), action: 'vertical.liquidation.refused', resourceType: 'fiscal_object', resourceId: objectId, outcome: 'DENIED', details: { vertical: v.slug, reason: v.legal } });
       throw unprocessable('ACTE_REQUIS', `${v.name} : ${LEGAL_LABEL[v.legal]}. Aucune obligation ne peut être émise.`);
     }
-    const code = VX_DEMO_RULES[v.slug];
+    const code = ruleCodeFor(v.slug);
     const latest = code ? this.ruleByCode(code) : undefined;
     if (!latest) throw unprocessable('NO_RULE', `Aucune règle au registre pour ${v.name} : aucun montant n’est exigible.`);
     const rule = this.activeRuleFor(v.slug) ?? latest; // une règle non ACTIVE est refusée (et journalisée) par le moteur de liquidation
@@ -1068,6 +1112,18 @@ export class VerticalesService {
     if (v.slug === 'construction' && !Object.keys(inputs).length) {
       const a = o.attributes;
       inputs = { emprise_voie_m2: String(a.emprise_voie_m2 ?? '0'), duree_mois: String(a.dureeMois ?? '1') };
+    }
+    if (v.slug === 'environnement' && !Object.keys(inputs).length) {
+      // Base déclarée par le metteur en marché (dernière déclaration de tonnage non refusée) : jamais estimée.
+      const t = this.environnement?.declaredTonnage(objectId);
+      if (!t) throw unprocessable('NO_TONNAGE_DECLARATION', 'Liquidation impossible sans tonnage déclaré par le metteur en marché.');
+      inputs = { tonnage_t: t.tonnes };
+    }
+    if (v.slug === 'actifs' && !Object.keys(inputs).length) {
+      // Redevance domaniale : montant de l'offre retenue à l'issue de l'appel (jamais un montant saisi par l'agent).
+      const r = o.attributes.redevance_annuelle;
+      if (typeof r !== 'string' || !r) throw unprocessable('NO_AWARD', 'Liquidation impossible : aucune attribution issue d’un appel pour cet objet.');
+      inputs = { redevance_annuelle: r };
     }
     const res = this.ctx.assessment.calculate(user, { ruleId: rule.id, taxpayerId: o.taxpayerId, objectId, inputs, simulate: false });
     if (v.slug === 'evenements') {

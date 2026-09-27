@@ -686,6 +686,19 @@ export class PubliciteService {
     qrScanned?: string; ocrText?: string; presumedOperator?: string; observations: string;
   }) {
     let device = input.deviceId ? this.getDevice(input.deviceId) : input.qrScanned ? this.devices.findOne((d) => d.qrToken === input.qrScanned) ?? null : null;
+    // Module 77 : recherche AUTOMATIQUE de l'autorisation correspondante à partir des références lues par OCR (référence
+    // du support ou de l'autorisation) quand ni le support ni le QR n'ont été désignés ; une seule correspondance exigée.
+    let autoMatched: string | null = null;
+    if (!device && input.ocrText) {
+      const text = input.ocrText.toUpperCase();
+      const refs = new Set([...text.matchAll(REF_RE)].map((m) => m[0]));
+      const auths = new Set([...text.matchAll(AUTH_RE)].map((m) => m[0]));
+      const hits = new Set<string>([
+        ...this.devices.all().filter((d) => refs.has(d.reference)).map((d) => d.id),
+        ...this.requests.all().filter((r) => auths.has(r.reference)).map((r) => r.deviceId),
+      ]);
+      if (hits.size === 1) { device = this.getDevice([...hits][0]!); autoMatched = device.reference; }
+    }
     // Publicité mobile : le véhicule circule dans toute la ville ; l'inspection relève de la commune où se trouve
     // l'inspecteur (position de l'inspection), non de la commune déclarée du support.
     const newType = input.newDevice?.type;
@@ -735,7 +748,7 @@ export class PubliciteService {
       actor: actorOf(user), action: 'publicite.inspection.recorded', resourceType: 'ad_inspection', resourceId: insp.id,
       details: { deviceId: device.id, finding: insp.finding, photos: insp.photos, serverPhotos: serverPhotos.length, weakEvidence: insp.weakEvidence, lat: insp.lat, lon: insp.lon, caseId },
     });
-    return { inspection: insp, device: this.deviceView(this.getDevice(device.id), { withOwner: true }), case: caseId ? this.caseView(this.cases.get(caseId)!) : null };
+    return { inspection: insp, device: this.deviceView(this.getDevice(device.id), { withOwner: true }), case: caseId ? this.caseView(this.cases.get(caseId)!) : null, autoMatched };
   }
 
   // ---------------------------------------------------------------- Photos de preuve (conservées au serveur)
@@ -1018,6 +1031,8 @@ export class PubliciteService {
         requestsPending: this.requests.find((r) => ['DEPOSEE', 'COMPLEMENT_DEMANDE', 'PROPOSEE'].includes(r.status)).length,
         inspections: inspections.length, casesOpen: cases.filter((c) => c.status === 'CONSTATE' || c.status === 'VERIFIE').length,
         casesRetained: cases.filter((c) => c.status === 'RETENU').length, casesDismissed: cases.filter((c) => c.status === 'CLASSE' || c.status === 'REJETE_QA').length,
+        // Module 77 : constats validés (vérification du superviseur confirmée), qu'ils soient ensuite retenus ou classés.
+        casesValidated: cases.filter((c) => c.verification?.outcome === 'CONFIRME').length,
         contested: cases.filter((c) => c.contests.length > 0).length,
         obligations: liquidated, revenue: sumByCurrency(paid), authorizedSurfaceM2: surfaceStr,
         revenuePerM2: dec(surfaceStr) > 0n ? perUnit(sumByCurrency(paid), surfaceStr) : [],

@@ -3,6 +3,7 @@ import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Too
 import { formatMoney, type CurrencyCode } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
+import { PartsRepartition, SuiviTransparence } from './TransparenceComplements';
 import { PageHead } from '../../components/Shell';
 import { ChartCard } from '../../components/ChartCard';
 import { ChartTooltip, useChartColors } from '../../components/charts';
@@ -49,7 +50,7 @@ export default function Transparence() {
   const head = <PageHead eyebrow="Transparence publique" title="Où vont nos impôts ?" lead="Recettes rapprochées sur les comptes publics, par commune et par catégorie, publiées chaque trimestre par l’autorité. Aucune donnée personnelle." />;
   if (index.loading) return <div className="page page-wide">{head}<Loading /></div>;
   if (index.error) return <div className="page page-wide">{head}<ErrorState error={index.error} onRetry={index.reload} /></div>;
-  if (!index.data?.periods.length) return <div className="page page-wide">{head}<EmptyState title="Aucun tableau publié pour l’instant" icon="globe">Le premier tableau trimestriel sera publié par l’autorité après le test anti-ré-identification.</EmptyState></div>;
+  if (!index.data?.periods.length) return <div className="page page-wide">{head}<EmptyState title="Aucun tableau publié pour l’instant" icon="globe">Le premier tableau trimestriel sera publié par l’autorité après le test anti-ré-identification.</EmptyState><div className="dash-grid"><PartsRepartition /><SuiviTransparence /></div></div>;
   const p = pub.data;
   const currencies = p ? p.content.totals.map((t) => t.currency) : [];
 
@@ -137,6 +138,7 @@ export default function Transparence() {
           <p className="small muted">Seuil de publication : {p.content.threshold} contribuables distincts par cellule.</p>
         </>
       )}
+      <div className="dash-grid"><PartsRepartition /><SuiviTransparence /></div>
     </div>
   );
 }

@@ -30,6 +30,9 @@ export interface Registre {
   points: PointView[];
   septQuestions: { rang: number; question: string; autorite: string; effet: string; points: string[]; statut: string }[];
   annexeB: { point: number; objet: string; points: string[]; note?: string; statut: string }[];
+  /** Document maître FR 2 : annexe B (13 points) et annexe A (11 sources et leur fiabilité). */
+  annexeBFr2?: { point: number; objet: string; points: string[]; note?: string; statut: string }[];
+  annexeA?: { rang: number; source: string; usage: string; fiabilite: string; points: string[]; instrumentsStatut: { id: string; statut: string }[] }[];
   fonctions: EtatFonction[];
   summary: { total: number; ouverts: number; tranches: number };
   note: string;
@@ -50,7 +53,7 @@ const STATUT_TEXTE: Record<string, [string, 'good' | 'warning' | 'critical' | 'n
   EN_VIGUEUR: ['En vigueur', 'good'], MODIFIE: ['Modifié', 'info'], A_VERIFIER: ['À vérifier', 'warning'], ABROGE: ['Abrogé', 'critical'], ABSENT: ['Absent du registre', 'critical'], MIXTE: ['Statuts mixtes', 'neutral'],
 };
 
-type Tab = 'points' | 'questions' | 'annexe' | 'fonctions' | 'textes';
+type Tab = 'points' | 'questions' | 'annexe' | 'annexeFr2' | 'sources' | 'fonctions' | 'textes';
 
 export default function PointsJuridiques() {
   const { user, fmtDate } = useApp();
@@ -138,6 +141,8 @@ export default function PointsJuridiques() {
             { id: 'points', label: 'Points J1–J30', count: reg.data.summary.ouverts },
             { id: 'questions', label: 'Sept questions (§ 6.4)' },
             { id: 'annexe', label: 'Annexe B (29 points)' },
+            ...(reg.data.annexeBFr2 ? [{ id: 'annexeFr2' as Tab, label: `Annexe B du Document maître FR 2 (${reg.data.annexeBFr2.length} points)` }] : []),
+            ...(reg.data.annexeA ? [{ id: 'sources' as Tab, label: `Annexe A — sources (${reg.data.annexeA.length})` }] : []),
             { id: 'fonctions', label: 'Fonctions en attente', count: reg.data.fonctions.filter((f) => f.enAttente).length },
             { id: 'textes', label: 'Textes (§ 6.1)' },
           ]} />
@@ -168,6 +173,23 @@ export default function PointsJuridiques() {
                 { key: 'n', label: 'N°', num: true, render: (x) => x.point },
                 { key: 'o', label: 'Objet', primary: true, render: (x) => <>{x.objet}{x.note && <span className="small muted"> — {x.note}</span>}</> },
                 { key: 'p', label: 'Rattachement', render: (x) => <span className="ig-inline"><span className="mono small">{x.points.join(', ')}</span><StatutPoint statut={x.statut} /></span> },
+              ]} />
+          )}
+          {tab === 'annexeFr2' && reg.data.annexeBFr2 && (
+            <DataTable rows={reg.data.annexeBFr2} rowKey={(x) => String(x.point)} caption="Annexe B du Document maître FR 2 — points à vérifier avant mise en production"
+              columns={[
+                { key: 'n', label: 'N°', num: true, render: (x) => x.point },
+                { key: 'o', label: 'Objet', primary: true, render: (x) => <>{x.objet}{x.note && <span className="small muted"> — {x.note}</span>}</> },
+                { key: 'p', label: 'Rattachement', render: (x) => <span className="ig-inline"><span className="mono small">{x.points.join(', ')}</span><StatutPoint statut={x.statut} /></span> },
+              ]} />
+          )}
+          {tab === 'sources' && reg.data.annexeA && (
+            <DataTable rows={reg.data.annexeA} rowKey={(x) => String(x.rang)} caption="Annexe A — sources consultées et niveau de fiabilité"
+              columns={[
+                { key: 's', label: 'Source', primary: true, render: (x) => x.source },
+                { key: 'u', label: 'Usage', render: (x) => <span className="small">{x.usage}</span> },
+                { key: 'f', label: 'Fiabilité', render: (x) => <span className="small">{x.fiabilite}</span> },
+                { key: 'r', label: 'Rattachement', render: (x) => <span className="small mono">{[...x.instrumentsStatut.map((i) => `${i.id} (${STATUT_TEXTE[i.statut]?.[0] ?? i.statut})`), ...x.points].join(', ') || '—'}</span> },
               ]} />
           )}
           {tab === 'fonctions' && (

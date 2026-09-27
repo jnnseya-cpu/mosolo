@@ -53,3 +53,7 @@
 
 /* AVIA — chiffres du dossier source sur deux colonnes (une seule colonne sur téléphone). */
 .vx-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+
+/* Fiches sectorielles (modules 13 à 25) : listes compactes et résultat de scan valide. */
+.list-plain { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+.callout-ok { border-left-color: var(--flag-blue); }

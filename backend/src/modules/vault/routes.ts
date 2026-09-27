@@ -11,6 +11,8 @@ const proposeSchema = z.object({
   accountNumber: z.string().regex(/^[A-Z0-9 ]{8,40}$/, 'numéro de compte invalide'),
   holderName: z.string().trim().min(2).max(200),
   reason: z.string().trim().min(5).max(500),
+  /** Date d'effet future (ISO 8601), au plus tôt à la fin du refroidissement de 72 h (module 60). */
+  effectiveFrom: z.string().datetime({ offset: true }).optional(),
 }).strict();
 
 const approveSchema = z.object({ outOfBandVerified: z.boolean() }).strict();

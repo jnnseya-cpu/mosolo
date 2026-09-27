@@ -131,7 +131,7 @@ export default function Home() {
               </figcaption>
             </figure>
             <figure className="big-figure">
-              <p className="big-num">22 <span className="big-unit">%</span> <span className="big-sep">/</span> 17 <span className="big-unit">%</span></p>
+              <p className="big-num">22 <span className="big-unit">%</span></p>
               <figcaption>
                 <p className="big-label">{tr('home.fig2.label')}</p>
                 <p className="big-text">{tr('home.fig2.text')}</p>

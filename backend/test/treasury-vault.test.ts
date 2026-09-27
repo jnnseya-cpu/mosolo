@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { assertBalanced } from '../src/modules/treasury/ledger.js';
-import { createOrder, DEMO, payDemoObligation, setup } from './helpers.js';
+import { createOrder, DEMO, payDemoObligation, setup, postStatement } from './helpers.js';
 
 describe('Grand livre et rapprochement', () => {
   it('AC-LED-01 : aucune suppression ; correction par contre-écriture liée ; livre équilibré', async () => {
@@ -45,7 +45,7 @@ describe('Grand livre et rapprochement', () => {
   it('les lignes non appariées deviennent des exceptions (crédit orphelin, mauvais compte, montant)', async () => {
     const env = await setup();
     const { order } = await payDemoObligation(env);
-    const res = await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+    const res = await postStatement(env, 'u-tresor', {
       statementId: 'REL-EXC',
       lines: [
         { accountAlias: DEMO.dgipkAlias, amount: { amount: '99.00', currency: 'USD' }, valueDate: '2026-09-26', paymentReference: 'PR-ORPH-ELIN' },

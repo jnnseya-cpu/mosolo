@@ -47,10 +47,33 @@ export function ScenarioCard({ s }: { s: Scenario }) {
   );
 }
 
+export interface IllustrativeExample {
+  titre: string; source: string; colonnes: string[]; avertissement: string; formula: string; concordance: boolean;
+  lignes: { ligne: string; objetsTexte: string; montantTexte: string; conformiteTexte: string; gainTexte: string; marque: string; gainCalcule: MoneyJSON; gainMillionsCalcule: number; gainMillionsCahier: number; concordance: boolean }[];
+}
+
+/** Exemple illustratif du Cahier (§ 39.3) : lecture seule, jamais enregistré comme hypothèse ni utilisé par les scénarios. */
+export function IllustrativeExamplePanel({ x }: { x: IllustrativeExample }) {
+  return (
+    <Section title={`[EXEMPLE] ${x.titre}`} sub={`${x.source} — ${x.formula}`}>
+      <DataTable caption="Exemple illustratif (hypothèses)" rows={x.lignes} rowKey={(l) => l.ligne} columns={[
+        { key: 'l', label: x.colonnes[0] ?? 'Ligne', primary: true, render: (l) => <><strong>{l.ligne}</strong><span className="small muted" style={{ display: 'block' }}>{l.marque}</span></> },
+        { key: 'o', label: x.colonnes[1] ?? 'Objets', render: (l) => l.objetsTexte },
+        { key: 'm', label: x.colonnes[2] ?? 'Montant', render: (l) => l.montantTexte },
+        { key: 'c', label: x.colonnes[3] ?? 'Conformité', render: (l) => l.conformiteTexte },
+        { key: 'g', label: `${x.colonnes[4] ?? 'Gain'} (Cahier)`, num: true, render: (l) => l.gainTexte },
+        { key: 'k', label: 'Recalcul (formule du simulateur)', num: true, render: (l) => <>{moneyText(l.gainCalcule)} <StatusBadge tone={l.concordance ? 'good' : 'critical'} label={l.concordance ? `≈ ${l.gainMillionsCalcule} M USD, concordant` : `≈ ${l.gainMillionsCalcule} M USD, écart`} /></> },
+      ]} />
+      <Callout tone="warn"><strong>Avertissement méthodologique.</strong> {x.avertissement}</Callout>
+    </Section>
+  );
+}
+
 export default function Scenarios() {
   const { user } = useApp();
   const sim = useApi(() => api<Simulation>('/v1/pilotage/scenarios'), [user?.id]);
   const hyps = useApi(() => api<{ items: Hyp[] }>('/v1/pilotage/scenarios/hypotheses'), [user?.id]);
+  const example = useApi(() => api<IllustrativeExample>('/v1/pilotage/scenarios/exemple-illustratif'), [user?.id]);
   const reload = () => { sim.reload(); hyps.reload(); };
   const r = useRunner(reload);
   const [h, setH] = useState({ scenario: 'ATTENDU', variable: 'TAUX_CONFORMITE_CIBLE', revenue: '*', value: '', source: '', sourceDate: '' });
@@ -92,6 +115,7 @@ export default function Scenarios() {
             </div>
           )}
         </Section>
+        {example.data && <IllustrativeExamplePanel x={example.data} />}
       </div>
     </div>
   );

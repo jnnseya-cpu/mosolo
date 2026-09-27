@@ -16,7 +16,7 @@ import { assertDistinctPerson, authorize } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository, type Entity } from '../../core/repository.js';
 import { discover, isAppendOnly } from '../../persistence/registry.js';
 import { classer, purgeInterdite, type RegleConservation } from './classification.js';
-import { ANNEXE_B_29, FONCTIONS_CONDITIONNEES, POINTS_JURIDIQUES, SEPT_QUESTIONS_6_4, type FonctionConditionnee, type PointJuridique } from './points.js';
+import { ANNEXE_B_29, ANNEXE_B_FR2, FONCTIONS_CONDITIONNEES, POINTS_JURIDIQUES, SEPT_QUESTIONS_6_4, SOURCES_ANNEXE_A, type FonctionConditionnee, type PointJuridique } from './points.js';
 
 export interface ActeReference { reference: string; titre: string; sha256: string }
 
@@ -89,6 +89,9 @@ export class JuridiqueService {
       points,
       septQuestions: SEPT_QUESTIONS_6_4.map((q) => ({ ...q, statut: tranche(q.points) ? 'TRANCHE' : 'OUVERT' })),
       annexeB: ANNEXE_B_29.map((a) => ({ ...a, statut: tranche(a.points) ? 'TRANCHE' : 'OUVERT' })),
+      // Document maître FR 2 : annexe B (13 points) et annexe A (sources et fiabilité), rattachées au registre.
+      annexeBFr2: ANNEXE_B_FR2.map((a) => ({ ...a, statut: tranche(a.points) ? 'TRANCHE' : 'OUVERT' })),
+      annexeA: SOURCES_ANNEXE_A.map((a) => ({ ...a, instrumentsStatut: a.instruments.map((id) => ({ id, statut: this.ctx.rules.instrument(id)?.status ?? 'ABSENT' })) })),
       fonctions: (Object.keys(FONCTIONS_CONDITIONNEES) as FonctionConditionnee[]).map((f) => this.fonction(f)),
       summary: { total: points.length, ouverts: points.filter((p) => p.statut === 'OUVERT').length, tranches: points.filter((p) => p.statut === 'TRANCHE').length },
       note: 'Trancher un point exige un acte (référence et empreinte) proposé par un juriste puis décidé par une autre personne. Aucune fonction existante n’est désactivée par ce registre : chaque écran affiche ce qu’il attend.',

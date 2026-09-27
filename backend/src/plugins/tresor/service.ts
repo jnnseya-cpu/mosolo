@@ -11,7 +11,7 @@
  */
 import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify, type KeyObject } from 'node:crypto';
 import { canTransition, Money, type CurrencyCode, type MoneyJSON, type RevenueCategory } from '@mosolo/shared';
-import { actorOf } from '../../core/audit.js';
+import { actorOf, type AuditActor } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { DAY_MS, HOUR_MS } from '../../core/clock.js';
 import { canonicalJson, sha256Hex } from '../../core/crypto.js';
@@ -195,7 +195,7 @@ export interface RecuperationGate {
  */
 export interface RepartitionGate {
   target(input: OperationInput): { key: string; label: string; amount: MoneyJSON };
-  executed(op: FinancialOperation, user: User, at: string): Record<string, unknown>;
+  executed(op: FinancialOperation, user: User, at: string, actor?: AuditActor): Record<string, unknown>;
 }
 
 export interface FinancialOperation {
@@ -214,6 +214,11 @@ export interface FinancialOperation {
   decidedAt?: string;
   decisionNote?: string;
   result?: Record<string, unknown>;
+  /**
+   * Exécution AUTOMATIQUE (répartition du § 37A, décision du maître d'ouvrage du 27/09/2026) : fondée sur l'acte et la
+   * convention tripartite enregistrés, sans validation humaine au cas par cas ; piste d'audit complète.
+   */
+  automatic?: { acte: string; convention: string };
 }
 
 export interface NomenclatureEntry {
@@ -840,6 +845,25 @@ export class TresorService {
       this.ctx.comms.publish('refund.requested', [taxpayerRecipient(this.ctx.taxpayers.get(o.taxpayerId))], { reference: o.paymentReference }, { entity: 'TRESOR' });
     }
     return op;
+  }
+
+  /**
+   * Exécution AUTOMATIQUE d'un flux de répartition du § 37A : clé ACTIVE, acte et convention tripartite enregistrés
+   * (vérifiés par la passerelle). Même cible et mêmes refus que la voie à quatre yeux (deux flux seulement, flux déjà
+   * instruit refusé) ; l'opération est journalisée comme exécutée par le traitement automatique.
+   */
+  executeRepartitionAutomatically(input: OperationInput, principal: User, actor: AuditActor, basis: { acte: string; convention: string }): FinancialOperation {
+    if (input.kind !== 'DECAISSEMENT_REPARTITION' || !this.repartitionGate) throw unprocessable('REPARTITION_INDISPONIBLE', 'Exécution automatique réservée aux flux de la répartition du § 37A.');
+    const target = this.precheck(input);
+    const at = this.now();
+    const op = this.operations.insert({
+      id: this.ids.next('OPF'), kind: input.kind, status: 'PROPOSEE', input, target, proposedBy: principal.id, proposedAt: at,
+      approvals: [], requiredApprovals: 0, automatic: basis,
+    });
+    const result = this.repartitionGate.executed(op, principal, at, actor);
+    const updated = this.operations.update({ ...op, status: 'EXECUTEE', decidedBy: principal.id, decidedAt: at, decisionNote: `Exécution automatique — acte ${basis.acte}, convention ${basis.convention}`, result });
+    this.ctx.audit.append({ actor, action: 'treasury.operation.executed_automatically', resourceType: 'financial_operation', resourceId: op.id, details: { kind: op.kind, target: target.label, reason: input.reason, ...basis, ...result } });
+    return updated;
   }
 
   listOperations(user: User, status?: string) {

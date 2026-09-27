@@ -18,6 +18,7 @@ import { assertDistinctPerson, authorize } from '../../core/policy.js';
 import { validityView } from '../../core/validity.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { userRecipient } from '../../modules/identity/recipients.js';
+import type { ObjectCategory } from '../../modules/objects/service.js';
 import { pct } from '../../core/percent.js';
 import { certificationValide } from '../apprentissage/garde.js';
 import { distanceM, type LatLon } from './geo.js';
@@ -59,6 +60,8 @@ export interface MissionInput {
 export interface FindingInput {
   clientRef: string; objectId?: string; outcome: FindingOutcome; observations: string;
   gps: { lat: number; lon: number; accuracyM: number; source?: 'GPS' | 'MANUEL' | 'ZONE' }; photoSha256?: string; capturedAt: string; deviceId?: string; justification?: string;
+  /** Catégorie d'un objet non enregistré (objet provisoire, sans effet fiscal avant qualification). */
+  category?: ObjectCategory;
 }
 
 /**
@@ -87,6 +90,8 @@ export class TerrainService {
   private readonly badgeKey: string;
   /** Contrôle qualité renforcé : doublons, objets fictifs, rotation des zones, récupérations (§ 15A.5, § 15A.7). */
   qualite?: TerrainQualityService;
+  /** Inspection et constat (module 35) : dossiers d'inspection, paquet hors ligne, procès-verbaux. */
+  inspection?: import('./inspection.js').InspectionService;
 
   constructor(private readonly ctx: AppContext) {
     // Clé de signature des QR de badge, dérivée de la clé serveur (production : HSM, clé dédiée).
@@ -116,6 +121,10 @@ export class TerrainService {
     if (u.roles.some((r) => BROAD_ROLES.includes(r))) return undefined;
     if (!u.roles.includes('R35')) return undefined;
     return this.subcontractors.findOne((s) => s.entity === u.entity) ?? null;
+  }
+  /** Périmètre sous-traitant de la personne (undefined : tous ; null : aucun) — points de résultats (module 67). */
+  subcontractorScope(u: User): Subcontractor | null | undefined {
+    return this.scopedSubcontractor(u);
   }
   private assertOwnSubcontractor(u: User, st: Subcontractor): void {
     const scoped = this.scopedSubcontractor(u);
@@ -484,6 +493,24 @@ export class TerrainService {
     return this.setAgentStatus(u, agent, 'SUSPENDU', this.reason(reason));
   }
 
+  /**
+   * Fin d'affectation (module 51 « révoquer automatiquement à la fin d'une affectation ») : tout agent HABILITÉ dont
+   * l'habilitation est échue (heure du serveur) est révoqué — badge, terminaux, missions rendues — par l'échéancier.
+   * Mesure de sécurité liée à l'échéance, jamais une sanction : une nouvelle habilitation reste possible.
+   */
+  expireAssignments(): string[] {
+    const today = this.today();
+    const system = { kind: 'user' as const, id: 'systeme-echeancier', name: 'Échéancier des affectations', roles: [], entity: 'PLATEFORME' };
+    const out: string[] = [];
+    for (const a of this.agents.find((x) => x.status === 'HABILITE' && !!x.habilitation && x.habilitation.validUntil < today)) {
+      this.setAgentStatus(system, a, 'REVOQUE', `Fin d’affectation : habilitation échue le ${a.habilitation!.validUntil}`);
+      const target = this.ctx.users.get(a.id);
+      if (target) target.territory = [];
+      out.push(a.id);
+    }
+    return out;
+  }
+
   revokeAgent(u: User, agentId: string, reason: string): FieldAgent {
     authorize(u, A.agentSuspend);
     const agent = this.agents.get(agentId);
@@ -778,6 +805,8 @@ export class TerrainService {
     const sealContent = {
       clientRef: input.clientRef, missionId, objectId: input.objectId ?? null, agentId: u.id, outcome: input.outcome, observations: input.observations,
       gps: input.gps, photoSha256: input.photoSha256 ?? null, capturedAt: input.capturedAt, deviceId: input.deviceId ?? null, justification: input.justification ?? null,
+      // Scellée seulement si fournie : les empreintes des constats antérieurs restent inchangées.
+      ...(input.category ? { category: input.category } : {}),
     };
     const seal = sha256Hex(canonicalJson(sealContent));
     const previous = this.findings.findOne((f) => f.agentId === u.id && f.clientRef === input.clientRef);
@@ -801,6 +830,7 @@ export class TerrainService {
       if (d.agentUserId !== u.id) throw forbidden('DEVICE_USER_MISMATCH', 'Ce terminal n’est pas affecté à cet agent.');
       if (d.status !== 'ACTIF') throw forbidden('DEVICE_REVOKED', 'Terminal révoqué.');
     }
+    if (input.category && input.outcome !== 'OBJET_NON_ENREGISTRE') throw badRequest('CATEGORY_ONLY_FOR_NEW_OBJECT', 'La catégorie ne se saisit que pour un objet non enregistré.');
     if (input.outcome !== 'OBJET_NON_ENREGISTRE' && m.objectIds.length > 0 && !input.objectId) {
       throw badRequest('OBJECT_REQUIRED', 'Objet de la mission requis pour ce type de constat.');
     }
@@ -833,7 +863,7 @@ export class TerrainService {
       commune: m.commune, outcome: input.outcome, observations: input.observations, gps: input.gps,
       ...(input.photoSha256 ? { photoSha256: input.photoSha256.toLowerCase() } : {}), capturedAt: input.capturedAt, receivedAt: this.now(),
       reference, distanceM: dist, toleranceM: tol, flags, ...(flagMessage ? { flagMessage } : {}),
-      ...(input.justification ? { justification: input.justification } : {}), seal, probativeStatus: 'OBSERVE', status: 'SOUMIS',
+      ...(input.justification ? { justification: input.justification } : {}), ...(input.category ? { category: input.category } : {}), seal, probativeStatus: 'OBSERVE', status: 'SOUMIS',
     });
     if (m.status === 'AFFECTEE') this.missions.update({ ...m, status: 'EN_COURS' });
     this.audit(u, 'terrain.finding.submitted', 'finding', finding.id, { missionId, objectId: input.objectId, distanceM: dist, flags, seal });

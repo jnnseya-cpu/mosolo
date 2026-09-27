@@ -11,6 +11,7 @@
  * Réutilise : registre des règles et des instruments, objets fiscaux, quitus (fiscal), titres par plaque, missions
  * terrain, alertes d'intégrité, concentration des exonérations, agent « Découverte des recettes » (ia), audit, alertes.
  */
+import type { PilotResultsService } from './pilotes.js';
 import { createHash } from 'node:crypto';
 import { distanceM, Money, normalizePlate, type CurrencyCode, type MoneyJSON, type RoleCode } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
@@ -78,6 +79,8 @@ export class OpportunitesService {
   readonly blocks = new InMemoryRepository<ServiceBlock>();
   readonly simulations = new InMemoryAppendOnlyRepository<Simulation>();
   readonly params = new InMemoryRepository<CrossParams & { id: string }>();
+  /** Résultats des pilotes et indicateurs (module 61) — branché par le module (plugin.ts). */
+  pilots!: PilotResultsService;
   private readonly ids = new IdGenerator();
 
   constructor(private readonly ctx: AppContext) {

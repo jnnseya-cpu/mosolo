@@ -12,7 +12,7 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
-import { DemoNote, FiscalTabs, PERIODICITY, PROBATIVE, useViewer, VerifyQr } from './common';
+import { DemoNote, FiscalTabs, PERIODICITY, PROBATIVE, ReasonAction, useViewer, VerifyQr } from './common';
 import type { LeaseAttestationView, LeaseRow } from './types';
 import './fiscal.css';
 
@@ -36,6 +36,20 @@ function Attestation({ a }: { a: LeaseAttestationView }) {
       </div>
       <VerifyQr path={a.verifyPath} code={a.shortCodeDisplay} caption={a.number} size={112} />
     </div>
+  );
+}
+
+/** Résiliation du bail par une partie (§ 30 : déclaré, vérifié, résilié, contesté) : date d'effet et motif, jamais supprimé. */
+export function LeaseTermination({ l, onDone }: { l: LeaseRow; onDone: () => void }) {
+  const { fmtDate } = useApp();
+  const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
+  if (l.termination) return <p className="small">Bail résilié au {fmtDate(l.termination.endDate)} ({l.termination.byRole === 'BAILLEUR' ? 'par le bailleur' : l.termination.byRole === 'LOCATAIRE' ? 'par le locataire' : 'par un mandataire'}) — {l.termination.reason}</p>;
+  return (
+    <ReasonAction label="Résilier le bail" confirmLabel="Enregistrer la résiliation" tone="secondary" minLength={5}
+      onSubmit={async (reason) => { await api(`/v1/fiscal/leases/${encodeURIComponent(l.id)}/resiliation`, { method: 'POST', body: { endDate, reason } }); onDone(); }}>
+      <label className="label" htmlFor={`rs-date-${l.id}`}>Date d’effet de la résiliation</label>
+      <input id={`rs-date-${l.id}`} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+    </ReasonAction>
   );
 }
 
@@ -64,8 +78,9 @@ export default function AttestationsBail() {
           <article key={l.id} className="panel">
             <div className="panel-head">
               <div><p className="panel-title">Bail <span className="mono">{l.id}</span></p><p className="panel-sub">Vous êtes {l.role === 'BAILLEUR' ? 'bailleur' : 'locataire'} · <span className="mono">{l.unitIgf}</span></p></div>
-              <StatusBadge tone={PROBATIVE[l.probativeStatus]?.tone ?? 'neutral'} label={PROBATIVE[l.probativeStatus]?.label ?? l.probativeStatus} />
+              <StatusBadge tone={l.state === 'RESILIE' ? 'neutral' : PROBATIVE[l.probativeStatus]?.tone ?? 'neutral'} label={l.state === 'RESILIE' ? (l.stateLabel ?? 'Résilié') : PROBATIVE[l.probativeStatus]?.label ?? l.probativeStatus} />
             </div>
+            <LeaseTermination l={l} onDone={q.reload} />
             {l.attestation ? <Attestation a={l.attestation} /> : (
               <button type="button" className="btn btn-primary" onClick={() => void issue(l.id)}><Icon name="ticket" size={16} /> Obtenir l’attestation</button>
             )}

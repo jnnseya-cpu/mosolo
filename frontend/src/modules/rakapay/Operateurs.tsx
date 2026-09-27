@@ -17,6 +17,7 @@ import { api, describeError } from '../../lib/api';
 import { COMMUNES } from '../../verticals/catalogue';
 import '../referentiel/referentiel.css';
 import './rakapay.css';
+import { OperatorTools } from './Billetterie';
 
 interface Operator { id: string; code: string; name: string; kind: string; commune: string; status: string }
 interface Offer { id: string; operatorId: string; commercialName: string; family: string; duration: { unit: string; value: number }; publicRevenue: boolean; price?: MoneyJSON; typeCode?: string; status: string; place: { commune: string; label: string } }
@@ -117,6 +118,7 @@ function OperatorSpace({ id }: { id: string }) {
         </div></div>
       )}
       {d.publicCircuit && <p className="small"><strong>Circuit public</strong> — {d.publicCircuit.paidReferences} référence(s) payée(s) · <Amounts list={d.publicCircuit.amounts} /> · {d.publicCircuit.settlement}</p>}
+      <OperatorTools operatorId={id} viewer={d.viewer} offers={d.offers} agents={d.agents.filter((x) => x.status === 'ACTIF')} />
     </section>
   );
 }
@@ -185,6 +187,7 @@ function Supervision() {
           {sim && <p className="small">{sim.simulated.length ? <>Simulation : <Amounts list={sim.simulated} /> — </> : null}{sim.notice}</p>}
         </section>
       )}
+      <SupervisedOperators operators={(ops.data ?? []).filter((o) => o.status === 'ACCREDITE')} />
       {reviews.data && (
         <section className="panel">
           <div className="panel-head"><h2 className="panel-title"><Icon name="analysis" size={18} /> Revue des ventes atypiques</h2>
@@ -207,6 +210,22 @@ function Supervision() {
         </section>
       )}
     </div>
+  );
+}
+
+/** Supervision : limites approuvées, analyse quotidienne et blocage préventif, opérateur par opérateur. */
+function SupervisedOperators({ operators }: { operators: Operator[] }) {
+  const [sel, setSel] = useState('');
+  const dash = useApi(sel ? () => api<Dashboard>(`/v1/rakapay/operateurs/${sel}/tableau`) : null, [sel]);
+  return (
+    <section className="panel stack-sm">
+      <h2 className="panel-title"><Icon name="scale" size={18} /> Limites, analyse quotidienne et blocages</h2>
+      <select value={sel} onChange={(e) => setSel(e.target.value)} aria-label="Opérateur supervisé">
+        <option value="">Choisir un opérateur accrédité</option>
+        {operators.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+      </select>
+      {sel && dash.data && <OperatorTools operatorId={sel} viewer="SUPERVISION" offers={dash.data.offers} agents={dash.data.agents.filter((x) => x.status === 'ACTIF')} />}
+    </section>
   );
 }
 

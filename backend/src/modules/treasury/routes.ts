@@ -22,14 +22,35 @@ const statementSchema = z.object({
 }).strict();
 
 const reversalSchema = z.object({ reason: z.string().trim().min(5).max(500) }).strict();
+const validationSchema = z.object({ approve: z.boolean(), motif: z.string().trim().min(5).max(1000) }).strict();
 
 export function registerTreasuryRoutes(app: FastifyInstance, ctx: AppContext): void {
+  // Double validation des imports (module 29) : la route PROPOSE l'import (202, aucune écriture) avec son contrôle
+  // d'intégrité ; une seconde personne habilitée, distincte, le valide (POST …/:statementId/validation), et seulement
+  // alors le relevé est appliqué (appariement, règlement, suspens, quittances définitives). Rejeu d'un relevé déjà
+  // appliqué avec le même contenu : 200 et résultat d'origine (idempotent).
   app.post('/v1/settlements/statements', async (req, reply) => {
     const user = requireUser(req);
-    authorize(user, 'settlement.import');
+    authorize(user, 'tresorerie:releve.proposer');
     const body = parse(statementSchema, req.body);
-    const { replayed, result } = ctx.treasury.importStatement(user, body);
-    return reply.code(replayed ? 200 : 201).send(result);
+    const r = ctx.treasury.proposeImport(user, body);
+    if (r.replayed) return reply.code(200).send(r.result);
+    return reply.code(202).send({
+      ...r.pending, lines: r.pending.lines.length,
+      notice: r.pending.status === 'INTEGRITE_KO'
+        ? 'Intégrité du relevé en échec : aucune validation possible ; rien n’a été écrit.'
+        : 'Import proposé : rien n’est écrit tant qu’une seconde personne habilitée ne l’a pas validé.',
+    });
+  });
+
+  // Imports proposés : contrôle d'intégrité, proposant, décision (Trésor, analyste, audit).
+  app.get('/v1/settlements/imports', async (req) => ctx.treasury.listImports(requireUser(req)));
+
+  // Seconde validation : approbation (le relevé est appliqué, 201 et résultat) ou rejet motivé (200).
+  app.post<{ Params: { statementId: string } }>('/v1/settlements/statements/:statementId/validation', async (req, reply) => {
+    const user = requireUser(req);
+    const { pending, result } = ctx.treasury.validateImport(user, req.params.statementId, parse(validationSchema, req.body));
+    return result ? reply.code(201).send(result) : reply.code(200).send({ ...pending, lines: pending.lines.length });
   });
 
   // Relevés importés (Trésor, analyste, audit) : comptes crédités, lignes, lignes encore en exception ouverte.

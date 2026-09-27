@@ -109,7 +109,8 @@ export const CONFIDENTIALITE = {
 
 // ───────────────────────────────────────────── contenus versionnés ─────────────────────────────────────────────
 
-export type TypeContenu = 'FICHE' | 'MODULE';
+/** FICHE (aide contextuelle), MODULE (micro-apprentissage + épreuve), PROCEDURE (base de procédures versionnée, module 50). */
+export type TypeContenu = 'FICHE' | 'MODULE' | 'PROCEDURE';
 export type StatutVersion = 'BROUILLON' | 'PROPOSEE' | 'PUBLIEE' | 'REFUSEE' | 'REMPLACEE';
 
 export interface Question {

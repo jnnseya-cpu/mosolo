@@ -8,6 +8,8 @@
  * d'ouvrage du 27/09/2026) : c'est le montant fixé par la décision, non négociable ; l'agent invite l'usager à payer
  * par les canaux officiels avec sa référence, il n'encaisse rien et ne prend aucune mesure sur place.
  */
+import { kinshasaDate } from '../../core/clock.js';
+import { AgentReserveService } from './reserve-agents.js';
 import type { MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import { CommissionService } from './commissions.js';
@@ -60,6 +62,11 @@ export class SanctionsService {
   readonly counterChecks: CounterChecks;
   /** Validation à deux personnes des commissions acquises avant versement. */
   readonly validations: CommissionValidations;
+  /**
+   * Réserve des agents et sous-traitants par module (module 67, § 37A.5) : répartie au prorata des points de résultats
+   * vérifiés × note de qualité ; la commission de 10 % en est une vue (décision du maître d'ouvrage du 27/09/2026).
+   */
+  readonly reserve: AgentReserveService;
   private timer: NodeJS.Timeout | undefined;
 
   constructor(private readonly ctx: AppContext) {
@@ -68,6 +75,9 @@ export class SanctionsService {
     this.counterChecks = new CounterChecks(ctx);
     this.validations = new CommissionValidations(ctx, this.commissions);
     this.commissions.validationState = (key) => this.validations.stateOf(key);
+    this.reserve = new AgentReserveService(ctx, this.commissions, this.validations);
+    this.commissions.reserveView = (agentId) => this.reserve.compute(kinshasaDate(ctx.clock.now()).slice(0, 7), { agentId });
+    this.commissions.reserveAll = () => this.reserve.compute(kinshasaDate(ctx.clock.now()).slice(0, 7));
   }
 
   /** Calcul périodique de la surveillance : les signaux « à examiner » ouvrent des alertes (dédoublonnées). */

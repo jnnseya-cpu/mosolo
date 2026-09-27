@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { ManualClock } from '../src/core/clock.js';
 import { sha256Hex } from '../src/core/crypto.js';
-import { callbackHeaders } from './helpers.js';
+import { callbackHeaders, postStatement } from './helpers.js';
 import { runDemoFlow } from '../src/plugins/pilotage/demo-flow.js';
 import { pilotagePlugin } from '../src/plugins/pilotage/plugin.js';
 import type { PilotageService } from '../src/plugins/pilotage/service.js';
@@ -58,7 +58,7 @@ async function pay(env: Env, obligationId: string, channel = 'MOBILE_MONEY') {
 }
 
 async function reconcile(env: Env, orders: { paymentReference: string; amount: { amount: string; currency: string } }[]) {
-  const st = await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+  const st = await postStatement(env, 'u-tresor', {
     statementId: `REL-${randomUUID()}`,
     lines: orders.map((o) => ({ accountAlias: DEMO.dgipkAlias, amount: o.amount, valueDate: '2026-09-26', paymentReference: o.paymentReference })),
   });

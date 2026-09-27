@@ -18,10 +18,11 @@ import {
   VIOLATION_STATUS, ZONE_STATUS, type ObligationSummary, type Partner, type Reservation, type Session, type Violation, type Zone,
 } from './shared';
 import { EvidencePhotos } from './EvidencePhotos';
+import { TextChannelPanel } from './Stationnement14';
 import './parking.css';
 import { PrintProofLink } from '../preuves/PrintLink';
 
-type Tab = 'sessions' | 'start' | 'reservations' | 'violations' | 'partners';
+type Tab = 'sessions' | 'start' | 'reservations' | 'violations' | 'partners' | 'texte';
 const DURATIONS = [15, 30, 60, 120, 180, 240];
 
 export default function ParkingDriver() {
@@ -49,7 +50,7 @@ export default function ParkingDriver() {
         <>
           <ExampleNotice text="Seules les zones de démonstration sont payantes ici (règle fictive). Les zones réelles restent « acte requis » tant que le zonage et la grille ne sont pas publiés." />
           <div className="seg seg-wrap pk-tabs" role="tablist" aria-label="Rubriques">
-            {([['sessions', 'Mes sessions'], ['start', 'Démarrer'], ['reservations', 'Réservations'], ['violations', 'Constats'], ['partners', 'Parkings partenaires']] as [Tab, string][]).map(([k, l]) => (
+            {([['sessions', 'Mes sessions'], ['start', 'Démarrer'], ['reservations', 'Réservations'], ['violations', 'Constats'], ['partners', 'Parkings partenaires'], ['texte', 'USSD / SMS']] as [Tab, string][]).map(([k, l]) => (
               <button key={k} type="button" role="tab" aria-pressed={tab === k} aria-selected={tab === k} onClick={() => setTab(k)}>{l}</button>
             ))}
           </div>
@@ -58,6 +59,7 @@ export default function ParkingDriver() {
           {tab === 'reservations' && <ReservationsTab zones={zones.data ?? []} plates={vehicles.data ?? []} tick={tick} onChange={refresh} />}
           {tab === 'violations' && <ViolationsTab tick={tick} onChange={refresh} />}
           {tab === 'partners' && <PartnersTab tick={tick} />}
+          {tab === 'texte' && <TextChannelPanel onChange={refresh} />}
         </>
       )}
     </div>

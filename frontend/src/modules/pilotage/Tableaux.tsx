@@ -8,6 +8,7 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
+import { SIX_ETATS } from '@mosolo/shared';
 import {
   DrillChart, ExportButton, FiltersBar, KpiTiles, LadderChart, qs, ScopeLine, Section, SeriesChart, useFmt,
   type Amounts, type Contested, type DrillResult, type Filters, type Kpi, type LadderLevel, type Scope, type SeriesPoint,
@@ -85,6 +86,30 @@ function BucketTable({ rows, caption }: { rows: Bucket[]; caption: string }) {
   );
 }
 
+/**
+ * Les six états de la recette distingués explicitement (Document maître FR 2, ch. 42, critère 10) : potentiel,
+ * constaté, encaissé, réglé, rapproché, disponible — niveaux de l'échelle, jamais additionnés ; non mesuré déclaré.
+ */
+export function SixEtats({ levels }: { levels: { level: string; label: string; measured: boolean; consolidatedCdf: { amount: string; currency: string } | null; note?: string }[] }) {
+  return (
+    <section className="panel span-12" aria-labelledby="six-etats">
+      <header className="panel-head"><div><h2 className="panel-title" id="six-etats">Six états de la recette</h2><p className="panel-sub">Distingués explicitement, jamais additionnés (contre-valeur CDF indicative)</p></div></header>
+      <div className="pl-figs">
+        {SIX_ETATS.map((s) => {
+          const l = levels.find((x) => x.level === s.niveau);
+          return (
+            <div key={s.code} className="pl-fig">
+              <span>{s.libelle}</span>
+              <strong>{!l || !l.measured ? 'Non mesuré' : l.consolidatedCdf ? `${Number(l.consolidatedCdf.amount).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} ${l.consolidatedCdf.currency}` : '—'}</strong>
+              <span className="small muted">{l?.label ?? s.niveau}</span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default function Tableaux() {
   const { user } = useApp();
   const [params, setParams] = useSearchParams();
@@ -122,6 +147,7 @@ export default function Tableaux() {
           <div className="dash-grid">
             {d.kpis.length > 0 && <div className="span-12"><KpiTiles kpis={d.kpis.filter((k) => k.status !== 'NON_MESURE').slice(0, 8)} /></div>}
             {d.tiles && <Section title="Encaissement du jour" sub={`Journée du ${d.tiles.today} — comparaison avec la veille`}><DayFigures t={d.tiles} /></Section>}
+            <SixEtats levels={d.ladder} />
             <LadderChart className="span-7" levels={d.ladder} contested={d.contested} />
             {d.byCommune && <DrillChart className="span-5" drill={d.byCommune} title="Par commune (fait générateur)" />}
             {d.byCategory && <DrillChart className="span-6" drill={d.byCategory} title="Par catégorie de recette" />}

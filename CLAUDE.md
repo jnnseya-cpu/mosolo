@@ -43,4 +43,9 @@ données de démonstration.
 - **IRL** : 22 % à tous les rangs, retenue 20 % (rang 1) / 15 % (rangs 2 à 4) — § 16.2 ; statut « à vérifier ».
 - **Plaque NFIU** : l'agent habilité voit la situation complète (§ 16.7) ; scan public minimal.
 - **Module 4** : application Android **et iOS**.
+- **Données de démonstration (27/09/2026)** : toutes les données de démonstration sont conservées pour l'instant
+  (aucune suppression ni modification) ; le mode production (sans `--demo`) ne les charge pas.
+- **Interface (27/09/2026)** : pas de « Vérification publique » dans le menu du Gouverneur, du directeur de cabinet,
+  du secrétaire général et des ministres (R01–R05) ; la mention « Document de travail soumis à validation juridique… »
+  n'est plus affichée.
 

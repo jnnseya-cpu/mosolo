@@ -15,6 +15,7 @@ import { api } from '../../lib/api';
 import { MAP_STATUS } from '../../lib/status';
 import { ColorChip, DemoNote, FiscalTabs } from './common';
 import type { MapResponse } from './types';
+import { CouchesCadastre } from './Couches';
 import './fiscal.css';
 
 /** Disposition schématique (non géographique) des communes : [ligne, colonne]. */
@@ -140,6 +141,7 @@ export default function Carte() {
           </section>
         </div>
       )}
+      {user && !user.roles.some((r) => r === 'R30' || r === 'R31') && <CouchesCadastre />}
     </div>
   );
 }

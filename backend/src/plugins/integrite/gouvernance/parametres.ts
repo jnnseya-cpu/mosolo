@@ -28,6 +28,7 @@ import { ATTRIBUTION_WINDOWS_MINUTES, DECLARED_TIME_TOLERANCE_MINUTES } from '..
 import { COUNTER_CHECK_RATE_PER_10K } from '../../sanctions/counterchecks.js';
 import { MAX_CODE_ATTEMPTS, MAX_PASSWORD_FAILURES } from '../../socle/service.js';
 import { DEFAULT_GPS_TOLERANCE_M, MIN_SAMPLE_RATE } from '../../terrain/model.js';
+import { NOTE_QUALITE_SANS_JUGEMENT, POINTS_ENROLEMENT_VALIDE, POINTS_OBJET_CONFIRME, POINTS_REGULARISATION_CONFIRMEE } from '../../sanctions/reserve-agents.js';
 import { DYNAMIC_GRACE_SECONDS, DYNAMIC_WINDOW_SECONDS } from '../../titres/tokens.js';
 import { EXCEPTION_SLA_HOURS, PROVIDER_SETTLEMENT_DELAY_DAYS, REFUND_EXTRA_APPROVAL_THRESHOLDS, SUSPENSE_MAX_DAYS, SUSPENSE_SLA_DAYS } from '../../tresor/service.js';
 import { DETECTION_PARAMS } from '../service.js';
@@ -42,6 +43,9 @@ import {
 } from '../../pilotage/repartition/model.js';
 import { ATYPICAL_CANCELLATIONS_MIN, ATYPICAL_SALES_FACTOR, ATYPICAL_SALES_MIN } from '../../rakapay/operateurs.js';
 import { PARAMETRES_SECURITE } from './parametres-securite.js';
+import { PARAMETRES_VEHICULES } from '../../vehicules-controle/parametres.js';
+import { PARAMETRES_DOCUMENTS } from '../../documents/model.js';
+import { PARAMETRES_ENQUETES } from '../enquetes/parametres.js';
 
 export type ParamValue = number | boolean;
 export type ParamOwner = 'CODE' | 'REGISTRE';
@@ -107,6 +111,10 @@ export const REGISTRE_DEFAUTS: ParamDefinition[] = [
     'Durée à fixer par acte (prescription, archives publiques, J4, J8) ; purge par effacement des champs personnels, après aperçu et approbation à deux personnes.'),
   R('conservation.sessions_canaux_jours', 'Conservation des sessions USSD / SVI terminées (0 = non fixée : aucune purge)', 'Conservation des données (§ 32)', 0, 'jours', { min: 0, max: 3650 },
     'Durée à fixer par acte (J8) ; seules les sessions terminées sont concernées.'),
+  // Conservation des documents par catégorie (module 38) : 0 = non fixée ⇒ aucune purge ; preuves d'audit jamais purgées.
+  ...PARAMETRES_DOCUMENTS,
+  // Renseignement anti-fraude (module 40) : signaux complémentaires et suspension conservatoire.
+  ...PARAMETRES_ENQUETES,
 ];
 
 /** Paramètres anti-fraude du code (constantes importées : la valeur affichée est TOUJOURS celle du code en service). */
@@ -124,6 +132,11 @@ export const PARAMETRES_CODE: ParamDefinition[] = [
   // Contrôles et preuves
   C('sanctions.contre_verification_pct', 'Contre-vérification aléatoire des constats retenus', 'Contrôles et preuves', COUNTER_CHECK_RATE_PER_10K / 100, '%', code('plugins/sanctions/counterchecks.ts', 'COUNTER_CHECK_RATE_PER_10K'), 'Exprimé pour dix mille dans le code (500 = 5 %).'),
   C('terrain.contre_visite_min_pct', 'Terrain : taux minimal d’échantillonnage de contre-visite', 'Contrôles et preuves', MIN_SAMPLE_RATE, '%', code('plugins/terrain/model.ts', 'MIN_SAMPLE_RATE')),
+  // Module 67 : réserve des agents répartie par points de résultats vérifiés × note de qualité (§ 37A.5).
+  C('reserve.points_objet_confirme', 'Réserve des agents : points par objet confirmé après contrôle qualité', 'Réserve des agents (§ 37A.5)', POINTS_OBJET_CONFIRME, 'points', code('plugins/sanctions/reserve-agents.ts', 'POINTS_OBJET_CONFIRME')),
+  C('reserve.points_enrolement_valide', 'Réserve des agents : points par enrôlement valide', 'Réserve des agents (§ 37A.5)', POINTS_ENROLEMENT_VALIDE, 'points', code('plugins/sanctions/reserve-agents.ts', 'POINTS_ENROLEMENT_VALIDE')),
+  C('reserve.points_regularisation', 'Réserve des agents : points par régularisation confirmée par quittance définitive', 'Réserve des agents (§ 37A.5)', POINTS_REGULARISATION_CONFIRMEE, 'points', code('plugins/sanctions/reserve-agents.ts', 'POINTS_REGULARISATION_CONFIRMEE')),
+  C('reserve.note_sans_jugement', 'Réserve des agents : note de qualité sans résultat jugé', 'Réserve des agents (§ 37A.5)', NOTE_QUALITE_SANS_JUGEMENT, 'coefficient', code('plugins/sanctions/reserve-agents.ts', 'NOTE_QUALITE_SANS_JUGEMENT')),
   C('parking.fenetre_photo_min', 'Stationnement : fenêtre de prise des photos d’un contrôle', 'Contrôles et preuves', PHOTO_WINDOW_MINUTES, 'min', code('plugins/parking/field.ts', 'PHOTO_WINDOW_MINUTES')),
   C('parking.derive_horloge_s', 'Stationnement : dérive d’horloge du terminal signalée au-delà de', 'Contrôles et preuves', CLOCK_SKEW_WARN_SECONDS, 's', code('plugins/parking/field.ts', 'CLOCK_SKEW_WARN_SECONDS')),
   C('titres.fenetre_dynamique_s', 'Titres : période du code dynamique anti-capture', 'Contrôles et preuves', DYNAMIC_WINDOW_SECONDS, 's', code('plugins/titres/tokens.ts', 'DYNAMIC_WINDOW_SECONDS')),
@@ -195,6 +208,8 @@ export const PARAMETRES_CODE: ParamDefinition[] = [
   C('ia.decisions_min', 'IA : décisions minimales pour mesurer dérive ou biais', 'Suivi des modèles d’IA', IA_DECISIONS_MIN, 'décisions', code('plugins/ia/modeles.ts', 'IA_DECISIONS_MIN')),
   // Rapprochement proposé, sous-traitance terrain, détecteurs complémentaires (§ 15A.5, § 20.1, § 25).
   ...PARAMETRES_COMPLEMENTAIRES,
+  // Chaîne véhicule (modules 82 à 84) : délais et seuils d'alerte, jamais de tarif.
+  ...PARAMETRES_VEHICULES,
 ];
 
 export const ALL_PARAMETERS: ParamDefinition[] = [...REGISTRE_DEFAUTS, ...PARAMETRES_CODE];
