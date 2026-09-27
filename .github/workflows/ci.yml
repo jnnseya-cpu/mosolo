@@ -23,7 +23,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22]
+        # Node 22 (LTS de référence : .nvmrc, Dockerfile, Render) ; Node 24 (LTS suivante) pour anticiper. Node 20 : fin de vie avril 2026.
+        node: [22, 24]
     env:
       # Identifiants de démonstration uniquement ; aucun secret réel n'est utilisé en CI.
       MOSOLO_DEMO_MODE: 'true'

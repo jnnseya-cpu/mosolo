@@ -13,7 +13,7 @@
     "dev:frontend": "npm run dev -w frontend",
     "gen": "python3 tools/gen_evenements.py && python3 tools/gen_graphiques.py"
   },
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=22 <25" },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.11.0",
