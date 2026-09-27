@@ -65,9 +65,9 @@ export const DEMO_GOVERNOR_RAW = {
     month, collected: md([7.9, 8.15, 9.8, 8.4, 9.1, 10.1, 9.3, 9.05, 9.7, 11.95, 12.2, 13.45][i]!), target: md([9, 9, 10.5, 9.5, 10, 11, 10, 10, 10.5, 11.5, 11, 11][i]!),
   })),
   scenarios: [
-    { code: 'conservateur', label: 'Conservateur', yearEnd: md(128) },
-    { code: 'attendu', label: 'Attendu', yearEnd: md(141.5) },
-    { code: 'ambitieux', label: 'Ambitieux', yearEnd: md(158) },
+    { code: 'conservateur', label: 'Prudent (conservateur) [EXEMPLE]', yearEnd: md(128) },
+    { code: 'attendu', label: 'Attendu [EXEMPLE]', yearEnd: md(141.5) },
+    { code: 'ambitieux', label: 'Transformationnel (ambitieux) [EXEMPLE]', yearEnd: md(158) },
   ],
   alerts: [
     { id: 'a1', severity: 'CRITICAL', title: 'Compte bénéficiaire : changement proposé', detail: 'KIN-DGIPK-RECETTES-01 · 1 approbation sur 2 · délai de 72 h en cours', age: '2 h' },

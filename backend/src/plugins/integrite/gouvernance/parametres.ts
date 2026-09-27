@@ -31,6 +31,7 @@ import { DEFAULT_GPS_TOLERANCE_M, MIN_SAMPLE_RATE } from '../../terrain/model.js
 import { DYNAMIC_GRACE_SECONDS, DYNAMIC_WINDOW_SECONDS } from '../../titres/tokens.js';
 import { EXCEPTION_SLA_HOURS, PROVIDER_SETTLEMENT_DELAY_DAYS, REFUND_EXTRA_APPROVAL_THRESHOLDS, SUSPENSE_MAX_DAYS, SUSPENSE_SLA_DAYS } from '../../tresor/service.js';
 import { DETECTION_PARAMS } from '../service.js';
+import { IA_BIAIS_ECART_POINTS, IA_DECISIONS_MIN, IA_DERIVE_SEUIL_POINTS, IA_FENETRE_JOURS } from '../../ia/modeles.js';
 import {
   ECHANTILLON_CONFORMITE_MIN_PCT, ECHANTILLON_TAILLE, EVALUATION_CONTINUE_INTERVALLE_JOURS, SEUIL_REUSSITE_EPREUVE_PCT, VALIDITE_CERTIFICAT_JOURS,
 } from '../../apprentissage/model.js';
@@ -186,6 +187,11 @@ export const PARAMETRES_CODE: ParamDefinition[] = [
   // Anomalies locatives (§ 16.4) : listes de travail pour vérification humaine, jamais une dette.
   C('anomalies.compteurs_multiples_min', 'Anomalies locatives : nombre de compteurs constituant « plusieurs compteurs »', 'Détection (Intégrité)', MULTIPLE_METERS_MIN, 'compteurs', code('plugins/fiscal/anomalies.ts', 'MULTIPLE_METERS_MIN'), 'Cahier § 16.4 : « plusieurs compteurs ».'),
   C('anomalies.immeuble_neuf_mois', 'Anomalies locatives : délai sans unité déclarée après réception d’un immeuble', 'Détection (Intégrité)', NEW_BUILDING_NO_UNIT_MONTHS, 'mois', code('plugins/fiscal/anomalies.ts', 'NEW_BUILDING_NO_UNIT_MONTHS'), 'Cahier § 16.4 : « après douze mois ».'),
+  // Suivi des modèles d'IA (§ 23.1) : alertes à examiner, jamais d'effet automatique
+  C('ia.derive_points', 'IA : variation du taux d’acceptation signalée comme dérive', 'Suivi des modèles d’IA', IA_DERIVE_SEUIL_POINTS, 'points', code('plugins/ia/modeles.ts', 'IA_DERIVE_SEUIL_POINTS')),
+  C('ia.biais_ecart_points', 'IA : écart d’acceptation entre entités signalé comme biais', 'Suivi des modèles d’IA', IA_BIAIS_ECART_POINTS, 'points', code('plugins/ia/modeles.ts', 'IA_BIAIS_ECART_POINTS')),
+  C('ia.fenetre_jours', 'IA : fenêtre de comparaison du suivi de dérive', 'Suivi des modèles d’IA', IA_FENETRE_JOURS, 'jours', code('plugins/ia/modeles.ts', 'IA_FENETRE_JOURS')),
+  C('ia.decisions_min', 'IA : décisions minimales pour mesurer dérive ou biais', 'Suivi des modèles d’IA', IA_DECISIONS_MIN, 'décisions', code('plugins/ia/modeles.ts', 'IA_DECISIONS_MIN')),
 ];
 
 export const ALL_PARAMETERS: ParamDefinition[] = [...REGISTRE_DEFAUTS, ...PARAMETRES_CODE];

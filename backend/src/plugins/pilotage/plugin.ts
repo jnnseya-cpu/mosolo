@@ -26,6 +26,12 @@ definePolicy('pilotage:profile.tresor', { R17: always, R18: always, R01: always,
 definePolicy('pilotage:profile.commune', { R08: inTerritory('full'), R01: always, R02: always, R05: always });
 definePolicy('pilotage:profile.audit', { R22: always, R23: always, R24: always });
 definePolicy('pilotage:profile.ministre', { R04: always, R05: always, R01: always });
+// § 26.2 : tableaux du cabinet, du secrétariat général, des juristes, des superviseurs et des chefs de service.
+definePolicy('pilotage:profile.cabinet', { R02: always, R01: always });
+definePolicy('pilotage:profile.sg', { R03: always, R01: always, R02: always });
+definePolicy('pilotage:profile.juridique', { R13: always, R14: always, R15: always, R16: always, R22: always });
+definePolicy('pilotage:profile.superviseur', { R09: inTerritory('full'), R06: always });
+definePolicy('pilotage:profile.chef-service', { R07: always, R06: always });
 /** Consultation jusqu'au paiement individuel (sans nom) : Trésor et audit seulement — jamais le Gouverneur (C2-263). */
 definePolicy('pilotage:drill.payments', { R17: always, R18: always, R22: always, R23: always });
 /** Piste d'audit par dossier : auditeurs et enquêteur anti-fraude. */

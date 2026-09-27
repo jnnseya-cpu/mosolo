@@ -9,7 +9,7 @@ import type { Facts } from './facts.js';
 import {
   isConfirmed, isDue, isReconciled, isSettled, matchesChannel, matchesDims, type Filters,
 } from './ladder.js';
-import { hoursOf, mean, median, pct } from './money.js';
+import { CurrencyTotals, hoursOf, mean, median, pct } from './money.js';
 
 
 /** Canaux numériques (paiement dématérialisé de bout en bout). Le guichet bancaire et le point agréé sont « assistés ». */
@@ -27,6 +27,30 @@ export interface KpiInputs {
   comms: { attempted: number; delivered: number; sandboxLogged: number };
   alerts: { severity: string; at: string }[];
   ai: { status: string; createdAt?: string }[];
+  /** Compléments (§ 39, § 8.6, § 2) : lus dans les modules chargés ; absents ⇒ indicateur « non mesuré ». */
+  extra?: KpiExtra;
+}
+
+/**
+ * Données complémentaires des indicateurs § 39 / § 8.6 / équation du § 2. Chaque champ est facultatif : un champ absent
+ * signifie « source non disponible » et l'indicateur correspondant reste « non mesuré » (jamais une valeur inventée).
+ */
+export interface KpiExtra {
+  /** Objets du périmètre : contribuable rattaché vérifié (N2 ou N3) et géolocalisation valide. */
+  objectsQuality?: { id: string; verifiedTaxpayer: boolean; geolocated: boolean }[];
+  /** Avis notifiés (recouvrement) : obligation et date d'émission. */
+  notices?: { obligationId: string; issuedAt: string }[];
+  /** Arbitrages entre entités (§ 10A.3). */
+  arbitrations?: { openedAt: string; decidedAt?: string }[];
+  /** RANV (§ 38.2) : calculée seulement sur une base de référence CERTIFIÉE. */
+  ranv?: { certified: boolean; value: string | null; detail: string };
+  /** Coûts certifiés de la période (contre-valeur CDF indicative, unités mineures) et recettes correspondantes. */
+  costs?: { collectionCdfMinor: bigint | null; recoveryCdfMinor: bigint | null; reconciledCdfMinor: bigint; recoveredArrearsCdfMinor: bigint; period: string };
+  satisfaction?: { count: number; sumTenths: number };
+  availability?: { probes: number; ok: number };
+  sla?: { definitions: number; onTime: number; late: number };
+  instructions?: { onTime: number; late: number; open: number };
+  targets?: { year: string; realisedCdfMinor: bigint; targetCdfMinor: bigint };
 }
 
 export type KpiStatus = 'ATTEINTE' | 'NON_ATTEINTE' | 'SANS_CIBLE' | 'NON_MESURE' | 'NON_CALCULABLE';
@@ -56,6 +80,8 @@ export interface KpiDefinition {
   measurable: boolean;
   /** Mesure structurelle : garantie par construction plutôt qu'observée. */
   structural?: boolean;
+  /** Mesurabilité conditionnelle : l'indicateur n'est mesuré que si la source existe (sinon « non mesuré »). */
+  measurableWhen?: (i: KpiInputs) => boolean;
   compute?: (i: KpiInputs) => KpiValue;
 }
 
@@ -63,6 +89,17 @@ const scopedObligations = (i: KpiInputs) => i.facts.obligations.filter((o) => ma
 const scopedOrders = (i: KpiInputs) => i.facts.orders.filter((o) => matchesDims(o, i.filters) && matchesChannel(o, i.filters));
 const ratio = (n: number, d: number, detail?: string): KpiValue => ({ value: pct(n, d), numerator: n, denominator: d, ...(detail ? { detail } : {}) });
 const ms = (a: string, b: string) => new Date(b).getTime() - new Date(a).getTime();
+/** Ratio en pour cent sur montants BigInt (unités mineures), une décimale, arrondi au plus proche ; signe conservé. */
+export function pctBig(num: bigint, den: bigint): string | null {
+  if (den <= 0n) return null;
+  const neg = num < 0n;
+  const n = (neg ? -num : num) * 1000n;
+  const q = (n * 2n + den) / (2n * den);
+  return `${neg && q > 0n ? '-' : ''}${q / 10n}.${q % 10n}`;
+}
+const cdfOf = (minor: bigint) => `${minor / 100n}`;
+/** Obligations réglées après leur échéance (arriérés régularisés), au périmètre. */
+const recoveredArrears = (i: KpiInputs) => scopedObligations(i).filter((o) => o.paidAt && !o.cancelled && o.paidAt.slice(0, 10) > o.dueDate);
 
 export const KPI_CATALOGUE: KpiDefinition[] = [
   {
@@ -310,18 +347,151 @@ export const KPI_CATALOGUE: KpiDefinition[] = [
     definition: 'Coût total de collecte rapporté aux recettes rapprochées.',
     formula: 'Coût total / recettes rapprochées', source: 'Comptabilité analytique — non intégrée',
     unit: '%', target: null, targetLabel: 'En baisse', better: 'BAISSE', reference: '§ 39 Coût', measurable: false,
+    // Mesuré dès qu'un relevé de coûts CERTIFIÉ (deux personnes) couvre la période : coût / recettes rapprochées (contre-valeur CDF indicative).
+    measurableWhen: (i) => i.extra?.costs?.collectionCdfMinor != null || i.extra?.costs?.recoveryCdfMinor != null,
+    compute: (i) => {
+      const c = i.extra!.costs!;
+      const cost = (c.collectionCdfMinor ?? 0n) + (c.recoveryCdfMinor ?? 0n);
+      return { value: pctBig(cost, c.reconciledCdfMinor), detail: `Relevé de coûts certifié ${c.period} : ${cdfOf(cost)} CDF pour ${cdfOf(c.reconciledCdfMinor)} CDF rapprochés (contre-valeur indicative).` };
+    },
   },
   {
     code: 'RANV', domain: 'Résultat', label: 'Recette additionnelle nette vérifiée (RANV)',
     definition: 'Recette additionnelle nette par rapport à une base de référence auditée (§ 38.2).',
     formula: '§ 38.2', source: 'Base de référence auditée — non disponible',
     unit: '%', target: null, targetLabel: 'Positive et certifiée', better: 'HAUSSE', reference: '§ 39 Résultat', measurable: false,
+    // Mesurée UNIQUEMENT sur une base de référence certifiée (§ 38.1) : RANV rapportée aux encaissements de la base (même durée).
+    measurableWhen: (i) => i.extra?.ranv?.certified === true,
+    compute: (i) => ({ value: i.extra!.ranv!.value, detail: i.extra!.ranv!.detail }),
   },
   {
     code: 'SATISFACTION', domain: 'Service', label: 'Satisfaction après paiement',
     definition: 'Note moyenne de l’enquête post-paiement.',
     formula: 'Moyenne des notes (sur 5)', source: 'Enquête post-paiement — non déployée',
     unit: 'nombre', target: { op: '>=', value: '4' }, targetLabel: '≥ 4/5', better: 'HAUSSE', reference: '§ 39 Service', measurable: false,
+    // Mesurée dès que des réponses (facultatives) à l'enquête après paiement ou après visite existent.
+    measurableWhen: (i) => (i.extra?.satisfaction?.count ?? 0) > 0,
+    compute: (i) => {
+      const s = i.extra!.satisfaction!;
+      const tenths = Math.round(s.sumTenths / s.count);
+      return { value: `${Math.floor(tenths / 10)}.${tenths % 10}`, denominator: s.count, detail: `${s.count} réponse(s) facultative(s), agrégées sans nom.` };
+    },
+  },
+  // ——— Indicateurs complémentaires (§ 39, leviers du § 8.6, équation de croissance du § 2) ———
+  {
+    code: 'TAUX_RATTACHEMENT', domain: 'Identité', label: 'Taux de rattachement (identification)',
+    question: 'Les objets sont-ils rattachés à la bonne personne ?',
+    definition: 'Part des objets recensés rattachés à un contribuable vérifié (niveau N2 ou N3).',
+    formula: 'Objets avec contribuable vérifié / objets recensés', source: 'Registre des objets × identités (niveau de vérification)',
+    unit: '%', target: null, targetLabel: 'Fixée après la base de référence (§ 39)', better: 'HAUSSE', reference: '§ 39 Identité ; § 8.6 levier 2 ; § 2', measurable: false,
+    measurableWhen: (i) => i.extra?.objectsQuality !== undefined,
+    compute: (i) => { const o = i.extra!.objectsQuality!; return ratio(o.filter((x) => x.verifiedTaxpayer).length, o.length); },
+  },
+  {
+    code: 'COUVERTURE_SIG', domain: 'Couverture', label: 'Couverture géographique (SIG)',
+    question: 'Quelles zones sont insuffisamment recensées ?',
+    definition: 'Part des objets enregistrés portant une géolocalisation valide.',
+    formula: 'Objets géolocalisés / objets enregistrés', source: 'Registre des objets fiscaux (coordonnées)',
+    unit: '%', target: null, targetLabel: 'Fixée après la base de référence (§ 39)', better: 'HAUSSE', reference: '§ 39 Couverture GIS', measurable: false,
+    measurableWhen: (i) => i.extra?.objectsQuality !== undefined,
+    compute: (i) => { const o = i.extra!.objectsQuality!; return ratio(o.filter((x) => x.geolocated).length, o.length); },
+  },
+  {
+    code: 'DEPOT_A_TEMPS', domain: 'Conformité', label: 'Dépôt à temps des déclarations',
+    definition: 'Déclarations déposées dans le délai rapportées aux déclarations attendues.',
+    formula: 'Déclarations à temps / déclarations attendues', source: 'Calendrier des déclarations attendues — non intégré',
+    unit: '%', target: null, targetLabel: 'Fixée après la base de référence (§ 39)', better: 'HAUSSE', reference: '§ 39 Conformité ; § 8.6 levier 5 ; § 2', measurable: false,
+  },
+  {
+    code: 'CONVERSION_AVIS_PAIEMENT', domain: 'Paiement', label: 'Conversion avis → paiement',
+    question: 'Les contribuables régularisent-ils après notification ?',
+    definition: 'Part des obligations ayant reçu un avis notifié (échéance dépassée, relance, avis formel, mise en demeure) payées après cet avis.',
+    formula: 'Obligations notifiées payées après l’avis / obligations notifiées', source: 'Avis du recouvrement × paiements confirmés',
+    unit: '%', target: null, targetLabel: '> 50 % dans le délai légal (§ 39) — délai légal à confirmer', better: 'HAUSSE', reference: '§ 39 ; § 8.6 levier 6', measurable: false,
+    measurableWhen: (i) => i.extra?.notices !== undefined,
+    compute: (i) => {
+      const scope = new Map(scopedObligations(i).map((o) => [o.id, o]));
+      const first = new Map<string, string>();
+      for (const n of i.extra!.notices!) {
+        if (!scope.has(n.obligationId) || n.issuedAt > i.facts.asOf) continue;
+        const cur = first.get(n.obligationId);
+        if (!cur || n.issuedAt < cur) first.set(n.obligationId, n.issuedAt);
+      }
+      const paid = [...first.entries()].filter(([id, at]) => { const p = scope.get(id)!.paidAt; return !!p && p >= at; }).length;
+      return ratio(paid, first.size);
+    },
+  },
+  {
+    code: 'ARRIERES_RECOUVRES', domain: 'Recouvrement', label: 'Arriérés recouvrés',
+    definition: 'Obligations payées après leur échéance (régularisation d’arriérés), en nombre ; montants bruts par devise en détail.',
+    formula: 'Nombre d’obligations réglées après l’échéance ; montant brut (et net des coûts certifiés)', source: 'Obligations × paiements confirmés',
+    unit: 'nombre', target: null, targetLabel: 'Suivi — brut et net des coûts (§ 39)', better: 'HAUSSE', reference: '§ 39 Arriérés recouvrés ; § 8.6 levier 8', measurable: true,
+    compute: (i) => {
+      const r = recoveredArrears(i);
+      const t = new CurrencyTotals();
+      r.forEach((o) => t.add(o.amount));
+      const brut = t.toJSON().map((m) => `${m.amount} ${m.currency}`).join(' · ');
+      return { value: String(r.length), numerator: r.length, ...(r.length ? { detail: `Montant brut : ${brut}.` } : {}) };
+    },
+  },
+  {
+    code: 'RENDEMENT_CONTROLE', domain: 'Contrôle', label: 'Rendement net du contrôle',
+    question: 'Quels contrôles créent un gain mesurable ?',
+    definition: 'Recettes récupérées (arriérés régularisés) diminuées du coût certifié du recouvrement, rapportées à ce coût.',
+    formula: '(Recettes récupérées − coût) / coût', source: 'Arriérés régularisés × relevé de coûts certifié',
+    unit: '%', target: null, targetLabel: 'Positif (§ 39)', better: 'HAUSSE', reference: '§ 39 Contrôle ; § 8.6 levier 8', measurable: false,
+    measurableWhen: (i) => (i.extra?.costs?.recoveryCdfMinor ?? 0n) > 0n,
+    compute: (i) => {
+      const c = i.extra!.costs!;
+      return { value: pctBig(c.recoveredArrearsCdfMinor - c.recoveryCdfMinor!, c.recoveryCdfMinor!), detail: `Récupéré ${cdfOf(c.recoveredArrearsCdfMinor)} CDF ; coût certifié ${cdfOf(c.recoveryCdfMinor!)} CDF (${c.period}, contre-valeur indicative).` };
+    },
+  },
+  {
+    code: 'DISPONIBILITE', domain: 'Exploitation', label: 'Disponibilité du service',
+    definition: 'Part des sondes de disponibilité réussies (sondes externes enregistrées par l’exploitation).',
+    formula: 'Sondes réussies / sondes enregistrées', source: 'Registre des sondes de disponibilité',
+    unit: '%', target: null, targetLabel: 'Fixée par l’accord de service (§ 39)', better: 'HAUSSE', reference: '§ 39 Disponibilité et sécurité', measurable: false,
+    measurableWhen: (i) => (i.extra?.availability?.probes ?? 0) > 0,
+    compute: (i) => ratio(i.extra!.availability!.ok, i.extra!.availability!.probes),
+  },
+  {
+    code: 'ARBITRAGES_OUVERTS', domain: 'Coexistence', label: 'Arbitrages entre entités ouverts',
+    definition: 'Dossiers d’arbitrage entre entités non encore décidés ; délai médian de résolution en détail.',
+    formula: 'Nombre d’arbitrages OUVERT ou INSTRUIT', source: 'Arbitrages du module d’accès (§ 10A.3)',
+    unit: 'nombre', target: null, targetLabel: 'Suivi — délai de résolution', better: 'BAISSE', reference: '§ 39 Coexistence ; § 10A.3', measurable: false,
+    measurableWhen: (i) => i.extra?.arbitrations !== undefined,
+    compute: (i) => {
+      const a = i.extra!.arbitrations!.filter((x) => x.openedAt <= i.facts.asOf);
+      const open = a.filter((x) => !x.decidedAt || x.decidedAt > i.facts.asOf).length;
+      const m = median(a.filter((x) => x.decidedAt && x.decidedAt <= i.facts.asOf).map((x) => ms(x.openedAt, x.decidedAt!)));
+      return { value: String(open), numerator: open, denominator: a.length, ...(m !== null ? { detail: `Délai médian de résolution : ${hoursOf(m / 24)} j.` } : {}) };
+    },
+  },
+  {
+    code: 'ACCORDS_SERVICE', domain: 'Coexistence', label: 'Respect des accords de niveau de service entre entités',
+    definition: 'Part des demandes inter-entités (instruction, reversement, vérification, réponse) traitées dans le délai de l’accord.',
+    formula: 'Demandes closes dans le délai / (demandes closes + demandes ouvertes hors délai)', source: 'Registre des accords de service et suivi des demandes',
+    unit: '%', target: null, targetLabel: 'Fixée par chaque accord (§ 10A.3)', better: 'HAUSSE', reference: '§ 39 ; § 10A.3', measurable: false,
+    measurableWhen: (i) => (i.extra?.sla?.definitions ?? 0) > 0,
+    compute: (i) => { const s = i.extra!.sla!; return ratio(s.onTime, s.onTime + s.late); },
+  },
+  {
+    code: 'INSTRUCTIONS_DELAIS', domain: 'Pilotage', label: 'Instructions exécutées dans les délais',
+    question: 'Les instructions du Gouverneur et du cabinet sont-elles suivies ?',
+    definition: 'Part des instructions closes dans le délai fixé, rapportée aux instructions closes et aux instructions ouvertes hors délai.',
+    formula: 'Instructions closes à temps / (closes + ouvertes hors délai)', source: 'Circuit des instructions (§ 26.1, § 26.2)',
+    unit: '%', target: null, targetLabel: 'Suivi du cabinet', better: 'HAUSSE', reference: '§ 26.1 ; § 26.2', measurable: false,
+    measurableWhen: (i) => { const s = i.extra?.instructions; return !!s && s.onTime + s.late + s.open > 0; },
+    compute: (i) => { const s = i.extra!.instructions!; return ratio(s.onTime, s.onTime + s.late, `${s.open} instruction(s) ouverte(s).`); },
+  },
+  {
+    code: 'ECART_ASSIGNATION', domain: 'Pilotage', label: 'Réalisation des assignations budgétaires',
+    question: 'Quel écart entre la cible et le réalisé ?',
+    definition: 'Recettes rapprochées de l’exercice rapportées aux assignations certifiées (commune × catégorie), en contre-valeur CDF indicative.',
+    formula: 'Rapproché de l’exercice / assignation certifiée', source: 'Registre des assignations certifié × rapprochements',
+    unit: '%', target: null, targetLabel: '100 % à la clôture de l’exercice', better: 'HAUSSE', reference: '§ 26.1 ; § 8.6 levier 12', measurable: false,
+    measurableWhen: (i) => (i.extra?.targets?.targetCdfMinor ?? 0n) > 0n,
+    compute: (i) => { const t = i.extra!.targets!; return { value: pctBig(t.realisedCdfMinor, t.targetCdfMinor), detail: `Exercice ${t.year} : ${cdfOf(t.realisedCdfMinor)} CDF rapprochés pour ${cdfOf(t.targetCdfMinor)} CDF assignés.` }; },
   },
 ];
 
@@ -346,12 +516,14 @@ export interface KpiResult extends Omit<KpiDefinition, 'compute'> {
 
 /** Calcule le catalogue ; `previous` = entrées à la date d'arrêté antérieure (tendance). */
 export function computeKpis(current: KpiInputs, previous: KpiInputs | null, window = '7 jours'): KpiResult[] {
-  return KPI_CATALOGUE.map(({ compute, ...def }) => {
+  return KPI_CATALOGUE.map(({ compute, measurableWhen, ...rest }) => {
+    // Mesurabilité conditionnelle : mesurée seulement si la source existe à la date d'arrêté courante.
+    const def = measurableWhen ? { ...rest, measurable: measurableWhen(current) } : rest;
     if (!def.measurable || !compute) {
       return { ...def, value: null, status: 'NON_MESURE' as const, trend: { previous: null, window, direction: 'INDISPONIBLE' as const, favorable: null } };
     }
     const cur = compute(current);
-    const prev = previous ? compute(previous) : null;
+    const prev = previous && (!measurableWhen || measurableWhen(previous)) ? compute(previous) : null;
     const status: KpiStatus = cur.value === null ? 'NON_CALCULABLE' : def.target ? (meets(def.target, cur.value) ? 'ATTEINTE' : 'NON_ATTEINTE') : 'SANS_CIBLE';
     let direction: KpiResult['trend']['direction'] = 'INDISPONIBLE';
     let favorable: boolean | null = null;

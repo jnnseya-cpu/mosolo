@@ -99,11 +99,17 @@ export function trend() {
   return months.map((month, i) => ({ month, collected: cdf(collected[i]! * MILLION), target: cdf(target[i]! * MILLION) }));
 }
 
+/**
+ * Scénarios d'EXEMPLE (illustratifs, non opposables) — conservés tels quels ; marqués [EXEMPLE] et reliés au
+ * vocabulaire du Cahier (§ 38.4 : prudent = conservateur, transformationnel = ambitieux). Le simulateur réel,
+ * construit sur la base de référence, est servi par GET /v1/pilotage/scenarios.
+ */
 export function scenarios() {
+  const tag = { example: true, exampleTag: '[EXEMPLE]', simulator: '/v1/pilotage/scenarios' } as const;
   return [
-    { code: 'conservateur', label: 'Conservateur', yearEnd: cdf(128_000n * MILLION), assumptions: ['Rythme actuel maintenu', 'Aucune campagne de régularisation', 'Taux de rapprochement stable (96 %)'] },
-    { code: 'attendu', label: 'Attendu', yearEnd: cdf(141_500n * MILLION), assumptions: ['Campagne de régularisation dans 3 communes', 'Recensement locatif à Limete et Ngaliema', 'Délai moyen de règlement réduit à J+1'] },
-    { code: 'ambitieux', label: 'Ambitieux', yearEnd: cdf(158_000n * MILLION), assumptions: ['Couverture du recensement > 80 % dans 12 communes', 'Paiement diaspora par carte ouvert', 'Taux de conformité +10 points à Kalamu et Kimbanseke'] },
+    { code: 'conservateur', cahierCode: 'PRUDENT', label: 'Prudent (conservateur) [EXEMPLE]', ...tag, yearEnd: cdf(128_000n * MILLION), assumptions: ['Rythme actuel maintenu', 'Aucune campagne de régularisation', 'Taux de rapprochement stable (96 %)'] },
+    { code: 'attendu', cahierCode: 'ATTENDU', label: 'Attendu [EXEMPLE]', ...tag, yearEnd: cdf(141_500n * MILLION), assumptions: ['Campagne de régularisation dans 3 communes', 'Recensement locatif à Limete et Ngaliema', 'Délai moyen de règlement réduit à J+1'] },
+    { code: 'ambitieux', cahierCode: 'TRANSFORMATIONNEL', label: 'Transformationnel (ambitieux) [EXEMPLE]', ...tag, yearEnd: cdf(158_000n * MILLION), assumptions: ['Couverture du recensement > 80 % dans 12 communes', 'Paiement diaspora par carte ouvert', 'Taux de conformité +10 points à Kalamu et Kimbanseke'] },
   ];
 }
 
