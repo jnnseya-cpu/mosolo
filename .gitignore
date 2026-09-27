@@ -13,3 +13,6 @@ frontend/public/ocr/
 # Fond de carte OSM fabriqué par tools/maps (volumineux)
 frontend/public/tiles/
 data/osm/
+
+# Arbres de travail temporaires des agents (jamais versionnés)
+.claude/worktrees/
