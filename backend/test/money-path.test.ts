@@ -5,6 +5,7 @@
  * clôtures quotidiennes dans l'ordre, numérotation et clé de signature des quittances.
  */
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
+import { sha256Hex } from '../src/core/crypto.js';
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { defaultSecrets } from '../src/context.js';
@@ -44,8 +45,10 @@ async function order(env: Env, obl = obligationId(env)) {
   return env.req('POST', `/v1/obligations/${obl}/payment-orders`, 'u-contribuable', { channel: 'MOBILE_MONEY' }, { 'idempotency-key': randomUUID() });
 }
 
+const PAYER = sha256Hex('msisdn-payeur-test');
+
 async function succeed(env: Env, ref: string, amount = '150.00') {
-  return (await signedCallback(env, callbackBody(env, ref, { amount, currency: 'USD' }))).json();
+  return (await signedCallback(env, { ...callbackBody(env, ref, { amount, currency: 'USD' }), payerMsisdnHash: PAYER })).json();
 }
 
 /** Simulation : un paiement confirmé partiel déjà enregistré (échéance payée, par exemple). */
@@ -64,13 +67,15 @@ async function reconcile(env: Env, paymentReference: string, amount = '150.00') 
   })).json();
 }
 
-async function approveOp(env: Env, body: Record<string, unknown>) {
+async function approveOp(env: Env, body: Record<string, unknown>, approval: Record<string, unknown> = {}) {
   const op = await env.req('POST', '/v1/tresor/operations', 'u-tresor', body);
   expect(op.statusCode).toBe(201);
-  const done = await env.req('POST', `/v1/tresor/operations/${op.json().id}/approve`, 'tresor-chef-comptable', {});
+  const done = await env.req('POST', `/v1/tresor/operations/${op.json().id}/approve`, 'tresor-chef-comptable', approval);
   expect(done.statusCode).toBe(200);
   return done.json();
 }
+
+const REFUND_PROOF = { refundReference: 'RMB-TEST-0001', evidenceSha256: sha256Hex('avis-de-remboursement') };
 
 const attente = (env: Env) => env.app.ctx.ledger.balance().accounts.find((a) => a.account === 'COMPTE_ATTENTE' && a.currency === 'USD')?.balance.amount ?? '0.00';
 
@@ -131,7 +136,7 @@ describe('Références expirées et paiements non affectés', () => {
     // Jamais affecté à un autre paiement : seule la restitution à l'instrument d'origine est possible.
     const aff = await env.req('POST', '/v1/tresor/operations', 'u-tresor', { kind: 'APUREMENT_SUSPENS', suspenseId: s.id, mode: 'AFFECTATION', paymentReference: o.paymentReference, reason: 'Tentative d’affectation (test)' });
     expect(aff.json().code).toBe('UNAPPLIED_PAYMENT_REFUND_ONLY');
-    await approveOp(env, { kind: 'APUREMENT_SUSPENS', suspenseId: s.id, mode: 'RESTITUTION', reason: 'Doublon restitué au payeur (test)' });
+    await approveOp(env, { kind: 'APUREMENT_SUSPENS', suspenseId: s.id, mode: 'RESTITUTION', destination: PAYER, reason: 'Doublon restitué au payeur (test)' }, REFUND_PROOF);
     expect(env.svc.suspense.get(s.id)!.status).toBe('APURE');
     expect(attente(env)).toBe(before);
     const ex = (await env.req('GET', '/v1/tresor/exceptions', 'u-tresor')).json().items.find((e: { id: string }) => e.id === `EXC-NAFF-${u.id}`);
@@ -218,7 +223,7 @@ describe('Rectification, réclamation et remboursement', () => {
     await succeed(env, o.paymentReference);
     await reconcile(env, o.paymentReference);
     expect(env.app.ctx.assessment.get(obl).status).toBe('SOLDEE');
-    await approveOp(env, { kind: 'REMBOURSEMENT', paymentReference: o.paymentReference, reason: 'Paiement indu constaté (test)' });
+    await approveOp(env, { kind: 'REMBOURSEMENT', paymentReference: o.paymentReference, destination: PAYER, reason: 'Paiement indu constaté (test)' }, REFUND_PROOF);
     expect(env.app.ctx.assessment.get(obl).status).toBe('EXIGIBLE');
   });
 });
@@ -228,7 +233,13 @@ describe('Grand livre et clôtures', () => {
     const env = await setupMoney();
     const o = (await order(env)).json();
     await succeed(env, o.paymentReference);
-    const target = env.app.ctx.ledger.list().at(-1)!;
+    // L'écriture du paiement appartient à son objet : refus (contrepassation du paiement seulement).
+    const owned = env.app.ctx.ledger.list().at(-1)!;
+    expect((await env.req('POST', `/v1/ledger/entries/${owned.id}/reversals`, 'u-tresor', { reason: 'Écriture sur une mauvaise pièce (test)' })).json().code).toBe('ENTRY_OWNED_BY_BUSINESS_OBJECT');
+    const target = env.app.ctx.ledger.post({
+      eventType: 'MANUAL', description: 'Écriture manuelle (test)', sourceType: 'manuel', sourceId: 'MAN-1',
+      lines: [{ account: 'COMPTE_PUBLIC_RECETTES', side: 'DEBIT', amount: { amount: '1.00', currency: 'USD' } }, { account: 'RECETTES_CONSTATEES', side: 'CREDIT', amount: { amount: '1.00', currency: 'USD' } }],
+    });
     const prop = await env.req('POST', `/v1/ledger/entries/${target.id}/reversals`, 'u-tresor', { reason: 'Écriture sur une mauvaise pièce (test)' });
     expect(prop.statusCode).toBe(202);
     expect(prop.json().operation).toMatchObject({ kind: 'CONTRE_ECRITURE', status: 'PROPOSEE' });

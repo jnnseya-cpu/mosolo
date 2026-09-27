@@ -13,6 +13,8 @@ const statementSchema = z.object({
     amount: moneySchema,
     valueDate: isoDateString,
     paymentReference: z.string().min(1),
+    /** Empreinte du donneur d'ordre (fournie par la banque ou le prestataire) : destination d'une éventuelle restitution. */
+    counterparty: z.string().trim().min(8).max(128).optional(),
   }).strict()).min(1).max(5000),
 }).strict();
 

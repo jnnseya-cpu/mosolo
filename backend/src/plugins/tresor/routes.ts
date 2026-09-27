@@ -17,10 +17,20 @@ const evidenceSchema = z.object({
 const resolutionSchema = z.object({
   outcome: z.enum(['RESOLUE', 'CLASSEE']),
   motif,
-  action: z.enum(['AUCUNE', 'MISE_EN_SUSPENS']).default('AUCUNE'),
+  action: z.enum(['AUCUNE', 'MISE_EN_SUSPENS', 'RAPPROCHEMENT', 'OPERATION']).default('AUCUNE'),
+  operationId: z.string().min(3).max(40).optional(),
 }).strict();
 const rejectSchema = z.object({ motif }).strict();
-const approveSchema = z.object({ note: z.string().trim().max(1000).optional() }).strict();
+const sha256 = z.string().regex(/^[0-9a-f]{64}$/, 'empreinte SHA-256 hexadécimale attendue');
+/** Exécution d'un remboursement / d'une restitution : référence du prestataire ou de la banque et empreinte de la pièce. */
+const approveSchema = z.object({
+  note: z.string().trim().max(1000).optional(),
+  refundReference: z.string().trim().min(3).max(100).optional(),
+  evidenceSha256: sha256.optional(),
+}).strict();
+/** Empreinte de l'instrument de destination : doit être celle de l'instrument d'origine (jamais un compte saisi). */
+const destination = z.string().trim().min(8).max(128);
+const waiverSchema = z.object({ date: isoDateString, motif }).strict();
 
 const REVENUE_CATEGORIES = [
   'IMPOT_PROVINCIAL', 'INTERET_COMMUN', 'PROVINCIAL_SPECIFIQUE', 'RECETTE_ETD', 'RECETTE_CENTRALE', 'PARTAGEE', 'DROIT_ADMINISTRATIF',
@@ -32,11 +42,11 @@ const operationSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('ANNULATION_QUITTANCE'), receipt: z.string().min(3).max(60), reason: motif, publicReason: z.string().trim().min(5).max(200).optional() }).strict(),
   z.object({ kind: z.literal('REMPLACEMENT_QUITTANCE'), receipt: z.string().min(3).max(60), reason: motif, publicReason: z.string().trim().min(5).max(200).optional() }).strict(),
   z.object({ kind: z.literal('CONTREPASSATION'), paymentReference: z.string().min(3).max(60), reason: motif, publicReason: z.string().trim().min(5).max(200).optional() }).strict(),
-  z.object({ kind: z.literal('REMBOURSEMENT'), paymentReference: z.string().min(3).max(60), reason: motif, publicReason: z.string().trim().min(5).max(200).optional() }).strict(),
+  z.object({ kind: z.literal('REMBOURSEMENT'), paymentReference: z.string().min(3).max(60), destination: destination.optional(), reason: motif, publicReason: z.string().trim().min(5).max(200).optional() }).strict(),
   z.object({ kind: z.literal('CONTRE_ECRITURE'), ledgerEntryId: z.string().min(3).max(40), reason: motif }).strict(),
   z.object({
     kind: z.literal('APUREMENT_SUSPENS'), suspenseId: z.string().min(3).max(40), mode: z.enum(['AFFECTATION', 'RESTITUTION']),
-    paymentReference: z.string().min(3).max(60).optional(), reason: motif,
+    paymentReference: z.string().min(3).max(60).optional(), destination: destination.optional(), reason: motif,
   }).strict(),
   z.object({
     kind: z.literal('PARAMETRE_NOMENCLATURE'), reason: motif,
@@ -80,7 +90,7 @@ export function registerTresorRoutes(app: FastifyInstance, _ctx: AppContext, svc
     if (res.replayed) void reply.header('idempotent-replayed', 'true');
     return reply.code(res.statusCode).send(res.body);
   });
-  app.post<{ Params: { id: string } }>('/v1/tresor/operations/:id/approve', async (req) => svc.approve(requireUser(req), req.params.id, parse(approveSchema, req.body).note));
+  app.post<{ Params: { id: string } }>('/v1/tresor/operations/:id/approve', async (req) => svc.approve(requireUser(req), req.params.id, parse(approveSchema, req.body)));
   app.post<{ Params: { id: string } }>('/v1/tresor/operations/:id/reject', async (req) => svc.reject(requireUser(req), req.params.id, parse(rejectSchema, req.body).motif));
 
   // Nomenclature, imputation (« Comptabilisé »), clôtures, export.
@@ -89,6 +99,15 @@ export function registerTresorRoutes(app: FastifyInstance, _ctx: AppContext, svc
   app.get('/v1/tresor/accounting', async (req) => svc.accountingStatus(requireUser(req)));
   app.get('/v1/tresor/closures', async (req) => svc.listClosures(requireUser(req)));
   app.post('/v1/tresor/closures/daily', async (req, reply) => reply.code(201).send(svc.closeDay(requireUser(req), parse(closeDaySchema, req.body).date)));
+  // Dérogation de clôture (exceptions d'argent ouvertes, créances prestataire en retard) : demande motivée, second R17.
+  app.post('/v1/tresor/closures/daily/waivers', async (req, reply) => {
+    const body = parse(waiverSchema, req.body);
+    return reply.code(201).send(svc.requestClosureWaiver(requireUser(req), body.date, body.motif));
+  });
+  app.post<{ Params: { id: string } }>('/v1/tresor/closures/daily/waivers/:id/approve', async (req) => svc.approveClosureWaiver(requireUser(req), req.params.id));
+  // Balance âgée des créances sur prestataires ; contrôle de cohérence grand livre / états métier.
+  app.get('/v1/tresor/provider-receivables', async (req) => svc.providerReceivables(requireUser(req)));
+  app.get('/v1/tresor/consistency', async (req) => svc.consistency(requireUser(req)));
   app.post('/v1/tresor/closures/monthly', async (req, reply) => reply.code(201).send(svc.closeMonth(requireUser(req), parse(closeMonthSchema, req.body).month)));
   app.get('/v1/tresor/exports', async (req, reply) => {
     const q = parse(exportQuery, req.query);

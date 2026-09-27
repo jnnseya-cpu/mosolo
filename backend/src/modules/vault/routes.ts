@@ -14,6 +14,7 @@ const proposeSchema = z.object({
 }).strict();
 
 const approveSchema = z.object({ outOfBandVerified: z.boolean() }).strict();
+const vetoSchema = z.object({ motif: z.string().trim().min(10).max(1000) }).strict();
 
 export function registerVaultRoutes(app: FastifyInstance, ctx: AppContext): void {
   app.get('/v1/beneficiary-accounts', async (req) => {
@@ -34,5 +35,14 @@ export function registerVaultRoutes(app: FastifyInstance, ctx: AppContext): void
     requireAcr(user, ACR.MFA); // DG-09 : authentification renforcée (levée en mode démonstration)
     const { outOfBandVerified } = parse(approveSchema, req.body);
     return ctx.vault.maskedRequest(ctx.vault.approve(user, req.params.id, outOfBandVerified));
+  });
+
+  // Veto pendant le refroidissement de 72 h (ou avant quorum) : R01, R05, R22 ou un R19 autre que le proposant.
+  app.post<{ Params: { id: string } }>('/v1/beneficiary-accounts/change-requests/:id/veto', async (req) => {
+    const user = requireUser(req);
+    authorize(user, 'vault:beneficiary.veto');
+    requireAcr(user, ACR.MFA);
+    const { motif } = parse(vetoSchema, req.body);
+    return ctx.vault.maskedRequest(ctx.vault.veto(user, req.params.id, motif));
   });
 }

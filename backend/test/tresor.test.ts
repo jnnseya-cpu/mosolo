@@ -36,10 +36,13 @@ type Env = Awaited<ReturnType<typeof setupTresor>>;
 
 const obligationId = (env: Env) => env.app.ctx.assessment.byTaxpayer(DEMO.taxpayerId)[0]!.id;
 
+/** Empreinte (fictive) de l'instrument du payeur transmise par le prestataire : seule destination d'un remboursement. */
+const PAYER = sha256Hex('msisdn-payeur-test');
+
 /** Paiement de l'obligation de démonstration par le circuit commun (ordre → rappel signé → quittance provisoire). */
 async function pay(env: Env) {
   const order = (await env.req('POST', `/v1/obligations/${obligationId(env)}/payment-orders`, 'u-contribuable', { channel: 'MOBILE_MONEY' }, { 'idempotency-key': randomUUID() })).json();
-  const cb = (await signedCallback(env, callbackBody(env, order.paymentReference))).json();
+  const cb = (await signedCallback(env, { ...callbackBody(env, order.paymentReference), payerMsisdnHash: PAYER })).json();
   return { order, receiptCode: cb.receiptCode as string, receiptNumber: cb.receiptNumber as string };
 }
 
@@ -58,7 +61,13 @@ async function propose(env: Env, user: string, body: Record<string, unknown>) {
 describe('Quittances : annulation, remplacement, duplicata (quatre yeux)', () => {
   it('annulation d’une quittance provisoire : proposition, validation par une autre personne, statut public « annulée »', async () => {
     const env = await setupTresor();
-    const { receiptCode, receiptNumber } = await pay(env);
+    const { order, receiptCode, receiptNumber } = await pay(env);
+    // Paiement CONFIRMÉ : sa quittance ne s'annule pas (il compte comme payé) ; seule la contrepassation est admise.
+    const confirmed = await propose(env, 'u-guichet', { kind: 'ANNULATION_QUITTANCE', receipt: receiptNumber, reason: 'Paiement déclaré échoué par le prestataire après émission (test)' });
+    expect(confirmed.json().code).toBe('PAYMENT_CONFIRMED_USE_REVERSAL');
+    // État hérité (paiement déclaré échoué hors circuit) : la quittance provisoire orpheline s'annule à quatre yeux.
+    const po = env.app.ctx.payments.orders.get(order.paymentOrderId)!;
+    env.app.ctx.payments.orders.update({ ...po, status: 'ECHOUE' });
     // Le contribuable ne propose rien ; le motif est obligatoire.
     expect((await propose(env, 'u-contribuable', { kind: 'ANNULATION_QUITTANCE', receipt: receiptNumber, reason: 'Tentative du contribuable' })).statusCode).toBe(403);
     expect((await propose(env, 'u-guichet', { kind: 'ANNULATION_QUITTANCE', receipt: receiptNumber, reason: 'court' })).statusCode).toBe(400);
@@ -82,8 +91,8 @@ describe('Quittances : annulation, remplacement, duplicata (quatre yeux)', () =>
 
   it('auteur = valideur → refus (séparation des tâches) ; rejet motivé par une autre personne', async () => {
     const env = await setupTresor();
-    const { receiptNumber } = await pay(env);
-    const op = (await propose(env, 'u-tresor', { kind: 'ANNULATION_QUITTANCE', receipt: receiptNumber, reason: 'Erreur d’émission présumée (test)' })).json();
+    const { order, receiptNumber } = await pay(env);
+    const op = (await propose(env, 'u-tresor', { kind: 'CONTREPASSATION', paymentReference: order.paymentReference, reason: 'Erreur d’émission présumée (test)' })).json();
     const self = await env.req('POST', `/v1/tresor/operations/${op.id}/approve`, 'u-tresor', {});
     expect(self.statusCode).toBe(403);
     expect(self.json().code).toBe('SEPARATION_OF_DUTIES');
@@ -158,9 +167,14 @@ describe('Contrepassation et remboursement (double validation)', () => {
     // Aucune destination libre : un compte saisi est rejeté par le schéma.
     const withAccount = await propose(env, 'u-tresor', { kind: 'REMBOURSEMENT', paymentReference: order.paymentReference, reason: 'Trop-perçu signalé (test)', destinationAccount: 'CD00 9999' });
     expect(withAccount.statusCode).toBe(400);
-    const op = (await propose(env, 'u-tresor', { kind: 'REMBOURSEMENT', paymentReference: order.paymentReference, reason: 'Dégrèvement décidé sur réclamation (test)' })).json();
-    const done = (await env.req('POST', `/v1/tresor/operations/${op.id}/approve`, 'tresor-chef-comptable', {})).json();
-    expect(done.result).toMatchObject({ destination: 'INSTRUMENT_ORIGINE' });
+    // Destination obligatoire et égale à l'instrument d'origine (empreinte transmise par le prestataire).
+    expect((await propose(env, 'u-tresor', { kind: 'REMBOURSEMENT', paymentReference: order.paymentReference, reason: 'Dégrèvement décidé sur réclamation (test)' })).json().code).toBe('DESTINATION_REQUIRED');
+    expect((await propose(env, 'u-tresor', { kind: 'REMBOURSEMENT', paymentReference: order.paymentReference, destination: sha256Hex('autre-numero'), reason: 'Dégrèvement décidé sur réclamation (test)' })).json().code).toBe('DESTINATION_NOT_ORIGINAL_INSTRUMENT');
+    const op = (await propose(env, 'u-tresor', { kind: 'REMBOURSEMENT', paymentReference: order.paymentReference, destination: PAYER, reason: 'Dégrèvement décidé sur réclamation (test)' })).json();
+    // Exécution : référence de remboursement du prestataire et empreinte de la pièce exigées.
+    expect((await env.req('POST', `/v1/tresor/operations/${op.id}/approve`, 'tresor-chef-comptable', {})).json().code).toBe('REFUND_EXECUTION_PROOF_REQUIRED');
+    const done = (await env.req('POST', `/v1/tresor/operations/${op.id}/approve`, 'tresor-chef-comptable', { refundReference: 'RMB-MM-0001', evidenceSha256: sha256Hex('avis-remboursement') })).json();
+    expect(done.result).toMatchObject({ destination: 'INSTRUMENT_ORIGINE', refundReference: 'RMB-MM-0001' });
     expect(env.app.ctx.payments.byReference(order.paymentReference)!.status).toBe('REMBOURSE');
     expect(env.app.ctx.ledger.get(done.result.ledgerEntryId)!.eventType).toBe('REFUND');
     expect((await env.req('GET', `/v1/public/receipts/${receiptCode}`)).json().status).toBe('REFUNDED');
@@ -170,7 +184,14 @@ describe('Contrepassation et remboursement (double validation)', () => {
   it('contre-écriture en double validation ; l’IA ne peut ni proposer ni valider', async () => {
     const env = await setupTresor();
     await pay(env);
-    const target = env.app.ctx.ledger.list().at(-1)!;
+    // L'écriture de confirmation appartient au paiement : jamais contre-passée « à nu ».
+    const owned = env.app.ctx.ledger.list().at(-1)!;
+    expect((await propose(env, 'u-tresor', { kind: 'CONTRE_ECRITURE', ledgerEntryId: owned.id, reason: 'Écriture passée sur une mauvaise pièce (test)' })).json().code).toBe('ENTRY_OWNED_BY_BUSINESS_OBJECT');
+    // Écriture sans objet métier (saisie manuelle) : contre-écriture à quatre yeux.
+    const target = env.app.ctx.ledger.post({
+      eventType: 'MANUAL', description: 'Écriture manuelle (test)', sourceType: 'manuel', sourceId: 'MAN-1',
+      lines: [{ account: 'COMPTE_PUBLIC_RECETTES', side: 'DEBIT', amount: { amount: '1.00', currency: 'USD' } }, { account: 'RECETTES_CONSTATEES', side: 'CREDIT', amount: { amount: '1.00', currency: 'USD' } }],
+    });
     const op = (await propose(env, 'u-tresor', { kind: 'CONTRE_ECRITURE', ledgerEntryId: target.id, reason: 'Écriture passée sur une mauvaise pièce (test)' })).json();
     expect(env.app.ctx.ledger.isReversed(target.id)).toBe(false);
     const done = (await env.req('POST', `/v1/tresor/operations/${op.id}/approve`, 'tresor-chef-comptable', {})).json();
@@ -201,10 +222,14 @@ describe('Files d’exception et compte d’attente', () => {
     const noEvidence = await env.req('POST', `/v1/tresor/exceptions/${exId}/resolution`, 'u-analyste-rappro', { outcome: 'RESOLUE', motif: 'Crédit non identifié à porter en suspens', action: 'MISE_EN_SUSPENS' });
     expect(noEvidence.json().code).toBe('EVIDENCE_REQUIRED');
     await env.req('POST', `/v1/tresor/exceptions/${exId}/evidence`, 'u-analyste-rappro', { label: 'Réponse du prestataire : aucune transaction (démo)', sha256: sha256Hex('piece') });
+    // Crédit constaté : ni classement, ni résolution sans action financière.
+    expect((await env.req('POST', `/v1/tresor/exceptions/${exId}/resolution`, 'u-analyste-rappro', { outcome: 'CLASSEE', motif: 'Crédit sans suite (tentative de classement)', action: 'AUCUNE' })).json().code).toBe('MONEY_EXCEPTION_NEEDS_FINANCIAL_ACTION');
     await env.req('POST', `/v1/tresor/exceptions/${exId}/resolution`, 'u-analyste-rappro', { outcome: 'RESOLUE', motif: 'Crédit non identifié à porter en suspens', action: 'MISE_EN_SUSPENS' });
     expect((await env.req('POST', `/v1/tresor/exceptions/${exId}/resolution/approve`, 'u-analyste-rappro')).statusCode).toBe(403);
-    const ok = (await env.req('POST', `/v1/tresor/exceptions/${exId}/resolution/approve`, 'u-tresor')).json();
-    expect(ok).toMatchObject({ status: 'RESOLUE', decision: { approvedBy: 'u-tresor' } });
+    // Qui a affecté l'exception ne valide pas sa résolution.
+    expect((await env.req('POST', `/v1/tresor/exceptions/${exId}/resolution/approve`, 'u-tresor')).json().code).toBe('SEPARATION_OF_DUTIES');
+    const ok = (await env.req('POST', `/v1/tresor/exceptions/${exId}/resolution/approve`, 'tresor-chef-comptable')).json();
+    expect(ok).toMatchObject({ status: 'RESOLUE', decision: { approvedBy: 'tresor-chef-comptable' } });
     // La file publique du socle reflète le traitement.
     const core = (await env.req('GET', '/v1/reconciliation/exceptions', 'u-analyste-rappro')).json();
     expect(core.find((e: { id: string }) => e.id === exId).status).toBe('RESOLUE');
@@ -241,7 +266,10 @@ describe('Files d’exception et compte d’attente', () => {
     expect(env.app.ctx.comms.deliveries.find((d) => d.eventCode === 'reconciliation.exception.aged').length).toBeGreaterThan(0);
     await env.req('POST', `/v1/tresor/exceptions/${exId}/assign`, 'u-analyste-rappro', { assignee: 'u-tresor' });
     await env.req('POST', `/v1/tresor/exceptions/${exId}/start`, 'u-tresor');
-    await env.req('POST', `/v1/tresor/exceptions/${exId}/resolution`, 'u-tresor', { outcome: 'CLASSEE', motif: 'Montant négligeable restitué hors système (test)', action: 'AUCUNE' });
+    // Un crédit « négligeable » ne se classe pas : il porte de l'argent.
+    expect((await env.req('POST', `/v1/tresor/exceptions/${exId}/resolution`, 'u-tresor', { outcome: 'CLASSEE', motif: 'Montant négligeable restitué hors système (test)', action: 'AUCUNE' })).json().code).toBe('MONEY_EXCEPTION_NEEDS_FINANCIAL_ACTION');
+    await env.req('POST', `/v1/tresor/exceptions/${exId}/evidence`, 'u-tresor', { label: 'Relevé bancaire (démo)', sha256: sha256Hex('releve') });
+    await env.req('POST', `/v1/tresor/exceptions/${exId}/resolution`, 'u-tresor', { outcome: 'RESOLUE', motif: 'Crédit non identifié à porter en suspens (test)', action: 'MISE_EN_SUSPENS' });
     const rej = await env.req('POST', `/v1/tresor/exceptions/${exId}/resolution/reject`, 'tresor-chef-comptable', { motif: 'Le classement exige une pièce de restitution.' });
     expect(rej.json().status).toBe('EN_COURS');
     expect(rej.json().proposal).toBeUndefined();

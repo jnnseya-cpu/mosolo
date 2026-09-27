@@ -2,7 +2,7 @@
  * Orchestrateur de paiement (D5, ch. 18) : MOSOLO émet des références et reçoit des confirmations signées ;
  * il ne détient jamais les fonds. Le compte bénéficiaire est un ALIAS résolu dans le coffre.
  */
-import { Money, PRIMARY_CURRENCY, UNATTRIBUTED_COMMUNE, canTransition, type CurrencyCode, type MoneyJSON, type PaymentStatus, type TerritorialAttribution } from '@mosolo/shared';
+import { AmountPrecisionError, Money, PRIMARY_CURRENCY, UNATTRIBUTED_COMMUNE, canTransition, type CurrencyCode, type MoneyJSON, type PaymentStatus, type TerritorialAttribution } from '@mosolo/shared';
 import { z } from 'zod';
 import type { AuditActor, AuditLog } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
@@ -66,6 +66,10 @@ export interface PaymentOrder {
   /** Motif de fermeture d'une référence non payée (ECHOUE) : expiration, obligation rectifiée ou non payable. */
   closedReason?: OrderClosedReason;
   closedAt?: string;
+  /** Empreinte de l'instrument du payeur (MSISDN haché fourni par le prestataire) : seule destination d'un remboursement. */
+  payerInstrumentHash?: string;
+  /** Version du compte bénéficiaire (coffre) en vigueur à l'émission : un crédit reçu sous une autre version est signalé. */
+  beneficiaryAccountVersion?: number;
 }
 
 /** Fermeture d'une référence INITIE sans paiement : état terminal ECHOUE de la table partagée, motif explicite. */
@@ -89,6 +93,18 @@ export interface UnappliedPayment {
   amount: MoneyJSON;
   ledgerEntryId: string;
   receivedAt: string;
+  /** Empreinte de l'instrument du payeur du paiement non affecté : seule destination de sa restitution. */
+  payerInstrumentHash?: string;
+}
+
+/**
+ * Sort d'un paiement non affecté : fonds RÉGLÉS par le prestataire sur le compte public (ligne de relevé appariée,
+ * une seule fois) ou RESTITUÉS au payeur (une seule fois). Une même unité monétaire ne se restitue jamais deux fois.
+ */
+export interface UnappliedState {
+  id: string; // = identifiant du paiement non affecté
+  settled?: { statementId: string; ledgerEntryId: string; at: string; accountVersion?: number };
+  restituted?: { operationId: string; ledgerEntryId: string; at: string };
 }
 
 const CONFIRMED_LIKE: PaymentStatus[] = ['CONFIRME', 'REGLE', 'RAPPROCHE'];
@@ -137,6 +153,8 @@ export interface NormalizedConfirmation {
   confirmationMethod: ConfirmationMethod;
   /** Intention annoncée par le prestataire : doit correspondre à celle liée à l'ordre. */
   providerIntentId?: string;
+  /** Empreinte de l'instrument du payeur (ex. MSISDN haché) : destination unique d'un éventuel remboursement. */
+  payerInstrumentHash?: string;
 }
 
 /** Contrôles du rappel générique : signature HMAC, nonce unique, horodatage ±5 min. */
@@ -270,6 +288,7 @@ export class PaymentService {
   readonly providerResolutions = new InMemoryAppendOnlyRepository<ProviderResolutionRecord>();
   readonly verificationEvidence = new InMemoryAppendOnlyRepository<VerificationEvidenceRecord>();
   readonly unappliedPayments = new InMemoryAppendOnlyRepository<UnappliedPayment>();
+  readonly unappliedStates = new InMemoryRepository<UnappliedState>();
   private readonly unappliedListeners: ((u: UnappliedPayment) => void)[] = [];
   private readonly nonces = new Set<string>();
   /** Obligations dont une intention prestataire est en cours de création (verrou anti-concurrence). */
@@ -379,6 +398,7 @@ export class PaymentService {
       throw conflict('ACTIVE_PAYMENT_REFERENCE_EXISTS', `Une référence active existe déjà pour cette obligation.`, { paymentReference: active.paymentReference });
     }
     const beneficiaryAlias = this.vault.resolveAlias(obligation.beneficiaryAccountAlias);
+    const accountVersion = this.vault.current(beneficiaryAlias)?.version;
     const draft: PaymentOrder = {
       id: '',
       paymentReference: this.newReference(),
@@ -391,6 +411,7 @@ export class PaymentService {
       attribution: obligation.attribution,
       indicativeAmount: this.indicative(amount, input.displayCurrency),
       beneficiaryAlias,
+      ...(accountVersion !== undefined ? { beneficiaryAccountVersion: accountVersion } : {}),
       expiresAt: new Date(now.getTime() + REFERENCE_VALIDITY_HOURS * HOUR_MS).toISOString(),
       status: 'INITIE',
       createdBy: user.id,
@@ -547,6 +568,7 @@ export class PaymentService {
       id, reason, provider, providerTxnId: n.providerTxnId, paymentReference: order.paymentReference, paymentOrderId: order.id,
       obligationId: order.obligationId, taxpayerId: order.taxpayerId, beneficiaryAlias: order.beneficiaryAlias, amount: order.amount,
       ledgerEntryId: entry.id, receivedAt: this.clock.now().toISOString(),
+      ...(n.payerInstrumentHash ? { payerInstrumentHash: n.payerInstrumentHash } : {}),
     });
     const actor = { kind: 'provider' as const, id: provider };
     this.audit.append({
@@ -607,8 +629,8 @@ export class PaymentService {
     }
     const parsed = callbackBodySchema.safeParse(json);
     if (!parsed.success) throw badRequest('VALIDATION_ERROR', parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
-    const body = parsed.data;
-    return this.confirmFromProvider(provider, { ...body, confirmationMethod: 'HMAC_CALLBACK' }, CALLBACK_CHECKS);
+    const { payerMsisdnHash, ...body } = parsed.data;
+    return this.confirmFromProvider(provider, { ...body, ...(payerMsisdnHash ? { payerInstrumentHash: payerMsisdnHash } : {}), confirmationMethod: 'HMAC_CALLBACK' }, CALLBACK_CHECKS);
   }
 
   /**
@@ -633,13 +655,21 @@ export class PaymentService {
         paymentReference: order.paymentReference, providerTxnId: n.providerTxnId, providerIntentId: n.providerIntentId,
       });
     }
-    const paid = (() => {
-      try {
-        return Money.fromJSON(n.amount as MoneyJSON);
-      } catch {
-        return undefined;
-      }
-    })();
+    // Lecture stricte : un montant portant plus de décimales que la devise n'est jamais arrondi puis comparé.
+    let paid: Money | undefined;
+    let precision = false;
+    try {
+      paid = Money.parseStrict(n.amount);
+      if (n.payerAmount) Money.parseStrict(n.payerAmount);
+    } catch (e) {
+      precision = e instanceof AmountPrecisionError;
+      paid = undefined;
+    }
+    if (precision) {
+      this.reject(provider, 422, 'AMOUNT_PRECISION', `Montant ${n.amount.amount} ${n.amount.currency}${n.payerAmount ? ` / ${n.payerAmount.amount} ${n.payerAmount.currency}` : ''} : décimales au-delà de la devise, refusé sans arrondi.`, {
+        paymentReference: order.paymentReference, providerTxnId: n.providerTxnId,
+      });
+    }
     if (!paid || !paid.equals(Money.fromJSON(order.amount))) {
       this.reject(provider, 422, 'AMOUNT_MISMATCH', `Montant confirmé ${n.amount.amount} ${n.amount.currency} ≠ montant dû ${order.amount.amount} ${order.amount.currency}.`, {
         paymentReference: order.paymentReference, providerTxnId: n.providerTxnId,
@@ -697,14 +727,15 @@ export class PaymentService {
       return record('NON_AFFECTE', { status: 'NON_AFFECTE', paymentReference: order.paymentReference, reason });
     }
 
-    const payerAmount = n.payerAmount && n.payerAmount.currency !== order.amount.currency ? Money.fromJSON(n.payerAmount as MoneyJSON).toJSON() : undefined;
+    const payerAmount = n.payerAmount && n.payerAmount.currency !== order.amount.currency ? Money.parseStrict(n.payerAmount).toJSON() : undefined;
     const entry = this.ledger.postPair({
       eventType: 'PAYMENT_CONFIRMED', description: `Confirmation ${provider} ${n.providerTxnId} pour ${order.paymentReference}`,
       sourceType: 'payment_order', sourceId: order.id, debit: 'FONDS_A_RECEVOIR_PRESTATAIRES', credit: 'CREANCES_CONTRIBUABLES', amount: order.amount,
     });
     const confirmed = this.transition(order, 'CONFIRME', {
       provider, providerTxnId: n.providerTxnId, confirmedAt: this.clock.now().toISOString(), confirmationMethod: n.confirmationMethod,
-      ...(payerAmount ? { payerAmount } : {}), ledgerEntryIds: [...order.ledgerEntryIds, entry.id],
+      ...(payerAmount ? { payerAmount } : {}), ...(n.payerInstrumentHash ? { payerInstrumentHash: n.payerInstrumentHash } : {}),
+      ledgerEntryIds: [...order.ledgerEntryIds, entry.id],
     });
     // Contre-valeur indicative en CDF (AC-CUR-01) : taux et source figurent sur la quittance.
     const indicativeAmount = confirmed.indicativeAmount ?? this.indicative(confirmed.amount);
@@ -896,7 +927,7 @@ export class PaymentService {
     let amountMatchesOrder: boolean | undefined;
     if (ev.amount && order) {
       try {
-        amountMatchesOrder = Money.fromJSON(ev.amount).equals(Money.fromJSON(order.amount));
+        amountMatchesOrder = Money.parseStrict(ev.amount).equals(Money.fromJSON(order.amount));
       } catch {
         amountMatchesOrder = false;
       }
@@ -1012,6 +1043,43 @@ export class PaymentService {
     const o = this.orders.get(orderId);
     if (!o) throw notFound('PAYMENT_ORDER_NOT_FOUND', `Ordre inconnu : ${orderId}`);
     return this.transition(o, 'REMBOURSE', { ledgerEntryIds: [...o.ledgerEntryIds, refundEntryId] });
+  }
+
+  /** Sort d'un paiement non affecté (réglé sur relevé, restitué). */
+  unappliedState(id: string): UnappliedState | undefined {
+    return this.unappliedStates.get(id);
+  }
+
+  /** Paiements non affectés dont les fonds sont encore dus par le prestataire (ni réglés sur relevé, ni restitués). */
+  openUnappliedReceivables(): UnappliedPayment[] {
+    return this.unappliedPayments.all().filter((u) => {
+      const st = this.unappliedStates.get(u.id);
+      return !st?.settled && !st?.restituted;
+    });
+  }
+
+  /**
+   * Paiement non affecté que peut régler une ligne de relevé : même référence, même montant exact, même compte, fonds
+   * encore chez le prestataire. `exclude` : non affectés déjà appariés dans le même relevé.
+   */
+  findSettleableUnapplied(paymentReference: string, amount: Money, accountAlias: string, exclude: ReadonlySet<string> = new Set()): UnappliedPayment | undefined {
+    return this.openUnappliedReceivables().find((u) =>
+      !exclude.has(u.id) && u.paymentReference === paymentReference && u.beneficiaryAlias === accountAlias && Money.fromJSON(u.amount).equals(amount));
+  }
+
+  /** Règlement d'un paiement non affecté par le prestataire (ligne de relevé) : une seule fois. */
+  markUnappliedSettled(id: string, settled: NonNullable<UnappliedState['settled']>): UnappliedState {
+    const cur = this.unappliedStates.get(id);
+    if (cur?.settled) throw conflict('UNAPPLIED_ALREADY_SETTLED', `Le paiement non affecté ${id} est déjà réglé (${cur.settled.statementId}).`);
+    if (cur?.restituted) throw conflict('UNAPPLIED_ALREADY_RESTITUTED', `Le paiement non affecté ${id} est déjà restitué.`);
+    return cur ? this.unappliedStates.update({ ...cur, settled }) : this.unappliedStates.insert({ id, settled });
+  }
+
+  /** Restitution d'un paiement non affecté au payeur : une seule fois. */
+  markUnappliedRestituted(id: string, restituted: NonNullable<UnappliedState['restituted']>): UnappliedState {
+    const cur = this.unappliedStates.get(id);
+    if (cur?.restituted) throw conflict('UNAPPLIED_ALREADY_RESTITUTED', `Le paiement non affecté ${id} est déjà restitué.`);
+    return cur ? this.unappliedStates.update({ ...cur, restituted }) : this.unappliedStates.insert({ id, restituted });
   }
 
   /** Règlement puis rapprochement (appelé par le Trésor). */

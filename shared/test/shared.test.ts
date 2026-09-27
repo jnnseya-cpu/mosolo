@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   Money, CurrencyMismatchError, formatMoney, CURRENCIES, PRIMARY_CURRENCY, EVENTS, EVENT_CATEGORIES,
   channelCoverage, resolveChannels, getEvent, isRuleExecutable, SAMPLE_RULES, t, completeness, LANGUAGE_CODES,
-  canTransition, hasIncompatibility,
+  canTransition, hasIncompatibility, AmountPrecisionError,
 } from '../src/index.js';
 
 describe('Money', () => {
@@ -19,6 +19,18 @@ describe('Money', () => {
   it('convertit au taux officiel', () => {
     expect(Money.of('150', 'USD').convert('CDF', '2267.75').toDecimalString()).toBe('340162.50');
     expect(Money.of('1000', 'CDF').convert('XAF', '0.25').toDecimalString()).toBe('250');
+  });
+  it('lecture stricte aux frontières : « 149.995 » n’est jamais arrondi en 150.00', () => {
+    // Attaque rejouée : Money.of arrondit HALF_UP et rendait 149.995 « égal » à 150.00.
+    expect(Money.of('149.995', 'USD').equals(Money.of('150.00', 'USD'))).toBe(true);
+    expect(() => Money.parseStrict({ amount: '149.995', currency: 'USD' })).toThrow(AmountPrecisionError);
+    expect(() => Money.parseStrict({ amount: '150.001', currency: 'CDF' })).toThrow(AmountPrecisionError);
+    expect(Money.parseStrict({ amount: '150.00', currency: 'USD' }).equals(Money.of('150', 'USD'))).toBe(true);
+    expect(Money.parseStrict({ amount: '150.000', currency: 'USD' }).toDecimalString()).toBe('150.00');
+    expect(Money.parseStrict({ amount: '150', currency: 'USD' }).toDecimalString()).toBe('150.00');
+    expect(() => Money.parseStrict({ amount: '-1.00', currency: 'USD' })).toThrow(/invalide/);
+    expect(() => Money.parseStrict({ amount: '1e3', currency: 'USD' })).toThrow(/invalide/);
+    expect(() => Money.parseStrict({ amount: '10', currency: 'XYZ' })).toThrow(/Devise inconnue/);
   });
   it('sérialise en JSON décimal', () => {
     expect(Money.of('1250000', 'CDF').toJSON()).toEqual({ amount: '1250000.00', currency: 'CDF' });

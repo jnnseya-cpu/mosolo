@@ -23,6 +23,7 @@ definePolicy('tresor:operation.read', { R17: always, R18: always, R20: always, R
 definePolicy('tresor:suspense.read', { R17: always, R18: always, R22: always, R23: always });
 definePolicy('tresor:closure.read', { R17: always, R18: always, R22: always, R23: always, R05: always });
 definePolicy('tresor:closure.write', { R17: always });
+definePolicy('tresor:receivables.read', { R17: always, R18: always, R22: always, R23: always, R05: always });
 definePolicy('tresor:nomenclature.read', { R17: always, R18: always, R22: always, R23: always });
 definePolicy('tresor:imputation.run', { R17: always });
 definePolicy('tresor:export', { R17: always, R22: always, R23: always });
