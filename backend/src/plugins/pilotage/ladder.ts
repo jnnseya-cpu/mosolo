@@ -4,7 +4,7 @@
  * s'additionnent JAMAIS. Le contesté est un indicateur séparé, hors échelle.
  */
 import { REVENUE_LADDER, UNATTRIBUTED_COMMUNE, type MoneyJSON, type RevenueLadderLevel } from '@mosolo/shared';
-import { kinshasaDate } from '../../core/clock.js';
+import { kinshasaDay } from '../../core/clock.js';
 import { badRequest } from '../../core/errors.js';
 import type { Facts, ObligationFact, OrderFact, RecordedFact } from './facts.js';
 import { CurrencyTotals } from './money.js';
@@ -98,8 +98,7 @@ export function quarterOf(date: string): string {
   return `${y}-T${q}`;
 }
 
-/** Journée de Kinshasa (UTC+1) d'un horodatage ; une date seule (AAAA-MM-JJ) est déjà une journée. */
-export const kinshasaDay = (ts: string): string => (ts.length <= 10 ? ts : kinshasaDate(new Date(ts)));
+export { kinshasaDay };
 
 export function inPeriod(ts: string | undefined, f: Filters): boolean {
   if (!ts) return false;

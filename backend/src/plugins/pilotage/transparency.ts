@@ -6,6 +6,7 @@
  *  - suppression secondaire (complémentaire) pour qu'aucune cellule masquée ne se déduise par différence ;
  *  - tranches d'effectifs (jamais le nombre exact) ; balayage des identifiants personnels.
  */
+import { kinshasaDay } from '../../core/clock.js';
 import { Money, UNATTRIBUTED_COMMUNE, type CurrencyCode } from '@mosolo/shared';
 import type { Facts, OrderFact } from './facts.js';
 import { isReconciled } from './ladder.js';
@@ -112,7 +113,7 @@ export interface TransparencyBuild {
 }
 
 export function buildTransparency(facts: Facts, period: string, range: { from: string; to: string }): TransparencyBuild {
-  const orders = facts.orders.filter((o) => isReconciled(o) && o.reconciledAt!.slice(0, 10) >= range.from && o.reconciledAt!.slice(0, 10) <= range.to);
+  const orders = facts.orders.filter((o) => isReconciled(o) && kinshasaDay(o.reconciledAt!) >= range.from && kinshasaDay(o.reconciledAt!) <= range.to);
   const dims: Record<'commune' | 'category', Map<string, Map<CurrencyCode, Stat>>> = { commune: new Map(), category: new Map() };
   const totals = new Map<CurrencyCode, Stat>();
   for (const o of orders) {
@@ -155,7 +156,7 @@ export function buildTransparency(facts: Facts, period: string, range: { from: s
   for (const [c, s] of totals) internal.push({ dimension: 'total', key: 'TOTAL', currency: c, contributors: s.byTaxpayer.size, suppressed: s.suppressed, maxSharePct: share(s) });
 
   // Délais de traitement des recours décidés dans la période (agrégat masqué sous le seuil).
-  const decided = facts.appeals.filter((a) => a.decidedAt && a.decidedAt.slice(0, 10) >= range.from && a.decidedAt.slice(0, 10) <= range.to);
+  const decided = facts.appeals.filter((a) => a.decidedAt && kinshasaDay(a.decidedAt) >= range.from && kinshasaDay(a.decidedAt) <= range.to);
   const days = decided.map((a) => Math.round((new Date(a.decidedAt!).getTime() - new Date(a.submittedAt).getTime()) / 86_400_000)).sort((a, b) => a - b);
   const appealsSuppressed = decided.length < MIN_CONTRIBUTORS;
 
