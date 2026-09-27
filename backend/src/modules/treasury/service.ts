@@ -3,19 +3,19 @@
  * obligation (dû) ↔ confirmation prestataire (payé) ↔ crédit sur compte public (arrivé), puis écriture.
  * Tout ce qui ne s'apparie pas devient une exception ; rien n'est forcé.
  */
-import { Money, type MoneyJSON } from '@mosolo/shared';
+import { AmountPrecisionError, Money, type MoneyJSON } from '@mosolo/shared';
 import type { AuditActor, AuditLog } from '../../core/audit.js';
 import type { User, UserDirectory } from '../../core/auth.js';
 import { DAY_MS, type Clock } from '../../core/clock.js';
 import { canonicalJson, sha256Hex } from '../../core/crypto.js';
-import { conflict } from '../../core/errors.js';
+import { conflict, unprocessable } from '../../core/errors.js';
 import { authorize } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import type { AssessmentService } from '../assessment/service.js';
 import type { CommunicationService } from '../communications/service.js';
 import { taxpayerRecipient, userRecipient } from '../identity/recipients.js';
 import type { TaxpayerService } from '../identity/service.js';
-import type { PaymentService } from '../payments/service.js';
+import type { PaymentOrder, PaymentService, UnappliedPayment } from '../payments/service.js';
 import type { ReceiptService } from '../receipts/service.js';
 import type { VaultService } from '../vault/service.js';
 import type { LedgerService } from './ledger.js';
@@ -25,11 +25,19 @@ export interface StatementLine {
   amount: MoneyJSON;
   valueDate: string;
   paymentReference: string;
+  /** Contrepartie (donneur d'ordre) : empreinte fournie par la banque ou le prestataire ; destination d'une restitution. */
+  counterparty?: string;
+  /** Version du compte du coffre en vigueur à l'import : renseignée par le système, jamais saisie. */
+  accountVersion?: number;
 }
 
 export type ExceptionType =
   | 'ORPHAN_CREDIT' | 'CREDIT_WITHOUT_CONFIRMATION' | 'DUPLICATE_CREDIT' | 'WRONG_ACCOUNT' | 'UNKNOWN_ACCOUNT' | 'AMOUNT_MISMATCH' | 'MISSING_SETTLEMENT' | 'PROVIDER_AMBIGUOUS'
-  | 'UNAPPLIED_PAYMENT';
+  | 'UNAPPLIED_PAYMENT'
+  /** Crédit reçu alors que le compte du coffre a changé de version depuis l'émission de la référence. */
+  | 'ACCOUNT_VERSION_MISMATCH'
+  /** Crédit d'un paiement confirmé dont la quittance ne peut devenir définitive (annulée, signalée…) : rien n'est passé. */
+  | 'RECEIPT_NOT_FINALIZABLE';
 
 /** Cycle de traitement d'une exception (§ 20, C3-113) : ouverte → en cours → résolue ou classée avec motif. */
 export type ExceptionStatus = 'OUVERTE' | 'EN_COURS' | 'RESOLUE' | 'CLASSEE';
@@ -47,6 +55,8 @@ export const EXCEPTION_QUEUE: Record<ExceptionType, ExceptionQueue> = {
   UNKNOWN_ACCOUNT: 'REGLEMENT_SANS_PAIEMENT',
   AMOUNT_MISMATCH: 'ECART_MONTANT',
   WRONG_ACCOUNT: 'ECART_MONTANT',
+  ACCOUNT_VERSION_MISMATCH: 'ECART_MONTANT',
+  RECEIPT_NOT_FINALIZABLE: 'REGLEMENT_SANS_PAIEMENT',
 };
 
 export interface ReconciliationException {
@@ -69,9 +79,16 @@ export interface StatementResult {
   importedAt: string;
   importedBy: string;
   lines: number;
-  matched: { paymentReference: string; receiptNumber: string; obligationId: string; amount: MoneyJSON }[];
+  matched: { paymentReference: string; receiptNumber: string; obligationId: string; amount: MoneyJSON; accountVersion?: number }[];
+  /** Lignes ayant réglé un paiement non affecté (doublon, retard) : fonds arrivés, restitution unique ensuite. */
+  settledUnapplied: { unappliedId: string; paymentReference: string; amount: MoneyJSON; ledgerEntryId: string }[];
   exceptions: ReconciliationException[];
 }
+
+type LinePlan =
+  | { kind: 'EXCEPTION'; type: ExceptionType; line: StatementLine; detail: string }
+  | { kind: 'MATCH'; order: PaymentOrder; line: StatementLine }
+  | { kind: 'UNAPPLIED'; u: UnappliedPayment; line: StatementLine };
 
 interface StoredStatement {
   id: string;
@@ -111,53 +128,89 @@ export class TreasuryService {
     const actor = { kind: 'user' as const, id: user.id, roles: user.roles };
     this.audit.append({ actor, action: 'settlement.received', resourceType: 'statement', resourceId: input.statementId, details: { lines: input.lines.length } });
 
-    const result: StatementResult = { statementId: input.statementId, importedAt: now, importedBy: user.id, lines: input.lines.length, matched: [], exceptions: [] };
-    const open = (type: ExceptionType, line: StatementLine, detail: string) => {
-      const ex = this.exceptions.insert({
-        id: this.ids.next('EXC'), type, statementId: input.statementId, paymentReference: line.paymentReference, line, detail, status: 'OUVERTE', openedAt: now,
-      });
-      result.exceptions.push(ex);
-      this.audit.append({ actor, action: 'reconciliation.exception.opened', resourceType: 'reconciliation_exception', resourceId: ex.id, outcome: 'FAILURE', details: { type, paymentReference: line.paymentReference } });
-    };
-
-    for (const line of input.lines) {
-      const account = this.vault.current(line.accountAlias);
+    // Phase 1 — validation et plan, SANS AUCUNE ÉCRITURE : tout le relevé est accepté ou rien ne l'est.
+    // Montants lus strictement (aucun arrondi : « 149.995 » n'est jamais 150.00).
+    input.lines.forEach((line, i) => {
+      try {
+        Money.parseStrict(line.amount);
+      } catch (e) {
+        throw unprocessable(e instanceof AmountPrecisionError ? 'AMOUNT_PRECISION' : 'INVALID_AMOUNT', `Ligne ${i + 1} du relevé ${input.statementId} : ${(e as Error).message}. Aucune ligne importée.`, { line: i + 1 });
+      }
+    });
+    const plans: LinePlan[] = [];
+    const matchedOrders = new Set<string>();
+    const usedUnapplied = new Set<string>();
+    for (const raw of input.lines) {
+      const account = this.vault.current(raw.accountAlias);
+      const line: StatementLine = { ...raw, ...(account ? { accountVersion: account.version } : {}) };
+      const exception = (type: ExceptionType, detail: string) => plans.push({ kind: 'EXCEPTION', type, line, detail });
       if (!account) {
-        open('UNKNOWN_ACCOUNT', line, `Compte ${line.accountAlias} inconnu du coffre.`);
+        exception('UNKNOWN_ACCOUNT', `Compte ${line.accountAlias} inconnu du coffre.`);
         continue;
       }
+      const credited = Money.parseStrict(line.amount);
       const order = this.payments.byReference(line.paymentReference);
       if (!order) {
-        open('ORPHAN_CREDIT', line, 'Crédit sans référence de paiement connue : recherche prestataire.');
+        exception('ORPHAN_CREDIT', 'Crédit sans référence de paiement connue : recherche prestataire.');
         continue;
       }
-      if (order.status === 'RAPPROCHE' || order.status === 'REGLE') {
-        open('DUPLICATE_CREDIT', line, `Crédit en double pour ${order.paymentReference}.`);
+      if (order.status === 'CONFIRME' && !matchedOrders.has(order.id)) {
+        if (order.beneficiaryAlias !== line.accountAlias) {
+          exception('WRONG_ACCOUNT', `Crédit sur ${line.accountAlias} au lieu de ${order.beneficiaryAlias}.`);
+          continue;
+        }
+        if (!credited.equals(Money.fromJSON(order.amount))) {
+          exception('AMOUNT_MISMATCH', `Montant crédité ${line.amount.amount} ${line.amount.currency} ≠ ${order.amount.amount} ${order.amount.currency}.`);
+          continue;
+        }
+        if (order.beneficiaryAccountVersion !== undefined && order.beneficiaryAccountVersion !== account.version) {
+          exception('ACCOUNT_VERSION_MISMATCH', `Référence ${order.paymentReference} émise sous la version ${order.beneficiaryAccountVersion} du compte ${line.accountAlias}, crédit reçu sous la version ${account.version} : vérification du changement de compte requise.`);
+          continue;
+        }
+        const blocker = this.matchBlocker(order);
+        if (blocker) {
+          exception('RECEIPT_NOT_FINALIZABLE', blocker);
+          continue;
+        }
+        matchedOrders.add(order.id);
+        plans.push({ kind: 'MATCH', order, line });
         continue;
       }
-      if (order.status !== 'CONFIRME') {
-        open('CREDIT_WITHOUT_CONFIRMATION', line, `Crédit reçu sans confirmation prestataire vérifiée (statut ${order.status}).`);
+      // Doublon ou paiement tardif déjà en compte d'attente : la ligne RÈGLE ce paiement non affecté (un seul suspens,
+      // une seule restitution possible), elle n'ouvre jamais un second suspens.
+      const u = this.payments.findSettleableUnapplied(line.paymentReference, credited, line.accountAlias, usedUnapplied);
+      if (u) {
+        usedUnapplied.add(u.id);
+        plans.push({ kind: 'UNAPPLIED', u, line });
         continue;
       }
-      if (order.beneficiaryAlias !== line.accountAlias) {
-        open('WRONG_ACCOUNT', line, `Crédit sur ${line.accountAlias} au lieu de ${order.beneficiaryAlias}.`);
+      if (order.status === 'RAPPROCHE' || order.status === 'REGLE' || matchedOrders.has(order.id)) {
+        exception('DUPLICATE_CREDIT', `Crédit en double pour ${order.paymentReference}.`);
         continue;
       }
-      let credited: Money | undefined;
-      try {
-        credited = Money.fromJSON(line.amount);
-      } catch {
-        credited = undefined;
+      exception('CREDIT_WITHOUT_CONFIRMATION', `Crédit reçu sans confirmation prestataire vérifiée (statut ${order.status}).`);
+    }
+
+    // Phase 2 — application.
+    const result: StatementResult = { statementId: input.statementId, importedAt: now, importedBy: user.id, lines: input.lines.length, matched: [], settledUnapplied: [], exceptions: [] };
+    for (const p of plans) {
+      if (p.kind === 'EXCEPTION') {
+        const ex = this.exceptions.insert({
+          id: this.ids.next('EXC'), type: p.type, statementId: input.statementId, paymentReference: p.line.paymentReference, line: p.line, detail: p.detail, status: 'OUVERTE', openedAt: now,
+        });
+        result.exceptions.push(ex);
+        this.audit.append({ actor, action: 'reconciliation.exception.opened', resourceType: 'reconciliation_exception', resourceId: ex.id, outcome: 'FAILURE', details: { type: p.type, paymentReference: p.line.paymentReference } });
+      } else if (p.kind === 'MATCH') {
+        // Appariement complet : écriture, RAPPROCHE, quittance définitive, obligation soldée.
+        const m = this.completeMatch(p.order.id, {
+          debit: 'COMPTE_PUBLIC_RECETTES', description: `Crédit ${p.line.accountAlias} (${input.statementId}) pour ${p.order.paymentReference}`,
+          actor, details: { statementId: input.statementId, accountVersion: p.line.accountVersion ?? null },
+        });
+        const { ledgerEntryId: _l, ...matched } = m;
+        result.matched.push({ ...matched, ...(p.line.accountVersion !== undefined ? { accountVersion: p.line.accountVersion } : {}) });
+      } else {
+        result.settledUnapplied.push(this.settleUnapplied(p.u, { statementId: input.statementId, ...(p.line.accountVersion !== undefined ? { accountVersion: p.line.accountVersion } : {}), actor }));
       }
-      if (!credited || !credited.equals(Money.fromJSON(order.amount))) {
-        open('AMOUNT_MISMATCH', line, `Montant crédité ${line.amount.amount} ${line.amount.currency} ≠ ${order.amount.amount} ${order.amount.currency}.`);
-        continue;
-      }
-      // Appariement complet : écriture, RAPPROCHE, quittance définitive, obligation soldée.
-      result.matched.push(this.completeMatch(order.id, {
-        debit: 'COMPTE_PUBLIC_RECETTES', description: `Crédit ${line.accountAlias} (${input.statementId}) pour ${order.paymentReference}`,
-        actor, details: { statementId: input.statementId },
-      }));
     }
     if (result.exceptions.length > 0) {
       this.comms.publish('reconciliation.exception.opened', this.users.withRole('R18').map(userRecipient), { reference: input.statementId }, { entity: 'TRESOR' });
@@ -173,6 +226,9 @@ export class TreasuryService {
   completeMatch(orderId: string, opts: { debit: 'COMPTE_PUBLIC_RECETTES' | 'COMPTE_ATTENTE'; description: string; actor: AuditActor; details?: Record<string, unknown> }) {
     const order = this.payments.orders.get(orderId);
     if (!order || order.status !== 'CONFIRME') throw conflict('PAYMENT_NOT_CONFIRMED', `Le paiement ${order?.paymentReference ?? orderId} n'est pas au statut confirmé.`);
+    // Tout est vérifié AVANT la moindre écriture : jamais d'écriture ni de RAPPROCHE sans quittance définitive.
+    const blocker = this.matchBlocker(order);
+    if (blocker) throw conflict('RECEIPT_NOT_FINALIZABLE', blocker);
     const entry = this.ledger.postPair({
       eventType: 'SETTLEMENT_CREDITED', description: opts.description,
       sourceType: 'payment_order', sourceId: order.id, debit: opts.debit, credit: 'FONDS_A_RECEVOIR_PRESTATAIRES', amount: order.amount,
@@ -187,6 +243,42 @@ export class TreasuryService {
     this.audit.append({ actor: opts.actor, action: 'reconciliation.matched', resourceType: 'payment_order', resourceId: order.id, details: { ...opts.details, receipt: receipt.number, ledgerEntryId: entry.id } });
     this.comms.publish('receipt.finalized', [taxpayerRecipient(this.taxpayers.get(order.taxpayerId))], { reference: receipt.number }, { entity: obligation.entity });
     return { paymentReference: order.paymentReference, receiptNumber: receipt.number, obligationId: obligation.id, amount: order.amount, ledgerEntryId: entry.id };
+  }
+
+  /**
+   * Motif empêchant d'apparier un paiement confirmé (sans rien écrire) : quittance absente ou non finalisable,
+   * obligation ou contribuable introuvable. `undefined` : appariement possible.
+   */
+  matchBlocker(order: PaymentOrder): string | undefined {
+    const r = this.receipts.byPaymentOrder(order.id);
+    if (!r) return `Aucune quittance pour ${order.paymentReference} : appariement impossible.`;
+    if (r.status !== 'PROVISOIRE' && r.status !== 'DEFINITIVE') return `Quittance ${r.number} au statut ${r.status} pour ${order.paymentReference} : elle ne peut devenir définitive, aucun appariement.`;
+    try {
+      this.assessment.get(this.payments.currentObligationId(order.obligationId));
+      this.taxpayers.get(order.taxpayerId);
+    } catch (e) {
+      return `Paiement ${order.paymentReference} : ${(e as Error).message}`;
+    }
+    return undefined;
+  }
+
+  /**
+   * Règlement par le prestataire d'un paiement non affecté (doublon, retard) : les fonds arrivent sur le compte public
+   * (débit compte public, crédit créance sur le prestataire). Le suspens déjà ouvert reste le SEUL restituable.
+   */
+  settleUnapplied(u: UnappliedPayment, opts: { statementId: string; accountVersion?: number; actor: AuditActor }) {
+    const st = this.payments.unappliedState(u.id);
+    if (st?.settled) throw conflict('UNAPPLIED_ALREADY_SETTLED', `Le paiement non affecté ${u.id} est déjà réglé (${st.settled.statementId}).`);
+    if (st?.restituted) throw conflict('UNAPPLIED_ALREADY_RESTITUTED', `Le paiement non affecté ${u.id} est déjà restitué.`);
+    const entry = this.ledger.postPair({
+      eventType: 'UNAPPLIED_SETTLED', description: `Règlement prestataire du paiement non affecté ${u.id} (${u.paymentReference}) sur relevé ${opts.statementId}`,
+      sourceType: 'unapplied_payment', sourceId: u.id, debit: 'COMPTE_PUBLIC_RECETTES', credit: 'FONDS_A_RECEVOIR_PRESTATAIRES', amount: u.amount,
+    });
+    this.payments.markUnappliedSettled(u.id, {
+      statementId: opts.statementId, ledgerEntryId: entry.id, at: this.clock.now().toISOString(), ...(opts.accountVersion !== undefined ? { accountVersion: opts.accountVersion } : {}),
+    });
+    this.audit.append({ actor: opts.actor, action: 'reconciliation.unapplied_settled', resourceType: 'unapplied_payment', resourceId: u.id, details: { statementId: opts.statementId, paymentReference: u.paymentReference, ledgerEntryId: entry.id } });
+    return { unappliedId: u.id, paymentReference: u.paymentReference, amount: u.amount, ledgerEntryId: entry.id };
   }
 
   /** Branche la surcouche de traitement des exceptions (module Trésor avancé). */

@@ -3,6 +3,8 @@
  * Les canaux ne reçoivent qu'un ALIAS ; le compte réel n'est modifiable que par :
  * proposition du Trésor (R17) → deux approbations distinctes de gestionnaires du coffre (R19)
  * avec vérification hors bande → délai de refroidissement de 72 h → effet. Notifications multiples.
+ * Pendant l'attente et le refroidissement, un veto motivé (Gouverneur R01, ministre des Finances R05, audit R22, ou tout
+ * gestionnaire du coffre R19 autre que le proposant) annule définitivement la demande.
  */
 import type { CurrencyCode } from '@mosolo/shared';
 import type { AuditLog } from '../../core/audit.js';
@@ -10,13 +12,16 @@ import type { User, UserDirectory } from '../../core/auth.js';
 import { HOUR_MS, type Clock } from '../../core/clock.js';
 import { sha256Hex } from '../../core/crypto.js';
 import { conflict, notFound, unprocessable } from '../../core/errors.js';
-import { assertDistinctPerson, authorize } from '../../core/policy.js';
+import { assertDistinctPerson, authorize, definePolicy, GRANTS } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import type { CommunicationService } from '../communications/service.js';
 import { userRecipient } from '../identity/recipients.js';
 
 export const COOLING_OFF_HOURS = 72;
 export const REQUIRED_VAULT_APPROVALS = 2;
+
+/** Veto d'un changement de compte bénéficiaire en attente ou en refroidissement. */
+definePolicy('vault:beneficiary.veto', { R01: GRANTS.always, R05: GRANTS.always, R22: GRANTS.always, R19: GRANTS.always });
 
 export interface BeneficiaryAccount {
   id: string; // = alias
@@ -38,9 +43,11 @@ export interface ChangeRequest {
   requestedBy: string;
   requestedAt: string;
   approvals: { userId: string; at: string; outOfBandVerified: true }[];
-  status: 'EN_ATTENTE_APPROBATION' | 'EN_REFROIDISSEMENT' | 'EFFECTIF';
+  status: 'EN_ATTENTE_APPROBATION' | 'EN_REFROIDISSEMENT' | 'EFFECTIF' | 'ANNULEE';
   coolingEndsAt?: string;
   effectiveAt?: string;
+  /** Veto motivé : la demande est définitivement annulée, le compte en vigueur ne change pas. */
+  veto?: { by: string; at: string; motif: string };
 }
 
 export function maskAccount(n: string): string {
@@ -135,6 +142,29 @@ export class VaultService {
       details: { approvals: approvals.length, outOfBandVerified: true, status: updated.status },
     });
     if (quorum) this.comms.publish('beneficiary.change.cooling_off', this.watchers(), { reference: id }, { entity: 'TRESOR' });
+    return updated;
+  }
+
+  /**
+   * Veto pendant l'attente d'approbation ou le refroidissement : R01, R05, R22 ou un R19 autre que le proposant.
+   * Définitif (ANNULEE) ; notifié aux mêmes destinataires que la proposition.
+   */
+  veto(user: User, id: string, motif: string): ChangeRequest {
+    authorize(user, 'vault:beneficiary.veto');
+    this.applyDue();
+    const req = this.requests.get(id);
+    if (!req) throw notFound('CHANGE_REQUEST_NOT_FOUND', `Demande inconnue : ${id}`);
+    if (req.status !== 'EN_ATTENTE_APPROBATION' && req.status !== 'EN_REFROIDISSEMENT') {
+      throw conflict('INVALID_CHANGE_REQUEST_STATE', `Demande au statut ${req.status} : veto possible seulement avant l'effet.`);
+    }
+    assertDistinctPerson(user.id, [req.requestedBy], 'Le proposant ne peut pas opposer son veto à sa propre demande (il peut la laisser rejeter).');
+    const at = this.clock.now().toISOString();
+    const updated = this.requests.update({ ...req, status: 'ANNULEE', veto: { by: user.id, at, motif } });
+    this.audit.append({
+      actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'beneficiary.change.vetoed', resourceType: 'beneficiary_change', resourceId: id,
+      details: { alias: req.alias, from: req.status, motif },
+    });
+    this.comms.publish('beneficiary.change.blocked', this.watchers(), { reference: id }, { entity: 'TRESOR' });
     return updated;
   }
 
