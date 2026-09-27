@@ -302,7 +302,7 @@ export class OperateursRakaPay {
 
   // ------------------------------------------------------------------ circuit privé (AC-TKT-01)
 
-  recordPrivateSale(user: User, input: { offerId: string; channel: string }): PrivateSale {
+  recordPrivateSale(user: User, input: { offerId: string; channel: string }): PrivateSale & { commission?: { pct: string; amount: MoneyJSON } | null } {
     const offer = this.offers.get(input.offerId);
     if (!offer || offer.status !== 'APPROUVEE') throw notFound('OFFER_NOT_FOUND', 'Offre inconnue ou non approuvée.');
     if (offer.publicRevenue) throw unprocessable('PUBLIC_REVENUE_OFFER', 'Recette publique : la vente passe par le circuit commun (référence de paiement → compte public).');
@@ -311,6 +311,8 @@ export class OperateursRakaPay {
     const mine = this.agentOf(user.id);
     if (!this.isAdmin(user, op) && mine?.operatorId !== op.id) throw forbidden('NOT_OPERATOR_AGENT', 'Vente réservée aux agents de cet opérateur.');
     if (!(PRIVATE_CHANNELS as readonly string[]).includes(input.channel)) throw unprocessable('CASH_NOT_ALLOWED', 'Aucune vente en espèces par un agent (§ 11D.4) : paiement numérique uniquement.');
+    // Module 76 : blocage préventif décidé par la supervision (décision motivée).
+    this.rk.billetterie.assertNotBlocked(op.id, user.id);
     const at = this.now();
     const ms = offer.duration.unit === 'HEURE' ? offer.duration.value * 3_600_000 : offer.duration.value * 86_400_000;
     const id = this.ids.next('VPR');
@@ -319,7 +321,9 @@ export class OperateursRakaPay {
       soldAt: at.toISOString(), validUntil: new Date(at.getTime() + ms).toISOString(), circuit: 'PRIVE', settlement: 'REGLEMENT_DIRECT_OPERATEUR',
     });
     this.ctx.audit.append({ actor: actorOf(user), action: 'rakapay.private_sale.recorded', resourceType: 'rakapay_private_sale', resourceId: sale.id, details: { operatorId: op.id, offerId: offer.id, amount: sale.amount, circuit: 'PRIVE' } });
-    return sale;
+    // Module 76 : commission de l'agent calculée instantanément selon la grille contractuelle de l'opérateur.
+    const c = this.rk.billetterie.onSale(sale);
+    return { ...sale, commission: c ? { pct: c.pct, amount: c.amount } : null };
   }
 
   cancelPrivateSale(user: User, saleId: string, motif: string): PrivateSaleCancellation {
