@@ -10,6 +10,9 @@ import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
 import { EXC_STATUS, hasRole, Message, QUEUE_LABEL, TYPE_LABEL, useAction, type ExceptionList, type Queue, type TreasuryException } from './shared';
 
+/** Types d'exception qui portent de l'argent (clôture uniquement par une action financière). */
+const MONEY_TYPES = ['ORPHAN_CREDIT', 'CREDIT_WITHOUT_CONFIRMATION', 'UNKNOWN_ACCOUNT', 'DUPLICATE_CREDIT', 'AMOUNT_MISMATCH', 'MISSING_SETTLEMENT', 'PROVIDER_AMBIGUOUS', 'UNAPPLIED_PAYMENT', 'WRONG_ACCOUNT', 'ACCOUNT_VERSION_MISMATCH', 'RECEIPT_NOT_FINALIZABLE'];
+
 const HISTORY_LABEL: Record<string, string> = {
   AFFECTEE: 'Affectée', PRISE_EN_CHARGE: 'Prise en charge', JUSTIFICATIF: 'Justificatif ajouté',
   RESOLUTION_PROPOSEE: 'Résolution proposée', RESOLUTION_VALIDEE: 'Résolution validée', RESOLUTION_REJETEE: 'Résolution rejetée',
@@ -29,7 +32,10 @@ function Detail({ ex, onChanged }: { ex: TreasuryException; onChanged: () => voi
   const [evHash, setEvHash] = useState<string | undefined>();
   const [outcome, setOutcome] = useState<'RESOLUE' | 'CLASSEE'>('RESOLUE');
   const [motif, setMotif] = useState('');
-  const [suspend, setSuspend] = useState(false);
+  // Exception portant de l'argent : jamais classée sans suite ; issue = suspens, rapprochement ou opération exécutée.
+  const moneyEx = !!ex.line || MONEY_TYPES.includes(ex.type);
+  const [action, setAction] = useState<'AUCUNE' | 'MISE_EN_SUSPENS' | 'RAPPROCHEMENT' | 'OPERATION'>(moneyEx ? (ex.line ? 'MISE_EN_SUSPENS' : 'OPERATION') : 'AUCUNE');
+  const [operationId, setOperationId] = useState('');
   const [rejectMotif, setRejectMotif] = useState('');
   const roles = user?.roles;
   const me = user?.id;
@@ -44,7 +50,7 @@ function Detail({ ex, onChanged }: { ex: TreasuryException; onChanged: () => voi
   }
   function submitProposal(e: FormEvent) {
     e.preventDefault();
-    void run(`${base}/resolution`, { outcome, motif, action: suspend ? 'MISE_EN_SUSPENS' : 'AUCUNE' }, 'Résolution proposée : elle attend la validation d’une autre personne.', onChanged);
+    void run(`${base}/resolution`, { outcome: moneyEx ? 'RESOLUE' : outcome, motif, action, ...(action === 'OPERATION' ? { operationId: operationId.trim() } : {}) }, 'Résolution proposée : elle attend la validation d’une autre personne.', onChanged);
   }
 
   return (
@@ -100,16 +106,24 @@ function Detail({ ex, onChanged }: { ex: TreasuryException; onChanged: () => voi
             <h3 className="h-sub">Proposer la clôture</h3>
             <div className="seg seg-sm" role="group" aria-label="Issue">
               <button type="button" aria-pressed={outcome === 'RESOLUE'} onClick={() => setOutcome('RESOLUE')}>Résolue</button>
-              <button type="button" aria-pressed={outcome === 'CLASSEE'} onClick={() => setOutcome('CLASSEE')}>Classée</button>
+              {!moneyEx && <button type="button" aria-pressed={outcome === 'CLASSEE'} onClick={() => setOutcome('CLASSEE')}>Classée</button>}
             </div>
             <div className="field"><label className="label" htmlFor="tr-motif">Motif (10 caractères au moins)</label>
               <textarea id="tr-motif" rows={3} value={motif} onChange={(e) => setMotif(e.target.value)} required minLength={10} /></div>
-            {ex.line && (
-              <label className="check"><input type="checkbox" checked={suspend} onChange={(e) => setSuspend(e.target.checked)} />
-                <span>Porter le crédit en compte d’attente (suspens daté et justifié par ce motif)</span></label>
+            <div className="field"><label className="label" htmlFor="tr-action">Action financière</label>
+              <select id="tr-action" value={action} onChange={(e) => setAction(e.target.value as typeof action)}>
+                {!moneyEx && <option value="AUCUNE">Aucune (exception sans argent)</option>}
+                {ex.line && <option value="MISE_EN_SUSPENS">Porter le crédit en compte d’attente (suspens daté)</option>}
+                <option value="RAPPROCHEMENT">Rapprochement avec un paiement ou une ligne de relevé</option>
+                <option value="OPERATION">Opération exécutée (contrepassation, remboursement, apurement)</option>
+              </select>
+              {moneyEx && <span className="hint">Argent en jeu : l’exception ne peut pas être classée sans suite.</span>}</div>
+            {action === 'OPERATION' && (
+              <div className="field"><label className="label" htmlFor="tr-op">Opération exécutée (OPF-…)</label>
+                <input id="tr-op" className="mono" value={operationId} onChange={(e) => setOperationId(e.target.value)} required minLength={3} /></div>
             )}
             {outcome === 'RESOLUE' && (ex.evidence?.length ?? 0) === 0 && <p className="small muted">Une résolution exige au moins un justificatif.</p>}
-            <button type="submit" className="btn btn-primary btn-sm" disabled={busy || motif.trim().length < 10}>Soumettre à validation</button>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={busy || motif.trim().length < 10 || (action === 'OPERATION' && operationId.trim().length < 3)}>Soumettre à validation</button>
           </form>
         </>
       )}
