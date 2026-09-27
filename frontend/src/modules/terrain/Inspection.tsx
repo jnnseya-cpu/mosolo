@@ -15,6 +15,7 @@ import { api, describeError, safeGet, safeSet } from '../../lib/api';
 import { sha256Hex, uid } from '../../lib/crypto';
 import { ReasonAction } from '../fiscal/common';
 import './terrain.css';
+import { InspectionVisuel, type InspectionIndicateurs } from './visuels';
 
 interface Dossier {
   id: string; objectId: string; version: number; contentHash: string;
@@ -166,6 +167,12 @@ function Supervision() {
   );
 }
 
+/** Visuel en tête d'écran (27/09/2026) : les mêmes indicateurs que le panneau textuel du bas (conservé). */
+function IndicatorsVisuel() {
+  const q = useApi(() => api<InspectionIndicateurs>('/v1/terrain/inspection/indicateurs'), []);
+  return q.data ? <InspectionVisuel d={q.data} /> : null;
+}
+
 function IndicatorsPanel() {
   const q = useApi(() => api<Indicators>('/v1/terrain/inspection/indicateurs'), []);
   if (!q.data) return null;
@@ -214,6 +221,7 @@ export default function Inspection() {
     <div className="page page-wide">
       <PageHead eyebrow="Terrain" title="Inspection et constat"
         lead="Le dossier de chaque objet est préparé avant la visite et emporté hors ligne ; le procès-verbal est établi selon vos pouvoirs, signé ou avec mention du refus, puis validé par une autre personne. Un procès-verbal validé n’est jamais modifié. Aucun encaissement, aucune sanction." />
+      <IndicatorsVisuel key={`v-${tick}`} />
       {!online && <p className="notice" role="status">Hors ligne : les paquets déjà téléchargés restent consultables ; les procès-verbaux sont conservés puis transmis.</p>}
       <div className="field-row">
         <div className="field"><label className="label" htmlFor="ins-mission">Mission</label>

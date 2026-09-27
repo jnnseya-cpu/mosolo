@@ -19,6 +19,7 @@ import { AGENT_STATUS, MODULE_LABEL, moduleLabel, ST_STATUS } from './labels';
 import type { FieldAgent, Lot, MysteryCheck, Remuneration, Subcontractor } from './types';
 import { AideContextuelle } from '../apprentissage/AideContextuelle';
 import { EtatCertification } from '../apprentissage/EtatCertification';
+import { SousTraitantsVisuel } from './visuels';
 import { SubcontractorPointsPanel } from './ReserveAgents';
 import './terrain.css';
 
@@ -390,6 +391,8 @@ export default function Subcontractors() {
       <SubcontractorPointsPanel />
       {subs.loading ? <Loading /> : subs.error ? <ErrorState error={subs.error} onRetry={subs.reload} /> : (
         <>
+          {/* Visuels (27/09/2026) : accréditations et agents, depuis les listes déjà chargées. */}
+          <SousTraitantsVisuel subs={items} agents={agents.data?.items ?? []} example={items.some((s) => s.demo)} />
           <section className="section" aria-labelledby="st-t">
             <div className="section-head"><h2 id="st-t">Sous-traitants</h2><span className="count">{items.length}</span>
               {hasRole(roles, 'R06', 'R07') && <button type="button" className="btn btn-primary" onClick={() => setInviting(true)}><Icon name="send" size={18} /> Inviter un sous-traitant</button>}

@@ -26,6 +26,7 @@ import { BadgeCard, Progress } from '../modules/terrain/common';
 import { FLAG_LABEL, MISSION_STATUS, moduleLabel, OUTCOME_LABEL } from '../modules/terrain/labels';
 import type { CounterVisit, Finding, FindingOutcome, MeResponse, Mission } from '../modules/terrain/types';
 import '../modules/terrain/terrain.css';
+import { TerrainAgentVisuel } from './visuels';
 
 const OCCUPANCY = ['owner_occupied', 'rented', 'mixed', 'vacant', 'under_construction', 'commercial', 'unknown'] as const;
 
@@ -306,6 +307,8 @@ export default function Field() {
         <div className="callout callout-warn" role="note"><Icon name="lock" size={20} /><p>Votre compte est <strong>{agent.status === 'INVITE' ? 'en attente d’habilitation par la régie' : agent.status.toLowerCase()}</strong> : aucune mission ni aucun constat n’est possible.</p></div>
       )}
 
+      {/* Visuel de synthèse (27/09/2026) : avancement des missions et file de constats de l'agent connecté. */}
+      {me.data && agent && <TerrainAgentVisuel missions={missions} file={queue.filter((q) => q.ownerId === user?.id)} fileEtats={STATE} example={missions.some((m) => m.demo)} />}
       <div className="field-layout">
         <section className="section" aria-labelledby="mis-title">
           <div className="section-head"><h2 id="mis-title">{tr('field.missions')}</h2><span className="count">{missions.length}</span></div>

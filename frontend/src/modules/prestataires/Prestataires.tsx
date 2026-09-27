@@ -16,6 +16,9 @@ import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components
 import './prestataires.css';
 import { AttenteBaseLegale } from '../juridique/AttenteBaseLegale';
 import type { UIKey } from '../../lib/i18n';
+import { BarChartViz, ChartGrid, StatusDistribution, fmtNombre } from '../../components/viz';
+import { countBy } from '../../lib/aggregate';
+import { etatsDepuis } from '../../pages/visuels';
 
 interface Connector {
   id: string; label: string; mode: 'SANDBOX_LOCAL' | 'TEST' | 'LIVE'; baseUrl: string; apiKey: string; webhookSecret: string;
@@ -73,6 +76,16 @@ export default function Prestataires() {
       {!!q.error && <ErrorState error={q.error} onRetry={q.reload} />}
       {q.data && (
         <div className="stack">
+          {/* Visuels (27/09/2026) : entonnoir par prestataire, webhooks et ordres par état, depuis la même console. */}
+          <ChartGrid min={300} label="Prestataires en graphiques">
+            <BarChartViz title="Ordres par prestataire" subtitle="ordres, confirmés et rapprochés (niveaux emboîtés, côte à côte)" orientation="horizontal" format={(v) => fmtNombre(v, 0)} example
+              series={[{ key: 'o', label: 'Ordres' }, { key: 'c', label: 'Confirmés' }, { key: 'r', label: 'Rapprochés' }, { key: 'w', label: 'Webhooks' }]}
+              rows={q.data.connectors.map((c) => { const st = q.data!.stats.find((x) => x.id === c.id); return { key: c.id, label: c.label, values: { o: st?.orders ?? 0, c: st?.confirmed ?? 0, r: st?.reconciled ?? 0, w: st?.webhooks ?? 0 } }; })} />
+            <StatusDistribution title="Webhooks signés par issue" unitLabel="webhooks" example emptyText="Aucun webhook reçu"
+              items={etatsDepuis(OUTCOME, countBy(q.data.events, 'outcome'), { masquerZeros: true })} />
+            <StatusDistribution title="Ordres récents par état" unitLabel="ordres" example emptyText="Aucun ordre lié à un prestataire"
+              items={countBy(q.data.recentOrders, 'status').map((r) => ({ key: r.key, label: tr(`payment.status.${r.key}` as UIKey), tone: STATUS_TONE[r.key] ?? 'neutral', count: r.count }))} />
+          </ChartGrid>
           <div className="pr-grid">
             {q.data.connectors.map((c) => {
               const st = q.data!.stats.find((s) => s.id === c.id);

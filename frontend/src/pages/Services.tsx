@@ -7,6 +7,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { ErrorState, ExampleNotice, Loading } from '../components/States';
 import { fetchCatalogue, fetchSummary, LEGAL_TONE } from '../verticals/catalogue';
 import '../modules/verticales/verticales.css';
+import { ServicesVisuel } from './visuels';
 
 export { LEGAL_TONE };
 
@@ -31,6 +32,8 @@ export default function Services() {
       <ExampleNotice text="Démonstration : objets et références sont fictifs. Aucune règle sectorielle n’est encore certifiée : les montants proviennent de règles fictives de démonstration, non opposables. Un service « acte requis » n’exige aucun paiement." />
       {cat.loading && <Loading />}
       {!!cat.error && <ErrorState error={cat.error} onRetry={cat.reload} />}
+      {/* Visuel de synthèse (27/09/2026) : statut juridique des services ; situation du contribuable par service. */}
+      {cat.data && <ServicesVisuel items={cat.data.items} legalTone={LEGAL_TONE} mine={isTaxpayer ? sum.data?.items : undefined} />}
       {cat.data && (
         <ul className="vx-grid">
           {cat.data.items.map((v, i) => {

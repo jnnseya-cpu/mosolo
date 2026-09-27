@@ -16,6 +16,7 @@ import { normalizeComms, normalizeDeliveries } from '../lib/normalize';
 import { DEMO_COMMS, localPreviewHtml } from '../demo/communications';
 import { useInsight } from '../hooks/useInsight';
 import { AIInsightPanel } from '../components/AIInsightPanel';
+import { CommunicationsVisuel } from './visuels';
 
 export const ENTITIES = ['DGIPK', 'DGTK', 'MINFIN', 'TRESOR'] as const;
 
@@ -134,6 +135,10 @@ export default function Communications() {
           <span className="stat-note">{tr('comms.productionNote', { n: CHANNELS.length - connected })}</span></dd></div>
       </dl>
 
+      {/* Visuel de synthèse (27/09/2026) : remise, derniers envois par état, catalogue par gravité. */}
+      <CommunicationsVisuel delivered={o.delivered.delivered} attempted={o.delivered.attempted} recents={o.recent} example={o.example || fallback}
+        recentEtat={(s) => { const d = DELIVERY_TONE[normStatus(s)] ?? { tone: 'neutral' as Tone, key: 'delivery.en_file' as UIKey }; return { label: tr(d.key), tone: d.tone }; }}
+        gravites={(['critical', 'warning', 'info', 'success'] as Severity[]).map((g) => ({ key: g, label: tr(`severity.${g}` as UIKey), count: events.filter((e) => e.gravite === g).length }))} />
       <div className="dash-grid">
         <ChartCard className="span-7" title={tr('comms.coverage')} subtitle={measure === 'events' ? tr('comms.coverageEvents') : tr('comms.coverageSent')}
           example={o.example || fallback} height={280}

@@ -15,6 +15,7 @@ import { DynamicQr, ISSUANCE_LABEL, TitleStatus, type CredentialView, type Issua
 import '../modules/titres/titres.css';
 import '../modules/rakapay/rakapay.css';
 import { PrintProofLink } from '../modules/preuves/PrintLink';
+import { PassVisuel, RakaPayHistoriqueVisuel } from './visuels';
 
 /**
  * Espace citoyen RakaPay (modules 76, 70, 71) et pass des moto-taxis wewa (module 81, composante de RakaPay) — branché sur l'API.
@@ -212,6 +213,8 @@ function PassTab() {
       {d.passes && d.passes.length > 0 && (
         <section className="panel" aria-labelledby="rk-passes">
           <div className="panel-head"><h2 className="panel-title" id="rk-passes">Mes pass</h2><span className="count">{d.passes.length}</span></div>
+          {/* Visuel (27/09/2026) : mes pass par état et leurs périodes de validité, depuis la même réponse. */}
+          <PassVisuel passes={d.passes} />
           <ul className="list-rows">
             {d.passes.map((c) => (
               <li key={c.id} className="list-row">
@@ -329,6 +332,8 @@ function HistoryTab() {
     <section className="panel" aria-labelledby="rk-hist">
       <div className="panel-head"><h2 className="panel-title" id="rk-hist">Historique et quittances</h2><span className="count">{orders.data?.length ?? 0}</span></div>
       {err && <p className="notice notice-err" role="alert">{err}</p>}
+      {/* Visuel (27/09/2026) : commandes par état et par jour, depuis l'historique déjà chargé. */}
+      {!!orders.data?.length && <RakaPayHistoriqueVisuel orders={orders.data} />}
       {!orders.data?.length ? <EmptyState title="Aucune commande" icon="history" /> : (
         <ul className="list-rows">
           {orders.data.map((o) => (

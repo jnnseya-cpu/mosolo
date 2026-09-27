@@ -7,6 +7,8 @@ import { Icon } from '../components/Icon';
 import { AUTORITES_POSTE, InstallButton, visibleNav } from '../components/Shell';
 import { MakerMark, Tricolour } from '../components/Brand';
 import type { UIKey } from '../lib/i18n';
+import { ChartGrid } from '../components/viz';
+import { CatalogueEvenementsVisuel } from './visuels';
 
 const CHAIN = [
   'recenser', 'identifier', 'geolocaliser', 'qualifier', 'calculer', 'notifier', 'payer',
@@ -149,6 +151,13 @@ export default function Home() {
               </figcaption>
             </figure>
           </div>
+        </div>
+      </section>
+
+      {/* 4 bis. Le catalogue d'événements en graphique (données réelles du paquet partagé) */}
+      <section className="home-viz" aria-label="Catalogue d’événements en graphique">
+        <div className="section-inner">
+          <ChartGrid min={320}><CatalogueEvenementsVisuel events={EVENTS} categories={EVENT_CATEGORIES} /></ChartGrid>
         </div>
       </section>
 

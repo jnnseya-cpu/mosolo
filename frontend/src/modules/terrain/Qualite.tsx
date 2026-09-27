@@ -15,6 +15,7 @@ import { api } from '../../lib/api';
 import { useApp } from '../../context';
 import { hasRole, Message, useAction } from '../tresor/shared';
 import './terrain.css';
+import { QualiteVisuel } from './visuels';
 
 interface Suspicion { code: string; kind: 'DOUBLON' | 'FICTIF'; label: string; findingIds: string[]; subcontractorId: string | null; agentIds: string[]; detail: string; fingerprint: string }
 interface RotationItem { kind: 'AGENT' | 'SOUS_TRAITANT'; id: string; name: string; commune: string; since: string; days: number; overdue: boolean }
@@ -100,6 +101,8 @@ export default function Qualite() {
         <>
           {b.loading && <Loading />}
           {b.error !== null && <ErrorState error={b.error} onRetry={b.reload} />}
+          {/* Visuels (27/09/2026) : présomptions, rotation des zones et récupérations, depuis le même tableau de bord. */}
+          {b.data && <QualiteVisuel board={b.data} />}
           {b.data && <QualiteView board={b.data} roles={roles} onChanged={b.reload} />}
         </>
       )}

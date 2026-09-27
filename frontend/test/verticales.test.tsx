@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppProvider } from '../src/context';
 import Services from '../src/pages/Services';
@@ -28,7 +28,9 @@ describe('Portail des verticales branché sur l’API', () => {
     render(<AppProvider initialLang="fr"><MemoryRouter><Services /></MemoryRouter></AppProvider>);
     expect(await screen.findByText('MOSOLO Markets')).toBeTruthy();
     expect(screen.getByText('MOSOLO AVIA')).toBeTruthy();
-    expect(screen.getByText('Acte requis avant tout paiement')).toBeTruthy();
+    // Statut juridique sur la carte du service (le même libellé figure aussi dans la répartition graphique ajoutée le 27/09/2026).
+    expect(within(document.querySelector('.vx-grid') as HTMLElement).getByText('Acte requis avant tout paiement')).toBeTruthy();
+    expect(screen.getByRole('group', { name: /Services par statut juridique/ })).toBeTruthy();
     expect(screen.getByText(/règles fictives de démonstration, non opposables/)).toBeTruthy();
   });
 });

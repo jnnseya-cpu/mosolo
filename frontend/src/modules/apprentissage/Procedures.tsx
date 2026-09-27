@@ -9,6 +9,7 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { Section } from '../pilotage/shared';
 import { hasRole } from '../pilotage/planif';
 import { date, Ecran, Indicateurs, useVue, type Indicator } from '../decision/commun';
+import { ProceduresVisuel } from './visuels';
 
 interface Proc {
   id: string; cle: string; publics: string[]; demo: boolean;
@@ -25,6 +26,8 @@ export default function Procedures() {
     <Ecran eyebrow="IA et apprentissage · module 50" title="Base de procédures" lead="Procédures versionnées, publiées à quatre yeux ; seule la version publiée est opposable, l’historique reste consultable. Suivi des résultats, pas surveillance intrusive." q={q}>
       {(d) => (<>
         {ind.data && <Section title="Indicateurs"><Indicateurs items={ind.data.indicators} /></Section>}
+        {/* Visuels (27/09/2026) : publication et versions, depuis la même liste. */}
+        <ProceduresVisuel items={d.items} />
         <Section title="Procédures" sub="La rédaction et la publication se font dans « Certifications et contenus d’apprentissage » (type Procédure).">
           <DataTable caption="Procédures" rows={d.items} rowKey={(p) => p.id} empty={<p className="muted">Aucune procédure pour votre public.</p>} columns={[
             { key: 't', label: 'Procédure', primary: true, render: (p) => <>{p.publiee?.titre ?? p.cle}{p.demo && <span className="small muted"> [EXEMPLE]</span>}</> },

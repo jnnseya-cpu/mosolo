@@ -14,6 +14,7 @@ import { BADGE_RESULT, fmtPct, moduleLabel } from './labels';
 import { initials } from './common';
 import type { PublicBadgeCheck } from './types';
 import './terrain.css';
+import { ControlesMystereVisuel } from './visuels';
 
 type ReportKind = 'FAUX_AGENT' | 'HORS_ZONE' | 'DEMANDE_ESPECES';
 
@@ -148,6 +149,8 @@ export default function VerifyAgent() {
               <Icon name="shieldCheck" size={14} /> Contrôles mystère réalisés auprès des agents et sous-traitants : {summary.performed}, dont {fmtPct(summary.withoutIrregularity > 0 ? summary.withoutIrregularityPct : '0.0')} sans irrégularité (résultats agrégés).
             </p>
           )}
+          {/* Visuel (27/09/2026) : les mêmes résultats agrégés, en répartition (aucune donnée personnelle). */}
+          {summary && summary.performed > 0 && <ControlesMystereVisuel s={summary} />}
         </div>
       </CoverSplit>
     </div>

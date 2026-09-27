@@ -17,6 +17,7 @@ import { periodicityLabel, revenueCategoryLabel } from '../lib/labels';
 import '../modules/recouvrement/recouvrement.css';
 import { RuleLegalTests, RuleTechnicalView } from '../modules/juridique/RuleJuridiqueTools';
 import { VeilleRegles } from '../modules/juridique/VeilleRegles';
+import { RegistreVisuel } from './visuels';
 
 interface HistoryEntry { at: string; action: string; by: string; status: string; detail?: string }
 interface Suspension { reason: string; authority: string; instrumentRef?: string; by: string; at: string; previousStatus: string; liftedAt?: string; liftReason?: string }
@@ -537,6 +538,8 @@ export default function LegalRegister() {
       {q.loading && <Loading />}
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
       {q.data?.fallback && <ExampleNotice text={tr('rules.fallback')} />}
+      {/* Visuel de synthèse (27/09/2026) : cycle de vie, visas et devises des fiches chargées. */}
+      {q.data && <RegistreVisuel rules={rules} example={q.data.fallback || rules.some((r) => r.demo || r.sample)} etat={(s) => ({ label: tr(`rules.status.${s}` as UIKey), tone: STATUS_TONE[s] ?? 'neutral' })} />}
       {q.data && (
         <DataTable
           caption={tr('rules.title')}

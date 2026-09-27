@@ -76,8 +76,9 @@ export function useAutosave<T extends object>(key: string, initial: T, opts: { d
   useEffect(() => {
     if (!server) return;
     let alive = true;
-    api<DraftDoc<T> | null>(`/v1/drafts/${encodeURIComponent(key)}`)
-      .then((doc) => {
+    api<DraftDoc<T> | { draft: null } | null>(`/v1/drafts/${encodeURIComponent(key)}?siAbsent=vide`)
+      .then((res) => {
+        const doc = res && 'data' in res ? res : null;
         if (!alive || !doc || doc.data === undefined || dirty.current) return;
         const l = readLocalDraft<T>(key);
         if (l?.pending) return;
