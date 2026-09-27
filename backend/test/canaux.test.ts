@@ -8,6 +8,7 @@ import type { CanauxService } from '../src/plugins/canaux/service.js';
 import { integerToFrenchWords, moneyToFrenchWords } from '../src/plugins/canaux/words.js';
 import { holderPrincipal, normalizeReference } from '../src/plugins/canaux/points.js';
 import type { TestEnv } from './helpers.js';
+import { signedCallbackHeaders } from '../src/modules/payments/callback-signing.js';
 
 const DEMO_CARD = '48217730159'; // préfixe de la carte de démonstration (chiffre de contrôle calculé par le service)
 
@@ -633,7 +634,7 @@ describe('canaux — points de paiement agréés (R32)', () => {
     // Course : confirmation signée du point arrivée malgré tout ⇒ non affecté ; les espèces restent dues par le point.
     const secret = ctx.secrets.providerSecrets['point-agree-pa-limete-mm01']!;
     const raw = JSON.stringify({ providerTxnId: 'PA-LIMETE-MM01-TX-COURSE', paymentReference: order.paymentReference, amount: order.amount, status: 'SUCCESS', completedAt: ctx.clock.now().toISOString() });
-    const res = ctx.payments.handleCallback('point-agree-pa-limete-mm01', { signature: hmacSha256Hex(secret, raw), nonce: randomUUID(), timestamp: ctx.clock.now().toISOString() }, raw);
+    const res = ctx.payments.handleCallback('point-agree-pa-limete-mm01', signedCallbackHeaders(secret, raw, ctx.clock.now()), raw);
     expect(res.status).toBe('NON_AFFECTE');
     const after = (await c.env.req('GET', '/v1/payment-points/PA-LIMETE-MM01/cash-days/2026-09-26', 'canaux-op-limete')).json();
     expect(after.unapplied).toHaveLength(1);

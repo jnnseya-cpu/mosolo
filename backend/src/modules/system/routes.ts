@@ -25,7 +25,7 @@ export function registerSystemRoutes(app: FastifyInstance, ctx: AppContext): voi
     entities: Object.values(ENTITIES).map(({ code, name, shortName }) => ({ code, name, shortName })),
     roles: ROLES,
     demo: { auth: isDemoMode() ? 'x-demo-user + OIDC local' : 'OIDC local (jetons porteurs)', storage: getActivePersistence() ? 'postgresql' : 'in-memory', ai: 'deterministic-rules', fxSource: 'BCC (démo)' },
-    receiptVerificationKey: { algorithm: 'Ed25519', publicKeyPem: ctx.receipts.publicKeyPem() },
+    receiptVerificationKey: { algorithm: 'Ed25519', keyId: ctx.receipts.keyId, publicKeyPem: ctx.receipts.publicKeyPem(), keys: ctx.receipts.verificationKeys() },
   }));
 
   // Annuaire de démonstration (sélecteur x-demo-user) : démonstration UNIQUEMENT — hors démonstration, 404.

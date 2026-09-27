@@ -7,7 +7,7 @@ import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify, t
 import { type MoneyJSON, type PublicReceiptCheck, type ReceiptStatus } from '@mosolo/shared';
 import type { AuditLog } from '../../core/audit.js';
 import type { Clock } from '../../core/clock.js';
-import { canonicalJson } from '../../core/crypto.js';
+import { canonicalJson, sha256Hex } from '../../core/crypto.js';
 import { conflict, notFound } from '../../core/errors.js';
 import { VerificationGate, type GateDecision } from './limiter.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
@@ -59,6 +59,8 @@ export interface Receipt {
   mention: string;
   signature: string;
   signatureAlgorithm: 'Ed25519';
+  /** Identifiant de la clé de signature (receiptKeyId) ; absent sur les quittances antérieures à la rotation. */
+  keyId?: string;
   qrPayload: string;
   verificationPath: string;
   /** Numéro de la quittance qui remplace celle-ci (état REMPLACEE). */
@@ -149,6 +151,45 @@ export function loadReceiptSigningKey(raw: string | undefined): KeyObject | unde
   return key;
 }
 
+/** Identifiant d'une clé de quittance : 16 premiers hexadécimaux du SHA-256 de la clé publique SPKI (DER). */
+export function receiptKeyId(key: KeyObject): string {
+  const pub = key.type === 'private' ? createPublicKey(key) : key;
+  return sha256Hex(pub.export({ type: 'spki', format: 'der' })).slice(0, 16);
+}
+
+/**
+ * Clés de VÉRIFICATION retirées (rotation, MOSOLO_RECEIPT_VERIFY_KEYS) : liste séparée par « ; » (ou retours à la
+ * ligne entre blocs PEM) de clés publiques Ed25519 SPKI — PEM (\n littéraux admis) ou base64 DER ; une clé privée
+ * PKCS#8 est aussi admise (seule sa partie publique est gardée). Rotation : l'ancienne MOSOLO_RECEIPT_SIGNING_KEY
+ * passe ici (sa clé publique), la nouvelle la remplace ; les quittances déjà émises restent vérifiables.
+ */
+export function loadReceiptVerificationKeys(raw: string | undefined): KeyObject[] {
+  const value = raw?.trim().replace(/\\n/g, '\n');
+  if (!value) return [];
+  const items = value.includes('-----BEGIN')
+    ? (value.match(/-----BEGIN [A-Z ]+-----[\s\S]+?-----END [A-Z ]+-----/g) ?? [])
+    : value.split(/[;\s]+/).filter(Boolean);
+  return items.map((item, i) => {
+    let key: KeyObject;
+    try {
+      if (item.includes('PRIVATE KEY')) key = createPublicKey(createPrivateKey(item));
+      else if (item.includes('-----BEGIN')) key = createPublicKey(item);
+      else {
+        const der = Buffer.from(item, 'base64');
+        try {
+          key = createPublicKey({ key: der, format: 'der', type: 'spki' });
+        } catch {
+          key = createPublicKey(createPrivateKey({ key: der, format: 'der', type: 'pkcs8' }));
+        }
+      }
+    } catch {
+      throw new Error(`MOSOLO_RECEIPT_VERIFY_KEYS : clé n° ${i + 1} illisible (clé publique Ed25519 SPKI attendue, PEM ou base64 DER).`);
+    }
+    if (key.asymmetricKeyType !== 'ed25519') throw new Error(`MOSOLO_RECEIPT_VERIFY_KEYS : clé n° ${i + 1} non Ed25519 (${key.asymmetricKeyType ?? 'inconnu'}).`);
+    return key;
+  });
+}
+
 /** Quatre derniers caractères alphanumériques de la référence du contribuable (§ 19.2). */
 export function refSuffix(ref: string): string {
   return ref.replace(/[^0-9A-Za-z]/g, '').slice(-4);
@@ -209,6 +250,8 @@ export interface VerificationDayStats {
 export interface SignedRevocationList {
   issuedAt: string;
   algorithm: 'Ed25519';
+  /** Clé de signature de la liste (hors charge signée : indication pour choisir la clé du trousseau). */
+  keyId: string;
   entries: { code: string; number: string; status: PublicReceiptStatus; since: string }[];
   signature: string;
 }
@@ -218,6 +261,10 @@ export class ReceiptService {
   private readonly ids = new IdGenerator();
   private readonly privateKey: KeyObject;
   readonly publicKey: KeyObject;
+  /** Identifiant de la clé courante (signature des nouvelles quittances). */
+  readonly keyId: string;
+  /** Clés de vérification par identifiant : clé courante + clés retirées (rotation). */
+  private readonly verificationKeyRing = new Map<string, KeyObject>();
   private seq = 0;
   /** Nombre de quittances au dernier calage du compteur (un écart signale une restauration à reprendre). */
   private seqSyncedAt = 0;
@@ -230,6 +277,7 @@ export class ReceiptService {
     private readonly audit: AuditLog,
     private readonly alerts: AlertService,
     signingKey?: KeyObject,
+    retiredKeys: KeyObject[] = [],
   ) {
     if (signingKey) {
       this.privateKey = signingKey;
@@ -238,6 +286,13 @@ export class ReceiptService {
       const pair = generateKeyPairSync('ed25519');
       this.privateKey = pair.privateKey;
       this.publicKey = pair.publicKey;
+    }
+    this.keyId = receiptKeyId(this.publicKey);
+    this.verificationKeyRing.set(this.keyId, this.publicKey);
+    for (const k of retiredKeys) {
+      const pub = k.type === 'private' ? createPublicKey(k) : k;
+      const id = receiptKeyId(pub);
+      if (!this.verificationKeyRing.has(id)) this.verificationKeyRing.set(id, pub);
     }
     this.gate = new VerificationGate(clock);
   }
@@ -312,6 +367,7 @@ export class ReceiptService {
       mention: MENTIONS.PROVISOIRE,
       signature,
       signatureAlgorithm: 'Ed25519',
+      keyId: this.keyId,
       qrPayload: `MOSOLO1|${code}|${signature}`,
       verificationPath: `/v1/public/receipts/${code}`,
     });
@@ -398,6 +454,7 @@ export class ReceiptService {
       issuedAt: decision.at,
       replaces: r.number,
       signature,
+      keyId: this.keyId,
       qrPayload: `MOSOLO1|${code}|${signature}`,
       verificationPath: `/v1/public/receipts/${code}`,
       decision,
@@ -434,16 +491,30 @@ export class ReceiptService {
     };
   }
 
+  /**
+   * Vérification : avec la clé désignée par `keyId` (clé inconnue ⇒ invalide) ; quittance antérieure à la rotation
+   * (sans keyId) ⇒ essai de chaque clé du trousseau.
+   */
   verifySignature(r: Receipt): boolean {
-    try {
-      return verify(null, Buffer.from(this.signedPayload(r)), this.publicKey, Buffer.from(r.signature, 'base64url'));
-    } catch {
-      return false;
-    }
+    const keys = r.keyId !== undefined ? [this.verificationKeyRing.get(r.keyId)].filter((k): k is KeyObject => !!k) : [...this.verificationKeyRing.values()];
+    const payload = Buffer.from(this.signedPayload(r));
+    return keys.some((k) => {
+      try {
+        return verify(null, payload, k, Buffer.from(r.signature, 'base64url'));
+      } catch {
+        return false;
+      }
+    });
   }
 
+  /** Clé publique COURANTE (nouvelles quittances). */
   publicKeyPem(): string {
     return this.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+  }
+
+  /** Trousseau public de vérification (vérificateurs hors ligne) : clé courante puis clés retirées encore acceptées. */
+  verificationKeys(): { keyId: string; publicKeyPem: string; current: boolean }[] {
+    return [...this.verificationKeyRing.entries()].map(([keyId, k]) => ({ keyId, publicKeyPem: k.export({ type: 'spki', format: 'pem' }).toString(), current: keyId === this.keyId }));
   }
 
   /** Contrôle de débit d'un client (clé réseau) avant vérification publique. */
@@ -484,7 +555,7 @@ export class ReceiptService {
       .sort((a, b) => a.code.localeCompare(b.code));
     const issuedAt = this.clock.now().toISOString();
     const signature = sign(null, Buffer.from(canonicalJson({ issuedAt, entries })), this.privateKey).toString('base64url');
-    return { issuedAt, algorithm: 'Ed25519', entries, signature };
+    return { issuedAt, algorithm: 'Ed25519', keyId: this.keyId, entries, signature };
   }
 
   /** Vérification publique : résultat MINIMAL (§ 19.2, AC-RCP-01). `duplicateNo` : contrôle d'un duplicata présenté. */

@@ -6,7 +6,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { AppContext } from '../../context.js';
-import { hmacSha256Hex } from '../../core/crypto.js';
+import { signedCallbackHeaders } from '../../modules/payments/callback-signing.js';
 import type { PaymentChannel } from '../../modules/payments/service.js';
 
 const PLAN: { commune: string; quartier: string; rank: 1 | 2 | 3 | 4; count: number; reconcile: number; lat: number; lon: number }[] = [
@@ -50,7 +50,7 @@ export function runDemoFlow(ctx: AppContext, provider = 'mm-operator-a'): { obli
         providerTxnId: `DEMO-TXN-${randomUUID()}`, paymentReference: order.paymentReference, amount: order.amount, status: 'SUCCESS',
         completedAt: ctx.clock.now().toISOString(),
       });
-      const res = ctx.payments.handleCallback(provider, { signature: hmacSha256Hex(secret, raw), nonce: randomUUID(), timestamp: ctx.clock.now().toISOString() }, raw);
+      const res = ctx.payments.handleCallback(provider, signedCallbackHeaders(secret, raw, ctx.clock.now()), raw);
       if (res.status !== 'CONFIRME') continue;
       confirmed++;
       if (i < p.reconcile) toReconcile.push({ alias: order.beneficiaryAlias, amount: order.amount as { amount: string; currency: 'USD' }, ref: order.paymentReference });

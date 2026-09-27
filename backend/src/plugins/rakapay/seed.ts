@@ -6,7 +6,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { AppContext } from '../../context.js';
-import { hmacSha256Hex } from '../../core/crypto.js';
+import { signedCallbackHeaders } from '../../modules/payments/callback-signing.js';
 import type { RuleInput } from '../../modules/rules/service.js';
 import type { RakaPayService, WewaDuration } from './service.js';
 import { BUS_RULE, MODULE_WEWA, RAKAPAY_ENTITY, WEWA_RULE } from './service.js';
@@ -54,7 +54,7 @@ export function demoProviderConfirm(ctx: AppContext, paymentReference: string): 
   if (!secret || !order) return false;
   const now = ctx.clock.now().toISOString();
   const raw = JSON.stringify({ providerTxnId: `DEMO-RK-${randomUUID()}`, paymentReference, amount: order.amount, status: 'SUCCESS', completedAt: now });
-  ctx.payments.handleCallback(provider, { signature: hmacSha256Hex(secret, raw), nonce: randomUUID(), timestamp: now }, raw);
+  ctx.payments.handleCallback(provider, signedCallbackHeaders(secret, raw, new Date(now)), raw);
   return true;
 }
 

@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp, corsOrigins } from '../src/app.js';
 import { ACR, assertSafeDeployment, ConfigurationError, isDemoMode, type User } from '../src/core/auth.js';
 import { ManualClock } from '../src/core/clock.js';
-import { hmacSha256Hex } from '../src/core/crypto.js';
+import { callbackHeaders } from './helpers.js';
 import { deviceKeysFromEnv, providerSecretsFromEnv } from '../src/context.js';
 import { restoreStore, createBackup } from '../src/persistence/backup.js';
 import { collectRows } from '../src/persistence/registry.js';
@@ -107,7 +107,7 @@ describe('Secrets des prestataires et des terminaux', () => {
     const raw = JSON.stringify({ providerTxnId: 'TXN-FORGE', paymentReference: 'KIN-INCONNUE', amount: { amount: '150.00', currency: 'USD' }, status: 'SUCCESS', completedAt: c.now().toISOString() });
     const send = (secret: string) => app.inject({
       method: 'POST', url: '/v1/providers/mm-operator-a/callbacks', payload: raw,
-      headers: { 'content-type': 'application/json', 'x-signature': hmacSha256Hex(secret, raw), 'x-nonce': randomUUID(), 'x-timestamp': c.now().toISOString() },
+      headers: { 'content-type': 'application/json', ...callbackHeaders(secret, raw, c.now()) },
     });
     const forged = await send('demo-secret-mm-operator-a');
     expect(forged.statusCode).toBe(401);
