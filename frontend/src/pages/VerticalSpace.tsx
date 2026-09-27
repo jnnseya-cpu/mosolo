@@ -22,6 +22,7 @@ import '../modules/verticales/verticales.css';
 import { PrintProofLink } from '../modules/preuves/PrintLink';
 import { AviaAutoAirline } from '../modules/verticales/AviaAuto';
 import { ParcoursPanel } from '../modules/verticales/Parcours';
+import { EtablissementObligations } from '../modules/verticales/Determination';
 
 export { OBLIGATION_TONE as DUE_TONE };
 
@@ -454,6 +455,7 @@ function VerticalSpaceInner({ slug }: { slug: string }) {
               {slug === 'evenements' && <Ticketing objects={objects} ticketing={s.ticketing ?? []} onChange={space.reload} />}
               {slug === 'avia' && <AviaPanel objects={objects} />}
               {slug === 'avia' && <AviaAutoAirline />}
+              {slug === 'entreprises' && objects.filter((o) => o.objectType === 'ETABLISSEMENT').map((o) => <EtablissementObligations key={o.id} objectId={o.id} label={o.label} />)}
 
               <section className="panel" aria-labelledby="vx-due">
                 <div className="panel-head"><h2 className="panel-title" id="vx-due">Mes obligations</h2><span className="count">{s.obligations.length}</span></div>

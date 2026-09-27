@@ -70,7 +70,7 @@ export const PARCOURS: Record<string, ParcoursVerticale> = {
     nomPartieV: 'MOSOLO Business', finalite: 'Relier chaque entreprise et établissement à ses activités, autorisations et obligations.', modules: [10, 17, 56],
     etapes: [
       e(1, 'Enregistrement de l’établissement et de ses dirigeants', [10, 7], '/services/entreprises', 'POST /v1/verticales/entreprises/cases'),
-      e(2, 'Détermination des obligations par activité, lieu et catégorie', [10, 26], '/verticales/console', 'GET /v1/verticales/entreprises/etablissements/:objectId/obligations'),
+      e(2, 'Détermination des obligations par activité, lieu et catégorie', [10, 26], '/services/entreprises', 'GET /v1/verticales/entreprises/etablissements/:objectId/obligations'),
       e(3, 'Patente et autorisations avec QR « en règle »', [10], '/verifier-plaque', 'GET /v1/public/verticales/certificates/:code'),
       e(4, 'Recoupement Mobile Money, livraisons brassicoles, RCCM', [17, 61], '/opportunites/recoupement', 'POST /v1/verticales/secteurs/donnees-tierces'),
       e(5, 'Suivi des grands redevables', [56], '/verticales/secteurs', 'POST /v1/verticales/secteurs/grands-redevables'),
@@ -143,8 +143,8 @@ export const PARCOURS: Record<string, ParcoursVerticale> = {
   environnement: {
     nomPartieV: 'MOSOLO Environment', finalite: 'Préparer et gérer les recettes environnementales.', modules: [18, 19],
     etapes: [
-      e(1, 'Registre des assujettis', [18], '/services/environnement', 'GET /v1/verticales/environnement/registre'),
-      e(2, 'Simulation d’impact', [18, 26], '/verticales/console', 'POST /v1/verticales/environnement/simulations'),
+      e(1, 'Registre des assujettis', [18], '/verticales/environnement', 'GET /v1/verticales/environnement/registre'),
+      e(2, 'Simulation d’impact', [18, 26], '/verticales/environnement', 'POST /v1/verticales/environnement/simulations'),
       e(3, 'Activation après édit', [18, 26], '/registre', 'POST /v1/legal-rules/:id/approve', 'Acte requis (J15, J16) : désactivé tant qu’aucun édit n’est publié'),
       e(4, 'Déclarations et reversements', [18, 28], '/services/environnement', 'POST /v1/verticales/environnement/objects/:objectId/liquidate'),
     ],
