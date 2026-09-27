@@ -22,6 +22,7 @@ import type { UIKey } from '../lib/i18n';
 import { asMoney } from '../lib/normalize';
 import type { Obligation, ObligationDetail, ObligationExplanation, PaymentOrder, Receipt, TaxpayerProfile } from '../lib/types';
 import '../modules/fiscal/fiscal.css';
+import { SeptQuestionsPanel } from '../modules/chaine/SeptQuestions';
 
 /** Accès aux démarches fiscales (module fiscal) depuis l'espace contribuable. */
 const FISCAL_LINKS: { to: string; icon: string; title: string; text: string }[] = [
@@ -269,7 +270,7 @@ function ContestForm({ ob }: { ob: Obligation }) {
   );
 }
 
-type Panel = { kind: 'explain' | 'pay' | 'contest'; ob: Obligation } | null;
+type Panel = { kind: 'explain' | 'pay' | 'contest' | 'chaine'; ob: Obligation } | null;
 
 export default function TaxpayerSpace() {
   const { tr, user, users, setUserId, fmtDate, lang } = useApp();
@@ -327,6 +328,7 @@ export default function TaxpayerSpace() {
                   key: 'actions', label: tr('space.col.actions'), full: true, render: (o) => (
                     <div className="row-actions">
                       <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPanel({ kind: 'explain', ob: o })}><Icon name="info" size={16} /> {tr('taxpayer.explain')}</button>
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPanel({ kind: 'chaine', ob: o })}><Icon name="sync" size={16} /> Sept questions</button>
                       {o.status !== 'SOLDEE' && o.status !== 'ANNULEE' && <button type="button" className="btn btn-primary btn-sm" onClick={() => setPanel({ kind: 'pay', ob: o })}>{tr('taxpayer.pay')}</button>}
                       <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPanel({ kind: 'contest', ob: o })}>{tr('taxpayer.contest')}</button>
                     </div>
@@ -361,6 +363,7 @@ export default function TaxpayerSpace() {
                     <div className="row-side">
                       <MapStatusChip status={o.mapStatus ?? mapFromProbative(o.probativeStatus)} />
                       {o.probativeStatus && <span className="tag">{tr(`probative.${o.probativeStatus}` as UIKey)}</span>}
+                      <Link className="btn btn-ghost btn-sm" to={`/chaine/${encodeURIComponent(o.id)}`}><Icon name="sync" size={16} /> Sept questions</Link>
                     </div>
                   </li>
                 ))}
@@ -407,10 +410,11 @@ export default function TaxpayerSpace() {
       )}
 
       <Drawer open={panel !== null} onClose={() => setPanel(null)}
-        title={panel ? tr(panel.kind === 'explain' ? 'taxpayer.explain' : panel.kind === 'pay' ? 'taxpayer.pay' : 'taxpayer.contest') : ''}>
+        title={panel ? (panel.kind === 'chaine' ? 'Sept questions et chaîne opératoire' : tr(panel.kind === 'explain' ? 'taxpayer.explain' : panel.kind === 'pay' ? 'taxpayer.pay' : 'taxpayer.contest')) : ''}>
         {panel?.kind === 'explain' && <Explanation id={panel.ob.id} />}
         {panel?.kind === 'pay' && <PayFlow ob={panel.ob} />}
         {panel?.kind === 'contest' && <ContestForm ob={panel.ob} />}
+        {panel?.kind === 'chaine' && <SeptQuestionsPanel obligationId={panel.ob.id} />}
       </Drawer>
     </div>
   );

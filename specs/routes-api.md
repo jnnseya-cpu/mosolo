@@ -1,11 +1,12 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **634 routes** dans 36 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
 | extension acces | 63 |
 | extension canaux | 45 |
+| extension chaine | 3 |
 | extension fiscal | 44 |
 | extension ia | 28 |
 | extension integrite | 58 |
@@ -157,6 +158,14 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | GET | `/v1/public/short-codes/:code` |
 | POST | `/v1/ussd/sessions` |
 | POST | `/v1/ussd/sessions/:id/input` |
+
+## Extension chaine
+
+| Méthode | Chemin |
+|---|---|
+| GET | `/v1/integrite/chaine/ruptures` |
+| GET | `/v1/objects/:id/sept-questions` |
+| GET | `/v1/obligations/:id/chaine` |
 
 ## Extension fiscal
 

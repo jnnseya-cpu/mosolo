@@ -18,10 +18,12 @@ import { iaPlugin } from './ia/plugin.js';
 import { preuvesPlugin } from './preuves/plugin.js';
 import { sanctionsPlugin } from './sanctions/plugin.js';
 import { soclePlugin } from './socle/plugin.js';
+import { chainePlugin } from './chaine/plugin.js';
 
 /**
  * Ordre : `acces` en tête (garde des revendications, mandats), puis `fiscal` (il branche les exonérations sur la liquidation), `titres` avant `rakapay`,
- * `parking` avant `publicite`, `preuves` après tous les modules qui émettent des preuves, `socle` (authentification, limitation de débit) en dernier.
+ * `parking` avant `publicite`, `preuves` après tous les modules qui émettent des preuves, `chaine` (lecture seule de la
+ * chaîne opératoire) après tous les modules qu'elle relit, `socle` (authentification, limitation de débit) en dernier.
  */
 export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   accesPlugin,
@@ -41,5 +43,6 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   iaPlugin,
   preuvesPlugin,
   sanctionsPlugin,
+  chainePlugin,
   soclePlugin,
 ];
