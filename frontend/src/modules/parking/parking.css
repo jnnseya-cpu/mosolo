@@ -78,3 +78,43 @@
 .pk-steps { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--ink-3); }
 .pk-steps b { color: var(--ink); font-weight: 600; }
 .pk-steps .on { color: var(--ink); }
+
+/* ── Photos de preuve (caméra géolocalisée) ── */
+.ev-photos { display: grid; gap: 8px; }
+.ev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.ev-thumb { margin: 0; display: grid; gap: 4px; font-size: 11.5px; min-width: 0; }
+.ev-thumb-btn { padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--pale); aspect-ratio: 4 / 3; cursor: zoom-in; }
+.ev-thumb-btn img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ev-thumb-ph { display: grid; place-items: center; height: 100%; color: var(--ink-3); }
+.ev-thumb figcaption { display: grid; gap: 1px; overflow-wrap: anywhere; }
+.ev-warn { color: var(--warning-ink); display: inline-flex; gap: 4px; align-items: center; }
+.ev-sha { color: var(--ink-3); }
+.ev-lightbox { position: fixed; inset: 0; z-index: 1000; background: rgba(0, 0, 0, 0.85); display: grid; place-items: center; gap: 12px; padding: 16px; }
+.ev-lightbox img { max-width: 100%; max-height: 80vh; border-radius: 8px; }
+
+/* ── Caméra de preuve géolocalisée ── */
+.evc { display: grid; gap: 12px; }
+.evc-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; align-items: center; }
+.evc-meta > span { display: inline-flex; gap: 5px; align-items: center; }
+.evc-ok { color: var(--good-ink); font-weight: 600; }
+.evc-wait { color: var(--warning-ink); }
+.evc-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.evc-slot { position: relative; display: grid; justify-items: center; gap: 4px; padding: 8px; min-height: 84px; border: 1.5px dashed var(--line); border-radius: 10px; background: var(--surface); color: var(--ink-2); font-size: 12.5px; cursor: pointer; text-align: center; overflow: hidden; }
+.evc-slot img { width: 100%; height: 48px; object-fit: cover; border-radius: 6px; }
+.evc-slot.is-on { border-style: solid; border-color: var(--navy); box-shadow: 0 0 0 2px color-mix(in srgb, var(--navy) 25%, transparent); }
+.evc-slot.is-done { border-style: solid; border-color: var(--good); }
+.evc-slot.is-done > .icon:last-child { position: absolute; top: 4px; right: 4px; color: var(--good); }
+.evc-view { position: relative; border-radius: 12px; overflow: hidden; background: #0b0f1d; max-width: 640px; width: 100%; justify-self: center; aspect-ratio: 4 / 3; }
+.evc-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.evc-overlay { position: absolute; left: 8px; right: 8px; bottom: 8px; color: #fff; font-weight: 600; font-size: 13px; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
+.evc-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* ── Lecture de plaque ── */
+.plq { display: grid; gap: 10px; }
+.plq-view { position: relative; border-radius: 12px; overflow: hidden; background: #0b0f1d; aspect-ratio: 16 / 9; max-width: 560px; width: 100%; }
+.plq-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.plq-guide { position: absolute; left: 10%; top: 38%; width: 80%; height: 24%; border: 3px solid #F7D618; border-radius: 8px; box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.35); }
+.plq-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.plq-confirm { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.pk-pen { display: grid; gap: 6px; }
+.pk-pen-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+.pk-pen-row.is-unpaid { border-color: color-mix(in srgb, var(--critical) 50%, transparent); background: var(--critical-bg); }

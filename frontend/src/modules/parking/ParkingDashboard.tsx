@@ -15,6 +15,7 @@ import { ChartTooltip, useChartColors } from '../../components/charts';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { DemoTag, Kpis, Money, pctText, ZONE_STATUS } from './shared';
+import { AgentCommissions } from './AgentEarnings';
 import './parking.css';
 
 interface ZoneRow {
@@ -136,6 +137,7 @@ export default function ParkingDashboard() {
           </dl>
         </section>
       </div>
+      <AgentCommissions />
     </div>
   );
 }

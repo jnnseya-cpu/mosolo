@@ -5,6 +5,7 @@ import { requireUser } from '../../core/auth.js';
 import { isoDateString, parse } from '../../core/http.js';
 import { sha256Hex64 } from '../parking/support.js';
 import { AD_TYPES, FINDINGS, LIGHTING, PIECE_KINDS, type PubliciteService } from './service.js';
+import { withOverdue } from '../sanctions/service.js';
 
 const decimal = z.string().regex(/^\d{1,4}(\.\d{1,2})?$/, 'dimension en mètres, ex. "4.00"');
 const sha = z.string().regex(sha256Hex64, 'empreinte SHA-256 hexadécimale attendue');
@@ -17,7 +18,7 @@ const deviceSpec = {
 };
 const pieces = z.array(z.object({ kind: z.enum(PIECE_KINDS), name: z.string().trim().min(1).max(160), sha256: sha }).strict()).min(1).max(20);
 
-export function registerPubliciteRoutes(app: FastifyInstance, _ctx: AppContext, svc: PubliciteService): void {
+export function registerPubliciteRoutes(app: FastifyInstance, ctx: AppContext, svc: PubliciteService): void {
   // Annonceur / exploitant
   app.post('/v1/publicite/devices', async (req, reply) => {
     const body = parse(z.object({
@@ -58,7 +59,10 @@ export function registerPubliciteRoutes(app: FastifyInstance, _ctx: AppContext, 
       qrScanned: z.string().max(64).optional(), ocrText: z.string().max(2000).optional(), presumedOperator: z.string().trim().max(160).optional(),
       observations: z.string().trim().min(3).max(2000),
     }).strict(), req.body);
-    return reply.code(201).send(svc.inspect(requireUser(req), body));
+    const user = requireUser(req);
+    const r = svc.inspect(user, body);
+    const owner = svc.devices.get(r.device.id)?.ownerTaxpayerId ?? null;
+    return reply.code(201).send(withOverdue(ctx, user, r, { taxpayerId: owner }, 'PUBLICITE', r.inspection.id));
   });
   app.get<{ Querystring: { inspectorId?: string } }>('/v1/publicite/inspections', async (req) => ({ items: svc.inspectionsOf(requireUser(req), req.query.inspectorId) }));
   app.get<{ Querystring: { status?: string } }>('/v1/publicite/cases', async (req) => ({ items: svc.listCases(requireUser(req), req.query.status) }));

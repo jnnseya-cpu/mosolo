@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **570 routes** dans 34 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **575 routes** dans 34 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -9,7 +9,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **570 routes** dans 34
 | extension fiscal | 39 |
 | extension ia | 28 |
 | extension integrite | 52 |
-| extension parking | 31 |
+| extension parking | 36 |
 | extension pilotage | 15 |
 | extension preuves | 13 |
 | extension publicite | 27 |
@@ -283,13 +283,18 @@ Généré depuis le code source (`tools/gen_routes.py`) : **570 routes** dans 34
 
 | Méthode | Chemin |
 |---|---|
+| GET | `/v1/parking/agents/earnings` |
+| GET | `/v1/parking/agents/me/earnings` |
 | GET | `/v1/parking/control/:plate` |
+| POST | `/v1/parking/evidence-photos` |
+| GET | `/v1/parking/evidence-photos/:id` |
 | GET | `/v1/parking/indicators` |
 | GET | `/v1/parking/partners` |
 | POST | `/v1/parking/partners` |
 | POST | `/v1/parking/partners/:id/occupancy` |
 | POST | `/v1/parking/partners/:id/status` |
 | GET | `/v1/parking/partners/mine` |
+| GET | `/v1/parking/penalties` |
 | POST | `/v1/parking/reminders/run` |
 | GET | `/v1/parking/reservations` |
 | POST | `/v1/parking/reservations` |

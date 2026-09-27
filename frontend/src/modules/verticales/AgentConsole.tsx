@@ -8,6 +8,7 @@ import { Icon } from '../../components/Icon';
 import { StatusBadge } from '../../components/StatusBadge';
 import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { MoneyText } from '../../components/MoneyText';
+import { OverduePenalties, type OverduePenaltiesData } from '../../components/OverduePenalties';
 import { DataTable } from '../../components/DataTable';
 import { Drawer } from '../../components/Drawer';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
@@ -199,6 +200,7 @@ interface ScanResult {
   occupation: string | null; situation: { color: string; label: string; lastPaymentAt: string | null };
   stallTitle: { status: string; statusLabel: string; validFrom?: string | null; validUntil: string | null } | null; lastFinding: { date: string; result: string } | null;
   obligations?: VObligation[]; notice: string;
+  penalitesImpayees?: OverduePenaltiesData;
 }
 
 function PlatesTab() {
@@ -237,6 +239,7 @@ function PlatesTab() {
             </dl>
             {scan.obligations && scan.obligations.map((o) => <p key={o.id} className="small">{o.id} — <MoneyText money={o.amount} /> — {OBLIGATION_LABEL[o.status] ?? o.status}</p>)}
             <p className="hint"><Icon name="lock" size={13} /> {scan.notice}</p>
+            <OverduePenalties data={scan.penalitesImpayees} />
           </section>
         )}
         {counter && (

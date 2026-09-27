@@ -17,7 +17,14 @@ PC={'01-verifier-comment-lire':'Vérifier une preuve — comment lire la couleur
 PC.update({'16-bouton-scanner':'Vérifier une preuve — bouton « Scanner un QR code »','17-camera-en-direct':'Scanner — caméra en direct (détecteur du navigateur ou jsQR)',
 '18-resultat-apres-scan':'Scanner — ticket reconnu dès que le QR imprimé est dans le cadre','19-resultat-apres-photo':'Scanner — secours par photo du QR (iPhone, page hors HTTPS, caméra refusée)'})
 for k,v in PC.items(): titles[('preuves-canaux',k)]=v
-SEC={'preuves-canaux':'Preuves et canaux sans application','verification-publique':'Vérification publique','prestataires':'BitriPay et KODA','verticales-usagers':'Verticales — usagers','verticales-agents':'Verticales — agents'}
+TP={'01-lecture-plaque-camera':'Agent — lecture de la plaque à la caméra (OCR embarqué)','02-plaque-lue-a-confirmer':'Agent — plaque lue, à vérifier et confirmer (la machine propose, l’agent décide)',
+'03-plaque-rouge-camera-ouverte':'Plaque rouge — la caméra de preuve géolocalisée s’ouvre d’elle-même','04-camera-de-preuve':'Caméra de preuve — heure serveur, agent, GPS, lieu saisi',
+'05-cinq-photos-prises':'Cinq vues : avant, arrière, côté droit, côté gauche et abords, autre','06-constat-enregistre-photos':'Constat enregistré avec ses photos horodatées (empreinte SHA-256)',
+'07-penalites-usager-au-controle':'Agent du module — pénalités de l’usager au contrôle de sa plaque','08-mes-gains-10-pourcent':'Agent — « Mes gains » : 10 % des pénalités et paiements générés',
+'08b-mes-gains-page':'Agent — « Mes gains », page complète','09-verification-avec-photos':'Superviseur — vérification du constat avec les photos',
+'10-regie-commissions-agents':'Régie — commissions des agents (10 %)','11-autre-module-penalite-30-jours':'Autre module — pénalité impayée depuis plus de 30 jours, visible après un contrôle (sans montant)'}
+for k,v in TP.items(): titles[('terrain-parking',k)]=v
+SEC={'terrain-parking':'Terrain ParkSmart : plaque, preuves, pénalités, gains','preuves-canaux':'Preuves et canaux sans application','verification-publique':'Vérification publique','prestataires':'BitriPay et KODA','verticales-usagers':'Verticales — usagers','verticales-agents':'Verticales — agents'}
 try: F=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',34); f2=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',24)
 except: F=f2=ImageFont.load_default()
 pages=[]

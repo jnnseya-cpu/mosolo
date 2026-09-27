@@ -12,12 +12,14 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { DataTable } from '../../components/DataTable';
 import { useApi } from '../../hooks/useApi';
+import { OverduePenalties, type OverduePenaltiesData } from '../../components/OverduePenalties';
 import { api } from '../../lib/api';
 import { ErrorLine, GpsField, hasRole, MiniMap, PhotoHashes, ReasonForm, useAction } from '../parking/shared';
 import { AD_TYPE, CASE_STATUS, DEVICE_STATUS, FINDING, LIGHTING, RIGHTS, type Case, type Device, type DeviceStatus } from './types';
 import '../parking/parking.css';
 
 type Tab = 'control' | 'inventory' | 'verify' | 'mine';
+interface InspectionDone { inspection: { reference: string }; case: Case | null; penalitesImpayees?: OverduePenaltiesData }
 interface Lookup { detected: { deviceReferences: string[]; authorizationReferences: string[] }; matches: { id: string; reference: string; type: string; commune: string; address: string; status: DeviceStatus; authorization: { reference: string; validUntil: string } | null; rights: Device['rights'] }[]; notice: string }
 
 export default function AdInspector() {
@@ -73,7 +75,7 @@ function Control({ onDone }: { onDone: () => void }) {
   const [obs, setObs] = useState('');
   const [operator, setOperator] = useState('');
   const [nd, setNd] = useState({ type: 'PANNEAU', widthM: '4.00', heightM: '3.00', faces: 1, lighting: 'NON_ECLAIRE', commune: 'Gombe', quartier: '', address: '', localityRank: 1 });
-  const [done, setDone] = useState<{ inspection: { reference: string }; case: Case | null } | null>(null);
+  const [done, setDone] = useState<InspectionDone | null>(null);
   const search = useAction();
   const act = useAction();
   function lookup(e: FormEvent) {
@@ -89,7 +91,7 @@ function Control({ onDone }: { onDone: () => void }) {
       ...(acc !== undefined ? { gpsAccuracyM: acc } : {}), ...(q.trim() ? { ocrText: q.trim() } : {}), ...(operator.trim() ? { presumedOperator: operator.trim() } : {}),
       ...(deviceId ? { deviceId } : { newDevice: nd }),
     };
-    void act.run(() => api<{ inspection: { reference: string }; case: Case | null }>('/v1/publicite/inspections', { method: 'POST', body }), (r) => { setDone(r); setPhotos([]); setObs(''); onDone(); });
+    void act.run(() => api<InspectionDone>('/v1/publicite/inspections', { method: 'POST', body }), (r) => { setDone(r); setPhotos([]); setObs(''); onDone(); });
   }
   return (
     <div className="pk-grid pk-grid-2">
@@ -123,6 +125,7 @@ function Control({ onDone }: { onDone: () => void }) {
           <div className="result-card" role="status">
             <StatusBadge tone="good" label="Constat enregistré" />
             <p className="small">Référence <span className="mono">{done.inspection.reference}</span>{done.case ? <> · dossier <span className="mono">{done.case.reference}</span> transmis pour vérification.</> : ' · aucun dossier (support conforme).'}</p>
+            <OverduePenalties data={done.penalitesImpayees} />
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setDone(null); setLk(null); setQ(''); }}>Nouveau contrôle</button>
           </div>
         ) : (

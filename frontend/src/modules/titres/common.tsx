@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { MoneyJSON } from '@mosolo/shared';
 import { Icon } from '../../components/Icon';
+import type { OverduePenaltiesData } from '../../components/OverduePenalties';
 import { QrCode } from '../../components/QrCode';
 import { api, describeError } from '../../lib/api';
 
@@ -92,6 +93,7 @@ export interface ControlView {
   constat?: { id: string; notice: string };
   driverVerified?: boolean | null;
   offline?: boolean;
+  penalitesImpayees?: OverduePenaltiesData;
 }
 
 export const STATUS_LABEL: Record<string, string> = {

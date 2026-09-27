@@ -514,7 +514,97 @@ Tests :
 - `backend/test/preuves.test.ts` : résolution de chaque type de preuve ; seuils à l’heure serveur ; SMS sans accents et signé en production ; consentement WhatsApp, absence de lien et de montant ; pages sans script de moins de 10 Ko.
 - `frontend/test/validity-countdown.test.tsx` : seuils, dates seules, statut bloquant, contenu de la preuve imprimée.
 
-## I.15 Ce qui reste ouvert
+## I.15 Terrain ParkSmart : lecture de plaque, caméra de preuve, pénalités visibles, commission des agents
+
+Décisions du maître d’ouvrage du 27/09/2026, construites et testées.
+
+**1. Lecture de la plaque à la caméra.** Sur le terminal de contrôle, « Scanner la plaque (caméra) » ouvre la caméra arrière avec un cadre de visée au format plaque. La reconnaissance de caractères (Tesseract) est **servie par MOSOLO lui-même** (`/ocr/`, environ 7 Mo) : aucun service externe, et elle fonctionne hors réseau après la première utilisation. Elle n’est pas dans le pré-cache d’installation de l’application.
+
+**La machine propose, l’agent décide** : le texte lu (normalisé au format KN-0000-XX) s’affiche avec sa confiance. L’agent le corrige si besoin, puis « Confirmer et contrôler ». Un secours par photo existe.
+
+Essai réel dans Chromium, caméra simulée filmant l’arrière d’un véhicule : KN-0777-DM lu correctement en moins de 0,3 s une fois le moteur chargé.
+
+**2. Caméra de preuve géolocalisée (plaque ROUGE).** Quand le contrôle est rouge, la caméra de preuve s’ouvre d’elle-même.
+
+- **Vues** : l’agent prend **jusqu’à 5 photos** — avant, arrière (plaque), côté droit, côté gauche avec les abords, une autre vue (signalisation, contexte).
+- **Mentions incrustées dans l’image**, dans un bandeau et en filigrane :
+  - date et heure (horloge du **serveur**, Kinshasa) ;
+  - nom et identifiant de l’agent, numéro du contrôle ;
+  - coordonnées GPS avec leur précision ;
+  - **lieu saisi par l’agent** (obligatoire) ;
+  - plaque et vue.
+- **Empreinte et versement** : l’empreinte SHA-256 de l’image finale est calculée sur l’appareil. Le serveur **vérifie l’empreinte**, n’accepte que du JPEG (900 Ko au plus), dans les 30 minutes du contrôle rouge et par l’agent qui l’a fait. Il **conserve l’image telle que reçue** et note l’écart entre l’heure incrustée et l’heure de réception (signalé au-delà de 5 minutes).
+- **Protection des photos** :
+  - une même image ne peut servir deux fois ;
+  - une reprise conserve l’ancienne photo, marquée « remplacée » ;
+  - une photo jointe à un constat ne peut plus être remplacée.
+- **Sans GPS** : l’agent peut utiliser la position de la zone, **signalée au vérificateur**.
+- **Constat et lecture des photos** :
+  - le constat référence les photos ;
+  - le superviseur les voit pour vérifier, la régie pour décider ;
+  - le titulaire de la plaque les voit aussi, pour pouvoir contester ;
+  - toute consultation est journalisée.
+
+Le circuit RW1 est inchangé : le **constat ne sanctionne pas**. Vérification et décision restent confiées à deux autres personnes.
+
+**3. Pénalités visibles.**
+
+- **Dans le module** : tout agent du stationnement voit, au contrôle d’une plaque, les pénalités de l’usager (par plaque et par titulaire déclaré). Il voit leur montant, leur état de paiement et l’ancienneté de l’impayé. Consultation journalisée.
+- **Dans tous les modules, après 30 jours d’impayé** : une pénalité non payée 30 jours après sa décision devient visible de **tout agent de tout module, à l’occasion d’un contrôle**. Contrôles concernés :
+  - titres et tickets ;
+  - pass wewa ;
+  - scan d’une plaque d’étal, de chantier ou de site ;
+  - inspection publicitaire.
+- **Garde-fous** :
+  - visible **seulement après un contrôle réel** (divulgation journalisée avec la référence du contrôle) ;
+  - jamais pour un usager ;
+  - **aucun montant** hors du module d’origine, pour réduire le risque d’extorsion ;
+  - consigne : inviter l’usager à régulariser par les canaux officiels, **aucun encaissement ni mesure sur place** ;
+  - une pénalité contestée, payée ou annulée sort du registre.
+
+**4. Commission des agents : 10 %.** L’agent perçoit 10 % de deux recettes :
+
+- **les pénalités issues de ses constats** : constat vérifié par le superviseur et décidé par la régie, pénalité émise ;
+- **les paiements de stationnement générés par ses contrôles** : session ouverte pour la plaque dans l’heure qui suit son contrôle rouge. Un paiement n’est attribué qu’une fois, au premier contrôle.
+
+Chaque ligne passe par des états :
+
+- **en attente** (l’usager n’a pas payé) ;
+- **payée, rapprochement en cours** ;
+- **acquise** (rapprochée au compte public, à verser) ;
+- **annulée** (pénalité annulée sur recours).
+
+**Garde-fous** :
+- La commission est calculée sur des recettes **arrivées au compte public** et **versée par le Trésor (paie)**. **Un agent ne reçoit jamais d’argent de l’usager.**
+- Aucune pénalité n’existe sans deux autres personnes (vérification, décision).
+- Sommes par devise, sans addition de devises.
+
+Tableaux de bord :
+- **l’agent** : « Mes gains (10 %) », sur `/stationnement/mes-gains` ;
+- **la régie et le pilotage** : « Commissions des agents ».
+
+**Le taux est une décision du maître d’ouvrage : un arrêté est requis avant tout versement réel.**
+
+Risque de conflit d’intérêts à surveiller (indicateurs par agent, contrôles mystère, § 15A) : une rémunération liée aux pénalités incite à multiplier les constats. Les garde-fous ci-dessus (preuve photographique vérifiée, décision par un tiers, recours, annulation de la commission) doivent rester actifs.
+
+Routes :
+
+| Route | Rôle |
+|---|---|
+| `POST /v1/parking/evidence-photos` | Verser une photo de preuve |
+| `GET /v1/parking/evidence-photos/:id` | Lire une photo de preuve |
+| `GET /v1/parking/penalties?plate=` | Pénalités d’un usager (agents du module) |
+| `GET /v1/parking/agents/me/earnings` | Gains de l’agent |
+| `GET /v1/parking/agents/earnings` | Commissions de tous les agents (régie, pilotage) |
+| Champ `penalitesImpayees` | Ajouté aux réponses des contrôles des autres modules |
+
+Tests (`backend/test/parking-field.test.ts`) :
+- empreintes, formats, délais et verrouillage des photos ;
+- constat lié à ses photos, droits de lecture ;
+- visibilité à 30 jours et absence de montant ;
+- états de la commission, attribution des paiements, droits d’accès.
+
+## I.16 Ce qui reste ouvert
 
 Les points suivants ne relèvent pas du logiciel seul ou attendent un acte, un protocole ou une convention ; ils sont signalés dans les écrans concernés et ne produisent aucun effet financier tant qu’ils ne sont pas levés.
 

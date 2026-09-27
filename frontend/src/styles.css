@@ -840,3 +840,16 @@ input[type='file'] { font-size: 13.5px; max-width: 100%; }
 .qrs-frame i:nth-child(4) { bottom: 0; right: 0; border-left: 0; border-top: 0; border-bottom-right-radius: 8px; }
 .qrs-hint { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; color: #fff; font-size: 13.5px; font-weight: 600; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); }
 .qrs-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Pénalités impayées > 30 jours (aucun montant affiché) */
+.overdue-pen { margin: 12px 0 0; }
+.overdue-pen-body { display: grid; gap: 8px; flex: 1; }
+.overdue-pen-title { margin: 0; color: var(--ink); }
+.overdue-pen-count { color: var(--warning-ink); font-weight: 600; }
+.overdue-pen-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.overdue-pen-list li { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 6px 10px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); }
+.overdue-pen-mod { font-weight: 600; color: var(--ink); }
+.overdue-pen-days { color: var(--warning-ink); font-weight: 600; }
+.overdue-pen-guidance { margin: 0; color: var(--ink); }
+.overdue-pen-note { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+.earn-rules { margin: 0; padding-left: 18px; display: grid; gap: 4px; }

@@ -69,3 +69,19 @@ Les pages 1 à 36 du PDF de la galerie reprennent ces écrans. Régénération :
 - 19 : secours par photo du QR.
 
 Régénération : `tools/captures/scanqr.cjs` (caméra simulée par un fichier Y4M qui filme la preuve imprimée).
+
+
+## Partie 7 — Terrain ParkSmart (`galerie/terrain-parking/`)
+
+Parcours réel dans le navigateur (caméra simulée filmant l'arrière d'un véhicule) :
+- lecture de la plaque à la caméra ;
+- plaque rouge, puis ouverture automatique de la caméra de preuve ;
+- cinq photos horodatées et géolocalisées, avec le lieu saisi ;
+- constat enregistré avec ses photos ;
+- pénalités de l'usager au contrôle ;
+- « Mes gains (10 %) » ;
+- vérification par le superviseur avec les photos ;
+- commissions des agents (régie) ;
+- pénalité impayée depuis plus de 30 jours visible dans un autre module (sans montant).
+
+Les cinq photos réelles sont dans `photo-*.jpg`, avec leurs mentions incrustées. Régénération : `tools/captures/field.cjs`.

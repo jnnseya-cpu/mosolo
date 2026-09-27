@@ -9,6 +9,7 @@ import {
   PARTNER_KINDS, RESERVATION_PURPOSES, VIOLATION_NATURES, ZONE_KINDS, type ParkingService,
 } from './service.js';
 import { sha256Hex64 } from './support.js';
+import { AGENT_COMMISSION_PCT, EVIDENCE_SLOTS } from './field.js';
 
 const lonLat = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]);
 const reason = z.string().trim().min(5).max(2000);
@@ -93,11 +94,48 @@ export function registerParkingRoutes(app: FastifyInstance, ctx: AppContext, svc
   app.post('/v1/parking/violations', async (req, reply) => {
     const body = parse(z.object({
       zoneId: z.string().min(1), plate, nature: z.enum(VIOLATION_NATURES), checkId: z.string().optional(),
-      photoSha256: z.array(z.string().regex(sha256Hex64, 'empreinte SHA-256 hexadécimale attendue')).min(1).max(6),
+      photoSha256: z.array(z.string().regex(sha256Hex64, 'empreinte SHA-256 hexadécimale attendue')).min(1).max(6).optional(),
+      photoIds: z.array(z.string().min(1).max(40)).min(1).max(5).optional(), place: z.string().trim().min(3).max(200).optional(),
       lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180), gpsAccuracyM: z.number().min(0).max(10_000).optional(),
       deviceId: z.string().max(64).optional(), observations: z.string().trim().min(3).max(2000),
-    }).strict(), req.body);
+    }).strict().refine((b) => (b.photoSha256?.length ?? 0) > 0 || (b.photoIds?.length ?? 0) > 0, 'Au moins une photographie (photoIds ou photoSha256).'), req.body);
     return reply.code(201).send(svc.recordViolation(requireUser(req), body));
+  });
+
+  // Caméra de preuve : photo horodatée et géolocalisée (JPEG en base64, empreinte SHA-256 vérifiée), 5 par contrôle rouge.
+  app.post('/v1/parking/evidence-photos', { bodyLimit: 1_600_000 }, async (req, reply) => {
+    const body = parse(z.object({
+      checkId: z.string().min(1).max(40), slot: z.enum(EVIDENCE_SLOTS), imageBase64: z.string().min(100).max(1_300_000),
+      sha256: z.string().regex(sha256Hex64, 'empreinte SHA-256 hexadécimale attendue'),
+      lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180), accuracyM: z.number().min(0).max(100_000).optional(),
+      gpsSource: z.enum(['GPS', 'ZONE']), place: z.string().trim().min(3).max(200), stampedAt: z.string().datetime({ offset: true }),
+    }).strict(), req.body);
+    return reply.code(201).send(svc.field.upload(requireUser(req), body));
+  });
+  app.get<{ Params: { id: string } }>('/v1/parking/evidence-photos/:id', async (req, reply) => {
+    const p = svc.field.read(requireUser(req), req.params.id);
+    return reply.type(p.mime).header('cache-control', 'private, no-store').header('x-mosolo-sha256', p.sha256).send(p.data);
+  });
+
+  // Pénalités d'un usager (agents du module) et commission des agents.
+  app.get<{ Querystring: { plate?: string } }>('/v1/parking/penalties', async (req) => {
+    const user = requireUser(req);
+    authorize(user, 'parking:control', { communes: user.territory ?? [] });
+    const plateQ = parse(plate, req.query.plate ?? '');
+    const holder = svc.vehicles.findOne((v) => v.plate === svc.plate(plateQ));
+    ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'parking.penalties.viewed', resourceType: 'plate', resourceId: svc.plate(plateQ), details: {} });
+    return { items: svc.field.penaltiesFor({ plate: plateQ, taxpayerId: holder?.taxpayerId ?? null }) };
+  });
+  app.get('/v1/parking/agents/me/earnings', async (req) => {
+    const user = requireUser(req);
+    authorize(user, 'parking:violation.record', { communes: user.territory ?? [] });
+    return svc.field.earningsSummary(user.id);
+  });
+  app.get('/v1/parking/agents/earnings', async (req) => {
+    const user = requireUser(req);
+    authorize(user, 'parking:indicators', { entity: 'DGTK' });
+    const agents = [...new Set([...svc.checks.all().map((c) => c.agentId), ...svc.violations.all().map((v) => v.agentId)])];
+    return { items: agents.map((a) => { const e = svc.field.earningsSummary(a); return { agentId: a, agentName: ctx.users.get(a)?.name ?? a, totals: e.totals, counts: e.counts }; }), ratePct: AGENT_COMMISSION_PCT };
   });
   app.get<{ Querystring: { status?: string } }>('/v1/parking/violations', async (req) => ({ items: svc.listViolations(requireUser(req), req.query.status) }));
   app.get('/v1/parking/violations/mine', async (req) => ({ items: svc.myViolations(requireUser(req)) }));

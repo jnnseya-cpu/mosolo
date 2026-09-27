@@ -11,6 +11,7 @@ import { StatusBadge, type Tone } from '../../components/StatusBadge';
 import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { api, describeError, newIdempotencyKey, serverNow } from '../../lib/api';
 import { sha256Hex } from '../../lib/crypto';
+import type { EvidencePhotoMeta } from './EvidencePhotos';
 
 export const hasRole = (roles: string[] | undefined, ...want: string[]) => !!roles?.some((r) => want.includes(r));
 
@@ -45,7 +46,8 @@ export interface Violation {
   id: string; reference: string; zoneId: string; commune: string; plate: string; nature: string; lightAtCheck: Light | null;
   agentId: string; createdAt: string; status: 'CONSTATE' | 'VERIFIE' | 'REJETE' | 'RETENU' | 'CLASSE'; holderIdentified: boolean;
   zone: { id: string; code: string; name: string } | null;
-  evidence: { photoSha256: string[]; lat: number; lon: number; gpsAccuracyM: number | null; observedAt: string; observations: string } | null;
+  evidence: { photoSha256: string[]; lat: number; lon: number; gpsAccuracyM: number | null; observedAt: string; observations: string; place?: string; photoIds?: string[] } | null;
+  photos?: EvidencePhotoMeta[];
   verification?: { by: string; at: string; outcome: string; note: string };
   proposal?: { status: 'PROPOSEE' | 'ACTE_REQUIS'; ruleCode: string | null; ruleVersion: number | null; amount: MoneyJSON | null; basis: string };
   decision?: { by: string; at: string; outcome: string; reason: string; obligationId: string | null; effect: string };

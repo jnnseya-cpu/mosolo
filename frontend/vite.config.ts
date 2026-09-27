@@ -1,10 +1,44 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+import type { Plugin } from 'vite';
+
+/**
+ * Moteur de lecture des plaques (OCR, Tesseract) servi par MOSOLO lui-même depuis /ocr/ : aucun appel à un service
+ * externe, utilisable hors réseau une fois chargé. Les fichiers sont copiés depuis node_modules au démarrage.
+ */
+function ocrAssets(): Plugin {
+  const require = createRequire(import.meta.url);
+  const files: [string, string][] = [];
+  const add = (pkg: string, rel: string, as?: string) => {
+    try {
+      const dir = dirname(require.resolve(`${pkg}/package.json`));
+      files.push([join(dir, rel), as ?? rel.split('/').pop()!]);
+    } catch { /* paquet absent : lecture de plaque indisponible, saisie manuelle */ }
+  };
+  add('tesseract.js', 'dist/worker.min.js');
+  for (const f of ['tesseract-core-lstm.wasm.js', 'tesseract-core-simd-lstm.wasm.js', 'tesseract-core-relaxedsimd-lstm.wasm.js']) add('tesseract.js-core', f);
+  add('@tesseract.js-data/eng', '4.0.0_best_int/eng.traineddata.gz');
+  return {
+    name: 'mosolo-ocr-assets',
+    buildStart() {
+      const out = join(__dirname, 'public', 'ocr');
+      mkdirSync(out, { recursive: true });
+      for (const [src, name] of files) {
+        const dest = join(out, name);
+        if (existsSync(src) && (!existsSync(dest) || statSync(dest).size !== statSync(src).size)) copyFileSync(src, dest);
+      }
+    },
+  };
+}
 
 export default defineConfig({
   plugins: [
     react(),
+    ocrAssets(),
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: false,
@@ -30,9 +64,16 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,ico,webmanifest,woff2}'],
+        // Moteur OCR (~7 Mo) : hors du pré-cache d'installation, mis en cache à la première lecture de plaque.
+        globIgnores: ['**/ocr/**'],
         navigateFallback: '/index.html',
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith('/ocr/'),
+            handler: 'CacheFirst',
+            options: { cacheName: 'mosolo-ocr', cacheableResponse: { statuses: [0, 200] }, expiration: { maxEntries: 10 } },
+          },
           {
             urlPattern: ({ url }) => url.pathname === '/v1/meta',
             handler: 'NetworkFirst',

@@ -21,6 +21,7 @@ import { checkChar, randomCode } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, authorize, evaluate, hasAnyGrant } from '../../core/policy.js';
 import { validityView } from '../../core/validity.js';
+import { ParkingField } from './field.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
 import { isCommune } from '../../reference/kinshasa.js';
@@ -137,6 +138,9 @@ export interface ViolationEvidence {
   deviceId: string | null;
   agentId: string;
   observations: string;
+  /** Photos horodatées et géolocalisées versées au serveur (caméra de preuve), et lieu saisi par l'agent. */
+  photoIds?: string[];
+  place?: string;
 }
 
 export interface ViolationContest {
@@ -247,9 +251,14 @@ export class ParkingService {
   /** Moteur de liquidation des sessions achetées par l'usager (règle ACTIVE seulement). */
   readonly engine = enginePrincipal('svc-parking-liquidation', 'Moteur de liquidation ParkSmart (compte technique)', DGTK);
 
-  constructor(private readonly ctx: AppContext) {}
+  /** Terrain : photos de preuve, pénalités d'un usager, commission des agents (field.ts). */
+  readonly field: ParkingField;
 
-  private now(): Date {
+  constructor(private readonly ctx: AppContext) {
+    this.field = new ParkingField(ctx, this);
+  }
+
+  now(): Date {
     return this.ctx.clock.now();
   }
 
@@ -392,7 +401,7 @@ export class ParkingService {
     return this.vehicles.find((v) => v.taxpayerId === taxpayerId);
   }
 
-  private plate(raw: string): string {
+  plate(raw: string): string {
     const p = normalizePlate(raw);
     if (!PLATE_RE.test(p)) throw badRequest('INVALID_PLATE', `Plaque invalide : « ${raw} » (lettres, chiffres et tirets, 4 à 14 caractères).`);
     return p;
@@ -724,7 +733,7 @@ export class ParkingService {
   // ---------------------------------------------------------------- Contrôle par plaque
 
   /** Titre valide d'une plaque (session payée ou réservation confirmée) — heure du serveur. */
-  private titleFor(plate: string, zoneId: string | null, now: Date): { light: Light; title: ControlCheck['title']; validFrom: string | null; validUntil: string | null; zoneId: string | null } {
+  titleFor(plate: string, zoneId: string | null, now: Date): { light: Light; title: ControlCheck['title']; validFrom: string | null; validUntil: string | null; zoneId: string | null } {
     let best: { light: Light; title: ControlCheck['title']; validFrom: string | null; validUntil: string | null; zoneId: string | null } = { light: 'ROUGE', title: null, validFrom: null, validUntil: null, zoneId };
     for (const s of this.sessions.find((x) => x.plate === plate && (!zoneId || x.zoneId === zoneId))) {
       const d = this.sessionDerived(s, now);
@@ -760,7 +769,12 @@ export class ParkingService {
       AMBRE: 'Titre bientôt expiré : rappel envoyé à l’usager, prolongation possible à distance. Aucune action.',
       ROUGE: 'Aucun titre valide : l’usager peut régulariser immédiatement ; un constat photographique peut être établi par l’agent habilité. Aucune sanction automatique.',
     };
+    // Tout agent du module voit les pénalités de l'usager (par plaque et par titulaire déclaré) ; consultation journalisée.
+    const holder = this.vehicles.findOne((v) => v.plate === plate);
+    const penalties = this.field.penaltiesFor({ plate, taxpayerId: holder?.taxpayerId ?? null });
+    if (penalties.length) this.ctx.audit.append({ actor: actorOf(user), action: 'parking.penalties.viewed', resourceType: 'plate', resourceId: plate, details: { checkId: check.id, count: penalties.length } });
     return {
+      penalties, penaltiesUnpaid: penalties.filter((p) => p.unpaid).length,
       checkId: check.id, plate, zone: z ? { id: z.id, code: z.code, name: z.name } : null, light: t.light, title: t.title,
       validFrom: t.validFrom, validUntil: t.validUntil, validity: t.validUntil ? validityView(t.validFrom, t.validUntil, now) : null, checkedAt: check.at, guidance: guidance[t.light],
     };
@@ -769,12 +783,16 @@ export class ParkingService {
   // ---------------------------------------------------------------- Constats (circuit RW1)
 
   recordViolation(user: User, input: {
-    zoneId: string; plate: string; nature: ParkingViolation['nature']; checkId?: string; photoSha256: string[];
+    zoneId: string; plate: string; nature: ParkingViolation['nature']; checkId?: string; photoSha256?: string[]; photoIds?: string[]; place?: string;
     lat: number; lon: number; gpsAccuracyM?: number; deviceId?: string; observations: string;
   }) {
     const z = this.getZone(input.zoneId);
     authorize(user, 'parking:violation.record', { communes: [z.commune] });
     const plate = this.plate(input.plate);
+    // Photos de la caméra de preuve (images conservées au serveur) : leurs empreintes remplacent la liste déclarée.
+    const photos = input.photoIds?.length ? this.field.claimForViolation(user, input.photoIds, input.checkId, plate) : [];
+    if (photos.length) input = { ...input, photoSha256: photos.map((p) => p.sha256) };
+    input.photoSha256 ??= [];
     if (input.photoSha256.length === 0) throw badRequest('PHOTO_REQUIRED', 'Constat photographique : au moins une photographie (empreinte SHA-256) est exigée.');
     let lightAtCheck: Light | null = null;
     if (input.checkId) {
@@ -791,6 +809,7 @@ export class ParkingService {
     const ev = this.evidence.append({
       id: this.ids.next('PKE'), violationId: id, photoSha256: input.photoSha256, lat: input.lat, lon: input.lon,
       gpsAccuracyM: input.gpsAccuracyM ?? null, observedAt: now.toISOString(), deviceId: input.deviceId ?? null, agentId: user.id, observations: input.observations,
+      ...(photos.length ? { photoIds: photos.map((p) => p.id) } : {}), ...(input.place ? { place: input.place } : {}),
     });
     const holder = this.vehicles.findOne((v) => v.plate === plate);
     const v = this.violations.insert({
@@ -798,6 +817,7 @@ export class ParkingService {
       lightAtCheck, checkId: input.checkId ?? null, evidenceId: ev.id, agentId: user.id, createdAt: now.toISOString(),
       holderTaxpayerId: holder?.taxpayerId ?? null, status: 'CONSTATE', contests: [],
     });
+    if (photos.length) this.field.link(photos, v.id);
     this.ctx.audit.append({
       actor: actorOf(user), action: 'parking.violation.recorded', resourceType: 'parking_violation', resourceId: v.id,
       details: { plate, zoneId: z.id, nature: v.nature, evidenceId: ev.id, photos: input.photoSha256.length, holderIdentified: holder !== undefined },
@@ -917,6 +937,7 @@ export class ParkingService {
       ...v,
       zone: z ? { id: z.id, code: z.code, name: z.name } : null,
       evidence: ev ?? null,
+      photos: this.field.photosOfViolation(v.id),
       obligation: ob ? { ...obligationSummary(ob), payment: paymentState(this.ctx, ob.id).state } : null,
       holderIdentified: v.holderTaxpayerId !== null,
     };

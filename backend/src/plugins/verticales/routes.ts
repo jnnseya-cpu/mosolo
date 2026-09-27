@@ -9,6 +9,7 @@ import { decimalString, isoDateString, moneySchema, parse } from '../../core/htt
 import { VERTICALS } from './catalogue.js';
 import { ACCOUNT_TYPES, DOCUMENT_TYPES } from './calcu.js';
 import { type VerticalesService } from './service.js';
+import { withOverdue } from '../sanctions/service.js';
 
 const sha256 = z.string().regex(/^[0-9a-f]{64}$/, 'empreinte SHA-256 hexadécimale attendue');
 const docSchema = z.object({ label: z.string().trim().min(1).max(160), sha256 }).strict();
@@ -113,7 +114,12 @@ export function registerVerticalRoutes(app: FastifyInstance, ctx: AppContext, sv
     const body = parse(z.object({ reason }).strict(), req.body);
     return reply.code(201).send(svc.replacePlate(requireUser(req), req.params.code, body.reason));
   });
-  app.get<{ Params: { code: string } }>('/v1/verticales/plates/:code/scan', async (req) => svc.scanPlate(requireUser(req), req.params.code));
+  app.get<{ Params: { code: string } }>('/v1/verticales/plates/:code/scan', async (req) => {
+    const user = requireUser(req);
+    const r = svc.scanPlate(user, req.params.code);
+    const owner = ctx.objects.objects.get(r.object.id)?.taxpayerId ?? null;
+    return withOverdue(ctx, user, r, { taxpayerId: owner }, 'VERTICALES', `SCAN:${r.plate.code}`);
+  });
   app.get<{ Params: { code: string } }>('/v1/verticales/plates/:code/counter', async (req) => svc.counterLookup(requireUser(req), req.params.code));
   app.get<{ Querystring: { date?: string } }>('/v1/verticales/plates-report/daily', async (req) => {
     const date = req.query.date ?? ctx.clock.now().toISOString().slice(0, 10);

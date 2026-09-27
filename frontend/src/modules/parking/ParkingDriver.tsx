@@ -17,6 +17,7 @@ import {
   DemoTag, ErrorLine, fmtMinutes, LightBadge, MiniMap, Money, NATURE, PAYMENT_STATE, PayButton, PURPOSE, SESSION_STATUS, useAction,
   VIOLATION_STATUS, ZONE_STATUS, type ObligationSummary, type Partner, type Reservation, type Session, type Violation, type Zone,
 } from './shared';
+import { EvidencePhotos } from './EvidencePhotos';
 import './parking.css';
 import { PrintProofLink } from '../preuves/PrintLink';
 
@@ -363,9 +364,11 @@ function ViolationsTab({ tick, onChange }: { tick: number; onChange: () => void 
                 <div className="pk-evidence">
                   <span><Icon name="camera" size={14} /> {v.evidence.photoSha256.length} photographie(s) scellée(s) · {fmtDate(v.evidence.observedAt, true)}</span>
                   <span className="mono">{v.evidence.photoSha256[0]?.slice(0, 24)}…</span>
+                  {v.evidence.place && <span><Icon name="pin" size={14} /> {v.evidence.place}</span>}
                   <span>{v.evidence.observations}</span>
                 </div>
               )}
+              <EvidencePhotos photos={v.photos ?? []} />
               {v.proposal && v.status === 'VERIFIE' && <p className="small"><strong>Proposition (barème) :</strong> {v.proposal.amount ? <Money items={v.proposal.amount} /> : 'aucune — acte requis'} · décision à venir</p>}
               {v.decision && <p className="small"><strong>Décision :</strong> {v.decision.reason} — {v.decision.effect}</p>}
               {v.obligation && (

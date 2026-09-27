@@ -14,6 +14,7 @@ import { authorize, evaluate } from '../../core/policy.js';
 import { PAYMENT_CHANNELS } from '../../modules/payments/service.js';
 import { placeSchema, type TitresService } from './service.js';
 import { statusAt } from './validity.js';
+import { withOverdue } from '../sanctions/service.js';
 
 const subjectSchema = z.object({
   plate: z.string().trim().min(2).max(20).optional(),
@@ -133,7 +134,11 @@ export function registerTitresRoutes(app: FastifyInstance, ctx: AppContext, svc:
   // Contrôle en ligne (QR dynamique ou statique, code court, plaque).
   app.post('/v1/titres/controles', async (req, reply) => {
     const user = requireUser(req);
-    return reply.code(201).send(svc.control(user, parse(controlSchema, req.body)));
+    const view = svc.control(user, parse(controlSchema, req.body));
+    // Pénalités impayées depuis plus de 30 jours (tous modules), visibles après ce contrôle.
+    const ev = svc.controls.get(view.controlId);
+    const cred = ev?.credentialId ? svc.credentials.get(ev.credentialId) : undefined;
+    return reply.code(201).send(withOverdue(ctx, user, view, { plate: view.plate ?? cred?.subject.plate ?? null, taxpayerId: cred?.holderTaxpayerId ?? null }, 'TITRES', view.controlId));
   });
 
   // Paquet hors ligne : clé publique, liste de révocation signée, plaques actives.

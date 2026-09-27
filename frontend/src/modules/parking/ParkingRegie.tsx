@@ -15,9 +15,11 @@ import {
   DemoTag, ErrorLine, hasRole, MiniMap, Money, NATURE, PAYMENT_STATE, pctText, PURPOSE, ReasonForm, useAction, VIOLATION_STATUS, ZONE_KIND, ZONE_STATUS,
   type Partner, type Reservation, type Violation, type Zone,
 } from './shared';
+import { EvidencePhotos } from './EvidencePhotos';
+import { AgentCommissions } from './AgentEarnings';
 import './parking.css';
 
-type Tab = 'decisions' | 'reservations' | 'zones' | 'partners';
+type Tab = 'decisions' | 'reservations' | 'zones' | 'partners' | 'commissions';
 
 export default function ParkingRegie() {
   const { user } = useApp();
@@ -39,7 +41,7 @@ export default function ParkingRegie() {
         <button type="button" className="btn btn-secondary btn-sm" onClick={refresh}><Icon name="refresh" size={16} /> Actualiser</button>
       </PageHead>
       <div className="seg seg-wrap pk-tabs" role="tablist" aria-label="Rubriques">
-        {([['decisions', 'Décisions sur constats'], ['reservations', 'Réservations'], ['zones', 'Zones'], ['partners', 'Partenaires']] as [Tab, string][]).map(([k, l]) => (
+        {([['decisions', 'Décisions sur constats'], ['reservations', 'Réservations'], ['zones', 'Zones'], ['partners', 'Partenaires'], ['commissions', 'Commissions des agents (10 %)']] as [Tab, string][]).map(([k, l]) => (
           <button key={k} type="button" role="tab" aria-pressed={tab === k} aria-selected={tab === k} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -47,6 +49,7 @@ export default function ParkingRegie() {
       {tab === 'reservations' && <Reservations tick={tick} onChange={refresh} />}
       {tab === 'zones' && <Zones tick={tick} onChange={refresh} />}
       {tab === 'partners' && <Partners tick={tick} onChange={refresh} />}
+      {tab === 'commissions' && <AgentCommissions key={tick} />}
     </div>
   );
 }
@@ -70,7 +73,8 @@ function Decisions({ tick, onChange }: { tick: number; onChange: () => void }) {
                 <StatusBadge tone={VIOLATION_STATUS[v.status].tone} label={VIOLATION_STATUS[v.status].label} />
               </div>
               <p className="pk-steps"><span className="on">Constat <b>{v.agentId}</b></span><span className="on">Vérification <b>{v.verification?.by}</b></span><span>Décision : vous</span></p>
-              {v.evidence && <div className="pk-evidence"><span><Icon name="camera" size={14} /> {v.evidence.photoSha256.length} photo(s) scellée(s) · GPS {v.evidence.lat.toFixed(5)}, {v.evidence.lon.toFixed(5)}</span><span>{v.evidence.observations}</span><span className="muted">Vérification : {v.verification?.note}</span></div>}
+              {v.evidence && <div className="pk-evidence"><span><Icon name="camera" size={14} /> {v.evidence.photoSha256.length} photo(s) scellée(s) · GPS {v.evidence.lat.toFixed(5)}, {v.evidence.lon.toFixed(5)}</span>{v.evidence.place && <span><Icon name="pin" size={14} /> {v.evidence.place}</span>}<span>{v.evidence.observations}</span><span className="muted">Vérification : {v.verification?.note}</span></div>}
+              <EvidencePhotos photos={v.photos ?? []} />
               <p className="small"><strong>Proposition du système :</strong> {v.proposal?.amount ? <Money items={v.proposal.amount} /> : 'aucune pénalité (barème non publié)'} — <span className="muted">{v.proposal?.basis}</span></p>
               <p className="small">{v.holderIdentified ? 'Titulaire de la plaque identifié (compte déclaré).' : 'Titulaire non identifié : une décision retenue n’émettra aucune obligation.'}</p>
               {v.contests.length > 0 && <div className="pk-evidence"><strong>Observations de l’usager</strong>{v.contests.map((c) => <span key={c.id}>« {c.grounds} » ({fmtDate(c.at, true)})</span>)}</div>}

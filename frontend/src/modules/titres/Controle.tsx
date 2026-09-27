@@ -17,6 +17,7 @@ import { hmacSha256Hex, uid } from '../../lib/crypto';
 import { playSignal, type ControlView } from './common';
 import './titres.css';
 import { QrScanner } from '../../components/QrScanner';
+import { OverduePenalties } from '../../components/OverduePenalties';
 
 type Mode = 'qr' | 'plate' | 'vest';
 type Scope = '81' | 'tous';
@@ -98,6 +99,7 @@ function ResultCard({ r }: { r: ControlView }) {
           <p><strong>Constat {r.constat.id} ouvert.</strong> {r.constat.notice} N’encaissez rien : l’usager paie uniquement par téléphone, USSD ou point agréé.</p>
         </div>
       )}
+      <OverduePenalties data={r.penalitesImpayees} />
     </section>
   );
 }

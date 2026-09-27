@@ -58,6 +58,24 @@ export interface RequestOpts {
   raw?: boolean;
 }
 
+/** Ressource binaire authentifiée (photo de preuve…) : mêmes en-têtes que `api`, rendue en Blob. */
+export async function apiBlob(path: string): Promise<Blob> {
+  const headers: Record<string, string> = { 'Accept-Language': getApiLang() };
+  const user = getDemoUser();
+  if (user) headers['x-demo-user'] = user;
+  const sess = safeGet('mosolo.session');
+  if (sess) {
+    try {
+      const s = JSON.parse(sess) as { accessToken?: string; session?: { expiresAt?: string } };
+      if (s.accessToken && s.session?.expiresAt && new Date(s.session.expiresAt) > new Date()) headers.Authorization = `Bearer ${s.accessToken}`;
+    } catch { /* session illisible */ }
+  }
+  let res: Response;
+  try { res = await fetch(API_URL + path, { headers }); } catch { throw new NetworkError(); }
+  if (!res.ok) throw new ApiError(res.status, res.statusText || `HTTP ${res.status}`);
+  return res.blob();
+}
+
 export async function api<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json', 'Accept-Language': getApiLang(), ...opts.headers };
   const user = getDemoUser();

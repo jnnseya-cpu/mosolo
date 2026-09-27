@@ -13,6 +13,7 @@ import { authorize } from '../../core/policy.js';
 import { PAYMENT_CHANNELS } from '../../modules/payments/service.js';
 import { placeSchema } from '../titres/service.js';
 import { WEWA_DURATIONS, type RakaPayService } from './service.js';
+import { withOverdue } from '../sanctions/service.js';
 
 const channel = z.enum(PAYMENT_CHANNELS);
 const ticketSchema = z.object({ productId: z.string().min(1).max(64), departureStationId: z.string().min(1).max(64), channel }).strict();
@@ -107,7 +108,13 @@ export function registerRakaPayRoutes(app: FastifyInstance, ctx: AppContext, svc
   });
 
   // Contrôle protecteur (gilet, autocollant, plaque, QR) — contrôleur habilité, jamais la coopérative.
-  app.post('/v1/rakapay/wewa/controles', async (req, reply) => reply.code(201).send(svc.control(requireUser(req), parse(controlSchema, req.body))));
+  app.post('/v1/rakapay/wewa/controles', async (req, reply) => {
+    const user = requireUser(req);
+    const body = parse(controlSchema, req.body);
+    const view = svc.control(user, body);
+    // Plaque lue (même si la moto n'est pas enregistrée) : le registre des pénalités la recherche aussi.
+    return reply.code(201).send(withOverdue(ctx, user, view, { plate: view.plate ?? body.plate ?? null }, 'RAKAPAY', view.controlId));
+  });
 
   // Vérification par le passager (publique, minimale).
   app.get<{ Params: { code: string } }>('/v1/public/wewa/:code', async (req) => svc.passengerCheck(decodeURIComponent(req.params.code)));

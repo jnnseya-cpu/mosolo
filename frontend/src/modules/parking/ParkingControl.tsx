@@ -4,6 +4,7 @@
  * vérification par une personne distincte. Aucune sanction, aucun encaissement sur le terrain.
  */
 import { useState, type FormEvent } from 'react';
+import type { MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { PageHead } from '../../components/Shell';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
@@ -12,12 +13,17 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import {
-  DemoTag, ErrorLine, GpsField, hasRole, LIGHT_VIEW, NATURE, PhotoHashes, ReasonForm, useAction, VIOLATION_STATUS,
+  DemoTag, ErrorLine, hasRole, LIGHT_VIEW, Money, NATURE, ReasonForm, useAction, VIOLATION_STATUS,
   type Light, type Violation, type Zone,
 } from './shared';
+import { PlateScanner } from '../../components/PlateScanner';
+import { EvidenceCamera } from './EvidenceCamera';
+import { EvidencePhotos } from './EvidencePhotos';
 import './parking.css';
 
-interface ControlResult { checkId: string; plate: string; zone: { id: string; code: string; name: string } | null; light: Light; title: string | null; validUntil: string | null; checkedAt: string; guidance: string }
+interface PenaltyLine { module: string; reference: string; nature: string; status: string; createdAt: string; decidedAt: string | null; amount: MoneyJSON | null; payment: string; unpaid: boolean; overdueDays: number | null; zone?: string }
+interface ControlResult { checkId: string; plate: string; zone: { id: string; code: string; name: string } | null; light: Light; title: string | null; validUntil: string | null; checkedAt: string; guidance: string; penalties?: PenaltyLine[]; penaltiesUnpaid?: number }
+interface Evidence { photoIds: string[]; place: string; lat: number; lon: number; accuracy: number | null }
 
 export default function ParkingControl() {
   const { user } = useApp();
@@ -48,31 +54,40 @@ export default function ParkingControl() {
 }
 
 function ControlPanel({ zones, loading, onRecorded }: { zones: Zone[]; loading: boolean; onRecorded: () => void }) {
-  const { fmtDate } = useApp();
+  const { fmtDate, user } = useApp();
   const [zoneId, setZoneId] = useState('');
   const [plate, setPlate] = useState('');
   const [result, setResult] = useState<ControlResult | null>(null);
-  const [constat, setConstat] = useState(false);
+  const [scan, setScan] = useState(false);
+  const [step, setStep] = useState<'result' | 'camera' | 'constat'>('result');
+  const [evidence, setEvidence] = useState<Evidence | null>(null);
   const act = useAction();
   const zone = zones.find((z) => z.id === (zoneId || zones[0]?.id));
-  function check(e: FormEvent) {
-    e.preventDefault();
-    setConstat(false);
-    void act.run(() => api<ControlResult>(`/v1/parking/control/${encodeURIComponent(plate.trim())}${zone ? `?zoneId=${encodeURIComponent(zone.id)}` : ''}`), setResult);
+  function run(p: string) {
+    setStep('result'); setEvidence(null);
+    void act.run(() => api<ControlResult>(`/v1/parking/control/${encodeURIComponent(p.trim())}${zone ? `?zoneId=${encodeURIComponent(zone.id)}` : ''}`), (r) => {
+      setResult(r);
+      // Plaque ROUGE : la caméra de preuve géolocalisée s'ouvre d'elle-même.
+      if (r.light === 'ROUGE' && zone) setStep('camera');
+    });
   }
+  function check(e: FormEvent) { e.preventDefault(); run(plate); }
   if (loading && zones.length === 0) return <Loading />;
   const view = result ? LIGHT_VIEW[result.light] : null;
+  const reset = () => { setStep('result'); setResult(null); setPlate(''); setEvidence(null); };
   return (
     <section className="panel">
-      <header className="panel-head"><div><h2 className="panel-title"><Icon name="qr" size={18} /> Vérifier une plaque</h2><p className="panel-sub">Résultat minimal : aucun nom ni adresse. Chaque contrôle est journalisé.</p></div></header>
+      <header className="panel-head"><div><h2 className="panel-title"><Icon name="qr" size={18} /> Vérifier une plaque</h2><p className="panel-sub">Lisez la plaque à la caméra ou saisissez-la. Résultat minimal : aucun nom ni adresse. Chaque contrôle est journalisé.</p></div></header>
       <form className="form" onSubmit={check}>
         <label className="field"><span className="label">Zone contrôlée</span>
           <select value={zone?.id ?? ''} onChange={(e) => setZoneId(e.target.value)}>{zones.map((z) => <option key={z.id} value={z.id}>{z.name}{z.demo ? ' (démo)' : ''}</option>)}</select></label>
         <label className="field"><span className="label">Plaque</span>
-          <div className="input-row"><input className="pk-plate-input" value={plate} onChange={(e) => setPlate(e.target.value)} placeholder="KN-0000-XX" required autoComplete="off" />
+          <div className="input-row"><input className="pk-plate-input" value={plate} onChange={(e) => setPlate(e.target.value.toUpperCase())} placeholder="KN-0000-XX" required autoComplete="off" />
             <button type="submit" className="btn btn-primary" disabled={act.busy}>Contrôler</button></div>
           <span className="hint">Essayez KN-0001-DM (titre valide) ou KN-0777-DM (aucun titre) — plaques fictives.</span></label>
+        {!scan && <button type="button" className="btn btn-secondary" onClick={() => setScan(true)}><Icon name="camera" size={18} /> Scanner la plaque (caméra)</button>}
       </form>
+      {scan && <PlateScanner onConfirm={(p) => { setScan(false); setPlate(p); run(p); }} onClose={() => setScan(false)} />}
       <ErrorLine error={act.error} />
       {result && view && (
         <div className="stack" style={{ marginTop: 16 }}>
@@ -84,22 +99,43 @@ function ControlPanel({ zones, loading, onRecorded }: { zones: Zone[]; loading: 
             <p className="small">{result.guidance}</p>
             <p className="small muted">Contrôle {result.checkId} · {fmtDate(result.checkedAt, true)}</p>
           </div>
-          {result.light === 'ROUGE' && !constat && zone && (
-            <button type="button" className="btn btn-secondary" onClick={() => setConstat(true)}><Icon name="camera" size={18} /> Établir un constat photographique</button>
+          <Penalties items={result.penalties ?? []} />
+          {result.light === 'ROUGE' && step === 'result' && zone && (
+            <button type="button" className="btn btn-secondary" onClick={() => setStep('camera')}><Icon name="camera" size={18} /> Ouvrir la caméra de preuve</button>
           )}
-          {constat && zone && <ConstatForm zone={zone} plate={result.plate} checkId={result.checkId} onDone={() => { setConstat(false); setResult(null); setPlate(''); onRecorded(); }} />}
+          {step === 'camera' && zone && user && (
+            <EvidenceCamera checkId={result.checkId} plate={result.plate} zone={{ id: zone.id, name: zone.name, center: zone.center }} agent={{ id: user.id, name: user.name }}
+              onCancel={() => setStep('result')}
+              onDone={(photoIds, place, fix) => { setEvidence({ photoIds, place, lat: fix.lat, lon: fix.lon, accuracy: fix.accuracy }); setStep('constat'); }} />
+          )}
+          {step === 'constat' && zone && evidence && <ConstatForm zone={zone} plate={result.plate} checkId={result.checkId} evidence={evidence} onDone={() => { reset(); onRecorded(); }} />}
         </div>
       )}
     </section>
   );
 }
 
-function ConstatForm({ zone, plate, checkId, onDone }: { zone: Zone; plate: string; checkId: string; onDone: () => void }) {
+/** Pénalités de l'usager (tous les agents du module) : constats en cours et pénalités retenues, payées ou non. */
+function Penalties({ items }: { items: PenaltyLine[] }) {
+  const { fmtDate } = useApp();
+  if (!items.length) return <p className="small muted"><Icon name="check" size={14} /> Aucune pénalité enregistrée pour cette plaque.</p>;
+  const unpaid = items.filter((p) => p.unpaid).length;
+  return (
+    <div className="pk-pen" aria-label="Pénalités de l’usager">
+      <p className="pk-row-title"><Icon name="alert" size={16} /> Pénalités de l’usager : {items.length}{unpaid ? ` dont ${unpaid} impayée(s)` : ''}</p>
+      {items.map((p) => (
+        <div key={p.reference} className={`pk-pen-row${p.unpaid ? ' is-unpaid' : ''}`}>
+          <span><span className="mono">{p.reference}</span> · {p.nature}{p.zone ? ` · ${p.zone}` : ''}</span>
+          <span>{p.amount ? <Money items={[p.amount]} /> : 'montant après décision'} · {p.unpaid ? `impayée${p.overdueDays !== null ? ` depuis ${p.overdueDays} j` : ''}` : p.status === 'RETENU' ? 'payée' : `constat ${p.status.toLowerCase()}`} · {fmtDate(p.decidedAt ?? p.createdAt)}</span>
+        </div>
+      ))}
+      <p className="small muted">L’usager régularise par les canaux officiels ; aucun encaissement ni mesure sur place.</p>
+    </div>
+  );
+}
+
+function ConstatForm({ zone, plate, checkId, evidence, onDone }: { zone: Zone; plate: string; checkId: string; evidence: Evidence; onDone: () => void }) {
   const [nature, setNature] = useState('NON_PAIEMENT');
-  const [photos, setPhotos] = useState<string[]>([]);
-  const [lat, setLat] = useState(zone.center.lat.toFixed(6));
-  const [lon, setLon] = useState(zone.center.lon.toFixed(6));
-  const [acc, setAcc] = useState<number | undefined>();
   const [obs, setObs] = useState('');
   const [done, setDone] = useState<Violation | null>(null);
   const act = useAction();
@@ -107,26 +143,25 @@ function ConstatForm({ zone, plate, checkId, onDone }: { zone: Zone; plate: stri
     return (
       <div className="result-card" role="status">
         <StatusBadge tone="good" label="Constat enregistré" />
-        <p className="small">Référence <span className="mono">{done.reference}</span>. Il sera vérifié par le superviseur puis décidé par une autre personne. Aucune pénalité n’est émise à ce stade.</p>
+        <p className="small">Référence <span className="mono">{done.reference}</span> · {done.photos?.length ?? evidence.photoIds.length} photo(s) jointe(s). Il sera vérifié par le superviseur puis décidé par une autre personne. Aucune pénalité n’est émise à ce stade.</p>
+        <EvidencePhotos photos={done.photos ?? []} />
         <button type="button" className="btn btn-ghost btn-sm" onClick={onDone}>Nouveau contrôle</button>
       </div>
     );
   }
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (photos.length === 0) { act.setError('Au moins une photographie est obligatoire.'); return; }
     void act.run(() => api<Violation>('/v1/parking/violations', {
       method: 'POST',
-      body: { zoneId: zone.id, plate, nature, checkId, photoSha256: photos, lat: Number(lat), lon: Number(lon), ...(acc !== undefined ? { gpsAccuracyM: acc } : {}), observations: obs || 'Constat sur place.' },
+      body: { zoneId: zone.id, plate, nature, checkId, photoIds: evidence.photoIds, place: evidence.place, lat: evidence.lat, lon: evidence.lon, ...(evidence.accuracy !== null ? { gpsAccuracyM: evidence.accuracy } : {}), observations: obs || 'Constat sur place.' },
     }), setDone);
   }
   return (
     <form className="form panel" onSubmit={submit} aria-label="Constat">
       <p className="pk-row-title">Constat — <span className="pk-plate">{plate}</span></p>
+      <p className="small"><Icon name="camera" size={14} /> {evidence.photoIds.length} photo(s) horodatée(s) et géolocalisée(s) · {evidence.place}</p>
       <label className="field"><span className="label">Nature présumée</span>
         <select value={nature} onChange={(e) => setNature(e.target.value)}>{Object.entries(NATURE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-      <PhotoHashes value={photos} onChange={setPhotos} />
-      <GpsField lat={lat} lon={lon} onChange={(a, b, c) => { setLat(a); setLon(b); if (c !== undefined) setAcc(c); }} />
       <label className="field"><span className="label">Observations</span><textarea rows={3} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Faits constatés, signalisation, circonstances." /></label>
       <ErrorLine error={act.error} />
       <button type="submit" className="btn btn-primary" disabled={act.busy}>{act.busy ? 'Envoi…' : 'Enregistrer le constat'}</button>
@@ -151,8 +186,10 @@ function VerifyQueue({ state, onChange }: { state: ReturnType<typeof useApi<Viol
                 <div className="pk-evidence">
                   <span><Icon name="camera" size={14} /> {v.evidence.photoSha256.length} photo(s) · GPS {v.evidence.lat.toFixed(5)}, {v.evidence.lon.toFixed(5)}{v.evidence.gpsAccuracyM !== null ? ` (± ${v.evidence.gpsAccuracyM} m)` : ''} · {fmtDate(v.evidence.observedAt, true)}</span>
                   <span>{v.evidence.observations}</span>
+                  {v.evidence.place && <span>Lieu : {v.evidence.place}</span>}
                 </div>
               )}
+              <EvidencePhotos photos={v.photos ?? []} />
               <div className="pk-grid pk-grid-even">
                 <ReasonForm confirmLabel="Confirmer les preuves" placeholder="Note de vérification" onSubmit={(note) => api(`/v1/parking/violations/${v.id}/verify`, { method: 'POST', body: { confirm: true, note } }).then(onChange)} />
                 <ReasonForm confirmLabel="Écarter le constat" danger placeholder="Motif du rejet (qualité insuffisante…)" onSubmit={(note) => api(`/v1/parking/violations/${v.id}/verify`, { method: 'POST', body: { confirm: false, note } }).then(onChange)} />

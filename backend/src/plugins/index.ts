@@ -15,6 +15,7 @@ import { integritePlugin } from './integrite/plugin.js';
 import { pilotagePlugin } from './pilotage/plugin.js';
 import { iaPlugin } from './ia/plugin.js';
 import { preuvesPlugin } from './preuves/plugin.js';
+import { sanctionsPlugin } from './sanctions/plugin.js';
 import { soclePlugin } from './socle/plugin.js';
 
 /**
@@ -37,5 +38,6 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   pilotagePlugin,
   iaPlugin,
   preuvesPlugin,
+  sanctionsPlugin,
   soclePlugin,
 ];
