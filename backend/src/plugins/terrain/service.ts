@@ -87,6 +87,8 @@ export class TerrainService {
   private readonly badgeKey: string;
   /** Contrôle qualité renforcé : doublons, objets fictifs, rotation des zones, récupérations (§ 15A.5, § 15A.7). */
   qualite?: TerrainQualityService;
+  /** Inspection et constat (module 35) : dossiers d'inspection, paquet hors ligne, procès-verbaux. */
+  inspection?: import('./inspection.js').InspectionService;
 
   constructor(private readonly ctx: AppContext) {
     // Clé de signature des QR de badge, dérivée de la clé serveur (production : HSM, clé dédiée).

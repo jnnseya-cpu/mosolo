@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { ReasonAction } from '../fiscal/common';
+import CampagnesRecouvrement from './CampagnesRecouvrement';
 
 interface Simulation {
   at: string; targets: number; taxpayers: number; expectedNotices: number; totalMessages: number; unreachable: number;
@@ -156,6 +157,8 @@ export default function Campagnes() {
         </section>
       )}
       <ul className="stack">{(list.data ?? []).map((c) => <CampaignCard key={c.id} c={c} onChanged={reload} />)}</ul>
+      {/* Module 33 : campagnes de recouvrement (segments § 21.2, test / témoin, mesure, arrêt proposé). */}
+      <CampagnesRecouvrement />
       <Prorogations />
     </div>
   );

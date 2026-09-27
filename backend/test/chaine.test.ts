@@ -9,7 +9,7 @@ import { buildApp } from '../src/app.js';
 import { ManualClock } from '../src/core/clock.js';
 import type { Receipt } from '../src/modules/receipts/service.js';
 import { scanRuptures } from '../src/plugins/chaine/invariants.js';
-import { callbackBody, DEMO, PROVIDER_SECRET, publishCertifiedRule, signedCallback, type TestEnv } from './helpers.js';
+import { callbackBody, DEMO, PROVIDER_SECRET, publishCertifiedRule, signedCallback, type TestEnv, postStatement } from './helpers.js';
 
 async function full(): Promise<TestEnv> {
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
@@ -45,7 +45,7 @@ async function pay(env: TestEnv) {
 }
 
 async function reconcile(env: TestEnv, paymentReference: string, amount: { amount: string; currency: string }) {
-  const r = await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+  const r = await postStatement(env, 'u-tresor', {
     statementId: `REL-${randomUUID().slice(0, 8)}`,
     lines: [{ accountAlias: DEMO.dgipkAlias, amount, valueDate: '2026-09-26', paymentReference }],
   });
@@ -145,7 +145,7 @@ describe('Aucun maillon ne peut être sauté : refus par l’API publique', () =
     const order = await newOrder(env, ob.id);
     const forged = await signedCallback(env, callbackBody(env, order.paymentReference, ob.amount), { secret: 'mauvais-secret-de-test' });
     expect(forged.statusCode).toBeGreaterThanOrEqual(400);
-    await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+    await postStatement(env, 'u-tresor', {
       statementId: 'REL-SANS-CONFIRMATION', lines: [{ accountAlias: DEMO.dgipkAlias, amount: ob.amount, valueDate: '2026-09-26', paymentReference: order.paymentReference }],
     });
     expect(env.app.ctx.receipts.byPaymentOrder(order.id)).toBeUndefined();

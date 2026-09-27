@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { DEMO } from '../src/seed.js';
-import { callbackBody, setup, signedCallback, type TestEnv } from './helpers.js';
+import { callbackBody, setup, signedCallback, type TestEnv, postStatement } from './helpers.js';
 
 /** Paie une obligation précise par le rappel générique signé. */
 async function pay(env: TestEnv, obligationId: string) {
@@ -40,7 +40,7 @@ describe('§ 20.3 — attribution territoriale : commune du fait générateur', 
     ]);
 
     // Rapprochement avec le relevé du compte public : seul « rapproché » est une recette arrivée.
-    const st = await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+    const st = await postStatement(env, 'u-tresor', {
       statementId: 'REL-ATTR-1', lines: [{ accountAlias: DEMO.dgipkAlias, amount: limete.amount, valueDate: '2026-09-26', paymentReference: o1.paymentReference }],
     });
     expect(st.statusCode).toBe(201);

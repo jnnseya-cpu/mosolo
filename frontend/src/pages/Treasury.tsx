@@ -5,6 +5,7 @@ import { useApi } from '../hooks/useApi';
 import { useAutosave } from '../hooks/useAutosave';
 import { useInsight } from '../hooks/useInsight';
 import TresorWorkbench from '../modules/tresor/TresorWorkbench';
+import { ImportsRelevesPanel } from '../modules/tresor/ImportsReleves';
 import { PageHead } from '../components/Shell';
 import { AIInsightPanel } from '../components/AIInsightPanel';
 import { MoneyText } from '../components/MoneyText';
@@ -25,7 +26,7 @@ interface Balance {
 }
 interface Line { accountAlias: string; amount: string; currency: string; valueDate: string; paymentReference: string }
 interface StatementDraft { statementId: string; lines: Line[] }
-interface StatementResult { statementId?: string; lines?: number; matched?: { paymentReference: string; receiptNumber?: string }[]; exceptions?: ReconciliationException[] }
+interface StatementResult { statementId?: string; lines?: number | unknown[]; matched?: { paymentReference: string; receiptNumber?: string }[]; exceptions?: ReconciliationException[]; status?: string; id?: string; notice?: string }
 
 const today = () => new Date().toISOString().slice(0, 10);
 const newLine = (): Line => ({ accountAlias: 'KIN-DGIPK-RECETTES-01', amount: '', currency: 'USD', valueDate: today(), paymentReference: '' });
@@ -154,6 +155,7 @@ function StatementForm({ onImported }: { onImported: () => void }) {
         statementId: v.statementId,
         lines: v.lines.map((l) => ({ accountAlias: l.accountAlias, amount: { amount: l.amount, currency: l.currency }, valueDate: l.valueDate, paymentReference: l.paymentReference })),
       };
+      // Double validation (module 29) : la réponse est une PROPOSITION en attente (rien n'est écrit) ou un rejeu déjà appliqué.
       setRes(await api<StatementResult>('/v1/settlements/statements', { method: 'POST', body }));
       onImported();
     } catch (x) { setErr(describeError(x).message); } finally { setBusy(false); }
@@ -187,7 +189,9 @@ function StatementForm({ onImported }: { onImported: () => void }) {
       {err && <p className="notice notice-err" role="alert">{err}</p>}
       {res && (
         <div className="result-card" role="status">
-          <p>{tr('treasury.imported', { matched: res.matched?.length ?? 0, exceptions: res.exceptions?.length ?? 0 })}</p>
+          {res.status
+            ? <p>Import proposé ({res.id}) — {res.status === 'INTEGRITE_KO' ? 'intégrité en échec : aucune validation possible.' : 'en attente de validation par une seconde personne habilitée ; rien n’est écrit avant.'}</p>
+            : <p>{tr('treasury.imported', { matched: res.matched?.length ?? 0, exceptions: res.exceptions?.length ?? 0 })}</p>}
         </div>
       )}
       <button type="submit" className="btn btn-primary" disabled={busy}>{tr('treasury.import')}</button>
@@ -236,6 +240,7 @@ export default function Treasury() {
           <header className="panel-head"><div><h2 className="panel-title" id="st-title">{tr('treasury.statement')}</h2><p className="panel-sub">{tr('treasury.statementSub')}</p></div></header>
           <StatementForm onImported={() => { bal.reload(); setTick((n) => n + 1); }} />
         </section>
+        <div className="span-12"><ImportsRelevesPanel key={`imp-${tick}`} onChanged={() => { bal.reload(); setTick((n) => n + 1); }} /></div>
         <div className="span-12"><TresorWorkbench key={tick} onChanged={bal.reload} /></div>
 
         <div className="span-12"><AIInsightPanel rec={ai.rec} loading={ai.loading} error={ai.error} onRefresh={ai.reload} compact /></div>

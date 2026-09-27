@@ -8,7 +8,7 @@ import { authorize } from '../src/core/policy.js';
 import { tresorPlugin } from '../src/plugins/tresor/plugin.js';
 import type { TresorService } from '../src/plugins/tresor/service.js';
 import { DEMO } from '../src/seed.js';
-import { callbackBody, PROVIDER_SECRET, signedCallback, type TestEnv } from './helpers.js';
+import { callbackBody, PROVIDER_SECRET, signedCallback, type TestEnv, postStatement } from './helpers.js';
 
 async function setupTresor() {
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
@@ -47,7 +47,7 @@ async function pay(env: Env) {
 }
 
 async function reconcile(env: Env, paymentReference: string, amount = '150.00') {
-  const res = await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+  const res = await postStatement(env, 'u-tresor', {
     statementId: `REL-${randomUUID().slice(0, 8)}`,
     lines: [{ accountAlias: DEMO.dgipkAlias, amount: { amount, currency: 'USD' }, valueDate: '2026-09-26', paymentReference }],
   });
@@ -205,7 +205,7 @@ describe('Contrepassation et remboursement (double validation)', () => {
 describe('Files d’exception et compte d’attente', () => {
   it('parcours complet : affectation → en cours → justificatif → résolution avec mise en suspens → validation à quatre yeux', async () => {
     const env = await setupTresor();
-    const st = await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+    const st = await postStatement(env, 'u-tresor', {
       statementId: 'REL-ORPH-01',
       lines: [{ accountAlias: DEMO.dgipkAlias, amount: { amount: '150.00', currency: 'USD' }, valueDate: '2026-09-26', paymentReference: 'PR-INCONNUE-01' }],
     });
@@ -255,7 +255,7 @@ describe('Files d’exception et compte d’attente', () => {
 
   it('délai de 48 h : exception en retard signalée ; rejet d’une résolution la remet en cours', async () => {
     const env = await setupTresor();
-    const st = await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+    const st = await postStatement(env, 'u-tresor', {
       statementId: 'REL-ORPH-02',
       lines: [{ accountAlias: DEMO.dgipkAlias, amount: { amount: '10.00', currency: 'USD' }, valueDate: '2026-09-26', paymentReference: 'PR-INCONNUE-02' }],
     });

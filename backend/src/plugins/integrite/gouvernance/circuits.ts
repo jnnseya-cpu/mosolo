@@ -267,6 +267,13 @@ export const CIRCUITS: Circuit[] = [
     proposals: ['calcu.budget_line.declared'], approvals: ['calcu.budget_line.validated'], refusals: [],
     guard: { url: '/v1/verticales/calcu/lignes-budgetaires/:id/validation', key: (p) => p.id! },
   },
+  // Spécification fonctionnelle, modules 27 à 40 : circuits à deux personnes ajoutés.
+  {
+    code: 'TRESOR_IMPORT_RELEVE', label: 'Import d’un relevé bancaire ou d’opérateur (double validation, module 29)',
+    proposals: ['settlement.import.proposed'], approvals: ['settlement.import.validated'], refusals: ['settlement.import.rejected'],
+    key: detail('statementId'),
+    guard: { url: '/v1/settlements/statements/:statementId/validation', key: (p) => p.statementId!, refusal: approveFalse },
+  },
 ];
 
 export interface TwoPersonDecision {

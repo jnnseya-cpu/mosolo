@@ -6,10 +6,10 @@
 import { AmountPrecisionError, Money, type MoneyJSON } from '@mosolo/shared';
 import type { AuditActor, AuditLog } from '../../core/audit.js';
 import type { User, UserDirectory } from '../../core/auth.js';
-import { DAY_MS, type Clock } from '../../core/clock.js';
+import { DAY_MS, kinshasaDate, type Clock } from '../../core/clock.js';
 import { canonicalJson, sha256Hex } from '../../core/crypto.js';
-import { conflict, unprocessable } from '../../core/errors.js';
-import { authorize } from '../../core/policy.js';
+import { conflict, notFound, unprocessable } from '../../core/errors.js';
+import { assertDistinctPerson, authorize, definePolicy, GRANTS } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import type { AssessmentService } from '../assessment/service.js';
 import type { CommunicationService } from '../communications/service.js';
@@ -127,9 +127,67 @@ interface StoredStatement {
 /** Résolution d'une exception constatée par le système (ex. versement de point agréé constaté au relevé). */
 export interface ExceptionResolution { resolvedBy: string; resolvedAt: string; reference: string; motif: string }
 
+/*
+ * Double validation des imports de relevés (spécification fonctionnelle, module 29 « Contrôles : double validation des
+ * imports » ; « Fonctions : contrôler l'intégrité des relevés »). Un relevé importé par une personne est une PROPOSITION :
+ * rien n'est écrit (ni règlement, ni appariement, ni suspens) tant qu'une SECONDE personne habilitée, distincte, ne l'a
+ * pas validé. Le contrôle d'intégrité est calculé au dépôt ; un contrôle bloquant en échec interdit la validation.
+ */
+const { always: ALWAYS } = GRANTS;
+definePolicy('tresorerie:releve.proposer', { R17: ALWAYS, R18: ALWAYS });
+definePolicy('tresorerie:releve.valider', { R17: ALWAYS, R18: ALWAYS });
+
+export interface StatementIntegrityCheck {
+  code: string;
+  ok: boolean;
+  /** Contrôle bloquant : en échec, la validation est impossible. Sinon : observation portée à la connaissance du valideur. */
+  blocking: boolean;
+  detail: string;
+}
+
+/** Métadonnées du fichier déposé (dépôt par fichier, module Trésor) : établissement, période, totaux de contrôle déclarés. */
+export interface StatementFileSource {
+  kind: 'BANQUE' | 'OPERATEUR';
+  institution: string;
+  fileName: string;
+  fileSha256: string;
+  period: { from: string; to: string };
+  declared: { lines: number; totals: MoneyJSON[] };
+  /** Erreurs de lecture du fichier (lignes illisibles) : contrôle bloquant. */
+  readErrors?: string[];
+}
+
+export type StatementImportStatus = 'EN_ATTENTE_VALIDATION' | 'INTEGRITE_KO' | 'VALIDE' | 'REJETE';
+
+export interface StatementImport {
+  id: string;
+  statementId: string;
+  fingerprint: string;
+  lines: StatementLine[];
+  status: StatementImportStatus;
+  integrity: { ok: boolean; checks: StatementIntegrityCheck[]; totals: MoneyJSON[] };
+  source?: StatementFileSource;
+  proposedBy: string;
+  proposedAt: string;
+  decision?: { by: string; at: string; approve: boolean; motif: string };
+  result?: { matched: number; exceptions: number; settledUnapplied: number; claimed: number };
+}
+
+function totalsByCurrency(lines: { amount: MoneyJSON }[]): MoneyJSON[] {
+  const t = new Map<string, Money>();
+  for (const l of lines) {
+    const m = Money.fromJSON(l.amount);
+    const prev = t.get(m.currency);
+    t.set(m.currency, prev ? prev.add(m) : m);
+  }
+  return [...t.values()].map((m) => m.toJSON()).sort((a, b) => a.currency.localeCompare(b.currency));
+}
+
 export class TreasuryService {
   readonly statements = new InMemoryRepository<StoredStatement>();
   readonly exceptions = new InMemoryRepository<ReconciliationException>();
+  /** Imports proposés (double validation) : proposition, contrôle d'intégrité, décision de la seconde personne. */
+  readonly imports = new InMemoryRepository<StatementImport>();
   private readonly ids = new IdGenerator();
   /** Surcouche de traitement (affectation, statut, résolution) fournie par le module Trésor avancé. */
   private overlay: ((e: ReconciliationException) => ReconciliationException) | undefined;
@@ -149,8 +207,122 @@ export class TreasuryService {
     private readonly taxpayers: TaxpayerService,
   ) {}
 
+  /**
+   * PROPOSITION d'import (première personne) : lecture stricte des montants, empreinte, contrôle d'intégrité ; AUCUNE
+   * écriture. Rejeu idempotent : relevé déjà appliqué avec le même contenu ⇒ résultat d'origine ; même proposition en
+   * attente ⇒ la même proposition. Contenu différent sous un même identifiant ⇒ 409.
+   */
+  proposeImport(user: User, input: { statementId: string; lines: StatementLine[]; source?: StatementFileSource }):
+    { replayed: true; result: StatementResult } | { replayed: false; pending: StatementImport } {
+    authorize(user, 'tresorerie:releve.proposer');
+    input.lines.forEach((line, i) => {
+      try {
+        Money.parseStrict(line.amount);
+      } catch (e) {
+        throw unprocessable(e instanceof AmountPrecisionError ? 'AMOUNT_PRECISION' : 'INVALID_AMOUNT', `Ligne ${i + 1} du relevé ${input.statementId} : ${(e as Error).message}. Aucune ligne importée.`, { line: i + 1 });
+      }
+    });
+    const fingerprint = sha256Hex(canonicalJson(input.lines));
+    const applied = this.statements.get(input.statementId);
+    if (applied) {
+      if (applied.fingerprint !== fingerprint) throw conflict('STATEMENT_ALREADY_IMPORTED', `Relevé ${input.statementId} déjà importé avec un contenu différent.`);
+      return { replayed: true, result: applied.result };
+    }
+    const open = this.imports.findOne((i) => i.statementId === input.statementId && i.status === 'EN_ATTENTE_VALIDATION');
+    if (open) {
+      if (open.fingerprint !== fingerprint) throw conflict('STATEMENT_PENDING_DIFFERENT', `Relevé ${input.statementId} déjà proposé avec un contenu différent : attendre la décision sur la proposition ${open.id}.`);
+      return { replayed: false, pending: open };
+    }
+    const now = this.clock.now();
+    const today = kinshasaDate(now);
+    const checks: StatementIntegrityCheck[] = [];
+    const check = (code: string, ok: boolean, blocking: boolean, detail: string) => checks.push({ code, ok, blocking, detail });
+    const totals = totalsByCurrency(input.lines);
+    check('EMPREINTE', true, true, `Empreinte SHA-256 du contenu : ${fingerprint.slice(0, 16)}… (${input.lines.length} ligne(s)).`);
+    const src = input.source;
+    if (src) {
+      check('LECTURE_FICHIER', !src.readErrors?.length, true, src.readErrors?.length ? src.readErrors.slice(0, 5).join(' ') : `Fichier ${src.fileName} lu sans erreur.`);
+      check('NOMBRE_LIGNES', src.declared.lines === input.lines.length, true, `${input.lines.length} ligne(s) lue(s) pour ${src.declared.lines} déclarée(s) par l’établissement.`);
+      const declared = [...src.declared.totals].map((m) => Money.parseStrict(m).toJSON()).sort((a, b) => a.currency.localeCompare(b.currency));
+      const same = canonicalJson(declared) === canonicalJson(totals);
+      check('TOTAUX_CONTROLE', same, true, same ? 'Totaux par devise égaux aux totaux de contrôle déclarés.'
+        : `Totaux lus ${totals.map((m) => `${m.amount} ${m.currency}`).join(', ') || '—'} ≠ totaux déclarés ${declared.map((m) => `${m.amount} ${m.currency}`).join(', ') || '—'}.`);
+      const out = input.lines.filter((l) => l.valueDate < src.period.from || l.valueDate > src.period.to);
+      check('PERIODE', out.length === 0 && src.period.from <= src.period.to, true, out.length ? `${out.length} ligne(s) hors de la période ${src.period.from} → ${src.period.to}.` : `Dates de valeur dans la période ${src.period.from} → ${src.period.to}.`);
+      const replay = this.imports.findOne((i) => i.source?.fileSha256 === src.fileSha256 && i.statementId !== input.statementId && i.status !== 'REJETE' && i.status !== 'INTEGRITE_KO');
+      check('REJEU_FICHIER', !replay, true, replay ? `Fichier identique déjà déposé sous le relevé ${replay.statementId}.` : 'Fichier jamais déposé sous un autre relevé.');
+    } else {
+      check('TOTAUX', true, false, `Totaux calculés : ${totals.map((m) => `${m.amount} ${m.currency}`).join(', ') || '—'} (aucun total de contrôle déclaré : dépôt par fichier recommandé).`);
+    }
+    const seen = new Set<string>();
+    const dup = input.lines.filter((l) => { const k = `${l.accountAlias}|${l.paymentReference}|${l.amount.amount}|${l.amount.currency}|${l.valueDate}`; if (seen.has(k)) return true; seen.add(k); return false; }).length;
+    check('DOUBLONS', dup === 0, false, dup ? `${dup} ligne(s) répétée(s) à l’identique : elles deviendront des exceptions « crédit en double » si elles sont validées.` : 'Aucune ligne répétée.');
+    const future = input.lines.filter((l) => l.valueDate > today).length;
+    check('DATES_FUTURES', future === 0, false, future ? `${future} ligne(s) datée(s) après le jour du serveur (${today}).` : `Aucune date de valeur après le jour du serveur (${today}).`);
+    const unknown = [...new Set(input.lines.filter((l) => !this.vault.current(l.accountAlias)).map((l) => l.accountAlias))];
+    check('COMPTES_COFFRE', unknown.length === 0, false, unknown.length ? `Compte(s) inconnu(s) du coffre : ${unknown.join(', ')} (exception « compte inconnu » si validé).` : 'Comptes crédités connus du coffre des bénéficiaires.');
+    const ok = checks.every((c) => c.ok || !c.blocking);
+    const pending = this.imports.insert({
+      id: this.ids.next('IMP-REL'), statementId: input.statementId, fingerprint, lines: input.lines, status: ok ? 'EN_ATTENTE_VALIDATION' : 'INTEGRITE_KO',
+      integrity: { ok, checks, totals }, ...(src ? { source: src } : {}), proposedBy: user.id, proposedAt: now.toISOString(),
+    });
+    this.audit.append({
+      actor: { kind: 'user', id: user.id, roles: user.roles }, action: ok ? 'settlement.import.proposed' : 'settlement.import.integrity_failed',
+      resourceType: 'statement_import', resourceId: pending.id, outcome: ok ? 'SUCCESS' : 'FAILURE',
+      details: { statementId: input.statementId, fingerprint, lines: input.lines.length, failed: checks.filter((c) => !c.ok).map((c) => c.code), ...(src ? { fileSha256: src.fileSha256, institution: src.institution } : {}) },
+    });
+    if (ok) {
+      const validators = [...this.users.withRole('R17'), ...this.users.withRole('R18')].filter((u) => u.id !== user.id);
+      this.comms.publish('approval.requested', validators.map(userRecipient), { objet: `Validation du relevé ${input.statementId} (${input.lines.length} ligne(s))` }, { entity: 'TRESOR' });
+    }
+    return { replayed: false, pending };
+  }
+
+  /** Imports proposés (plus récents d'abord), avec leur contrôle d'intégrité et leur décision. */
+  listImports(user: User): StatementImport[] {
+    authorize(user, 'reconciliation.read');
+    return this.imports.all().slice().reverse();
+  }
+
+  /**
+   * SECONDE validation : une personne habilitée DISTINCTE du proposant approuve (le relevé est alors appliqué :
+   * appariement, règlement, suspens, quittances définitives) ou rejette avec motif. Intégrité en échec : impossible.
+   */
+  validateImport(user: User, statementId: string, input: { approve: boolean; motif: string }): { pending: StatementImport; result?: StatementResult } {
+    authorize(user, 'tresorerie:releve.valider');
+    const pending = this.imports.findOne((i) => i.statementId === statementId && (i.status === 'EN_ATTENTE_VALIDATION' || i.status === 'INTEGRITE_KO'))
+      ?? this.imports.find((i) => i.statementId === statementId).at(-1);
+    if (!pending) throw notFound('STATEMENT_IMPORT_NOT_FOUND', `Aucun import proposé pour le relevé ${statementId}.`);
+    if (pending.status === 'INTEGRITE_KO') throw conflict('STATEMENT_INTEGRITY_FAILED', `Intégrité du relevé ${statementId} en échec : validation impossible ; déposer un relevé conforme.`);
+    if (pending.status !== 'EN_ATTENTE_VALIDATION') throw conflict('STATEMENT_IMPORT_DECIDED', `Import du relevé ${statementId} déjà décidé (${pending.status}).`);
+    assertDistinctPerson(user.id, [pending.proposedBy], 'Double validation : la personne qui a proposé l’import du relevé ne peut pas le valider.');
+    if (input.motif.trim().length < 5) throw unprocessable('MOTIF_REQUIRED', 'Motif de la décision obligatoire (5 caractères au moins).');
+    const at = this.clock.now().toISOString();
+    let result: StatementResult | undefined;
+    if (input.approve) result = this.applyStatement(user, { statementId, lines: pending.lines }).result;
+    const updated = this.imports.update({
+      ...pending, status: input.approve ? 'VALIDE' : 'REJETE', decision: { by: user.id, at, approve: input.approve, motif: input.motif.trim() },
+      ...(result ? { result: { matched: result.matched.length, exceptions: result.exceptions.length, settledUnapplied: result.settledUnapplied.length, claimed: result.claimed?.length ?? 0 } } : {}),
+    });
+    this.audit.append({
+      actor: { kind: 'user', id: user.id, roles: user.roles }, action: input.approve ? 'settlement.import.validated' : 'settlement.import.rejected',
+      resourceType: 'statement_import', resourceId: pending.id, reason: input.motif.trim(),
+      approvalChain: [{ by: pending.proposedBy, step: 'PROPOSITION', at: pending.proposedAt }, { by: user.id, step: 'VALIDATION', at, decision: input.approve ? 'APPROUVE' : 'REFUSE' }],
+      details: { statementId, fingerprint: pending.fingerprint, proposedBy: pending.proposedBy, motif: input.motif.trim() },
+    });
+    return { pending: updated, ...(result ? { result } : {}) };
+  }
+
+  /**
+   * Application directe d'un relevé (usage interne des modules et des outils d'exploitation habilités « settlement.import ») ;
+   * la route publique passe par la proposition puis la seconde validation.
+   */
   importStatement(user: User, input: { statementId: string; lines: StatementLine[] }): { replayed: boolean; result: StatementResult } {
     authorize(user, 'settlement.import');
+    return this.applyStatement(user, input);
+  }
+
+  private applyStatement(user: User, input: { statementId: string; lines: StatementLine[] }): { replayed: boolean; result: StatementResult } {
     const fingerprint = sha256Hex(canonicalJson(input.lines));
     const existing = this.statements.get(input.statementId);
     if (existing) {

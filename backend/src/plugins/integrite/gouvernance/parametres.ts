@@ -42,6 +42,8 @@ import {
 } from '../../pilotage/repartition/model.js';
 import { ATYPICAL_CANCELLATIONS_MIN, ATYPICAL_SALES_FACTOR, ATYPICAL_SALES_MIN } from '../../rakapay/operateurs.js';
 import { PARAMETRES_SECURITE } from './parametres-securite.js';
+import { PARAMETRES_DOCUMENTS } from '../../documents/model.js';
+import { PARAMETRES_ENQUETES } from '../enquetes/parametres.js';
 
 export type ParamValue = number | boolean;
 export type ParamOwner = 'CODE' | 'REGISTRE';
@@ -107,6 +109,10 @@ export const REGISTRE_DEFAUTS: ParamDefinition[] = [
     'Durée à fixer par acte (prescription, archives publiques, J4, J8) ; purge par effacement des champs personnels, après aperçu et approbation à deux personnes.'),
   R('conservation.sessions_canaux_jours', 'Conservation des sessions USSD / SVI terminées (0 = non fixée : aucune purge)', 'Conservation des données (§ 32)', 0, 'jours', { min: 0, max: 3650 },
     'Durée à fixer par acte (J8) ; seules les sessions terminées sont concernées.'),
+  // Conservation des documents par catégorie (module 38) : 0 = non fixée ⇒ aucune purge ; preuves d'audit jamais purgées.
+  ...PARAMETRES_DOCUMENTS,
+  // Renseignement anti-fraude (module 40) : signaux complémentaires et suspension conservatoire.
+  ...PARAMETRES_ENQUETES,
 ];
 
 /** Paramètres anti-fraude du code (constantes importées : la valeur affichée est TOUJOURS celle du code en service). */
