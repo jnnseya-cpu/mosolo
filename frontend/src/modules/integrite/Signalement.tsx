@@ -5,6 +5,7 @@ import { Icon } from '../../components/Icon';
 import { api, newIdempotencyKey } from '../../lib/api';
 import { useApp } from '../../context';
 import { ActionError, CATEGORY_LABELS, EvidencePicker, StateBadge, Tabs, useAction, type Evidence } from './shared';
+import { SignalementPublicVisuels } from './visuels';
 import './integrite.css';
 
 export const COMMUNES = [
@@ -49,6 +50,7 @@ export default function Signalement() {
           <strong>Un agent MOSOLO ne demande jamais d’espèces.</strong> Tout paiement se fait sur une référence, vers un compte public, et donne une quittance vérifiable.
         </div>
       </div>
+      <SignalementPublicVisuels />
       <Tabs label="Signalement" value={tab} onChange={setTab} items={[
         { id: 'signaler', label: 'Signaler' }, { id: 'suivre', label: 'Suivre mon signalement' }, { id: 'canaux', label: 'SMS et serveur vocal' },
       ]} />

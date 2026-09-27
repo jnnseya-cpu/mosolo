@@ -13,6 +13,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { useApp } from '../../context';
 import { hasRole, Kpi } from './shared';
+import { ScellementVisuels } from './visuels';
 import './integrite.css';
 
 interface Root { id: string; day: string; partial: boolean; fromSeq: number; toSeq: number; count: number; merkleRoot: string; timestamp: { genTime: string; policy: string } | null; timestampError?: string; publication: { kind: string; ref: string } | null; publicationError?: string; createdAt: string }
@@ -56,6 +57,7 @@ export default function Scellement() {
             <Kpi label="Dernier contrôle" value={<span className="ig-kpi-text">{s.data.lastCheck ? (s.data.lastCheck.ok ? 'Intègre' : 'Divergence') : 'Aucun'}</span>} />
           </div>
           <p className="callout callout-info ig-note"><Icon name="lock" size={18} /><span>{s.data.signer.note} {s.data.timestampAuthority.note}</span></p>
+          <ScellementVisuels s={s.data} />
           {canRun && (
             <div className="row-actions">
               <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void run(() => api('/v1/integrite/scellement/copie', { method: 'POST' }), (r) => `Copie WORM : ${(r as { copied: number }).copied} enregistrement(s) ajouté(s) dans un nouveau segment.`)}><Icon name="download" size={16} /> Copier (WORM)</button>

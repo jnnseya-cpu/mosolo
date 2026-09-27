@@ -3,6 +3,7 @@
  * recettes d'une zone, proximité récurrente agent–objet, rotation des zones dépassée ; exécution planifiée qui inclut
  * le contrôle des ruptures de la chaîne opératoire. Alertes à examiner — jamais de sanction automatique.
  */
+import { useState } from 'react';
 import { PageHead } from '../../components/Shell';
 import { DataTable } from '../../components/DataTable';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
@@ -12,6 +13,7 @@ import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { useApp } from '../../context';
 import { ActionError, hasRole, Kpi, useAction } from './shared';
+import { DetecteursVisuels } from './visuels';
 import './integrite.css';
 
 interface Signal { code: string; label: string; subject: string; detail: string; fingerprint: string }
@@ -31,6 +33,7 @@ export function DetecteursView({ o }: { o: DetectorsOverview }) {
         <Kpi label="Ruptures de chaîne" value={<span className="ig-kpi-text">{o.schedule.includesChainRuptures ? 'Contrôlées à chaque exécution' : '—'}</span>} />
       </div>
       <p className="callout callout-info ig-note"><Icon name="info" size={18} /><span>{o.note} Seuils : {o.statut}.</span></p>
+      <DetecteursVisuels o={o} />
       <section className="panel" aria-labelledby="det-sig"><h2 className="panel-title" id="det-sig">Signaux</h2>
         {o.signals.length === 0 ? <EmptyState title="Aucun signal" icon="check">Aucune zone ni aucun agent ne franchit les seuils.</EmptyState> : (
           <ul className="plain-list ig-stack">{o.signals.map((s) => (
@@ -57,13 +60,15 @@ export default function Detecteurs() {
   const canRun = hasRole(user?.roles, 'R22', 'R24', 'R28');
   const o = useApi(allowed ? () => api<DetectorsOverview>('/v1/integrite/detecteurs') : null, [user?.id]);
   const act = useAction();
+  const [done, setDone] = useState<string | null>(null);
   if (!allowed) return <div className="page"><PageHead eyebrow="Intégrité" title="Détecteurs anti-fraude" /><EmptyState title="Accès réservé" icon="lock">Réservé à l’audit, à l’anti-fraude et à la sécurité.</EmptyState></div>;
   return (
     <div className="page page-wide ig-page">
       <PageHead eyebrow="Intégrité" title="Détecteurs anti-fraude" lead="Écart constats / paiements, baisse inexpliquée des recettes, proximité agent–objet, rotation des zones et ruptures de la chaîne opératoire : des signaux, jamais des sanctions.">
-        {canRun && <button type="button" className="btn btn-secondary" disabled={act.busy} onClick={() => void act.run(() => api('/v1/integrite/detecteurs/executions', { method: 'POST', body: {} })).then(() => o.reload())}><Icon name="refresh" size={18} /> Exécuter maintenant</button>}
+        {canRun && <button type="button" className="btn btn-secondary" disabled={act.busy} onClick={() => { setDone(null); void act.run(() => api<{ signals: unknown[]; raised: number }>('/v1/integrite/detecteurs/executions', { method: 'POST', body: {} })).then((r) => { if (r) setDone(`Exécution terminée : ${r.signals.length} signal(aux), ${r.raised} nouvelle(s) alerte(s) — à examiner par une personne.`); o.reload(); }); }}><Icon name="refresh" size={18} /> Exécuter maintenant</button>}
       </PageHead>
       <ActionError error={act.error} />
+      {done && <p className="notice notice-ok" role="status">{done}</p>}
       {o.loading && <Loading />}
       {o.error !== null && <ErrorState error={o.error} onRetry={o.reload} />}
       {o.data && <DetecteursView o={o.data} />}

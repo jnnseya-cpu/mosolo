@@ -10,6 +10,7 @@ import { api } from '../../lib/api';
 import { sha256Hex } from '../../lib/crypto';
 import { useApp } from '../../context';
 import { ActionError, hasRole, SEVERITY_LABELS, SeverityBadge, StateBadge, useAction } from './shared';
+import { IncidentsVisuels } from './visuels';
 import './integrite.css';
 
 interface Incident {
@@ -49,6 +50,7 @@ export default function Incidents() {
         <EmptyState title="Registre réservé" icon="lock">Tout agent peut déclarer un incident ; le registre est réservé à la sécurité, à l’exploitation, au DPO et à l’audit.</EmptyState>
       ) : (
         <>
+          {list.data && <IncidentsVisuels items={list.data} candidates={cands.data ? cands.data.length : null} />}
           {cands.data && cands.data.length > 0 && (
             <section className="panel ig-cands" aria-labelledby="inc-cand">
               <h2 id="inc-cand" className="panel-title"><Icon name="antenna" size={18} /> Alertes techniques non rattachées <span className="count">{cands.data.length}</span></h2>

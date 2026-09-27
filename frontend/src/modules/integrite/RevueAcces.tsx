@@ -8,6 +8,7 @@ import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { useApp } from '../../context';
 import { ActionError, hasRole, Kpi, StateBadge, useAction } from './shared';
+import { RevueVisuels } from './visuels';
 import './integrite.css';
 
 interface Item { id: string; userId: string; userName: string; entity: string; role: string; roleLabel: string; privileged: boolean; decision: string; reason?: string; decidedBy?: string; elevations?: { id: string; role: string; motif: string; actions: number }[] }
@@ -96,6 +97,7 @@ export default function RevueAcces() {
             <Kpi label="Accès privilégiés" value={camp.progress.privileged} sub="revue mensuelle" />
             <Kpi label="Prochaine revue" value={<span className="ig-kpi-text">{fmtDate(camp.nextReviewAt)}</span>} />
           </div>
+          <RevueVisuels camp={camp} />
           {camp.label.includes('démo') && <ExampleNotice text="Campagne de démonstration portant sur les comptes fictifs de l’annuaire." />}
           <div className="seg seg-sm seg-wrap" role="group" aria-label="Filtre">
             <button type="button" aria-pressed={filter === 'todo'} onClick={() => setFilter('todo')}>À confirmer</button>

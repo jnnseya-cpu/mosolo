@@ -12,6 +12,7 @@ import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { useApp } from '../../context';
 import { ActionError, hasRole, StateBadge, Tabs, useAction } from './shared';
+import { DemandesVisuels, JournalConsultationsVisuels, RegistreTraitementsVisuels } from './visuels';
 import './integrite.css';
 
 interface PReq {
@@ -112,6 +113,7 @@ function MyRequests() {
         <h2 id="my-list" className="panel-title">Mes demandes</h2>
         {list.loading && <Loading />}
         {list.error !== null && <ErrorState error={list.error} onRetry={list.reload} />}
+        {list.data && list.data.length > 0 && <DemandesVisuels items={list.data} />}
         {list.data && (list.data.length === 0 ? <EmptyState title="Aucune demande" /> : (
           <ul className="list-rows">
             {list.data.map((r) => (
@@ -148,6 +150,7 @@ function DpoRequests() {
       {list.error !== null && <ErrorState error={list.error} onRetry={list.reload} />}
       {list.data && (
         <>
+          <DemandesVisuels items={list.data} />
           <DataTable rows={list.data} rowKey={(r) => r.id} caption="Demandes des personnes" empty={<EmptyState title="Aucune demande" />}
             columns={[
               { key: 'id', label: 'Demande', primary: true, render: (r) => <><button type="button" className="btn-link ig-rowlink" onClick={() => setOpen(r.id)}>{typeLabel({ type: r.type })}</button><span className="account-code">{r.id}</span></> },
@@ -209,6 +212,7 @@ function Registry({ editable }: { editable: boolean }) {
     <section className="section">
       {list.loading && <Loading />}
       {list.error !== null && <ErrorState error={list.error} onRetry={list.reload} />}
+      {list.data && <RegistreTraitementsVisuels items={list.data} />}
       {list.data && (
         <div className="ig-registry">
           {list.data.map((p) => (
@@ -271,6 +275,7 @@ function AccessLog() {
       </form>
       {list.loading && <Loading />}
       {list.error !== null && <ErrorState error={list.error} onRetry={list.reload} />}
+      {list.data && <JournalConsultationsVisuels items={list.data} labels={LOG_LABELS} />}
       {list.data && (
         <DataTable rows={list.data} rowKey={(r) => `${r.at}-${r.action}-${r.actor}-${r.resourceId}`} caption="Journal des consultations" empty={<EmptyState title="Aucune consultation journalisée" />}
           columns={[

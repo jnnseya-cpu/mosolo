@@ -11,6 +11,7 @@ import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { useApp } from '../../context';
 import { hasRole, Kpi } from './shared';
+import { ClesVisuels } from './visuels';
 import './integrite.css';
 
 export interface KeyWarning { code: string; severity: 'INFO' | 'ATTENTION' | 'CRITIQUE'; message: string }
@@ -62,6 +63,7 @@ export default function SanteCles() {
             <Kpi label="À surveiller" value={h.data.summary.attention} />
           </div>
           <p className="callout callout-info ig-note"><Icon name="lock" size={18} /><span>{h.data.note}</span></p>
+          <ClesVisuels keys={h.data.keys} />
           <KeyTable keys={h.data.keys} />
         </>
       )}

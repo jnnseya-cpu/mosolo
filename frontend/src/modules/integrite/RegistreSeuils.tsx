@@ -13,6 +13,7 @@ import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { useApp } from '../../context';
 import { ActionError, hasRole, Kpi, useAction } from './shared';
+import { SeuilsVisuels } from './visuels';
 import './integrite.css';
 
 export interface ThresholdEntry {
@@ -101,6 +102,7 @@ export default function RegistreSeuils() {
             <Kpi label="Demandes en attente" value={pending.length} />
           </div>
           <p className="callout callout-info ig-note"><Icon name="info" size={18} /><span>{reg.data.note}</span></p>
+          <SeuilsVisuels reg={reg.data} />
 
           {pending.length > 0 && (
             <section className="panel" aria-labelledby="rs-pending">

@@ -10,6 +10,7 @@ import { api } from '../../lib/api';
 import { useApp } from '../../context';
 import { ActionError, EvidencePicker, hasRole, StateBadge, useAction, type Evidence } from './shared';
 import { COMMUNES } from './Signalement';
+import { MystereVisuels } from './visuels';
 import './integrite.css';
 
 interface Check {
@@ -39,6 +40,7 @@ export default function ControlesMystere() {
         lead="Vérifications anonymes et périodiques auprès des agents, sous-traitants, guichets et points de paiement. Un constat non conforme ouvre un signal à instruire, jamais une sanction automatique.">
         {allowed && <button type="button" className="btn btn-primary" onClick={() => setPlanning(true)}><Icon name="clock" size={18} /> Planifier un contrôle</button>}
       </PageHead>
+      <MystereVisuels checks={list.data} summary={summary.data} />
 
       <section className="section" aria-labelledby="cm-pub">
         <div className="section-head"><h2 id="cm-pub">Résultats publiés (agrégés)</h2></div>

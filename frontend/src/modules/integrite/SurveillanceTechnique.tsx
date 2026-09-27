@@ -13,6 +13,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { useApp } from '../../context';
 import { hasRole } from './shared';
+import { SurveillanceVisuels } from './visuels';
 import './integrite.css';
 
 interface Device { id: string; kind: 'EMPREINTE' | 'TERMINAL'; accounts: { userId: string }[]; lastSeen: string; multiAccounts: boolean; attestation: { status: string; mdmEnrolled: boolean | null; rooted: boolean | null; source: string; updatedBy?: string } }
@@ -51,6 +52,7 @@ export default function SurveillanceTechnique() {
       <PageHead eyebrow="Sécurité" title="Surveillance technique (appareils, GPS, plafonds)"
         lead="Signaux explicables à examiner par une personne : appareil partagé entre comptes, déplacement impossible entre deux actions de terrain, volume anormal de références de paiement." />
       {msg && <p className={`notice ${msg.ok ? 'notice-ok' : 'notice-err'}`} role="status">{msg.text}</p>}
+      <SurveillanceVisuels devices={devices.data} gps={gps.data} ceilings={ceilings.data} />
 
       <h2 className="panel-title">Appareils</h2>
       {devices.loading && <Loading />}
