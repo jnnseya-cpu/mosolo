@@ -304,6 +304,7 @@ export const CIRCUITS: Circuit[] = [
     proposals: ['settlement.import.proposed'], approvals: ['settlement.import.validated'], refusals: ['settlement.import.rejected'],
     key: detail('statementId'),
     guard: { url: '/v1/settlements/statements/:statementId/validation', key: (p) => p.statementId!, refusal: approveFalse },
+  },
   // Document maître FR 2, ch. 48 : décisions du Gouvernement provincial (enregistrement → validation par une autre personne).
   {
     code: 'DECISION_GOUVERNEMENT', label: 'Décision du Gouvernement provincial enregistrée sur acte (ch. 48)',

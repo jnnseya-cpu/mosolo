@@ -24,8 +24,6 @@ import type { PilotagePlanningHooks, PilotageService, Query } from '../service.j
 import { MIN_CONTRIBUTORS, type FundedProjectsSection } from '../transparency.js';
 import {
   additionalGrossMinor, addDays, amountsOf, EXEMPLE_ILLUSTRATIF, BASELINE_METRICS, dayCount, HYPOTHESIS_VARIABLES, INSTRUCTION_ORIGINS, MATURITY, meetsThreshold, moneyOfMinor, parseEntriesCsv,
-  pickHypothesis, PILOT_COMMUNES, PILOT_CRITERIA, PILOT_MILESTONES, PROCUREMENT, PROJECT_DOMAINS, prorate, RANV_COMPONENTS, SCENARIO_CODES, SCENARIOS,
-  addDays, amountsOf, BASELINE_METRICS, dayCount, HYPOTHESIS_VARIABLES, INSTRUCTION_ORIGINS, MATURITY, meetsThreshold, moneyOfMinor, parseEntriesCsv,
   pickHypothesis, PILOT_COMMUNES, PILOT_COMMUNES_46, PILOT_CRITERIA, PILOT_CRITERIA_46, PILOT_MILESTONES, PILOT_SEQUENCE_46, PROCUREMENT, PROJECT_DOMAINS, prorate, RANV_COMPONENTS, SCENARIO_CODES, SCENARIOS,
   selectEntries, SLA_KINDS, tenths, validateEntry,
   type BaselineEntry, type BaselineSet, type FundScenario, type FundScenarioItem, type Hypothesis, type HypothesisVariable, type Instruction, type InstructionOrigin,
