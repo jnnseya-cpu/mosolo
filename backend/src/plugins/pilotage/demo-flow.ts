@@ -57,9 +57,13 @@ export function runDemoFlow(ctx: AppContext, provider = 'mm-operator-a'): { obli
       if (i < p.reconcile) toReconcile.push({ alias: order.beneficiaryAlias, amount: order.amount as { amount: string; currency: 'USD' }, ref: order.paymentReference });
     }
   });
-  const statement = ctx.treasury.importStatement(tresor, {
-    statementId: `REL-DEMO-PILOTAGE-${kinshasaDate(ctx.clock.now())}`,
-    lines: toReconcile.map((l) => ({ accountAlias: l.alias, amount: l.amount, valueDate: kinshasaDate(ctx.clock.now()), paymentReference: l.ref })),
-  });
-  return { obligations: n, confirmed, reconciled: statement.result.matched.length };
+  // Import du relevé en double validation (module 29) : proposé par l'analyste de rapprochement, validé par le Trésor.
+  const statementId = `REL-DEMO-PILOTAGE-${kinshasaDate(ctx.clock.now())}`;
+  const lines = toReconcile.map((l) => ({ accountAlias: l.alias, amount: l.amount, valueDate: kinshasaDate(ctx.clock.now()), paymentReference: l.ref }));
+  const analyst = ctx.users.get('u-analyste-rappro');
+  if (!analyst) return { obligations: n, confirmed, reconciled: ctx.treasury.importStatement(tresor, { statementId, lines }).result.matched.length };
+  const proposed = ctx.treasury.proposeImport(analyst, { statementId, lines });
+  const matched = proposed.replayed ? proposed.result.matched.length
+    : ctx.treasury.validateImport(tresor, statementId, { approve: true, motif: 'Relevé de démonstration vérifié (non opposable).' }).result?.matched.length ?? 0;
+  return { obligations: n, confirmed, reconciled: matched };
 }

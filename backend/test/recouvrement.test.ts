@@ -3,7 +3,7 @@ import { buildApp } from '../src/app.js';
 import { ManualClock } from '../src/core/clock.js';
 import { authorize } from '../src/core/policy.js';
 import { recouvrementPlugin, RecoveryService } from '../src/plugins/recouvrement/plugin.js';
-import { callbackBody, DEMO, publishCertifiedRule, signedCallback, type TestEnv } from './helpers.js';
+import { callbackBody, DEMO, publishCertifiedRule, signedCallback, type TestEnv, postStatement } from './helpers.js';
 import { randomUUID } from 'node:crypto';
 
 const TENANT = DEMO.tenantTaxpayerId;
@@ -427,7 +427,7 @@ describe('Échéanciers', () => {
       expect(o.statusCode).toBe(201);
       const cb = await signedCallback(env, callbackBody(env, o.json().paymentReference, o.json().amount));
       expect(cb.json().status).toBe('CONFIRME');
-      const st = await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+      const st = await postStatement(env, 'u-tresor', {
         statementId: `REL-${randomUUID()}`, lines: [{ accountAlias: env.app.ctx.assessment.get(obl).beneficiaryAccountAlias, amount: o.json().amount, valueDate: '2026-09-26', paymentReference: o.json().paymentReference }],
       });
       expect(st.statusCode).toBe(201);

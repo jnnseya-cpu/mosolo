@@ -11,7 +11,7 @@ import { ALL_PARAMETERS } from '../src/plugins/integrite/gouvernance/parametres.
 import { APPARIEMENT_SEUIL_PROPOSITION, editDistance } from '../src/plugins/tresor/appariement.js';
 import { tresorPlugin } from '../src/plugins/tresor/plugin.js';
 import { DEMO } from '../src/seed.js';
-import { callbackBody, PROVIDER_SECRET, signedCallback, type TestEnv } from './helpers.js';
+import { callbackBody, PROVIDER_SECRET, signedCallback, type TestEnv, postStatement } from './helpers.js';
 
 async function setup(withCanaux = false) {
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
@@ -44,7 +44,7 @@ async function pay(env: TestEnv, second = false) {
   return { order, receiptNumber: cb.receiptNumber as string };
 }
 
-const statement = (env: TestEnv, lines: unknown[]) => env.req('POST', '/v1/settlements/statements', 'u-tresor', { statementId: `REL-${randomUUID().slice(0, 8)}`, lines });
+const statement = (env: TestEnv, lines: unknown[]) => postStatement(env, 'u-tresor', { statementId: `REL-${randomUUID().slice(0, 8)}`, lines });
 
 describe('Rapprochement proposé sous le seuil d’appariement exact (§ 20.1)', () => {
   it('distance d’édition : une transposition compte pour une erreur', () => {

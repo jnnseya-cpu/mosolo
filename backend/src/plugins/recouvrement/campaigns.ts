@@ -15,9 +15,10 @@ import { isCommune } from '../../reference/kinshasa.js';
 import type { AppContext } from '../../context.js';
 import { taxpayerRecipient } from '../../modules/identity/recipients.js';
 import { RECOVERY_PROCEDURE } from './parameters.js';
+import { RecoveryCampaignService } from './campagnes-relance.js';
 
 const { always } = GRANTS;
-definePolicy('campagnes:read', { R01: always, R02: always, R05: always, R06: always, R07: always, R11: always, R13: always, R16: always, R22: always, R23: always });
+definePolicy('campagnes:read', { R01: always, R02: always, R05: always, R06: always, R07: always, R11: always, R13: always, R16: always, R22: always, R23: always, R09: always, R20: always, R21: always });
 definePolicy('campagnes:manage', { R06: always, R07: always });
 definePolicy('campagnes:approve', { R01: always, R02: always, R05: always, R06: always });
 definePolicy('campagnes:prorogation.propose', { R06: always, R07: always, R13: always });
@@ -96,8 +97,12 @@ export class CampaignService {
   readonly campaigns = new InMemoryRepository<Campaign>();
   readonly extensions = new InMemoryRepository<DueExtensionRequest>();
   private readonly ids = new IdGenerator();
+  /** Campagnes de RECOUVREMENT (module 33) : mêmes droits, même calendrier, mesure par le rendement du recouvrement. */
+  readonly relances: RecoveryCampaignService;
 
-  constructor(private readonly ctx: AppContext) {}
+  constructor(private readonly ctx: AppContext) {
+    this.relances = new RecoveryCampaignService(ctx);
+  }
 
   private today() { return kinshasaDate(this.ctx.clock.now()); }
   private now() { return this.ctx.clock.now().toISOString(); }
@@ -296,6 +301,10 @@ export class CampaignService {
     const byEntity: Record<string, { code: string; id: string; label: string; status: Campaign['status']; dueDate: string; dueDateStatus: string; reminders: { label: string; date: string }[] }[]> = {};
     for (const c of this.campaigns.all().sort((a, b) => a.dueDate.localeCompare(b.dueDate))) {
       (byEntity[c.entity] ??= []).push({ code: c.code, id: c.id, label: c.label, status: c.status, dueDate: c.dueDate, dueDateStatus: c.dueDateStatus, reminders: c.reminders.map((r) => ({ label: r.label, date: addDays(c.dueDate, -r.offsetDays) })) });
+    }
+    // Campagnes de recouvrement (module 33) : séquence J-15 … J+30 relative à l'échéance de chaque cible.
+    for (const r of this.relances.relances.all()) {
+      (byEntity[r.entity] ??= []).push({ code: r.code, id: r.id, label: `${r.label} (recouvrement)`, status: r.status as Campaign['status'], dueDate: '—', dueDateStatus: 'PAR_CIBLE', reminders: r.sequence.map((s) => ({ label: s.label, date: `échéance ${s.offsetDays >= 0 ? '+' : ''}${s.offsetDays} j` })) });
     }
     return Object.entries(byEntity).map(([entity, campaigns]) => ({ entity, campaigns }));
   }

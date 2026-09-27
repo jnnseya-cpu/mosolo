@@ -13,7 +13,7 @@ import { planificationPlugin } from '../src/plugins/pilotage/planification/plugi
 import { parseEntriesCsv, selectEntries } from '../src/plugins/pilotage/planification/model.js';
 import { pilotagePlugin } from '../src/plugins/pilotage/plugin.js';
 import { DEMO } from '../src/seed.js';
-import { callbackHeaders, publishCertifiedRule } from './helpers.js';
+import { callbackHeaders, publishCertifiedRule, postStatement } from './helpers.js';
 
 const SECRET = 'test-secret-mm-operator-a';
 
@@ -38,7 +38,7 @@ async function payAndReconcile(env: Env, obligationId: string) {
   const raw = JSON.stringify({ providerTxnId: `TXN-${randomUUID()}`, paymentReference: order.paymentReference, amount: order.amount, status: 'SUCCESS', completedAt: env.clock.now().toISOString() });
   const cb = await env.app.inject({ method: 'POST', url: '/v1/providers/mm-operator-a/callbacks', payload: raw, headers: { 'content-type': 'application/json', ...callbackHeaders(SECRET, raw, env.clock.now()) } });
   expect(cb.json().status).toBe('CONFIRME');
-  const st = await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+  const st = await postStatement(env, 'u-tresor', {
     statementId: `REL-${randomUUID()}`, lines: [{ accountAlias: DEMO.dgipkAlias, amount: order.amount, valueDate: env.clock.now().toISOString().slice(0, 10), paymentReference: order.paymentReference }],
   });
   expect(st.statusCode).toBe(201);

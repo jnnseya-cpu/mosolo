@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { callbackBody, createOrder, DEMO, demoObligationId, payDemoObligation, setup, signedCallback } from './helpers.js';
+import { callbackBody, createOrder, DEMO, demoObligationId, payDemoObligation, setup, signedCallback, postStatement } from './helpers.js';
 
 describe('Ordres de paiement', () => {
   it('AC-PAY-01 : même clé + même contenu → même réponse ; contenu différent → 409', async () => {
@@ -75,7 +75,7 @@ describe('Rappels prestataires', () => {
     const pending = await env.req('GET', `/v1/public/receipts/${callback.receiptCode}`);
     expect(pending.json()).toMatchObject({ status: 'PENDING', settlementStatus: 'PENDING_SETTLEMENT' });
 
-    const st = await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+    const st = await postStatement(env, 'u-tresor', {
       statementId: 'REL-2026-09-26-A',
       lines: [{ accountAlias: DEMO.dgipkAlias, amount: { amount: '150.00', currency: 'USD' }, valueDate: '2026-09-26', paymentReference: order.paymentReference }],
     });
@@ -87,7 +87,7 @@ describe('Rappels prestataires', () => {
     const valid = await env.req('GET', `/v1/public/receipts/${callback.receiptCode}`);
     expect(valid.json()).toMatchObject({ status: 'VALID', settlementStatus: 'RECONCILED' });
     // Relevé rejoué à l'identique : idempotent, aucun double effet.
-    const replay = await env.req('POST', '/v1/settlements/statements', 'u-tresor', {
+    const replay = await postStatement(env, 'u-tresor', {
       statementId: 'REL-2026-09-26-A',
       lines: [{ accountAlias: DEMO.dgipkAlias, amount: { amount: '150.00', currency: 'USD' }, valueDate: '2026-09-26', paymentReference: order.paymentReference }],
     });

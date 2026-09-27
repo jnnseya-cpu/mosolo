@@ -3,6 +3,10 @@ import type { MosoloPlugin } from './types.js';
 import { accesPlugin } from './acces/plugin.js';
 import { fiscalPlugin } from './fiscal/plugin.js';
 import { tresorPlugin } from './tresor/plugin.js';
+import { tresorRelevesPlugin } from './tresor/releves.js';
+import { documentsPlugin } from './documents/plugin.js';
+import { communicationPlugin } from './communication/plugin.js';
+import { indicateursModules2740Plugin } from './pilotage/indicateurs-modules-27-40.js';
 import { recouvrementPlugin } from './recouvrement/plugin.js';
 import { campagnesPlugin } from './recouvrement/campagnes-plugin.js';
 import { titresPlugin } from './titres/plugin.js';
@@ -39,6 +43,7 @@ import { plateformePlugin } from './plateforme/plugin.js';
 import { accesDelegationsPlugin } from './acces/delegations-plugin.js';
 import { equipementsPlugin } from './equipements/plugin.js';
 import { grandsRedevablesPlugin } from './verticales/grands-redevables-plugin.js';
+import { integriteEnquetesPlugin } from './integrite/enquetes/plugin.js';
 
 /**
  * Ordre : `acces` en tête (garde des revendications, mandats), puis `fiscal` (il branche les exonérations sur la liquidation), `titres` avant `rakapay`,
@@ -49,6 +54,12 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   accesPlugin,
   fiscalPlugin,
   tresorPlugin,
+  // Dépôt des fichiers de relevés (module 29) : file commune des imports à double validation.
+  tresorRelevesPlugin,
+  // Gestion documentaire (module 38) : stockage chiffré, versions, sceau, OCR, conservation, exports filigranés.
+  documentsPlugin,
+  // Notifications et communication (module 39) : modèles versionnés, préférences, accusés, canal de secours, avis sur plaque.
+  communicationPlugin,
   recouvrementPlugin,
   campagnesPlugin,
   titresPlugin,
@@ -64,6 +75,8 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   apprentissagePlugin,
   terrainPlugin,
   integritePlugin,
+  // Renseignement anti-fraude (module 40) : signaux, scores explicables, suspension conservatoire, transmission.
+  integriteEnquetesPlugin,
   integriteGouvernancePlugin,
   integriteSecuritePlugin,
   pilotagePlugin,
@@ -94,4 +107,6 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   // Plateforme (modules 52, 53, 55) : API partenaires, administration, supervision — avant le socle (limitation de débit).
   plateformePlugin,
   soclePlugin,
+  // Indicateurs des modules 27 à 40 (spécification fonctionnelle) : lecture seule, après tous les modules.
+  indicateursModules2740Plugin,
 ];

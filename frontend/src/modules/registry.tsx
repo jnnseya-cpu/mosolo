@@ -56,7 +56,7 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   // Remises (demande et instruction R20, décision R21) et admission en non-valeur (proposition R20, décision R21) ; lecture : recouvrement:read.
   { path: '/recouvrement/remises', element: lazy(() => import('./recouvrement/Remises')), nav: { label: 'Remises gracieuses', short: 'Remises', icon: 'scale', group: 'operations', roles: ['R06', 'R07', 'R11', 'R20', 'R21', 'R22', 'R23'] } },
   // Campagnes (§ 8, § 45) et prorogations d'échéance (§ 6.2)
-  { path: '/recouvrement/campagnes', element: lazy(() => import('./recouvrement/Campagnes')), nav: { label: 'Campagnes et calendrier', short: 'Campagnes', icon: 'clock', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R11', 'R13', 'R16', 'R22', 'R23'] } },
+  { path: '/recouvrement/campagnes', element: lazy(() => import('./recouvrement/Campagnes')), nav: { label: 'Campagnes et calendrier', short: 'Campagnes', icon: 'clock', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R11', 'R13', 'R16', 'R22', 'R23', 'R09', 'R20', 'R21'] } },
   { path: '/recouvrement/non-valeurs', element: lazy(() => import('./recouvrement/NonValeurs')), nav: { label: 'Admissions en non-valeur', short: 'Non-valeurs', icon: 'ban', group: 'operations', roles: ['R06', 'R07', 'R11', 'R20', 'R21', 'R22', 'R23'] } },
 
   // Liquidation : dérogations à la base connue (lecture liquidation R06/R07/R11 et audit R22/R23 ; approbation R06/R07)
@@ -121,6 +121,18 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/referentiel/recettes', element: lazy(() => import('./referentiel/Recettes')), nav: { label: 'Référentiel des recettes', short: 'Recettes', icon: 'ledger', group: 'public', roles: [] } },
 
   // Terrain : supervision, sous-traitants, badges
+  // Gestion documentaire (module 38) : pièces chiffrées, versions, sceau, OCR, conservation, exports filigranés.
+  { path: '/documents', element: lazy(() => import('./documents/Documents')), nav: { label: 'Gestion documentaire', short: 'Documents', icon: 'file', group: 'operations', roles: ['R06', 'R07', 'R09', 'R11', 'R12', 'R17', 'R18', 'R20', 'R21', 'R22', 'R23', 'R24', 'R25', 'R30', 'R31'] } },
+  // Notifications et communication (module 39) : modèles versionnés, avis sur plaque, indicateurs ; préférences du contribuable.
+  { path: '/communication/notifications', element: lazy(() => import('./communication/Notifications')), nav: { label: 'Notifications et modèles', short: 'Notifications', icon: 'message', group: 'operations', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R10', 'R11', 'R12', 'R13', 'R14', 'R16', 'R20', 'R21', 'R22', 'R23'] } },
+  { path: '/mes-preferences', element: lazy(() => import('./communication/MesPreferences')), nav: { label: 'Mes préférences de communication', short: 'Préférences', icon: 'message', group: 'public', roles: ['R30', 'R31'] } },
+  // Indicateurs des modules 27 à 40 (spécification fonctionnelle), calculés sur les données réelles.
+  { path: '/pilotage/indicateurs-modules-27-40', element: lazy(() => import('./pilotage/IndicateursModules2740')), nav: { label: 'Indicateurs des modules 27 à 40', short: 'Indicateurs 27–40', icon: 'gauge', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R08', 'R17', 'R18', 'R20', 'R21', 'R22', 'R23', 'R24'] } },
+  // Renseignement anti-fraude (module 40) : scores explicables, suspension conservatoire, transmission à l'autorité.
+  { path: '/integrite/renseignement', element: lazy(() => import('./integrite/Renseignement')), nav: { label: 'Renseignement anti-fraude', short: 'Renseignement', icon: 'shieldCheck', group: 'operations', roles: ['R24', 'R22', 'R28', 'R26', 'R06', 'R21'] } },
+  // Inspection et constat (module 35) : dossiers préparés, paquet hors ligne, procès-verbaux selon les pouvoirs.
+  { path: '/terrain/inspection', element: lazy(() => import('./terrain/Inspection')), nav: { label: 'Inspection et constat', short: 'Inspection', icon: 'file', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R23', 'R24'] } },
+  { path: '/mes-proces-verbaux', element: lazy(() => import('./terrain/MesProcesVerbaux')), nav: { label: 'Procès-verbaux me concernant', short: 'PV', icon: 'file', group: 'public', roles: ['R30', 'R31'] } },
   { path: '/terrain/supervision', element: lazy(() => import('./terrain/Supervision')), nav: { label: 'Supervision terrain', short: 'Supervision', icon: 'gauge', group: 'operations', roles: ['R06', 'R07', 'R09', 'R11', 'R22', 'R23', 'R24', 'R35'] } },
   { path: '/terrain/sous-traitants', element: lazy(() => import('./terrain/Subcontractors')), nav: { label: 'Sous-traitants et équipes', short: 'Sous-traitants', icon: 'users', group: 'operations', roles: ['R06', 'R07', 'R08', 'R09', 'R11', 'R17', 'R22', 'R23', 'R24', 'R35'] } },
   // Apprentissage et environnement de travail (§ 24) : espace par rôle, mes certificats, administration des certifications

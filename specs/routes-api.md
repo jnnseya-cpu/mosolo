@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1378 routes** dans 46 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1453 routes** dans 48 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -10,26 +10,28 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1378 routes** dans 4
 | extension catalogue-api | 20 |
 | extension chaine | 3 |
 | extension citoyen | 60 |
+| extension communication | 13 |
 | extension decision | 30 |
+| extension documents | 16 |
 | extension equipements | 11 |
 | extension fiscal | 82 |
 | extension ia | 40 |
-| extension integrite | 70 |
+| extension integrite | 82 |
 | extension juridique | 11 |
 | extension opportunites | 32 |
 | extension parking | 74 |
-| extension pilotage | 86 |
+| extension pilotage | 87 |
 | extension plateforme | 23 |
 | extension preuves | 14 |
 | extension publicite | 52 |
 | extension rakapay | 53 |
-| extension recouvrement | 58 |
+| extension recouvrement | 74 |
 | extension referentiel | 10 |
 | extension sanctions | 12 |
 | extension socle | 24 |
-| extension terrain | 51 |
+| extension terrain | 64 |
 | extension titres | 22 |
-| extension tresor | 41 |
+| extension tresor | 43 |
 | extension vehicules-controle | 84 |
 | extension verticales | 193 |
 | module ai | 3 |
@@ -48,7 +50,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1378 routes** dans 4
 | module receipts | 2 |
 | module rules | 26 |
 | module system | 3 |
-| module treasury | 6 |
+| module treasury | 8 |
 | module vault | 4 |
 
 ## Extension acces
@@ -302,6 +304,24 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1378 routes** dans 4
 | GET | `/v1/public/transport/cartes/:id` |
 | POST | `/v1/public/visites` |
 
+## Extension communication
+
+| Méthode | Chemin |
+|---|---|
+| POST | `/v1/communication/accuses` |
+| GET | `/v1/communication/avis-plaque` |
+| POST | `/v1/communication/avis-plaque` |
+| POST | `/v1/communication/avis-plaque/:id/apposition` |
+| GET | `/v1/communication/envois/:id/preuve` |
+| GET | `/v1/communication/indicateurs` |
+| POST | `/v1/communication/messages/:id/lecture` |
+| GET | `/v1/communication/modeles` |
+| POST | `/v1/communication/modeles` |
+| POST | `/v1/communication/modeles/:id/decision` |
+| GET | `/v1/communication/preferences/:id` |
+| PUT | `/v1/communication/preferences/:id` |
+| GET | `/v1/public/avis-plaque/:code` |
+
 ## Extension decision
 
 | Méthode | Chemin |
@@ -336,6 +356,27 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1378 routes** dans 4
 | POST | `/v1/decision/salle-controle/escalades/:id/prise-en-charge` |
 | GET | `/v1/decision/transparence` |
 | GET | `/v1/public/transparence/repartition/:period` |
+
+## Extension documents
+
+| Méthode | Chemin |
+|---|---|
+| GET | `/v1/documents` |
+| POST | `/v1/documents` |
+| GET | `/v1/documents/:id` |
+| POST | `/v1/documents/:id/classification` |
+| GET | `/v1/documents/:id/contenu` |
+| POST | `/v1/documents/:id/exports` |
+| POST | `/v1/documents/:id/gel-juridique` |
+| POST | `/v1/documents/:id/versions` |
+| GET | `/v1/documents/categories` |
+| GET | `/v1/documents/exports/:token` |
+| POST | `/v1/documents/filigranes/verification` |
+| GET | `/v1/documents/indicateurs` |
+| POST | `/v1/documents/integrite/verification` |
+| POST | `/v1/documents/purges` |
+| POST | `/v1/documents/purges/:id/decision` |
+| GET | `/v1/documents/purges/apercu` |
 
 ## Extension equipements
 
@@ -497,6 +538,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1378 routes** dans 4
 | GET | `/v1/integrite/alerts` |
 | POST | `/v1/integrite/alerts/:id/examine` |
 | POST | `/v1/integrite/alerts/:id/propose-closure` |
+| GET | `/v1/integrite/alerts/:id/score` |
 | POST | `/v1/integrite/alerts/:id/validate-closure` |
 | GET | `/v1/integrite/appareils` |
 | POST | `/v1/integrite/appareils/:id/attestation` |
@@ -505,9 +547,12 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1378 routes** dans 4
 | GET | `/v1/integrite/cases/:id` |
 | POST | `/v1/integrite/cases/:id/conclusions` |
 | POST | `/v1/integrite/cases/:id/decision` |
+| POST | `/v1/integrite/cases/:id/deperdition-evitee` |
 | POST | `/v1/integrite/cases/:id/evidence` |
 | POST | `/v1/integrite/cases/:id/links` |
 | POST | `/v1/integrite/cases/:id/notes` |
+| POST | `/v1/integrite/cases/:id/suspensions-conservatoires` |
+| POST | `/v1/integrite/cases/:id/transmission` |
 | GET | `/v1/integrite/collusion` |
 | POST | `/v1/integrite/collusion/run` |
 | GET | `/v1/integrite/detecteurs` |
@@ -539,6 +584,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1378 routes** dans 4
 | GET | `/v1/integrite/privacy/requests/:id/export` |
 | POST | `/v1/integrite/privacy/requests/:id/respond` |
 | POST | `/v1/integrite/privacy/requests/:id/take` |
+| GET | `/v1/integrite/renseignement/indicateurs` |
 | GET | `/v1/integrite/reports` |
 | GET | `/v1/integrite/reports/:id` |
 | POST | `/v1/integrite/reports/:id/assign` |
@@ -550,9 +596,16 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1378 routes** dans 4
 | POST | `/v1/integrite/scellement/controles` |
 | POST | `/v1/integrite/scellement/copie` |
 | POST | `/v1/integrite/scellement/racines` |
+| GET | `/v1/integrite/scores` |
+| GET | `/v1/integrite/suspensions-conservatoires` |
+| POST | `/v1/integrite/suspensions-conservatoires/:id/decision` |
+| POST | `/v1/integrite/suspensions-conservatoires/:id/levee` |
 | GET | `/v1/integrite/thresholds` |
 | POST | `/v1/integrite/thresholds/change-requests` |
 | POST | `/v1/integrite/thresholds/change-requests/:id/decision` |
+| GET | `/v1/integrite/transmissions` |
+| POST | `/v1/integrite/transmissions/:id/accuse` |
+| GET | `/v1/integrite/transmissions/:id/verification` |
 | POST | `/v1/public/integrite/reports` |
 | POST | `/v1/public/integrite/reports/sms` |
 | POST | `/v1/public/integrite/reports/svi` |
@@ -731,6 +784,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1378 routes** dans 4
 | GET | `/v1/pilotage/gouvernance` |
 | POST | `/v1/pilotage/gouvernance/reunions` |
 | GET | `/v1/pilotage/indicateurs` |
+| GET | `/v1/pilotage/indicateurs-modules/27-40` |
 | GET | `/v1/pilotage/instructions` |
 | POST | `/v1/pilotage/instructions` |
 | POST | `/v1/pilotage/instructions/:id/accuse` |
@@ -951,6 +1005,22 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1378 routes** dans 4
 |---|---|
 | GET | `/v1/campagnes` |
 | POST | `/v1/campagnes` |
+| GET | `/v1/campagnes-recouvrement` |
+| POST | `/v1/campagnes-recouvrement` |
+| GET | `/v1/campagnes-recouvrement/:id` |
+| POST | `/v1/campagnes-recouvrement/:id/arret` |
+| POST | `/v1/campagnes-recouvrement/:id/arret/decision` |
+| POST | `/v1/campagnes-recouvrement/:id/execution` |
+| POST | `/v1/campagnes-recouvrement/:id/generalisation` |
+| POST | `/v1/campagnes-recouvrement/:id/generalisation/decision` |
+| POST | `/v1/campagnes-recouvrement/:id/lancement` |
+| POST | `/v1/campagnes-recouvrement/:id/lancement/decision` |
+| POST | `/v1/campagnes-recouvrement/:id/mesure` |
+| POST | `/v1/campagnes-recouvrement/:id/simulation` |
+| POST | `/v1/campagnes-recouvrement/:id/visites/:visitId` |
+| GET | `/v1/campagnes-recouvrement/indicateurs` |
+| GET | `/v1/campagnes-recouvrement/referentiel` |
+| GET | `/v1/campagnes-recouvrement/visites-a-faire` |
 | GET | `/v1/campagnes/:id` |
 | POST | `/v1/campagnes/:id/arret` |
 | POST | `/v1/campagnes/:id/lancement` |
@@ -1086,8 +1156,11 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1378 routes** dans 4
 | POST | `/v1/terrain/counter-visits/:id/assignment` |
 | POST | `/v1/terrain/counter-visits/:id/result` |
 | GET | `/v1/terrain/findings` |
+| POST | `/v1/terrain/findings/:id/objet-provisoire` |
 | POST | `/v1/terrain/findings/:id/review` |
 | GET | `/v1/terrain/indicators` |
+| GET | `/v1/terrain/inspection/indicateurs` |
+| GET | `/v1/terrain/inspection/modeles` |
 | GET | `/v1/terrain/lots` |
 | POST | `/v1/terrain/lots` |
 | POST | `/v1/terrain/lots/:id/close` |
@@ -1098,11 +1171,21 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1378 routes** dans 4
 | POST | `/v1/terrain/missions/:id/assignment` |
 | POST | `/v1/terrain/missions/:id/cancel` |
 | POST | `/v1/terrain/missions/:id/complete` |
+| POST | `/v1/terrain/missions/:id/dossiers-inspection` |
 | POST | `/v1/terrain/missions/:id/findings` |
+| GET | `/v1/terrain/missions/:id/itineraire` |
+| GET | `/v1/terrain/missions/:id/paquet-hors-ligne` |
 | GET | `/v1/terrain/mystery-checks` |
 | POST | `/v1/terrain/mystery-checks` |
 | POST | `/v1/terrain/mystery-checks/:id/result` |
+| POST | `/v1/terrain/paquets/verification` |
 | GET | `/v1/terrain/points-resultats` |
+| GET | `/v1/terrain/proces-verbaux` |
+| POST | `/v1/terrain/proces-verbaux` |
+| POST | `/v1/terrain/proces-verbaux/:id/contestations` |
+| POST | `/v1/terrain/proces-verbaux/:id/contestations/:cid/reponse` |
+| POST | `/v1/terrain/proces-verbaux/:id/decision` |
+| GET | `/v1/terrain/proces-verbaux/mes-proces-verbaux` |
 | GET | `/v1/terrain/qualite` |
 | GET | `/v1/terrain/quality` |
 | POST | `/v1/terrain/quality/samples` |
@@ -1195,6 +1278,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1378 routes** dans 4
 | GET | `/v1/tresor/provider-receivables` |
 | GET | `/v1/tresor/receipts/:ref` |
 | GET | `/v1/tresor/receipts/:ref/pdf` |
+| POST | `/v1/tresor/releves/depots` |
+| GET | `/v1/tresor/releves/indicateurs` |
 | GET | `/v1/tresor/suspense` |
 | GET | `/v1/tresor/verification-journal` |
 
@@ -1647,8 +1732,10 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1378 routes** dans 4
 | GET | `/v1/ledger/entries` |
 | POST | `/v1/ledger/entries/:id/reversals` |
 | GET | `/v1/reconciliation/exceptions` |
+| GET | `/v1/settlements/imports` |
 | GET | `/v1/settlements/statements` |
 | POST | `/v1/settlements/statements` |
+| POST | `/v1/settlements/statements/:statementId/validation` |
 
 ## Module vault
 
