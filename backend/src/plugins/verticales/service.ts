@@ -11,6 +11,7 @@
 import { createHmac } from 'node:crypto';
 import { isRuleExecutable, Money, type MoneyJSON, type PaymentStatus } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
+import { actorOf } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { DAY_MS, kinshasaDate } from '../../core/clock.js';
 import { validityView, type ValidityView } from '../../core/validity.js';
@@ -173,8 +174,6 @@ const COMMUNE_CODES: Record<string, string> = {
 };
 
 const CONFIRMED: PaymentStatus[] = ['CONFIRME', 'REGLE', 'RAPPROCHE'];
-
-const actorOf = (u: User) => ({ kind: 'user' as const, id: u.id, roles: u.roles });
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Service

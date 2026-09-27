@@ -10,7 +10,7 @@
  *  - suspension, annulation, remplacement : décision d'une personne habilitée, avec motif, tracée ;
  *  - réponse de contrôle minimale : ni nom, ni adresse, ni identifiant de contribuable.
  */
-import { Money, type MoneyJSON } from '@mosolo/shared';
+import { Money, normalizePlate, type MoneyJSON } from '@mosolo/shared';
 import { z } from 'zod';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
@@ -127,10 +127,8 @@ export interface MinimalControlView {
   offline: false;
 }
 
-/** Plaque normalisée : majuscules, sans espaces ni tirets. */
-export function normalizePlate(p: string): string {
-  return p.toUpperCase().replace(/[^0-9A-Z]/g, '');
-}
+/** Plaque normalisée (clé de comparaison partagée : majuscules, sans espaces ni tirets), réexportée pour les appelants. */
+export { normalizePlate };
 
 function kinshasaTime(iso: string): string {
   const d = new Date(new Date(iso).getTime() + KINSHASA_OFFSET_MS);

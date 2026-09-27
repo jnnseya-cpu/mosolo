@@ -12,7 +12,7 @@
  *   Aucune sanction prononcée par l'application ; aucune pénalité sans barème publié.
  */
 import { randomBytes } from 'node:crypto';
-import { type MoneyJSON } from '@mosolo/shared';
+import { normalizePlate, type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
 import { DAY_MS, kinshasaDate } from '../../core/clock.js';
@@ -26,7 +26,8 @@ import { validityView } from '../../core/validity.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
 import { isCommune } from '../../reference/kinshasa.js';
-import { actorOf, activeRule, DGTK, latestRule, paymentState, pct, perUnit, sumByCurrency } from '../parking/support.js';
+import { actorOf, activeRule, DGTK, latestRule, paymentState, perUnit, sumByCurrency } from '../parking/support.js';
+import { pct } from '../../core/percent.js';
 import { estimateCommune, isFixedObject } from '../fiscal/nearby.js';
 
 export const AD_TYPES = ['PANNEAU', 'ENSEIGNE', 'ECRAN_NUMERIQUE', 'BACHE', 'BANDEROLE', 'KAKEMONO', 'CHEVALET', 'AFFICHE_MURALE', 'HABILLAGE_VEHICULE', 'AUTRE'] as const;
@@ -146,7 +147,6 @@ export interface NewDeviceSpec {
   businessObjectId?: string;
 }
 
-export const normalizeAdPlate = (p: string) => p.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 /** Constat d'inspection : AJOUT SEUL (l'inspecteur ne peut ni le modifier ni le supprimer). */
 export interface AdInspection {
@@ -260,7 +260,7 @@ export class PubliciteService {
     if (spec.faces < 1 || spec.faces > 4) throw badRequest('INVALID_FACES', 'Nombre de faces : 1 à 4.');
     const surfaceM2 = this.computeSurface(spec.widthM, spec.heightM);
     const placement: Placement = spec.placement ?? (spec.type === 'HABILLAGE_VEHICULE' ? 'VEHICULE' : spec.type === 'ENSEIGNE' ? 'FACADE_COMMERCE' : spec.type === 'CHEVALET' ? 'DEVANT_COMMERCE' : 'SUPPORT_DEDIE');
-    const plate = spec.vehiclePlate ? normalizeAdPlate(spec.vehiclePlate) : '';
+    const plate = spec.vehiclePlate ? normalizePlate(spec.vehiclePlate) : '';
     if (placement === 'VEHICULE' && plate.length < 4) throw badRequest('VEHICLE_PLATE_REQUIRED', 'Publicité mobile : la plaque du véhicule qui la porte est obligatoire.');
     if (spec.placement && (placement === 'FACADE_COMMERCE' || placement === 'DEVANT_COMMERCE') && !spec.businessName?.trim() && !spec.businessObjectId) {
       throw badRequest('BUSINESS_REQUIRED', 'Enseigne ou publicité de commerce : indiquer le commerce (nom affiché ou établissement enregistré).');
@@ -407,7 +407,7 @@ export class PubliciteService {
     const found = new Map<string, AdDevice>();
     for (const d of this.devices.all()) {
       if (refs.has(d.reference) || d.qrToken === q.trim() || d.reference === text) found.set(d.id, d);
-      if (d.vehiclePlate && normalizeAdPlate(text).includes(d.vehiclePlate)) found.set(d.id, d);
+      if (d.vehiclePlate && normalizePlate(text).includes(d.vehiclePlate)) found.set(d.id, d);
     }
     for (const r of this.requests.all()) if (auths.has(r.reference)) found.set(r.deviceId, this.getDevice(r.deviceId));
     return {

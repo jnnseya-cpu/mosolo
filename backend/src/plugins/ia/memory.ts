@@ -11,9 +11,8 @@ import type { User } from '../../core/auth.js';
 import { conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { evaluate } from '../../core/policy.js';
 import { IdGenerator } from '../../core/repository.js';
-import { kinshasaDay } from '../../core/clock.js';
+import { DAY_MS, kinshasaDay } from '../../core/clock.js';
 
-const DAY = 86_400_000;
 
 export type MemoryLevel = 'UTILISATEUR' | 'ENTITE' | 'PROCESSUS' | 'INTELLIGENCE';
 
@@ -162,7 +161,7 @@ export class MemoryService {
       role: u.roles.join(', '),
       allowedKeys: this.allowedKeys(u),
       retention: base.audience === 'CONTRIBUABLE' ? '24 mois après la dernière utilisation' : '12 mois après la dernière utilisation',
-      expiresAt: new Date(new Date(base.lastUsedAt).getTime() + this.retentionDays(base) * DAY).toISOString(),
+      expiresAt: new Date(new Date(base.lastUsedAt).getTime() + this.retentionDays(base) * DAY_MS).toISOString(),
       notice: base.audience === 'CONTRIBUABLE'
         ? 'Préférences de service uniquement : aucun profilage comportemental.'
         : 'Aide au travail : jamais utilisée pour une évaluation disciplinaire sans procédure.',
@@ -251,7 +250,7 @@ export class MemoryService {
     const now = this.now();
     const item: EntityMemoryItem = {
       id: this.ids.next('MEM-ENT'), entity, kind: input.kind, title: input.title, content: input.content, refs: input.refs ?? [], source: 'SAISIE',
-      createdAt: now, createdBy: u.id, retainUntil: new Date(Date.parse(now) + 3 * 365 * DAY).toISOString(), status: 'ACTIVE',
+      createdAt: now, createdBy: u.id, retainUntil: new Date(Date.parse(now) + 3 * 365 * DAY_MS).toISOString(), status: 'ACTIVE',
     };
     this.entityItems.set(item.id, item);
     if (!opts.silent) this.ctx.audit.append({ actor: this.actor(u), action: 'ia.memory.entity.added', resourceType: 'ia_memory', resourceId: item.id, details: { entity, kind: input.kind } });
@@ -265,7 +264,7 @@ export class MemoryService {
       id: this.ids.next('MEM-ENT'), entity, kind: 'DECISION', title: `${d.agent} — ${d.decision}`,
       content: `Décision ${d.decision} par ${d.decidedByRole} : ${PII.reduce((t, re) => t.replace(new RegExp(re.source, 'gi'), '[masqué]'), d.reasonSummary).slice(0, 300)}`,
       refs: [d.recommendationId], source: 'DECISION_HUMAINE', createdAt: now, createdBy: d.decidedByRole,
-      retainUntil: new Date(Date.parse(now) + 10 * 365 * DAY).toISOString(), status: 'ACTIVE',
+      retainUntil: new Date(Date.parse(now) + 10 * 365 * DAY_MS).toISOString(), status: 'ACTIVE',
     };
     this.entityItems.set(item.id, item);
     return item;
@@ -418,12 +417,12 @@ export class MemoryService {
     const now = this.ctx.clock.now().getTime();
     let users = 0; let entityItems = 0; let signals = 0;
     for (const m of this.users.all()) {
-      if (Date.parse(m.lastUsedAt) + this.retentionDays(m) * DAY < now) { this.users.delete(m.userId); users++; }
+      if (Date.parse(m.lastUsedAt) + this.retentionDays(m) * DAY_MS < now) { this.users.delete(m.userId); users++; }
     }
     for (const i of this.entityItems.all()) {
       if (i.status === 'ACTIVE' && Date.parse(i.retainUntil) < now) { this.entityItems.delete(i.id); entityItems++; }
     }
-    const limit = new Date(now - 36 * 31 * DAY).toISOString().slice(0, 7);
+    const limit = new Date(now - 36 * 31 * DAY_MS).toISOString().slice(0, 7);
     for (const s of this.signals.all()) if (s.period < limit) { this.signals.delete(s.id); signals++; }
     this.ctx.audit.append({ actor: { kind: 'system', id: by }, action: 'ia.memory.purged', resourceType: 'ia_memory', resourceId: 'retention', details: { users, entityItems, signals } });
     return { users, entityItems, signals };

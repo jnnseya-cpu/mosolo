@@ -10,10 +10,8 @@ export const MAX_JPEG_BYTES = 880_000;
 /** Date et heure de Kinshasa, pour l'incrustation. */
 export const kinTime = (t: number) => new Date(t).toLocaleString('fr-FR', { timeZone: 'Africa/Kinshasa', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-export async function sha256Hex(buf: ArrayBuffer): Promise<string> {
-  const d = await crypto.subtle.digest('SHA-256', buf);
-  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
+/** Empreinte SHA-256 hexadécimale : implémentation unique dans `lib/crypto`, réexportée pour les appelants. */
+export { sha256Hex } from './crypto';
 
 export function toBase64(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf); let s = '';

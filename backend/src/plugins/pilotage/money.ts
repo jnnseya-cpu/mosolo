@@ -41,7 +41,10 @@ export function totalsOf(items: MoneyJSON[]): CurrencyTotals {
   return t;
 }
 
-/** Ratio en pourcentage, une décimale, arithmétique entière (demi-supérieur). */
+/**
+ * Ratio en pourcentage, une décimale, arithmétique entière (demi-supérieur). Variante volontairement distincte de
+ * `core/percent.ts` : BigInt, donc exacte pour les grands montants en unités mineures (au-delà de 2^53 / 1000).
+ */
 export function pct(num: number, den: number): string | null {
   if (den <= 0) return null;
   const n = BigInt(num) * 1000n;

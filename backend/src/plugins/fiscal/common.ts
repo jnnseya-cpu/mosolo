@@ -1,6 +1,5 @@
 /** Outils partagés du module fiscal (objets, relations, déclarations, exonérations, quitus). */
 import { kinshasaDate } from '../../core/clock.js';
-import type { User } from '../../core/auth.js';
 import { badRequest } from '../../core/errors.js';
 import { checkChar, hmacSha256Hex, randomCode, safeEqualHex } from '../../core/crypto.js';
 import type { AppContext } from '../../context.js';
@@ -31,7 +30,7 @@ export function makeDeps(ctx: AppContext, geo: GeoRegistry): FiscalDeps {
   };
 }
 
-export const actorOf = (u: User) => ({ kind: 'user' as const, id: u.id, roles: u.roles });
+export { actorOf } from '../../core/audit.js';
 
 /** Code court lisible (base 32 de Crockford) + caractère de contrôle, présenté `ABCD-EFGH-K`. */
 export function newShortCode(): string {

@@ -2,6 +2,7 @@
  * Calcul de validité — fonctions pures, heure du SERVEUR uniquement (AC-TIT-01).
  * Aucune fonction ne reçoit l'heure d'un terminal : l'instant de référence est toujours fourni par l'horloge serveur.
  */
+import { DAY_MS, HOUR_MS } from '../../core/clock.js';
 import { badRequest } from '../../core/errors.js';
 import { readValidity, type ValidityBand } from '@mosolo/shared';
 import {
@@ -9,7 +10,6 @@ import {
 } from './model.js';
 
 const MIN = 60_000;
-const DAY = 86_400_000;
 
 /** Fin de la journée calendaire de Kinshasa contenant `t` (23:59:59.999 heure locale). */
 export function endOfKinshasaDay(t: number): number {
@@ -44,10 +44,10 @@ export function computeWindow(policy: ValidityPolicy, input: WindowInput): { fro
       return { from: s, until: s + d * MIN - 1 };
     }
     case 'JOURNALIER':
-      return { from: s, until: policy.dayMode === 'GLISSANT_24H' ? s + DAY - 1 : endOfKinshasaDay(s) };
+      return { from: s, until: policy.dayMode === 'GLISSANT_24H' ? s + DAY_MS - 1 : endOfKinshasaDay(s) };
     case 'HEBDOMADAIRE_MENSUEL':
     case 'ABONNEMENT':
-      return { from: s, until: s + (policy.periodDays ?? 30) * DAY - 1 };
+      return { from: s, until: s + (policy.periodDays ?? 30) * DAY_MS - 1 };
     case 'ANNUEL_EXERCICE':
       return { from: s, until: endOfKinshasaYear(s) };
     case 'PAR_EVENEMENT': {
@@ -58,11 +58,11 @@ export function computeWindow(policy: ValidityPolicy, input: WindowInput): { fro
       return { from, until };
     }
     case 'USAGE_UNIQUE':
-      return { from: s, until: s + (policy.periodDays ?? 1) * DAY - 1, uses: 1 };
+      return { from: s, until: s + (policy.periodDays ?? 1) * DAY_MS - 1, uses: 1 };
     case 'CARNET_USAGES':
-      return { from: s, until: s + (policy.periodDays ?? 365) * DAY - 1, uses: policy.uses ?? 10 };
+      return { from: s, until: s + (policy.periodDays ?? 365) * DAY_MS - 1, uses: policy.uses ?? 10 };
     case 'GLISSANT_CONDITIONNEL':
-      return { from: s, until: s + (policy.periodDays ?? 90) * DAY - 1 };
+      return { from: s, until: s + (policy.periodDays ?? 90) * DAY_MS - 1 };
   }
 }
 
@@ -83,8 +83,8 @@ export interface StatusView {
 
 export function formatDuration(ms: number): string {
   const abs = Math.abs(ms);
-  const d = Math.floor(abs / DAY);
-  const h = Math.floor((abs % DAY) / 3_600_000);
+  const d = Math.floor(abs / DAY_MS);
+  const h = Math.floor((abs % DAY_MS) / HOUR_MS);
   const m = Math.floor((abs % 3_600_000) / MIN);
   if (d > 0) return `${d} j ${h} h`;
   if (h > 0) return `${h} h ${String(m).padStart(2, '0')} min`;

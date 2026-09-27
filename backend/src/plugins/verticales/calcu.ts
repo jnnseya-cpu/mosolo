@@ -8,6 +8,7 @@
  */
 import { Money, type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
+import { actorOf } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { canonicalJson, sha256Hex } from '../../core/crypto.js';
 import { assertDistinctPerson, authorize } from '../../core/policy.js';
@@ -78,7 +79,6 @@ export interface AnomalyReport {
   closure?: { by: string; at: string; reason: string };
 }
 
-const actorOf = (u: User) => ({ kind: 'user' as const, id: u.id, roles: u.roles });
 const normalizeAccount = (n: string) => n.replace(/[\s-]/g, '').toUpperCase();
 const mask = (n: string) => `•••• ${normalizeAccount(n).slice(-4)}`;
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');

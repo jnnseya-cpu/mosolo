@@ -152,12 +152,8 @@ export function circleRing(lon: number, lat: number, radiusM: number, steps = 64
   return out;
 }
 
-/** Distance en mètres (haversine). */
-export function metersBetween(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
-  const r = (d: number) => (d * Math.PI) / 180;
-  const h = Math.sin(r(b.lat - a.lat) / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lon - a.lon) / 2) ** 2;
-  return 2 * 6_371_008.8 * Math.asin(Math.min(1, Math.sqrt(h)));
-}
+/** Distance en mètres (haversine, non arrondie) : source unique partagée avec le serveur. */
+export { haversineM as metersBetween } from '@mosolo/shared';
 
 /**
  * Présence du terminal jointe à un contrôle (plaque, scan) : `lat`, `lon`, `accuracyM` ajoutés à l'URL, seulement

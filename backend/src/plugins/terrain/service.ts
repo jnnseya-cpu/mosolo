@@ -9,7 +9,7 @@
  */
 import { Money, type RoleCode } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
-import type { AuditActor } from '../../core/audit.js';
+import { actorOf, type AuditActor } from '../../core/audit.js';
 import { isDemoMode, type User } from '../../core/auth.js';
 import { kinshasaDate, kinshasaDay } from '../../core/clock.js';
 import { canonicalJson, checkChar, hmacSha256Hex, randomCode, randomSecret, safeEqualHex, sha256Hex } from '../../core/crypto.js';
@@ -18,7 +18,8 @@ import { assertDistinctPerson, authorize } from '../../core/policy.js';
 import { validityView } from '../../core/validity.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { userRecipient } from '../../modules/identity/recipients.js';
-import { distanceM, pct, type LatLon } from './geo.js';
+import { pct } from '../../core/percent.js';
+import { distanceM, type LatLon } from './geo.js';
 import {
   DEFAULT_GPS_TOLERANCE_M, MIN_SAMPLE_RATE, PROBATION_MAX_AGENTS,
   type AgentBadge, type AgentStatus, type BadgeVerification, type ContractUnitPrices, type CounterVisit, type FieldAgent,
@@ -97,7 +98,7 @@ export class TerrainService {
     return kinshasaDate(this.ctx.clock.now());
   }
   private actor(u: User): AuditActor {
-    return { kind: 'user', id: u.id, roles: u.roles };
+    return actorOf(u);
   }
   private audit(u: User | null, action: string, resourceType: string, resourceId: string, details: Record<string, unknown> = {}): void {
     this.ctx.audit.append({ actor: u ? this.actor(u) : { kind: 'public', id: 'anonyme' }, action, resourceType, resourceId, details });

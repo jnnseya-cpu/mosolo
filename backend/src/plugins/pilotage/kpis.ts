@@ -3,6 +3,7 @@
  * définition, sa formule, sa source, sa valeur calculée sur les données réelles, sa cible et sa tendance.
  * Un indicateur sans mesure possible est déclaré « non mesuré » — jamais une valeur inventée.
  */
+import { DAY_MS } from '../../core/clock.js';
 import { COMMUNES } from '../../reference/kinshasa.js';
 import type { Facts } from './facts.js';
 import {
@@ -10,8 +11,6 @@ import {
 } from './ladder.js';
 import { hoursOf, mean, median, pct } from './money.js';
 
-const HOUR = 3_600_000;
-const DAY = 24 * HOUR;
 
 /** Canaux numériques (paiement dématérialisé de bout en bout). Le guichet bancaire et le point agréé sont « assistés ». */
 export const DIGITAL_CHANNELS = ['MOBILE_MONEY', 'CARD', 'USSD', 'QR', 'TRANSFER'];
@@ -95,8 +94,8 @@ export const KPI_CATALOGUE: KpiDefinition[] = [
     unit: '%', target: { op: '>=', value: '95' }, targetLabel: '≥ 95 %', better: 'HAUSSE', reference: '§ 39 Rapprochement', measurable: true,
     compute: (i) => {
       const now = new Date(i.facts.asOf).getTime();
-      const base = scopedOrders(i).filter((o) => isConfirmed(o) && (isReconciled(o) || now - new Date(o.confirmedAt!).getTime() >= DAY));
-      return ratio(base.filter((o) => isReconciled(o) && ms(o.confirmedAt!, o.reconciledAt!) <= DAY).length, base.length);
+      const base = scopedOrders(i).filter((o) => isConfirmed(o) && (isReconciled(o) || now - new Date(o.confirmedAt!).getTime() >= DAY_MS));
+      return ratio(base.filter((o) => isReconciled(o) && ms(o.confirmedAt!, o.reconciledAt!) <= DAY_MS).length, base.length);
     },
   },
   {
@@ -107,7 +106,7 @@ export const KPI_CATALOGUE: KpiDefinition[] = [
     unit: '%', target: { op: '<', value: '1' }, targetLabel: '< 1 % (annexe H § H.19)', better: 'BAISSE', reference: 'Annexe H § H.19', measurable: true,
     compute: (i) => {
       const now = new Date(i.facts.asOf).getTime();
-      const old = scopedOrders(i).filter((o) => isConfirmed(o) && now - new Date(o.confirmedAt!).getTime() > 2 * DAY);
+      const old = scopedOrders(i).filter((o) => isConfirmed(o) && now - new Date(o.confirmedAt!).getTime() > 2 * DAY_MS);
       return ratio(old.filter((o) => !isReconciled(o)).length, old.length);
     },
   },
@@ -187,7 +186,7 @@ export const KPI_CATALOGUE: KpiDefinition[] = [
     unit: 'nombre', target: { op: '=', value: '0' }, targetLabel: '0 (§ 39)', better: 'BAISSE', reference: '§ 39 Exceptions', measurable: true,
     compute: (i) => {
       const now = new Date(i.facts.asOf).getTime();
-      const n = i.exceptions.filter((e) => now - new Date(e.openedAt).getTime() > 30 * DAY).length;
+      const n = i.exceptions.filter((e) => now - new Date(e.openedAt).getTime() > 30 * DAY_MS).length;
       return { value: String(n), numerator: n };
     },
   },

@@ -12,11 +12,12 @@
  *    sur des recettes CONFIRMÉES au compte public, versés par le Trésor : un agent ne touche jamais l'argent de l'usager.
  */
 import type { MoneyJSON } from '@mosolo/shared';
-import { Money } from '@mosolo/shared';
+import { distanceM, Money } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { Obligation } from '../../modules/assessment/service.js';
 import type { PaymentOrder } from '../../modules/payments/service.js';
 import type { User } from '../../core/auth.js';
+import { DAY_MS } from '../../core/clock.js';
 import { sha256Hex } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { authorize, evaluate } from '../../core/policy.js';
@@ -102,13 +103,8 @@ export function lowAccuracy(source: string | null | undefined, accuracyM: number
   return source !== 'GPS' || (accuracyM ?? Infinity) > GPS_WARN_ACCURACY_M;
 }
 
-/** Distance géodésique (haversine), en mètres. */
-export function distanceM(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
-  const R = 6_371_000; const r = Math.PI / 180;
-  const dLat = (b.lat - a.lat) * r; const dLon = (b.lon - a.lon) * r;
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) ** 2;
-  return Math.round(2 * R * Math.asin(Math.sqrt(h)));
-}
+/** Distance géodésique (haversine), en mètres entiers : source unique partagée, réexportée pour les appelants. */
+export { distanceM };
 
 /** Position déclarée par le terminal de l'agent au moment d'un contrôle. */
 export interface AgentFix { lat: number; lon: number; accuracyM: number }
@@ -192,7 +188,6 @@ const NATURE_LABEL: Record<string, string> = {
   NON_PAIEMENT: 'Stationnement non payé', DEPASSEMENT: 'Dépassement de durée', STATIONNEMENT_INTERDIT: 'Stationnement interdit',
   PLACE_RESERVEE: 'Place réservée occupée', DOUBLE_FILE: 'Double file',
 };
-const DAY_MS = 86_400_000;
 const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
 
 export class ParkingField {

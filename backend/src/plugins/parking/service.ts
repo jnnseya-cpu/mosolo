@@ -18,6 +18,7 @@ import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
 import { HOUR_MS, kinshasaDate } from '../../core/clock.js';
 import { checkChar, randomCode } from '../../core/crypto.js';
+import { pct } from '../../core/percent.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, assertNotRelated, authorize, evaluate, hasAnyGrant } from '../../core/policy.js';
 import { validityView } from '../../core/validity.js';
@@ -27,7 +28,7 @@ import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '.
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
 import { isCommune } from '../../reference/kinshasa.js';
 import {
-  actorOf, activeRule, DGTK, enginePrincipal, latestRule, normalizePlate, paymentState, pct, perUnit, PLATE_RE, sumByCurrency, type PaymentState,
+  actorOf, activeRule, DGTK, enginePrincipal, latestRule, normalizeParkingPlate, paymentState, perUnit, PLATE_RE, sumByCurrency, type PaymentState,
 } from './support.js';
 
 /** Surréservation (10 à 15 % du dossier source) : DÉSACTIVÉE jusqu'à validation juridique (ARB-14, J24). */
@@ -408,7 +409,7 @@ export class ParkingService {
   }
 
   plate(raw: string): string {
-    const p = normalizePlate(raw);
+    const p = normalizeParkingPlate(raw);
     if (!PLATE_RE.test(p)) throw badRequest('INVALID_PLATE', `Plaque invalide : « ${raw} » (lettres, chiffres et tirets, 4 à 14 caractères).`);
     return p;
   }

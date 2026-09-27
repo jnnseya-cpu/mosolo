@@ -11,7 +11,7 @@
  */
 import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify, type KeyObject } from 'node:crypto';
 import { canTransition, Money, type CurrencyCode, type MoneyJSON, type RevenueCategory } from '@mosolo/shared';
-import type { AuditActor } from '../../core/audit.js';
+import { actorOf } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { DAY_MS, HOUR_MS } from '../../core/clock.js';
 import { canonicalJson, sha256Hex } from '../../core/crypto.js';
@@ -286,8 +286,6 @@ export function kinDate(iso: string | Date): string {
   const t = typeof iso === 'string' ? new Date(iso).getTime() : iso.getTime();
   return new Date(t + HOUR_MS).toISOString().slice(0, 10);
 }
-
-const actorOf = (u: User): AuditActor => ({ kind: 'user', id: u.id, roles: u.roles });
 
 function sumByCurrency(items: MoneyJSON[]): MoneyJSON[] {
   const m = new Map<CurrencyCode, Money>();

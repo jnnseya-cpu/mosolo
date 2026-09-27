@@ -5,6 +5,7 @@
  * et une signature HMAC-SHA256 du hash par une clé serveur (en production : HSM).
  * L'empreinte de tête est conservée à part (ancrage), ce qui détecte aussi une troncature.
  */
+import type { User } from './auth.js';
 import type { Clock } from './clock.js';
 import { canonicalJson, hmacSha256Hex, safeEqualHex, sha256Hex } from './crypto.js';
 
@@ -15,6 +16,11 @@ export interface AuditActor {
   kind: ActorKind;
   id: string;
   roles?: string[];
+}
+
+/** Acteur d'audit d'une personne authentifiée (source unique ; les modules l'importent ou le réexportent). */
+export function actorOf(u: User): AuditActor {
+  return { kind: 'user', id: u.id, roles: u.roles };
 }
 
 export interface AuditInput {

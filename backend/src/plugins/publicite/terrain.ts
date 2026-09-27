@@ -11,7 +11,7 @@
  * autorisation, autorisation expirée ou droits impayés. Aucune mesure automatique : la couleur oriente l'inspection ;
  * le constat reste celui de l'inspecteur accrédité (photos, position), vérifié puis décidé par d'autres personnes.
  */
-import type { MapStatusColor } from '@mosolo/shared';
+import { normalizePlate, type MapStatusColor } from '@mosolo/shared';
 import type { User } from '../../core/auth.js';
 import { forbidden, unprocessable } from '../../core/errors.js';
 import { authorize, evaluate } from '../../core/policy.js';
@@ -20,7 +20,7 @@ import { NEARBY_NAMED_ROLES } from '../fiscal/nearby.js';
 import { distanceM } from '../terrain/geo.js';
 import type { VerticalesService } from '../verticales/service.js';
 import { actorOf, DGTK } from '../parking/support.js';
-import { adCommuneAt, normalizeAdPlate, type AdDevice, type PubliciteService } from './service.js';
+import { adCommuneAt, type AdDevice, type PubliciteService } from './service.js';
 
 export const AD_NEARBY_MAX_ACCURACY_M = 100;
 export const AD_NEARBY_MAX_RADIUS_M = 1000;
@@ -106,7 +106,7 @@ export function adNearby(ctx: AppContext, svc: PubliciteService, user: User, q: 
 /** Publicité mobile : contrôle par la plaque du véhicule, où qu'il se trouve dans la ville. */
 export function adVehicleCheck(ctx: AppContext, svc: PubliciteService, user: User, rawPlate: string) {
   authorize(user, 'publicite:nearby', { communes: user.territory ?? [], entity: DGTK });
-  const plate = normalizeAdPlate(rawPlate);
+  const plate = normalizePlate(rawPlate);
   if (plate.length < 4) throw unprocessable('INVALID_PLATE', 'Plaque illisible : au moins 4 caractères.');
   const devices = svc.devices.all().filter((d) => d.placement === 'VEHICULE' && d.vehiclePlate === plate && d.registration !== 'RETIRE');
   ctx.audit.append({ actor: actorOf(user), action: 'publicite.vehicle.checked', resourceType: 'vehicle_plate', resourceId: plate, details: { found: devices.length } });

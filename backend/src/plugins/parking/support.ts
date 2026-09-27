@@ -7,7 +7,6 @@
 import { randomUUID } from 'node:crypto';
 import { Money, type CurrencyCode, type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
-import type { AuditActor } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { signedCallbackHeaders } from '../../modules/payments/callback-signing.js';
 import { dec, decDiv, decToString } from '../../core/decimal.js';
@@ -18,9 +17,7 @@ export const PAID_STATUSES = ['CONFIRME', 'REGLE', 'RAPPROCHE'] as const;
 
 export const sha256Hex64 = /^[0-9a-f]{64}$/;
 
-export function actorOf(u: User): AuditActor {
-  return { kind: 'user', id: u.id, roles: u.roles };
-}
+export { actorOf } from '../../core/audit.js';
 
 /** Principal technique de liquidation (jamais sélectionnable comme utilisateur de démonstration). */
 export function enginePrincipal(id: string, name: string, entity: string): User {
@@ -125,15 +122,13 @@ export function perUnit(items: MoneyJSON[], units: string): MoneyJSON[] {
   return items.map((m) => Money.of(decToString(decDiv(dec(m.amount), dec(units))), m.currency as CurrencyCode).toJSON());
 }
 
-/** Pourcentage « 62.5 » (une décimale) ; null si le dénominateur est nul. */
-export function pct(num: number, den: number): string | null {
-  if (den <= 0) return null;
-  const tenths = Math.round((num * 1000) / den);
-  return `${Math.trunc(tenths / 10)}.${Math.abs(tenths % 10)}`;
-}
 
-/** Plaque d'immatriculation normalisée (majuscules, sans espaces). */
-export function normalizePlate(p: string): string {
+/**
+ * Forme STOCKÉE d'une plaque au stationnement (majuscules, espaces et soulignés remplacés par des tirets, tirets
+ * conservés, validée par PLATE_RE). Distincte de la clé de comparaison partagée `normalizePlate` (lettres et chiffres
+ * seuls) : les plaques de stationnement déjà enregistrées gardent leurs tirets.
+ */
+export function normalizeParkingPlate(p: string): string {
   return p.trim().toUpperCase().replace(/[\s_]+/g, '-');
 }
 export const PLATE_RE = /^[A-Z0-9][A-Z0-9-]{3,13}$/;

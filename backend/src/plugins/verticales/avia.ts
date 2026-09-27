@@ -8,6 +8,7 @@
  */
 import { isRuleExecutable } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
+import { actorOf } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { DAY_MS, kinshasaDate } from '../../core/clock.js';
 import { assertDistinctPerson, authorize, evaluate } from '../../core/policy.js';
@@ -64,8 +65,6 @@ export interface AviaDeclaration {
 /** Délai de la procédure contradictoire (démonstration) [À VÉRIFIER : délai fixé par l'arrêté]. */
 export const CONTRADICTORY_DAYS = 15;
 export const AVIA_RULE_CODE = 'AVIA-TAXE-PASSAGER';
-
-const actorOf = (u: User) => ({ kind: 'user' as const, id: u.id, roles: u.roles });
 
 export class AviaService {
   readonly declarations = new InMemoryRepository<AviaDeclaration>();

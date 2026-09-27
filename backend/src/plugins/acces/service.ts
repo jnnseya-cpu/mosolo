@@ -10,9 +10,9 @@
 import { randomInt } from 'node:crypto';
 import { hasIncompatibility, ROLES, type RoleCode, type VerificationLevel } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
-import type { AuditActor } from '../../core/audit.js';
+import { actorOf, type AuditActor } from '../../core/audit.js';
 import { ACR, hasAcr, isDemoMode, type User } from '../../core/auth.js';
-import { isoDate, kinshasaDate } from '../../core/clock.js';
+import { HOUR_MS, isoDate, kinshasaDate } from '../../core/clock.js';
 import { hmacSha256Hex, randomSecret, sha256Hex } from '../../core/crypto.js';
 import { ApiError, conflict, forbidden, notFound, unauthorized, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, evaluate, registerPersonResolver, registerRelatedTaxpayersResolver, type AnyAction } from '../../core/policy.js';
@@ -29,8 +29,7 @@ import {
   type Representative, type SandboxMessage, type TaxableFact, type ValidationRequest, type ValidatorRequirement, type WorkAccount,
 } from './model.js';
 
-const HOUR = 3_600_000;
-export const INVITATION_TTL_MS = 72 * HOUR;
+export const INVITATION_TTL_MS = 72 * HOUR_MS;
 export const OTP_TTL_MS = 5 * 60_000;
 export const OTP_MAX_ATTEMPTS = 5;
 export const MFA_SESSION_MS = 15 * 60_000;
@@ -122,7 +121,7 @@ export class AccesService {
   }
 
   private actor(user: User): AuditActor {
-    return { kind: 'user', id: user.id, roles: user.roles };
+    return actorOf(user);
   }
 
   private log(actor: AuditActor, action: string, resourceType: string, resourceId: string, details: Record<string, unknown> = {}, outcome?: 'SUCCESS' | 'DENIED') {

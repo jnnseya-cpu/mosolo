@@ -8,6 +8,7 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
+import { sha256Hex } from '../../lib/crypto';
 import { EXC_STATUS, hasRole, Message, QUEUE_LABEL, TYPE_LABEL, useAction, type ExceptionList, type Queue, type TreasuryException } from './shared';
 
 /** Types d'exception qui portent de l'argent (clôture uniquement par une action financière). */
@@ -20,8 +21,7 @@ const HISTORY_LABEL: Record<string, string> = {
 
 /** Empreinte SHA-256 d'une pièce choisie localement (la pièce ne quitte pas le poste dans la démonstration). */
 async function sha256File(f: File): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', await f.arrayBuffer());
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  return sha256Hex(await f.arrayBuffer());
 }
 
 function Detail({ ex, onChanged }: { ex: TreasuryException; onChanged: () => void }) {

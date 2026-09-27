@@ -10,7 +10,7 @@ import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components
 import { StatusBadge } from '../../components/StatusBadge';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
-import { readValidity } from '@mosolo/shared';
+import { normalizePlate, readValidity } from '@mosolo/shared';
 import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { api, describeError, safeGet, safeSet } from '../../lib/api';
 import { hmacSha256Hex, uid } from '../../lib/crypto';
@@ -43,7 +43,6 @@ const COMMUNES_FALLBACK = ['Kalamu', 'Lemba', 'Limete', 'Gombe'];
 function readJson<T>(k: string, d: T): T {
   try { const v = safeGet(k); return v ? (JSON.parse(v) as T) : d; } catch { return d; }
 }
-const norm = (p: string) => p.toUpperCase().replace(/[^0-9A-Z]/g, '');
 
 function decodeStatic(token: string): Record<string, unknown> | null {
   const parts = token.trim().split('.');
@@ -180,7 +179,7 @@ export default function Controle() {
     const decoded = payload.startsWith('MT1.') ? decodeStatic(payload) : null;
     let plate: string | undefined; let token: string | undefined; let found: Pack['plates']['plates'][number] | undefined; let invalid: string | undefined;
     let unverifiable = false;
-    if (mode === 'plate') plate = norm(payload);
+    if (mode === 'plate') plate = normalizePlate(payload);
     else if (decoded?.k === 'AUTOCOLLANT' && typeof decoded.p === 'string') plate = decoded.p;
     else if (decoded && typeof decoded.id === 'string') {
       token = payload;

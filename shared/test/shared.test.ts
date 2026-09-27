@@ -2,8 +2,23 @@ import { describe, it, expect } from 'vitest';
 import {
   Money, CurrencyMismatchError, formatMoney, CURRENCIES, PRIMARY_CURRENCY, EVENTS, EVENT_CATEGORIES,
   channelCoverage, resolveChannels, getEvent, isRuleExecutable, SAMPLE_RULES, t, completeness, LANGUAGE_CODES,
-  canTransition, hasIncompatibility, AmountPrecisionError,
+  canTransition, hasIncompatibility, AmountPrecisionError, distanceM, haversineM, normalizePlate,
 } from '../src/index.js';
+
+describe('Géodésie et plaques (sources uniques)', () => {
+  it('distance haversine : nulle au même point, ~111,2 km par degré de latitude, arrondie au mètre', () => {
+    const p = { lat: -4.32, lon: 15.31 };
+    const q = { lat: -4.321, lon: 15.312 };
+    expect(distanceM(p, p)).toBe(0);
+    expect(distanceM({ lat: 0, lon: 0 }, { lat: 1, lon: 0 })).toBe(111_195);
+    expect(Number.isInteger(distanceM(p, q))).toBe(true);
+    expect(Math.abs(haversineM(p, q) - distanceM(p, q))).toBeLessThanOrEqual(0.5);
+  });
+  it('clé de plaque : majuscules, lettres et chiffres seuls', () => {
+    expect(normalizePlate(' kn-1234 ab ')).toBe('KN1234AB');
+    expect(normalizePlate('KN1234AB')).toBe('KN1234AB');
+  });
+});
 
 describe('Money', () => {
   it('additionne exactement sans virgule flottante', () => {
