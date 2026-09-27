@@ -146,7 +146,9 @@ export interface SuspenseItem {
 
 export type OperationKind =
   | 'ANNULATION_QUITTANCE' | 'REMPLACEMENT_QUITTANCE' | 'CONTREPASSATION' | 'REMBOURSEMENT'
-  | 'CONTRE_ECRITURE' | 'APUREMENT_SUSPENS' | 'PARAMETRE_NOMENCLATURE';
+  | 'CONTRE_ECRITURE' | 'APUREMENT_SUSPENS' | 'PARAMETRE_NOMENCLATURE'
+  /** Instruction de virement d'un des DEUX flux de la clé de répartition du § 37A (jamais automatique). */
+  | 'DECAISSEMENT_REPARTITION';
 
 export const RECEIPT_KINDS: OperationKind[] = ['ANNULATION_QUITTANCE', 'REMPLACEMENT_QUITTANCE'];
 
@@ -163,6 +165,18 @@ export interface OperationInput {
   /** Remboursement / restitution : empreinte de l'instrument de destination, qui doit être l'instrument d'origine. */
   destination?: string;
   nomenclature?: { revenueCategory: RevenueCategory; code: string; label: string; officialAct?: string };
+  /** Décaissement de répartition (§ 37A.4) : répartition arrêtée et flux (deux flux seulement). */
+  repartition?: { distributionId: string; flow: string };
+}
+
+/**
+ * Passerelle vers la clé de répartition du § 37A (module pilotage/repartition), branchée après construction. Le Trésor
+ * ne calcule rien : il demande la cible (refus si la clé n'est pas ACTIVE, si le flux n'est pas l'un des deux flux ou
+ * s'il a déjà été instruit) et, après la seconde validation, fait constater l'instruction de virement.
+ */
+export interface RepartitionGate {
+  target(input: OperationInput): { key: string; label: string; amount: MoneyJSON };
+  executed(op: FinancialOperation, user: User, at: string): Record<string, unknown>;
 }
 
 export interface FinancialOperation {
@@ -302,6 +316,8 @@ export class TresorService {
   readonly cases = new InMemoryRepository<ExceptionCase>();
   readonly suspense = new InMemoryRepository<SuspenseItem>();
   readonly operations = new InMemoryRepository<FinancialOperation>();
+  /** Clé de répartition du § 37A (absente : aucun décaissement de répartition possible). */
+  private repartitionGate: RepartitionGate | undefined;
   readonly nomenclature = new Map<string, NomenclatureEntry>();
   readonly imputations = new InMemoryRepository<Imputation>();
   readonly daily = new InMemoryAppendOnlyRepository<DailyClosure>();
@@ -658,6 +674,11 @@ export class TresorService {
 
   /* ------------------------------------------------ double validation */
 
+  /** Branche la clé de répartition du § 37A (module pilotage/repartition). */
+  attachRepartition(gate: RepartitionGate): void {
+    this.repartitionGate = gate;
+  }
+
   private receiptKinds(kind: OperationKind): boolean {
     return RECEIPT_KINDS.includes(kind);
   }
@@ -743,6 +764,10 @@ export class TresorService {
         const n = input.nomenclature;
         if (!n) throw badRequest('NOMENCLATURE_REQUIRED', 'Entrée de nomenclature requise.');
         return { key: `nomenclature:${n.revenueCategory}`, label: `Imputation ${n.revenueCategory} → ${n.code}${n.officialAct ? '' : ' [DÉMO]'}` };
+      }
+      case 'DECAISSEMENT_REPARTITION': {
+        if (!this.repartitionGate) throw unprocessable('REPARTITION_INDISPONIBLE', 'Clé de répartition du § 37A non chargée : aucun décaissement de répartition.');
+        return this.repartitionGate.target(input);
       }
     }
   }
@@ -957,6 +982,9 @@ export class TresorService {
         const entry = this.setNomenclature({ ...n, demo: !n.officialAct }, user.id);
         return { revenueCategory: n.revenueCategory, code: entry.code, version: entry.version, demo: entry.demo };
       }
+      case 'DECAISSEMENT_REPARTITION':
+        // Aucun fonds ne transite par MOSOLO : l'instruction est constatée, la banque de règlement exécute (§ 37A.4).
+        return this.repartitionGate!.executed(op, user, decision.at);
     }
   }
 

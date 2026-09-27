@@ -27,7 +27,8 @@ export interface SuspenseItem {
 }
 export interface SuspenseList { items: SuspenseItem[]; open: number; totals: MoneyJSON[]; buckets: { bucket: string; count: number; amounts: MoneyJSON[] }[]; slaDays: number; maxDays: number }
 
-export type OperationKind = 'ANNULATION_QUITTANCE' | 'REMPLACEMENT_QUITTANCE' | 'CONTREPASSATION' | 'REMBOURSEMENT' | 'CONTRE_ECRITURE' | 'APUREMENT_SUSPENS' | 'PARAMETRE_NOMENCLATURE';
+export type OperationKind = 'ANNULATION_QUITTANCE' | 'REMPLACEMENT_QUITTANCE' | 'CONTREPASSATION' | 'REMBOURSEMENT' | 'CONTRE_ECRITURE' | 'APUREMENT_SUSPENS' | 'PARAMETRE_NOMENCLATURE'
+  | 'DECAISSEMENT_REPARTITION';
 export interface Operation {
   id: string; kind: OperationKind; status: 'PROPOSEE' | 'EXECUTEE' | 'REJETEE';
   input: { reason: string; publicReason?: string; receipt?: string; paymentReference?: string; ledgerEntryId?: string; suspenseId?: string; mode?: string };
@@ -83,6 +84,7 @@ export const OP_LABEL: Record<OperationKind, string> = {
   CONTRE_ECRITURE: 'Contre-écriture',
   APUREMENT_SUSPENS: 'Apurement de suspens',
   PARAMETRE_NOMENCLATURE: 'Paramètre de nomenclature',
+  DECAISSEMENT_REPARTITION: 'Décaissement de répartition (§ 37A, deux flux)',
 };
 
 export const OP_STATUS: Record<Operation['status'], { label: string; tone: Tone }> = {

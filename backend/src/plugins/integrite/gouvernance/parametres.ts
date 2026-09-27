@@ -30,6 +30,10 @@ import { DEFAULT_GPS_TOLERANCE_M, MIN_SAMPLE_RATE } from '../../terrain/model.js
 import { DYNAMIC_GRACE_SECONDS, DYNAMIC_WINDOW_SECONDS } from '../../titres/tokens.js';
 import { EXCEPTION_SLA_HOURS, PROVIDER_SETTLEMENT_DELAY_DAYS, REFUND_EXTRA_APPROVAL_THRESHOLDS, SUSPENSE_MAX_DAYS, SUSPENSE_SLA_DAYS } from '../../tresor/service.js';
 import { DETECTION_PARAMS } from '../service.js';
+import {
+  REPARTITION_DUREE_ANS, REPARTITION_NOMBRE_FLUX, REPARTITION_PART_AGENTS_PCT, REPARTITION_PART_GOUVERNEMENT_PCT, REPARTITION_PART_NSEYA_PCT,
+  REPARTITION_PART_TUTELLE_PCT,
+} from '../../pilotage/repartition/model.js';
 
 export type ParamValue = number | boolean;
 export type ParamOwner = 'CODE' | 'REGISTRE';
@@ -117,6 +121,16 @@ export const PARAMETRES_CODE: ParamDefinition[] = [
   C('commissions.tolerance_heure_declaree_min', 'Commissions : tolérance de l’heure déclarée hors ligne', 'Commissions', DECLARED_TIME_TOLERANCE_MINUTES, 'min', code('plugins/sanctions/commissions.ts', 'DECLARED_TIME_TOLERANCE_MINUTES')),
   ...Object.entries(ATTRIBUTION_WINDOWS_MINUTES).map(([m, v]) =>
     C(`commissions.delai_attribution.${m.toLowerCase()}`, `Commissions : délai d’attribution d’un paiement — ${m.toLowerCase()}`, 'Commissions', v, 'min', code('plugins/sanctions/commissions.ts', `ATTRIBUTION_WINDOWS_MINUTES.${m}`))),
+  // Répartition des recettes (§ 37A, position du promoteur) : clé NON ACTIVE, acte juridique requis (§ 37A.8)
+  ...([
+    ['repartition.part_groupe_nseya_pct', 'Répartition § 37A : part de Groupe Nseya (Flux 1)', REPARTITION_PART_NSEYA_PCT, 'REPARTITION_PART_NSEYA_PCT'],
+    ['repartition.part_tutelle_pct', 'Répartition § 37A : part du ministère de tutelle du module (Flux 2)', REPARTITION_PART_TUTELLE_PCT, 'REPARTITION_PART_TUTELLE_PCT'],
+    ['repartition.part_agents_pct', 'Répartition § 37A : réserve des agents et sous-traitants, par module (Flux 2) — les commissions des agents y sont imputées', REPARTITION_PART_AGENTS_PCT, 'REPARTITION_PART_AGENTS_PCT'],
+    ['repartition.part_gouvernement_pct', 'Répartition § 37A : solde du Gouvernement provincial (Flux 2, reçoit les arrondis)', REPARTITION_PART_GOUVERNEMENT_PCT, 'REPARTITION_PART_GOUVERNEMENT_PCT'],
+  ] as const).map(([id, label, v, constant]) => C(id, label, 'Répartition des recettes (§ 37A)', v, '%', code('plugins/pilotage/repartition/model.ts', constant),
+    'Position du promoteur (Cahier v2.9) : clé au statut ACTE_REQUIS, simulation seulement ; la table de taux de la règle CLE-REPARTITION-37A certifiée par acte prévaut.')),
+  C('repartition.duree_ans', 'Répartition § 37A : durée du modèle à compter de la mise en service du pilote', 'Répartition des recettes (§ 37A)', REPARTITION_DUREE_ANS, 'ans', code('plugins/pilotage/repartition/model.ts', 'REPARTITION_DUREE_ANS')),
+  C('repartition.nombre_flux', 'Répartition § 37A : flux de décaissement admis (tout troisième flux est rejeté)', 'Répartition des recettes (§ 37A)', REPARTITION_NOMBRE_FLUX, 'flux', code('plugins/pilotage/repartition/model.ts', 'REPARTITION_NOMBRE_FLUX')),
   // Trésor et quatre yeux
   C('tresor.remboursement_seuil_usd', 'Remboursement : seuil d’une troisième personne (USD)', 'Trésor et quatre yeux', Number(REFUND_EXTRA_APPROVAL_THRESHOLDS.USD?.amount ?? 0), 'USD', code('plugins/tresor/service.ts', 'REFUND_EXTRA_APPROVAL_THRESHOLDS.USD')),
   C('tresor.remboursement_seuil_cdf', 'Remboursement : seuil d’une troisième personne (CDF)', 'Trésor et quatre yeux', Number(REFUND_EXTRA_APPROVAL_THRESHOLDS.CDF?.amount ?? 0), 'CDF', code('plugins/tresor/service.ts', 'REFUND_EXTRA_APPROVAL_THRESHOLDS.CDF')),

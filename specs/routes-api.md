@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **638 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -10,7 +10,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | extension ia | 28 |
 | extension integrite | 58 |
 | extension parking | 36 |
-| extension pilotage | 17 |
+| extension pilotage | 24 |
 | extension preuves | 14 |
 | extension publicite | 34 |
 | extension rakapay | 23 |
@@ -357,6 +357,13 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | GET | `/v1/pilotage/piste-audit/:ref` |
 | GET | `/v1/pilotage/reductions` |
 | POST | `/v1/pilotage/reductions/detection` |
+| GET | `/v1/pilotage/repartition` |
+| GET | `/v1/pilotage/repartition/cle` |
+| POST | `/v1/pilotage/repartition/cles/:id/acte` |
+| POST | `/v1/pilotage/repartition/cles/:id/activation` |
+| POST | `/v1/pilotage/repartition/cles/:id/activation/decision` |
+| GET | `/v1/pilotage/repartition/distributions` |
+| POST | `/v1/pilotage/repartition/propositions` |
 | GET | `/v1/pilotage/serie` |
 | GET | `/v1/pilotage/tableaux` |
 | GET | `/v1/pilotage/tableaux/:profil` |

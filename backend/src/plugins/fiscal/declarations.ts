@@ -124,7 +124,9 @@ export class DeclarationService {
       const exec = versions.find((r) => isRuleExecutable(r, now).ok);
       if (exec) return exec;
     }
-    const fallback = byCode.find((v) => v.length)?.[0];
+    // Simulation non opposable : une position du promoteur (A_VERIFIER, Cahier) ne remplace pas la version antérieure.
+    const firstVersions = byCode.find((v) => v.length);
+    const fallback = firstVersions?.find((r) => !r.promoterPosition) ?? firstVersions?.[0];
     if (!fallback) throw unprocessable('NO_RULE_FOR_DECLARATION', `Aucune fiche de règle au registre pour la déclaration ${kind} : acte requis.`);
     return fallback;
   }

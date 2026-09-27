@@ -113,6 +113,7 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   // Pilotage : tableaux par profil, indicateurs, piste d'audit, transparence
   { path: '/pilotage/tableaux', element: lazy(() => import('./pilotage/Tableaux')), nav: { label: 'Tableaux par profil', short: 'Tableaux', icon: 'grid', group: 'pilotage', roles: DASH } },
   { path: '/pilotage/indicateurs', element: lazy(() => import('./pilotage/Indicateurs')), nav: { label: 'Indicateurs', short: 'KPI', icon: 'gauge', group: 'pilotage', roles: DASH } },
+  { path: '/pilotage/repartition', element: lazy(() => import('./pilotage/Repartition')), nav: { label: 'Répartition des recettes (§ 37A)', short: 'Répartition', icon: 'scale', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R05', 'R15', 'R16', 'R17', 'R18', 'R22', 'R23', 'R24'] } },
   { path: '/pilotage/reductions', element: lazy(() => import('./pilotage/Reductions')), nav: { label: 'Réductions de recettes', short: 'Réductions', icon: 'analysis', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R22', 'R23', 'R24'] } },
   { path: '/pilotage/piste-audit', element: lazy(() => import('./pilotage/PisteAudit')), nav: { label: 'Piste d’audit par dossier', short: 'Piste', icon: 'history', group: 'operations', roles: ['R22', 'R23', 'R24'] } },
   { path: '/transparence', element: lazy(() => import('./pilotage/Transparence')), nav: { label: 'Transparence publique', short: 'Transparence', icon: 'globe', group: 'public', roles: [] } },
