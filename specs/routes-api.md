@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **618 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **624 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -8,7 +8,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **618 routes** dans 35
 | extension canaux | 41 |
 | extension fiscal | 44 |
 | extension ia | 28 |
-| extension integrite | 52 |
+| extension integrite | 58 |
 | extension parking | 36 |
 | extension pilotage | 17 |
 | extension preuves | 14 |
@@ -256,6 +256,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **618 routes** dans 35
 | POST | `/v1/integrite/cases/:id/evidence` |
 | POST | `/v1/integrite/cases/:id/links` |
 | POST | `/v1/integrite/cases/:id/notes` |
+| GET | `/v1/integrite/collusion` |
+| POST | `/v1/integrite/collusion/run` |
 | POST | `/v1/integrite/detection/run` |
 | GET | `/v1/integrite/incidents` |
 | POST | `/v1/integrite/incidents` |
@@ -265,6 +267,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **618 routes** dans 35
 | POST | `/v1/integrite/incidents/:id/status` |
 | GET | `/v1/integrite/incidents/candidates` |
 | GET | `/v1/integrite/indicators` |
+| GET | `/v1/integrite/key-health` |
 | GET | `/v1/integrite/mystery-checks` |
 | POST | `/v1/integrite/mystery-checks` |
 | POST | `/v1/integrite/mystery-checks/:id/follow-up` |
@@ -286,6 +289,9 @@ Généré depuis le code source (`tools/gen_routes.py`) : **618 routes** dans 35
 | POST | `/v1/integrite/reports/:id/messages` |
 | POST | `/v1/integrite/reports/:id/qualify` |
 | POST | `/v1/integrite/reports/intake` |
+| GET | `/v1/integrite/thresholds` |
+| POST | `/v1/integrite/thresholds/change-requests` |
+| POST | `/v1/integrite/thresholds/change-requests/:id/decision` |
 | POST | `/v1/public/integrite/reports` |
 | POST | `/v1/public/integrite/reports/sms` |
 | POST | `/v1/public/integrite/reports/svi` |
