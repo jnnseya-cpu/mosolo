@@ -995,3 +995,21 @@ par des propriétés facultatives) :
 | Galerie | `/visualisation/galerie` (rôles internes) | Données réelles, sinon `[EXEMPLE]` |
 
 Tests : `aggregate`, `viz` (frontend). Captures : `docs/captures/visualisation/`.
+
+## I.25 bis — Visuels du périmètre « fiscal » (27/09/2026)
+
+Suite de I.25 : chaque écran des modules fiscal, parcours du citoyen (1 à 12), référentiel, juridique et opportunités
+reçoit en tête un résumé visuel de la trousse partagée, tiré des données qu'il charge déjà (aucune route ni aucun droit
+élargi, aucun chiffre inventé) ; rien n'est retiré.
+
+| Ajout | Emplacement | Règle |
+|---|---|---|
+| Visuels fiscaux (biens, déclarations, exonérations, quitus, baux, corrections, carte, autour de moi, anomalies, assiette 2026, conditions, recensement, couverture locative, reprise) | `frontend/src/modules/fiscal/visuels.tsx` | Couleur de situation = état réservé avec icône et libellé ; maille masquée = non mesurée |
+| Tuiles d'indicateurs des modules 1 à 12 et ventilations en barres ; visuels des écrans citoyens | `frontend/src/modules/citoyen/visuels.tsx` (`BlocIndicateurs` enrichi, liste conservée) | Valeur absente = « non mesuré » + raison |
+| Référentiel des recettes et modèle de données | `frontend/src/modules/referentiel/visuels.tsx` | Aucun taux ni pourcentage |
+| Points juridiques et gouvernance des données | `frontend/src/modules/juridique/visuels.tsx` | Progression « suivi (sans cible) » |
+| Opportunités, recoupement, maximisation | `frontend/src/modules/opportunites/visuels.tsx` | Aucun potentiel inventé ; tableaux par nature jamais additionnés |
+| Conversion du portail public sur la même période que les visites | `backend/src/plugins/citoyen/portail.ts` | Corrige un taux > 100 % |
+
+Détail écran par écran : [couverture-visuelle-fiscal.md](couverture-visuelle-fiscal.md). Tests :
+`frontend/test/visuels-fiscal.test.tsx`, `backend/test/citoyen.test.ts`. Captures : `docs/captures/visualisation/fiscal/`.
