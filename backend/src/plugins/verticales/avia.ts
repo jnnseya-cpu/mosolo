@@ -5,6 +5,22 @@
  * facturation SEULEMENT sur demande humaine et sur règle ACTIVE. Jamais de facturation automatique, jamais de sanction
  * (« billet sans IFA non validable », suspension, retrait d'agrément : non paramétrables avant arrêté — ARB-12).
  * Répartition 65/35 de la source : non retenue (ARB-07). Aucune interférence avec Go-Pass.
+ *
+ * Harmonisation avec le Cahier v2.9, chapitre 11C (27/09/2026) — ajouts PAR-DESSUS ce circuit, rien n'est retiré :
+ *  - Pôle de rapprochement des recettes (Revenue Reconciliation Hub, RRH, `avia-rrh.ts`) : trois flux (billetterie
+ *    IATA BSP/GDS/TTBS par connecteur, API des compagnies structurées dont DCS, portail des agences certifiées ;
+ *    embarquements RVA ; sorties DGM), plus les reversements BSP et les relevés des banques collectrices, et le fret.
+ *    Le rapprochement mensuel ALIMENTE ce circuit : il n'ouvre la procédure contradictoire que par le `reconcile`
+ *    ci-dessous (ou un constat sur un mois non déclaré), à l'initiative d'un analyste. Facturation ou compensation
+ *    des écarts : PROPOSÉES, décidées par une personne distincte (`requestBilling` sur règle ACTIVE, `decideCompensation`).
+ *  - Identifiant fiscal aérien (IFA) : un par vol et par passager, signé Ed25519 comme les titres (QR hors ligne).
+ *  - « Billet sans IFA non validable », pénalités, suspension, retrait d'agrément (ARB-12 maintenu) : mesures
+ *    paramétrées (`avia-cadre.ts`) ouvertes SEULEMENT après enregistrement de l'arrêté provincial (référence + double
+ *    validation) et liste de coordination complète (RVA, DGM, aviation civile, compagnies) ; chaque mesure est décidée
+ *    au cas par cas par l'autorité compétente : le système constate et calcule, il ne sanctionne pas.
+ *  - Clé 65 % Ville / 35 % Groupe Nseya (§ 11C.6) : conservée comme clé ALTERNATIVE, statut ACTE_REQUIS, simulation
+ *    seulement, à côté de la clé du § 37A (ARB-07 inchangé : elle exige une décision et un acte distincts).
+ *  - Chiffres du § 11C.1 et scénario prudent du § 11C.5 : affichés comme données source [À VÉRIFIER], jamais calculés.
  */
 import { isRuleExecutable } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
@@ -17,10 +33,11 @@ import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import { taxpayerRecipient } from '../../modules/identity/recipients.js';
 import { P } from './policies.js';
 
-export type AviaStatus = 'DECLAREE' | 'RAPPROCHEE' | 'ECART_CONSTATE' | 'OBSERVATIONS_RECUES' | 'VALIDEE' | 'FACTUREE';
+export type AviaStatus = 'DECLAREE' | 'RAPPROCHEE' | 'ECART_CONSTATE' | 'OBSERVATIONS_RECUES' | 'VALIDEE' | 'FACTUREE' | 'COMPENSEE';
 export const AVIA_STATUS_LABEL: Record<AviaStatus, string> = {
   DECLAREE: 'Déclarée', RAPPROCHEE: 'Rapprochée sans écart', ECART_CONSTATE: 'Écart constaté — procédure contradictoire ouverte',
   OBSERVATIONS_RECUES: 'Observations de la compagnie reçues', VALIDEE: 'Validée — facturation possible sur décision', FACTUREE: 'Avis émis sur règle active',
+  COMPENSEE: 'Compensation décidée par une personne habilitée — exécution sur acte',
 };
 
 export interface AviaFigures { flights: number; passengersDeparting: number; freightKg: number }
@@ -39,8 +56,28 @@ export interface AviaOperatorData {
   submittedAt: string;
 }
 
+/** Chiffres du pôle de rapprochement (RRH) repris dans un rapprochement (voir avia-rrh.ts). */
+export interface AviaRrhFigures {
+  reconciliationId: string;
+  flights: number;
+  sold: number;
+  boarded: number;
+  boardedWithoutIfa: number;
+  exited: number;
+  /** Taxe urbaine portée par les billets des passagers embarqués (donnée billetterie), en USD. */
+  taxOnBoarded: string;
+  remitted: string;
+  remittanceGap: string;
+  freightDeclaredKg: number;
+  freightManifestKg: number;
+  hasGap: boolean;
+  gapLabels: string[];
+}
+
 export interface AviaDeclaration {
   id: string;
+  /** Origine : déclaration de la compagnie (défaut) ou constat du RRH sur un mois non déclaré (chiffres déclarés à zéro). */
+  origin?: 'COMPAGNIE' | 'CONSTAT_RRH';
   taxpayerId: string;
   period: string;
   aircraftObjectIds: string[];
@@ -56,10 +93,14 @@ export interface AviaDeclaration {
     gaps: { flights: number; passengers: number; passengersExited: number | null; freightKg: number };
     /** Écart relatif de passagers, en pour cent (chaîne décimale). */
     passengerGapRate: string;
+    /** Flux du pôle de rapprochement (billetterie, embarquements, sorties, reversements, fret), s'il a été exécuté. */
+    rrh?: AviaRrhFigures;
   };
   contradictory?: { openedAt: string; deadline: string; observations: { at: string; by: string; text: string; documents: string[] }[] };
   validation?: { by: string; at: string; reason: string };
   billing: { at: string; by: string; outcome: 'REFUSEE' | 'EMISE'; reason: string; obligationId?: string }[];
+  /** Décisions humaines de compensation ou de classement d'un écart (jamais automatiques). */
+  gapDecisions?: { at: string; by: string; outcome: 'COMPENSATION' | 'CLASSEMENT'; reason: string; proposalRef?: string }[];
 }
 
 /** Délai de la procédure contradictoire (démonstration) [À VÉRIFIER : délai fixé par l'arrêté]. */
@@ -70,6 +111,8 @@ export class AviaService {
   readonly declarations = new InMemoryRepository<AviaDeclaration>();
   readonly operatorData = new InMemoryRepository<AviaOperatorData>();
   private readonly ids = new IdGenerator();
+  /** Branchement du pôle de rapprochement (RRH) : chiffres du dernier rapprochement mensuel d'une compagnie. */
+  rrhLookup?: (airlineTaxpayerId: string, period: string) => AviaRrhFigures | undefined;
 
   constructor(private readonly ctx: AppContext) {}
 
@@ -125,12 +168,16 @@ export class AviaService {
     if (d.status !== 'DECLAREE') throw conflict('INVALID_AVIA_STATE', `Rapprochement impossible au statut ${AVIA_STATUS_LABEL[d.status]}.`);
     const data = this.operatorData.find((o) => o.period === d.period && o.airlineTaxpayerId === d.taxpayerId);
     const boarding = data.find((o) => o.source === 'RVA' || o.source === 'EXPLOITANT');
-    if (!boarding) throw unprocessable('OPERATOR_DATA_MISSING', 'Données d’embarquement de l’exploitant absentes : rapprochement impossible.');
+    const rrh = this.rrhLookup?.(d.taxpayerId, d.period);
+    if (!boarding && !rrh) throw unprocessable('OPERATOR_DATA_MISSING', 'Données d’embarquement de l’exploitant absentes : rapprochement impossible.');
     const exits = data.find((o) => o.source === 'DGM');
-    const observed = {
-      flights: boarding.flights, passengersBoarded: boarding.passengersBoarded,
-      passengersExited: exits?.passengersExited ?? boarding.passengersExited ?? null, freightKg: boarding.freightKg,
-    };
+    // Priorité aux agrégats transmis par l'exploitant (circuit d'origine) ; à défaut, flux passager par passager du RRH.
+    const observed = boarding
+      ? {
+          flights: boarding.flights, passengersBoarded: boarding.passengersBoarded,
+          passengersExited: exits?.passengersExited ?? boarding.passengersExited ?? (rrh ? rrh.exited : null), freightKg: boarding.freightKg,
+        }
+      : { flights: rrh!.flights, passengersBoarded: rrh!.boarded, passengersExited: exits?.passengersExited ?? rrh!.exited, freightKg: rrh!.freightManifestKg };
     const gaps = {
       flights: observed.flights - d.declared.flights,
       passengers: observed.passengersBoarded - d.declared.passengersDeparting,
@@ -142,15 +189,15 @@ export class AviaService {
     const permille = Math.round((Math.abs(gaps.passengers) * 1000) / base);
     const passengerGapRate = `${Math.floor(permille / 10)}.${permille % 10}`;
     const now = this.ctx.clock.now();
-    const hasGap = gaps.flights !== 0 || gaps.passengers !== 0 || gaps.freightKg !== 0 || (gaps.passengersExited !== null && gaps.passengersExited !== 0);
+    const hasGap = gaps.flights !== 0 || gaps.passengers !== 0 || gaps.freightKg !== 0 || (gaps.passengersExited !== null && gaps.passengersExited !== 0) || !!rrh?.hasGap;
     const next: AviaDeclaration = {
       ...d,
       status: hasGap ? 'ECART_CONSTATE' : 'RAPPROCHEE',
-      reconciliation: { at: now.toISOString(), by: user.id, operatorDataIds: data.map((x) => x.id), observed, gaps, passengerGapRate },
+      reconciliation: { at: now.toISOString(), by: user.id, operatorDataIds: data.map((x) => x.id), observed, gaps, passengerGapRate, ...(rrh ? { rrh } : {}) },
       ...(hasGap ? { contradictory: { openedAt: now.toISOString(), deadline: kinshasaDate(new Date(now.getTime() + CONTRADICTORY_DAYS * DAY_MS)), observations: [] } } : {}),
     };
     const saved = this.declarations.update(next);
-    this.ctx.audit.append({ actor: actorOf(user), action: 'avia.declaration.reconciled', resourceType: 'avia_declaration', resourceId: id, details: { gaps, passengerGapRate, contradictory: hasGap } });
+    this.ctx.audit.append({ actor: actorOf(user), action: 'avia.declaration.reconciled', resourceType: 'avia_declaration', resourceId: id, details: { gaps, passengerGapRate, contradictory: hasGap, ...(rrh ? { rrhReconciliationId: rrh.reconciliationId } : {}) } });
     if (hasGap) {
       this.ctx.comms.publish('appeal.info_requested', [taxpayerRecipient(this.ctx.taxpayers.get(d.taxpayerId))], { reference: id }, { entity: 'DGTK' });
     }
@@ -210,6 +257,55 @@ export class AviaService {
     return this.view(saved);
   }
 
+  /**
+   * Constat du RRH sur un mois NON déclaré par la compagnie : la Ville ne dépend plus des déclarations (§ 11C) mais
+   * ne déclare pas à la place de la compagnie — le dossier porte des chiffres déclarés à zéro, marqué « constat RRH »,
+   * puis suit le MÊME rapprochement et la MÊME procédure contradictoire (la compagnie répond par ses observations).
+   */
+  openRrhFinding(user: User, airlineTaxpayerId: string, period: string) {
+    authorize(user, P.aviaReconcile, { taxpayerId: airlineTaxpayerId, entity: 'DGTK' });
+    this.ctx.taxpayers.get(airlineTaxpayerId);
+    if (this.declarations.findOne((d) => d.taxpayerId === airlineTaxpayerId && d.period === period)) {
+      throw conflict('AVIA_PERIOD_ALREADY_DECLARED', `Le mois ${period} a déjà un dossier pour cette compagnie.`);
+    }
+    if (!this.rrhLookup?.(airlineTaxpayerId, period)) throw unprocessable('RRH_NOT_RUN', 'Aucun rapprochement mensuel du RRH pour cette compagnie et ce mois.');
+    const d = this.declarations.insert({
+      id: this.ids.next(`AVIA-DEC-${period}`), origin: 'CONSTAT_RRH', taxpayerId: airlineTaxpayerId, period, aircraftObjectIds: [],
+      declared: { flights: 0, passengersDeparting: 0, freightKg: 0 },
+      declaredBy: user.id, declaredAt: this.ctx.clock.now().toISOString(), status: 'DECLAREE', billing: [],
+    });
+    this.ctx.audit.append({ actor: actorOf(user), action: 'avia.declaration.rrh_finding', resourceType: 'avia_declaration', resourceId: d.id, details: { period, airline: airlineTaxpayerId } });
+    return this.reconcile(user, d.id);
+  }
+
+  /**
+   * Nouvel écart révélé par le RRH sur un mois déjà « rapproché sans écart » : l'analyste rouvre le MÊME circuit
+   * (retour au statut « déclarée » puis rapprochement), tracé. Aucune réouverture après validation ou décision.
+   */
+  reopenForRrh(user: User, id: string) {
+    const d = this.get(id);
+    authorize(user, P.aviaReconcile, this.resource(d));
+    if (d.status !== 'RAPPROCHEE') throw conflict('INVALID_AVIA_STATE', `Réouverture impossible au statut ${AVIA_STATUS_LABEL[d.status]}.`);
+    this.declarations.update({ ...d, status: 'DECLAREE' });
+    this.ctx.audit.append({ actor: actorOf(user), action: 'avia.declaration.reopened_rrh', resourceType: 'avia_declaration', resourceId: id, details: { previous: d.reconciliation?.at ?? null } });
+    return this.reconcile(user, id);
+  }
+
+  /**
+   * Compensation (ou classement) d'un écart validé : PROPOSÉE par le RRH, DÉCIDÉE par une personne habilitée distincte
+   * de l'analyste, motivée. Aucun mouvement de fonds : l'exécution comptable suit l'acte et une règle ACTIVE.
+   */
+  decideCompensation(user: User, id: string, input: { outcome: 'COMPENSATION' | 'CLASSEMENT'; reason: string; proposalRef?: string }) {
+    const d = this.get(id);
+    authorize(user, P.aviaValidate, this.resource(d));
+    if (d.status !== 'VALIDEE') throw conflict('AVIA_NOT_VALIDATED', 'Aucune décision sur l’écart avant validation de la déclaration.');
+    assertDistinctPerson(user.id, [d.reconciliation?.by ?? ''], 'La décision doit être prise par une personne distincte de l’analyste qui a rapproché.');
+    const entry = { at: this.ctx.clock.now().toISOString(), by: user.id, outcome: input.outcome, reason: input.reason, ...(input.proposalRef ? { proposalRef: input.proposalRef } : {}) };
+    const saved = this.declarations.update({ ...d, status: input.outcome === 'COMPENSATION' ? 'COMPENSEE' : d.status, gapDecisions: [...(d.gapDecisions ?? []), entry] });
+    this.ctx.audit.append({ actor: actorOf(user), action: 'avia.gap.decided', resourceType: 'avia_declaration', resourceId: id, details: { outcome: input.outcome, reason: input.reason } });
+    return this.view(saved);
+  }
+
   view(d: AviaDeclaration) {
     return { ...d, statusLabel: AVIA_STATUS_LABEL[d.status] };
   }
@@ -238,7 +334,7 @@ export class AviaService {
         const ds = this.declarations.find((d) => d.period === p);
         const declared = ds.reduce((n, d) => n + d.declared.passengersDeparting, 0);
         const boarded = ds.reduce((n, d) => n + (d.reconciliation?.observed.passengersBoarded ?? 0), 0);
-        return { period: p, declarations: ds.length, passengersDeclared: declared, passengersBoarded: boarded, withGap: ds.filter((d) => d.contradictory).length, validated: ds.filter((d) => d.status === 'VALIDEE' || d.status === 'FACTUREE').length };
+        return { period: p, declarations: ds.length, passengersDeclared: declared, passengersBoarded: boarded, withGap: ds.filter((d) => d.contradictory).length, validated: ds.filter((d) => d.status === 'VALIDEE' || d.status === 'FACTUREE' || d.status === 'COMPENSEE').length };
       }),
     };
   }

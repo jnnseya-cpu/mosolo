@@ -37,6 +37,14 @@ export const P = {
   aviaReconcile: 'verticales:avia.reconcile',
   aviaValidate: 'verticales:avia.validate',
   aviaBill: 'verticales:avia.bill',
+  aviaAgencyPortal: 'verticales:avia.agency-portal',
+  aviaAgencyCertify: 'verticales:avia.agency-certify',
+  aviaRemittance: 'verticales:avia.remittance',
+  aviaIfaControl: 'verticales:avia.ifa-control',
+  aviaActRecord: 'verticales:avia.act-record',
+  aviaActValidate: 'verticales:avia.act-validate',
+  aviaMeasurePropose: 'verticales:avia.measure-propose',
+  aviaMeasureDecide: 'verticales:avia.measure-decide',
   calcuDeclare: 'verticales:calcu.declare',
   calcuValidateFinances: 'verticales:calcu.validate-finances',
   calcuValidateControl: 'verticales:calcu.validate-control',
@@ -75,6 +83,16 @@ export function registerVerticalPolicies(): void {
   definePolicy(P.aviaReconcile, { R11: sameEntity });
   definePolicy(P.aviaValidate, { R07: sameEntity, R06: sameEntity });
   definePolicy(P.aviaBill, { R07: sameEntity, R06: sameEntity });
+  // Pôle de rapprochement (§ 11C) : agences certifiées (portail), certification à quatre yeux, reversements (BSP : partenaire
+  // de données ; banque collectrice), contrôle terrain de l'IFA, arrêté à double validation, mesures décidées par l'autorité.
+  definePolicy(P.aviaAgencyPortal, { R30: ownTaxpayer, R31: mandant });
+  definePolicy(P.aviaAgencyCertify, { R07: sameEntity, R06: sameEntity });
+  definePolicy(P.aviaRemittance, { R34: always, R33: always });
+  definePolicy(P.aviaIfaControl, { R10: always, R11: always, R24: always, R34: always });
+  definePolicy(P.aviaActRecord, { R11: sameEntity, R07: sameEntity });
+  definePolicy(P.aviaActValidate, { R07: sameEntity, R06: sameEntity, R05: always });
+  definePolicy(P.aviaMeasurePropose, { R11: sameEntity, R07: sameEntity });
+  definePolicy(P.aviaMeasureDecide, { R06: sameEntity, R05: always, R01: always });
 
   // CALCU : l'entité déclare ; les Finances et l'organe de contrôle valident conjointement ; la banque transmet.
   definePolicy(P.calcuDeclare, { R08: always, R17: always });

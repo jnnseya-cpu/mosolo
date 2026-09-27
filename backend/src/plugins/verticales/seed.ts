@@ -14,6 +14,9 @@ import { VX_DEMO_RULES, type VerticalesService } from './service.js';
 export const VX_DEMO = {
   taxpayerId: 'TP-DEMO-0001',
   airlineTaxpayerId: 'TP-VX-AVIA-01',
+  /** Seconde compagnie fictive raccordée au pôle de rapprochement (RRH) par le bac à sable [EXEMPLE]. */
+  airlineBTaxpayerId: 'TP-VX-AVIA-02',
+  agencyTaxpayerId: 'TP-VX-AGV-01',
   telecomTaxpayerId: 'TP-VX-TEL-01',
   stallId: 'MCH-GMB-C-1044',
   users: {
@@ -22,6 +25,8 @@ export const VX_DEMO = {
     fieldAgent: 'vx-agent-terrain-dgtk',
     airline: 'vx-compagnie-aerienne',
     airport: 'vx-exploitant-aeroport',
+    airlineB: 'vx-compagnie-aerienne-b',
+    agency: 'vx-agence-voyages',
     telecom: 'vx-operateur-telecom',
     bank: 'vx-banque-calcu',
     publicEntity: 'vx-entite-pilote-calcu',
@@ -34,6 +39,8 @@ const DEMO_USERS: Omit<User, 'kind'>[] = [
   { id: VX_DEMO.users.fieldAgent, name: 'Agent de terrain DGTK (démo)', roles: ['R10'], entity: 'DGTK', territory: ['Gombe', 'Ngaliema', 'Lingwala', 'Kalamu', 'Nsele'] },
   { id: VX_DEMO.users.airline, name: 'Compagnie aérienne fictive (démo)', roles: ['R30'], entity: 'PUBLIC', taxpayerId: VX_DEMO.airlineTaxpayerId },
   { id: VX_DEMO.users.airport, name: 'Exploitant d’aérodrome — données d’embarquement (démo)', roles: ['R34'], entity: 'EXPLOITANT-AERO' },
+  { id: VX_DEMO.users.airlineB, name: 'Compagnie aérienne fictive B (démo)', roles: ['R30'], entity: 'PUBLIC', taxpayerId: VX_DEMO.airlineBTaxpayerId },
+  { id: VX_DEMO.users.agency, name: 'Agence de voyages fictive — portail certifié (démo)', roles: ['R30'], entity: 'PUBLIC', taxpayerId: VX_DEMO.agencyTaxpayerId },
   { id: VX_DEMO.users.telecom, name: 'Opérateur télécom fictif (démo)', roles: ['R30'], entity: 'PUBLIC', taxpayerId: VX_DEMO.telecomTaxpayerId },
   { id: VX_DEMO.users.bank, name: 'Banque partenaire — passerelle CALCU (démo)', roles: ['R33'], entity: 'BANQUE-A' },
   { id: VX_DEMO.users.publicEntity, name: 'Entité publique pilote CALCU (démo)', roles: ['R08'], entity: 'ENTITE-PILOTE' },
@@ -115,6 +122,8 @@ export function seedVerticales(ctx: AppContext, svc: VerticalesService): void {
 
   // Contribuables fictifs supplémentaires (compagnie aérienne, opérateur télécom).
   ctx.taxpayers.register({ phone: '+243810009901', fullName: 'Compagnie aérienne fictive (démo)', language: 'fr', situation: 'other' }, VX_DEMO.airlineTaxpayerId);
+  ctx.taxpayers.register({ phone: '+243810009903', fullName: 'Compagnie aérienne fictive B (démo)', language: 'fr', situation: 'other' }, VX_DEMO.airlineBTaxpayerId);
+  ctx.taxpayers.register({ phone: '+243810009904', fullName: 'Agence de voyages fictive (démo)', language: 'fr', situation: 'other' }, VX_DEMO.agencyTaxpayerId);
   ctx.taxpayers.register({ phone: '+243810009902', fullName: 'Opérateur télécom fictif (démo)', language: 'fr', situation: 'other' }, VX_DEMO.telecomTaxpayerId);
 
   // Règles FICTIVES publiées par le circuit des quatre visas.
@@ -224,6 +233,35 @@ export function seedVerticales(ctx: AppContext, svc: VerticalesService): void {
   svc.avia.reconcile(instructor, d2.id);
   svc.avia.validate(chief, d2.id, 'Rapprochement sans écart ; données de l’exploitant concordantes (démonstration).');
   svc.avia.reconcile(instructor, d1.id);
+
+  // ---------------------------------------------------------------- AVIA — pôle de rapprochement (RRH), IFA (§ 11C) [EXEMPLE]
+  // Billets FICTIFS du bac à sable BSP/GDS/TTBS : la taxe portée par le billet (5.00 USD) est une valeur d'exemple
+  // reprise de la taxe moyenne du dossier source [À VÉRIFIER], non contractuelle. Aucun mois déclaré par la compagnie B :
+  // le RRH le constate et PROPOSE un constat ; l'analyste décide de l'ouvrir.
+  const rrh = svc.aviaRrh;
+  const B = VX_DEMO.airlineBTaxpayerId;
+  const tax = { amount: '5.00', currency: 'USD' as const };
+  const tk = (n: number, flightNumber: string, flightDate: string, destination: string) => ({ ticketNumber: `99900000${String(n).padStart(5, '0')}`, flightNumber, flightDate, destination, passengerRef: `PNR-DEMO-${n}`, urbanTax: tax });
+  const f1 = `${m1}-12`;
+  const f2 = `${m1}-19`;
+  rrh.sandbox.load(B, m1, [...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => tk(n, 'XB101', f1, 'LBV')), ...[11, 12, 13, 14, 15].map((n) => tk(n, 'XB103', f2, 'JNB'))]);
+  const pulled = rrh.pullConnector(airport, 'BSP-BAC-A-SABLE', { airlineTaxpayerId: B, period: m1 });
+  const agencyUser = user(VX_DEMO.users.agency);
+  const agency = rrh.requestAgency(agencyUser, { name: 'Agence de voyages fictive (démo)', kind: 'AGENCE_VOYAGES', iataCode: '9999999', taxpayerId: VX_DEMO.agencyTaxpayerId });
+  rrh.decideAgency(chief, agency.id, { decision: 'CERTIFIEE', reason: 'Pièces vérifiées, compte certifié (démonstration).' });
+  const viaAgency = rrh.agencyDeclareTickets(agencyUser, agency.id, { airlineTaxpayerId: B, period: m1, tickets: [tk(16, 'XB103', f2, 'JNB')] });
+  const qr = (i: number) => ({ qr: pulled.ifas[i]!.qr });
+  rrh.recordPassengerEvents(airport, { source: 'RVA_EMBARQUEMENT', airlineTaxpayerId: B, flightNumber: 'XB101', flightDate: f1, scans: [0, 1, 2, 3, 4, 5, 6].map(qr), withoutIfa: 1 });
+  rrh.recordPassengerEvents(airport, { source: 'RVA_EMBARQUEMENT', airlineTaxpayerId: B, flightNumber: 'XB103', flightDate: f2, scans: [...[8, 9, 10, 11, 12].map(qr), { qr: viaAgency.ifas[0]!.qr }], withoutIfa: 0 });
+  rrh.recordPassengerEvents(airport, { source: 'DGM_SORTIE', airlineTaxpayerId: B, flightNumber: 'XB101', flightDate: f1, scans: [0, 1, 2, 3, 4, 5, 6].map(qr), withoutIfa: 0 });
+  rrh.recordPassengerEvents(airport, { source: 'DGM_SORTIE', airlineTaxpayerId: B, flightNumber: 'XB103', flightDate: f2, scans: [8, 9, 10, 11, 12].map(qr), withoutIfa: 0 });
+  const airlineB = user(VX_DEMO.users.airlineB);
+  rrh.recordFreight(airlineB, { source: 'COMPAGNIE', airlineTaxpayerId: B, flightNumber: 'XB101', flightDate: f1, awbNumber: '999-10000001', weightKg: 500 });
+  rrh.recordFreight(airport, { source: 'RVA_MANIFESTE', airlineTaxpayerId: B, flightNumber: 'XB101', flightDate: f1, awbNumber: '999-10000001', weightKg: 500 });
+  rrh.recordFreight(airport, { source: 'RVA_MANIFESTE', airlineTaxpayerId: B, flightNumber: 'XB101', flightDate: f1, awbNumber: '999-10000002', weightKg: 750 });
+  rrh.recordRemittance(airport, { source: 'BSP', airlineTaxpayerId: B, period: m1, amount: { amount: '65.00', currency: 'USD' }, reference: `BSP-DEMO-${m1}`, nature: 'COURANT' });
+  rrh.recordRemittance(user(VX_DEMO.users.bank), { source: 'BANQUE_COLLECTRICE', airlineTaxpayerId: B, period: m1, amount: { amount: '40.00', currency: 'USD' }, reference: `BQ-DEMO-${m1}`, bank: 'Banque collectrice fictive (démo)', nature: 'COURANT' });
+  rrh.runDueMonthly();
 
   // ---------------------------------------------------------------- CALCU : entité pilote, comptes, justificatifs, opérations
   const entity = user(VX_DEMO.users.publicEntity);
