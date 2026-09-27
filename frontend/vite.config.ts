@@ -99,6 +99,9 @@ export default defineConfig({
       },
     }),
   ],
+  // Construction sobre en mémoire : l'hébergement de démonstration (512 Mo) ne tient pas le calcul des tailles gzip ni
+  // les écritures de fichiers en parallèle d'un bundle de plus de 1 300 modules.
+  build: { reportCompressedSize: false, sourcemap: false, rollupOptions: { maxParallelFileOps: 2 } },
   // Travailleurs en modules ES (MapLibre 6 crée un Worker de type « module »).
   worker: { format: 'es' },
   server: { port: 5173 },
