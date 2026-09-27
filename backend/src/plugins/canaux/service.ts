@@ -12,8 +12,9 @@ import { CardRegistry, formatCardNumber, normalizeCardNumber, cardNumberFrom } f
 import { EnrolmentService } from './enrolment.js';
 import { VerificationLimiter } from './limiter.js';
 import {
-  IVR_NUMBER_LABEL, PICTOGRAMS, PILOT_COMMUNES, USSD_CODE_LABEL, initials, pictogramForCategory, type PictogramCode,
+  CHANNEL_OPERATIONS, IVR_NUMBER_LABEL, PICTOGRAMS, PILOT_COMMUNES, USSD_CODE_LABEL, initials, pictogramForCategory, type PictogramCode,
 } from './model.js';
+import { COMMUNES } from '../../reference/kinshasa.js';
 import { PaymentPointService, normalizeShortCode, type ReferenceInput } from './points.js';
 import { ChannelEngine, type VerifyOutcome } from './ussd.js';
 
@@ -154,11 +155,27 @@ export class CanauxService {
     const median = delays.length ? delays[Math.floor((delays.length - 1) / 2)]! : null;
     const pts = this.points.points.all();
     return {
-      enrolments: { total: enrols.length, byCommune: [...byCommune.values()].sort((a, b) => a.commune.localeCompare(b.commune, 'fr')), rejectedAttempts: this.enrolment.rejectedAttempts },
+      enrolments: {
+        total: enrols.length, rejectedAttempts: this.enrolment.rejectedAttempts,
+        // Part par commune (module 63) : dossiers assistés de la commune / total, en pour cent (une décimale).
+        byCommune: [...byCommune.values()].sort((a, b) => a.commune.localeCompare(b.commune, 'fr')).map((r) => ({ ...r, sharePct: enrols.length ? Math.round((r.total / enrols.length) * 1000) / 10 : null })),
+      },
       cards: { active: cards.filter((c) => c.status === 'ACTIVE').length, blocked: cards.filter((c) => c.status === 'BLOQUEE').length, revoked: cards.filter((c) => c.status === 'REVOQUEE').length, reissues: this.cards.reissues.find((r) => r.status === 'APPROUVEE').length },
       channels: {
         ussdSessions: sessions.filter((s) => s.channel === 'USSD').length, ivrSessions: sessions.filter((s) => s.channel === 'SVI').length,
         authenticatedSessions: sessions.filter((s) => s.authenticated).length, referencesIssued: this.engine.referencesIssued,
+        // Module 64 : appels (sessions SVI) et opérations réalisées à la voix, par nature.
+        voice: (() => {
+          const ivr = sessions.filter((s) => s.channel === 'SVI');
+          const ops = ivr.flatMap((s) => s.operations ?? []);
+          return {
+            calls: ivr.length, callsWithOperation: ivr.filter((s) => (s.operations ?? []).length > 0).length, operations: ops.length,
+            byKind: Object.fromEntries(CHANNEL_OPERATIONS.map((k) => [k, ops.filter((o) => o === k).length])),
+            byLanguage: Object.fromEntries([...new Set(ivr.map((s) => s.lang))].sort().map((l) => [l, ivr.filter((s) => s.lang === l).length])),
+            tollFreeNumber: IVR_NUMBER_LABEL,
+          };
+        })(),
+        ussdOperations: sessions.filter((s) => s.channel === 'USSD').flatMap((s) => s.operations ?? []).length,
       },
       points: {
         active: pts.filter((p) => p.status === 'ACTIF').length, suspended: pts.filter((p) => p.status === 'SUSPENDU').length, referenced: pts.filter((p) => p.status === 'REFERENCE').length,
@@ -167,7 +184,20 @@ export class CanauxService {
         medianSettlementHours: median, openExceptions: this.points.exceptions.count(), pendingProposals: this.points.proposals.find((p) => p.status === 'PROPOSEE').length,
       },
       verification: { total: this.limiter.logs.count(), suspectedEnumeration: this.limiter.suspectedAttempts },
-      accessibility: { note: 'Part de la population à moins de 15 minutes de marche d’un point agréé : à calculer après cartographie (§ H.19).' },
+      // Module 66 : accessibilité mesurée sur les points réels (communes couvertes par au moins un point ACTIF) ;
+      // la part de la population à moins de 15 minutes de marche exige la cartographie de la population (§ H.19).
+      accessibility: (() => {
+        const active = pts.filter((p) => p.status === 'ACTIF');
+        const covered = COMMUNES.filter((c) => active.some((p) => p.commune === c));
+        return {
+          activePoints: active.length, communesTotal: COMMUNES.length, communesCovered: covered.length,
+          communesCoveredPct: Math.round((covered.length / COMMUNES.length) * 1000) / 10,
+          communesWithoutPoint: COMMUNES.filter((c) => !covered.includes(c)),
+          byCommune: covered.map((c) => ({ commune: c, activePoints: active.filter((p) => p.commune === c).length })),
+          populationWithin15Min: null,
+          note: 'Part de la population à moins de 15 minutes de marche d’un point agréé : non mesurée — données de population géolocalisées absentes (cartographie § H.19).',
+        };
+      })(),
     };
   }
 

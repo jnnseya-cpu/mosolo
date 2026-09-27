@@ -141,7 +141,7 @@ export function registerPreuvesRoutes(app: FastifyInstance, ctx: AppContext, svc
 
 function channelsInfo() {
   return {
-    ussd: '*[code court À CONFIGURER]#', sms: 'SMS « V <code> » au [numéro court À CONFIGURER]', whatsapp: 'WhatsApp : compte certifié MOSOLO [numéro À CONFIGURER]',
+    ussd: '*[code court À RACCORDER — convention opérateur requise]#', sms: 'SMS « V <code> » au [numéro court À RACCORDER — convention opérateur requise]', whatsapp: 'WhatsApp : compte certifié MOSOLO [numéro À RACCORDER — convention requise]',
     lite: '/l — version légère sans application',
   };
 }

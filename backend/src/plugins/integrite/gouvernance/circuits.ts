@@ -142,6 +142,12 @@ export const CIRCUITS: Circuit[] = [
     guard: { url: '/v1/pilotage/repartition/cles/:id/activation/decision', key: (p) => p.id!, refusal: approveFalse },
   },
   {
+    // Module 67 : reprise des points fictifs ou frauduleux de la réserve des agents (contrôle qualité → régie).
+    code: 'RESERVE_REPRISE_POINTS', label: 'Reprise de points de la réserve des agents (§ 37A.5)',
+    proposals: ['agents.reserve.clawback_proposed'], approvals: ['agents.reserve.clawback_decided'], refusals: ['agents.reserve.clawback_rejected'],
+    guard: { url: '/v1/agents/reserve/reprises/:id/decision', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
     code: 'RAKAPAY_AGREMENT_OPERATEUR', label: 'Agrément d’un opérateur de billetterie RakaPay',
     proposals: ['rakapay.operator.approval_proposed'], approvals: ['rakapay.operator.approved'], refusals: ['rakapay.operator.refused'],
   },

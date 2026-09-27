@@ -282,6 +282,11 @@ export class AccesService {
     return this.isOversight(user) ? null : this.subtree(user.entity);
   }
 
+  /** Périmètre d'entités visible (null : toutes) — indicateurs des modules 72 et 74. */
+  visibleScope(user: User): Set<string> | null {
+    return this.visibleEntities(user);
+  }
+
   listEntities() {
     return this.entities.all().map((e) => ({
       ...e,

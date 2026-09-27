@@ -92,6 +92,13 @@ export class CommissionService {
   readonly frozen = new InMemoryRepository<FrozenAttribution>();
   /** État de validation d'une ligne (fourni par le circuit de validation, voir validations.ts). */
   validationState: ((key: string) => ValidationState) | undefined;
+  /**
+   * Vue de la réserve des agents (module 67, § 37A.5) pour un agent : points vérifiés, note de qualité et quote-part du
+   * mois (fournie par reserve-agents.ts). La commission de 10 % en est une vue harmonisée.
+   */
+  reserveView: ((agentId: string) => unknown) | undefined;
+  /** Réserve de tous les agents du mois (un seul calcul pour le récapitulatif). */
+  reserveAll: (() => { agents: { agentId: string; share: unknown; payable: unknown; points: number; quality: unknown }[] }) | undefined;
 
   constructor(private readonly ctx: AppContext) {}
 
@@ -276,7 +283,7 @@ export class CommissionService {
     return { lines: out, payable: sumByCurrency(out.filter((l) => l.validation === 'VALIDEE').map((l) => l.commission)) };
   }
 
-  summary(agentId: string, raw: CommissionLine[] = this.lines(agentId)) {
+  summary(agentId: string, raw: CommissionLine[] = this.lines(agentId), withReserve = true) {
     const { lines, payable } = this.withValidation(raw);
     const modules = [...new Set(lines.map((l) => l.module))].map((m) => ({
       module: m, moduleLabel: MODULE_LABEL[m] ?? m, lines: lines.filter((l) => l.module === m).length,
@@ -293,8 +300,11 @@ export class CommissionService {
       },
       modules, lines,
       windows: Object.entries(ATTRIBUTION_WINDOWS_MINUTES).map(([m, min]) => ({ module: m, moduleLabel: MODULE_LABEL[m], minutes: min })),
+      /** Réserve des agents (module 67) : points, note de qualité et quote-part du mois — la rémunération réelle. */
+      reserve: withReserve ? this.reserveView?.(agentId) ?? null : null,
       rules: [
-        `Commission de ${AGENT_COMMISSION_PCT} % pour tout agent, quel que soit son module : uniquement sur les pénalités issues de vos constats et sur les paiements provoqués par vos contrôles.`,
+        `Décision du maître d’ouvrage (27/09/2026) : la « commission de ${AGENT_COMMISSION_PCT} % » est désormais une vue de la réserve de ${AGENT_COMMISSION_PCT} % par module (§ 37A.5), répartie au prorata de vos points de résultats vérifiés × votre note de qualité — jamais selon le montant liquidé ou payé. Le montant de référence de chaque ligne (${AGENT_COMMISSION_PCT} % de la ligne) est indicatif et n’est pas versé.`,
+        `Lignes de résultats pour tout agent, quel que soit son module : les pénalités issues de vos constats et les paiements provoqués par vos contrôles ; chacune compte pour un point de régularisation une fois la quittance définitive émise (commission de référence : ${AGENT_COMMISSION_PCT} %).`,
         'Paiement provoqué : effectué après votre contrôle qui a révélé un défaut — dans l’heure (stationnement, titres, pass wewa) ou dans les 72 h (plaques des verticales, publicité, missions de terrain). Un paiement n’est attribué qu’une fois, au premier contrôle (heure du serveur) ; acquise, l’attribution est figée.',
         'Contrôle ouvrant droit : position GPS attestée près de la zone ou de l’objet (stationnement, plaques) ; dossier retenu (publicité) ; constat validé et photographié sur une dette échue (terrain). Aucun paiement dans les premières minutes suivant l’arrivée du véhicule.',
         'Calculée sur des recettes arrivées au compte public, échéance par échéance ; acquise après rapprochement bancaire ; versée par le Trésor (paie). Vous ne recevez jamais d’argent de l’usager.',
@@ -307,11 +317,14 @@ export class CommissionService {
 
   /** Récapitulatif par agent (régie, pilotage, Trésor) — un seul calcul pour tous les agents. */
   all() {
+    const reserve = this.reserveAll?.();
     return {
       ratePct: AGENT_COMMISSION_PCT,
+      reserveNotice: 'Rémunération réelle : quote-part de la réserve de 10 % par module, au prorata des points de résultats vérifiés × note de qualité (§ 37A.5) ; la commission de 10 % par ligne est un montant de référence non versé.',
       items: [...this.byAgent()].map(([a, lines]) => {
-        const s = this.summary(a, lines);
-        return { agentId: a, agentName: this.ctx.users.get(a)?.name ?? a, totals: s.totals, counts: s.counts, modules: s.modules };
+        const s = this.summary(a, lines, false);
+        const r = reserve?.agents.find((x) => x.agentId === a);
+        return { agentId: a, agentName: this.ctx.users.get(a)?.name ?? a, totals: s.totals, counts: s.counts, modules: s.modules, reserve: r ? { points: r.points, quality: r.quality, share: r.share, payable: r.payable } : null };
       }).sort((x, y) => x.agentName.localeCompare(y.agentName, 'fr')),
     };
   }

@@ -5,6 +5,8 @@ import { useApi } from '../hooks/useApi';
 import { useAutosave } from '../hooks/useAutosave';
 import { useInsight } from '../hooks/useInsight';
 import TresorWorkbench from '../modules/tresor/TresorWorkbench';
+import { GrandLivrePanel } from '../modules/tresor/GrandLivrePanel';
+import { VaultRegistryPanel } from '../modules/tresor/VaultRegistry';
 import { PageHead } from '../components/Shell';
 import { AIInsightPanel } from '../components/AIInsightPanel';
 import { MoneyText } from '../components/MoneyText';
@@ -55,6 +57,8 @@ function Vault() {
   const [list, setList] = useState<VaultChangeRequest[]>(readVault);
   const [form, setForm] = useState({ alias: 'KIN-DGIPK-RECETTES-01', bankName: '', accountNumber: '', holderName: '', reason: '' });
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  // Date d'effet future facultative (module 60) : au plus tôt la fin du refroidissement de 72 h.
+  const [effectiveFrom, setEffectiveFrom] = useState('');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const save = (l: VaultChangeRequest[]) => { setList(l); safeSet(VAULT_KEY, JSON.stringify(l)); };
@@ -77,7 +81,8 @@ function Vault() {
   async function propose(e: FormEvent) {
     e.preventDefault(); setBusy(true); setMsg(null);
     try {
-      const r = await api<VaultChangeRequest>('/v1/beneficiary-accounts/change-requests', { method: 'POST', body: form });
+      const body = effectiveFrom ? { ...form, effectiveFrom: new Date(effectiveFrom).toISOString() } : form;
+      const r = await api<VaultChangeRequest>('/v1/beneficiary-accounts/change-requests', { method: 'POST', body });
       upsert(r); setMsg({ ok: true, text: tr('vault.proposed') });
     } catch (x) { setMsg({ ok: false, text: describeError(x).message }); } finally { setBusy(false); }
   }
@@ -105,6 +110,10 @@ function Vault() {
           <div className="field-row">{f('bankName', 'vault.bank')}{f('holderName', 'vault.holder')}</div>
           {f('accountNumber', 'vault.account', true)}
           {f('reason', 'vault.reason')}
+          <div className="field">
+            <label className="label" htmlFor="v-effectiveFrom">Date d’effet future (facultative, après 72 h de refroidissement)</label>
+            <input id="v-effectiveFrom" type="datetime-local" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+          </div>
           <button type="submit" className="btn btn-secondary" disabled={busy}>{tr('vault.submit')}</button>
         </form>
         <div>
@@ -239,7 +248,9 @@ export default function Treasury() {
         <div className="span-12"><TresorWorkbench key={tick} onChanged={bal.reload} /></div>
 
         <div className="span-12"><AIInsightPanel rec={ai.rec} loading={ai.loading} error={ai.error} onRefresh={ai.reload} compact /></div>
+        <div className="span-12"><GrandLivrePanel /></div>
         <div className="span-12"><Vault /></div>
+        <div className="span-12"><VaultRegistryPanel /></div>
       </div>
     </div>
   );

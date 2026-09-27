@@ -13,7 +13,7 @@
 import { Money, normalizePlate, type MoneyJSON } from '@mosolo/shared';
 import { z } from 'zod';
 import type { AppContext } from '../../context.js';
-import type { User } from '../../core/auth.js';
+import { isDemoMode, type User } from '../../core/auth.js';
 import { HOUR_MS, kinshasaDate } from '../../core/clock.js';
 import { canonicalJson, checkChar, hmacSha256Hex, randomCode, safeEqualHex, sha256Hex } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unauthorized, unprocessable } from '../../core/errors.js';
@@ -23,7 +23,7 @@ import { taxpayerRecipient } from '../../modules/identity/recipients.js';
 import type { PaymentChannel } from '../../modules/payments/service.js';
 import { isCommune } from '../../reference/kinshasa.js';
 import {
-  KINSHASA_OFFSET_MS, VALIDITY_MODEL_LABELS,
+  KINSHASA_OFFSET_MS, VALIDITY_MODEL_LABELS, visualFor,
   type Constat, type ControlMethod, type ControlResult, type Credential, type CredentialPlace, type CredentialState, type CredentialSubject,
   type CredentialType, type DisplayStatus, type Issuance, type IssuanceItem, type IssuancePayment, type Revocation, type UsageEvent,
   type UsePlace, type VerificationEvent,
@@ -235,7 +235,7 @@ export class TitresService {
   typeView(t: CredentialType) {
     const act = this.activation(t);
     return {
-      code: t.code, version: t.version, module: t.module, moduleLabel: t.moduleLabel, label: t.label, prefix: t.prefix, entity: t.entity,
+      code: t.code, version: t.version, module: t.module, moduleLabel: t.moduleLabel, label: t.label, prefix: t.prefix, entity: t.entity, visual: visualFor(t.prefix),
       validity: { ...t.validity, modelLabel: VALIDITY_MODEL_LABELS[t.validity.model].label, modelRule: VALIDITY_MODEL_LABELS[t.validity.model].rule, timezone: 'Africa/Kinshasa' },
       transferable: t.transferable, plateBound: t.plateBound, supports: t.supports, legalAct: t.legalAct, demo: t.demo,
       activable: act.ok, ...(act.ok ? {} : { notActivableReason: act.reason }), price: this.pricePreview(t),
@@ -753,7 +753,7 @@ export class TitresService {
     const event = this.controls.append({
       id: this.ids.next('CTL'), ...(c ? { credentialId: c.id, typeCode: c.typeCode, module: c.module } : input.module ? { module: input.module } : {}), method: input.method,
       presented: input.method === 'PLAQUE' ? normalizePlate(input.presented) : sha256Hex(input.presented).slice(0, 16),
-      controllerId: user.id, ...(input.deviceId ? { deviceId: input.deviceId } : {}), place: input.place, at, offline: !!input.offline,
+      controllerId: user.id, ...(input.deviceId ? { deviceId: input.deviceId } : {}), registeredTerminal: this.isRegisteredTerminal(user, input.deviceId), place: input.place, at, offline: !!input.offline,
       ...(input.offline ? { offlineResult: input.offline.offlineResult, batchId: input.offline.batchId } : {}),
       result, displayStatus: status?.status ?? 'INCONNU', ...(reason ? { reason } : {}), consumedUse: consumed,
       ...(alreadyUsed ? { alreadyUsed } : {}), recordedAt: nowIso,
@@ -806,9 +806,27 @@ export class TitresService {
     };
   }
 
+  /** Terminal enrôlé, actif et affecté à ce contrôleur (module 71 : « terminal enregistré obligatoire »). */
+  isRegisteredTerminal(user: User, deviceId: string | undefined): boolean {
+    if (!deviceId) return false;
+    const d = this.ctx.field.devices.get(deviceId);
+    return !!d && d.status === 'ACTIF' && d.agentUserId === user.id;
+  }
+
   /** POST /v1/titres/controles — contrôle en ligne par QR (dynamique ou statique), code court ou plaque. */
   control(user: User, input: ControlInput): MinimalControlView {
     authorize(user, 'titres:control', this.controlResource(user, input.place));
+    // Terminal présenté : il doit être enrôlé, actif et affecté au contrôleur ; sinon refus journalisé (module 71).
+    if (input.deviceId && !this.isRegisteredTerminal(user, input.deviceId)) {
+      this.ctx.audit.append({ actor: this.actor(user), action: 'titres.control.device_refused', resourceType: 'device', resourceId: input.deviceId, outcome: 'DENIED', details: { place: input.place } });
+      throw forbidden('DEVICE_NOT_ALLOWED', 'Terminal non enrôlé, révoqué ou non affecté à ce contrôleur : contrôle refusé.');
+    }
+    // Terminal enregistré OBLIGATOIRE hors démonstration (module 71) : aucun contrôle depuis un poste non enrôlé. En
+    // démonstration, le contrôle depuis un navigateur reste possible mais il est compté et signalé dans les indicateurs.
+    if (!input.deviceId && !isDemoMode()) {
+      this.ctx.audit.append({ actor: this.actor(user), action: 'titres.control.device_refused', resourceType: 'device', resourceId: 'aucun', outcome: 'DENIED', details: { place: input.place, reason: 'TERMINAL_REQUIS' } });
+      throw forbidden('TERMINAL_REQUIRED', 'Terminal enregistré obligatoire : contrôle refusé depuis un poste non enrôlé (module 71).');
+    }
     this.sync();
     const now = this.ctx.clock.now().getTime();
     const presented = input.qr ?? input.code;
@@ -1060,6 +1078,9 @@ export class TitresService {
         offline: ctrls.filter((e) => e.offline).length, redShare: ctrls.length ? (red / ctrls.length).toFixed(4) : '0',
         controlledOverActive: active ? (ctrls.length / active).toFixed(4) : '0',
         reuseAttempts: ctrls.filter((e) => e.displayStatus === 'INVALIDE' && e.alreadyUsed).length,
+        // Module 71 : contrôles faits sans terminal enregistré (navigateur) — à résorber, signalés à l'audit.
+        withRegisteredTerminal: ctrls.filter((e) => e.registeredTerminal === true || (e.offline && !!e.deviceId)).length,
+        withoutRegisteredTerminal: ctrls.filter((e) => e.registeredTerminal === false && !e.offline).length,
       },
       renewals: { total: renewals, beforeExpiry: amberRenewals },
       constats: { total: constats.length, open: constats.filter((k) => k.status === 'OUVERT').length, classified: constats.filter((k) => k.status === 'CLASSE').length, transmitted: constats.filter((k) => k.status === 'TRANSMIS').length },
