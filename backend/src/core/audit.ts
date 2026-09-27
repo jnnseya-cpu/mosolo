@@ -106,6 +106,17 @@ export class AuditLog {
     return this.records.length;
   }
 
+  /** Tête de la chaîne (rang et empreinte du dernier enregistrement) — base de l'ancrage externe (persistence/anchor.ts). */
+  head(): { seq: number; hash: string } {
+    const last = this.records.at(-1);
+    return { seq: last?.seq ?? 0, hash: last?.hash ?? GENESIS_HASH };
+  }
+
+  /** Empreinte de l'enregistrement de rang `seq` (1…length), sinon undefined. */
+  hashAt(seq: number): string | undefined {
+    return this.records[seq - 1]?.hash;
+  }
+
   verify(): AuditVerification {
     const verifiedAt = this.clock.now().toISOString();
     let prev = GENESIS_HASH;
@@ -135,7 +146,8 @@ export class AuditLog {
    */
   /**
    * Rechargement depuis le stockage persistant (redémarrage) : remplace le contenu par les enregistrements lus
-   * et fixe l'ancrage de tête sur le dernier. N'est appelé qu'au démarrage, avant toute écriture ; la chaîne est
+   * et fixe l'ancrage de tête sur le dernier. ATTENTION : une chaîne tronquée reste alors cohérente — la troncature
+   * ou le retour arrière ne sont détectés que par l'ancre EXTERNE (persistence/anchor.ts, MOSOLO_AUDIT_ANCHOR_PATH). N'est appelé qu'au démarrage, avant toute écriture ; la chaîne est
    * ensuite contrôlée par `verify()` (une chaîne altérée est détectée, jamais « réparée »).
    */
   restore(records: AuditRecord[]): void {

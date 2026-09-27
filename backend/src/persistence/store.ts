@@ -138,9 +138,13 @@ export class PgSnapshotStore implements SnapshotStore {
 
   async replaceAll(rows: SnapshotRow[], at: Date): Promise<void> {
     await this.tx(async (c) => {
-      if (this.dialect === 'postgres') await c.query("SELECT set_config('mosolo.restore_in_progress', 'on', true)");
-      await c.query('DELETE FROM repository_snapshot');
-      await c.query('DELETE FROM append_only_journal');
+      if (this.dialect === 'postgres') {
+        // Migration 003 : purge réservée aux opérateurs de restauration (rôle mosolo_restore), fonction SECURITY DEFINER.
+        await c.query('SELECT mosolo_restore_purge()');
+      } else {
+        await c.query('DELETE FROM repository_snapshot');
+        await c.query('DELETE FROM append_only_journal');
+      }
       await this.insertRows(c, rows, at);
     });
   }

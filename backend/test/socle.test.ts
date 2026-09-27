@@ -244,8 +244,11 @@ describe('Persistance — sérialiseur, dépôts observables, magasins', () => {
     expect(() => createBackup(rows, 'courte', { source: 'x' })).toThrow();
 
     const target = new MemorySnapshotStore();
-    await restoreStore(target, backup, BACKUP_KEY, 'test-audit-key');
-    expect((await target.loadAll()).length).toBe(rows.length);
+    const restored = await restoreStore(target, backup, BACKUP_KEY, 'test-audit-key');
+    // Contenu de la sauvegarde + l'événement `audit.restored` chaîné à sa suite (jamais de restauration silencieuse).
+    expect((await target.loadAll()).length).toBe(rows.length + 1);
+    expect(restored).toMatchObject({ rollback: false, previousHead: { seq: 0 } });
+    expect(restored.newHead.seq).toBe(restored.restoredHead.seq + 1);
     // Démarrage sur la base restaurée : l'état et la chaîne sont intacts.
     const rt = await PersistenceRuntime.open(target);
     const env2 = await setupSocle({ persistence: rt });

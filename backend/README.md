@@ -13,7 +13,10 @@ npm test -w backend           # tests (vitest + fastify.inject ; vitest.config.t
 npm run typecheck -w backend  # TypeScript strict
 ```
 
-Le serveur démarre avec des **données de démonstration** en mémoire (voir « Utilisateurs de démonstration »).
+En mode démonstration (`npm run dev`, `start:demo`, `--demo`), le serveur démarre avec des **données de démonstration**
+en mémoire (voir « Utilisateurs de démonstration »). **Hors démonstration, rien n'est semé** : ni ordres, quittances,
+écritures, suspens, utilisateurs, comptes du coffre ou points d'encaissement fictifs — la plateforme démarre vide et
+s'amorce par le fichier `MOSOLO_BOOTSTRAP_FILE` (voir « Amorçage hors démonstration »).
 
 **Sûr par défaut.** Le mode démonstration (en-tête `x-demo-user`, `/v1/demo/users`, comptes et codes affichés, boîte
 d'envoi du bac à sable, CORS ouvert, secrets publics `demo-…`) n'est actif **que** si `MOSOLO_DEMO_MODE=true` (ou
@@ -240,8 +243,13 @@ Rejouer exactement la même requête renvoie 200 avec `"replayed": true`, sans s
 | `MOSOLO_DEMO_MODE` | `true` : mode démonstration (défaut : **désactivé**) ; interdit avec `NODE_ENV=production` (démarrage refusé) |
 | `NODE_ENV` | `production` : refuse `MOSOLO_DEMO_MODE=true` et `MOSOLO_DEMO_CREDENTIALS=true` |
 | `MOSOLO_DEMO_CREDENTIALS` | `true` : sème le mot de passe et les secrets TOTP de démonstration hors mode démo (préproduction) ; interdit en production |
-| `MOSOLO_AUDIT_HMAC_KEY` | clé de signature du journal d'audit (aléatoire au démarrage si absente ; **obligatoire** avec `DATABASE_URL` hors démonstration) |
-| `MOSOLO_AUDIT_ACCEPT_UNVERIFIED` | `true` : démarrer malgré une chaîne d'audit restaurée non vérifiée (après enquête ; tracé dans la chaîne). Sinon, démarrage refusé hors démonstration |
+| `MOSOLO_AUDIT_HMAC_KEY` | clé de signature du journal d'audit (aléatoire au démarrage si absente ; **obligatoire** avec `DATABASE_URL` hors démonstration, 32 caractères minimum) |
+| `MOSOLO_AUDIT_ANCHOR_PATH` | fichier de l'**ancre externe** de la tête du journal d'audit (rang, empreinte, heure, signés HMAC), hors de la base — idéalement volume distinct / répliqué WORM ; réécrit après chaque lot d'audit persisté. **Obligatoire** avec `DATABASE_URL` hors démonstration : chaîne plus courte que l'ancre ou d'empreinte différente ⇒ démarrage refusé. Même chemin pour `db:restore` |
+| `MOSOLO_AUDIT_ACCEPT_UNVERIFIED` | `true` : démarrer malgré une chaîne d'audit restaurée non vérifiée ou non conforme à l'ancre externe (après enquête ; `audit.chain.restored_unverified` / `audit.anchor.mismatch` ajoutés à la chaîne). Sinon, démarrage refusé hors démonstration |
+| `MOSOLO_RECEIPT_SIGNING_KEY` | clé privée Ed25519 PKCS#8 (PEM ou base64 DER) de signature des quittances : **obligatoire hors démonstration** (démarrage refusé si absente ou illisible) |
+| `MOSOLO_CLOSURE_SIGNING_KEY` | clé de signature des clôtures du Trésor : **obligatoire hors démonstration** (32 caractères minimum ; PEM lisible si PEM ; distincte de la clé des quittances) |
+| `MOSOLO_BOOTSTRAP_FILE` | fichier JSON d'amorçage hors démonstration (`mosolo-amorcage/1`) : comptes de travail et comptes du coffre ; ignoré si des données de démonstration sont semées, refusé en démonstration |
+| `MOSOLO_BOOTSTRAP_CREDENTIALS_OUT` | fichier (créé en exclusivité, droits 0600) où sont écrits les identifiants initiaux des comptes `enrol: true` sans identifiant ; à remettre puis **détruire** |
 | `MOSOLO_PROVIDER_SECRET_MM_OPERATOR_A`, `…_BANK_A`, `…_CARD_GATEWAY` | secrets HMAC des prestataires : **obligatoires hors démonstration** (16 caractères minimum, jamais une valeur `demo-…`) ; défauts publics `demo-secret-…` en démonstration seulement |
 | `MOSOLO_DEVICE_KEYS` | clés HMAC des terminaux terrain, `id=clé,id=clé` ; hors démonstration, un terminal semé sans clé reçoit une clé aléatoire |
 | `MOSOLO_CORS_ORIGINS` | origines autorisées, séparées par des virgules ; sans liste : toutes en démonstration, **aucune** hors démonstration (`*` refusé hors démonstration) |
@@ -250,6 +258,31 @@ Rejouer exactement la même requête renvoie 200 avec `"replayed": true`, sans s
 | `SMS_GATEWAY_SECRET`, `SVI_GATEWAY_SECRET` | signature HMAC (`x-mosolo-signature`) des passerelles SMS / SVI entrantes (`/v1/sms/inbound`, `/v1/public/integrite/reports/sms` et `/svi`) ; sans secret : simulateur en démonstration, refus (403) sinon |
 | `KODA_*`, `BITRIPAY_*` | connecteurs de prestataires (voir « Connecteurs de prestataires : BitriPay et KODA ») ; hors démonstration, un connecteur sans `…_WEBHOOK_SECRET` réel n'est pas enregistré |
 | `MOSOLO_EMAIL_PROVIDER_KEY`, `MOSOLO_SMS_PROVIDER_KEY`, `MOSOLO_PUSH_PROVIDER_KEY`, `MOSOLO_WHATSAPP_PROVIDER_KEY`, `MOSOLO_USSD_PROVIDER_KEY`, `MOSOLO_SVI_PROVIDER_KEY`, `MOSOLO_COURRIER_PROVIDER_KEY` | clés fournisseurs ; absente ⇒ canal en bac à sable (`journalise`) |
+
+## Amorçage hors démonstration
+
+Hors démonstration la plateforme démarre **vide**. Le fichier `MOSOLO_BOOTSTRAP_FILE` déclare le strict nécessaire ;
+il est contrôlé à l'avance par `npm run bootstrap:check -w backend -- amorcage.json` puis relu à chaque démarrage :
+
+```json
+{
+  "format": "mosolo-amorcage/1",
+  "users": [
+    { "id": "admin.plateforme", "name": "…", "roles": ["R26"], "entity": "PLATEFORME", "enrol": true },
+    { "id": "coffre.a", "name": "…", "roles": ["R19"], "entity": "TRESOR", "enrol": true },
+    { "id": "coffre.b", "name": "…", "roles": ["R19"], "entity": "TRESOR", "enrol": true }
+  ],
+  "vaultAccounts": [
+    { "alias": "KIN-DGIPK-RECETTES-01", "entity": "DGIPK", "bankName": "…", "accountNumber": "…", "holderName": "…", "currency": "USD" }
+  ]
+}
+```
+
+- Comptes de travail : ajoutés à l'annuaire (rôles connus, cumuls incompatibles refusés) ; `enrol: true` crée, s'il
+  n'existe aucun identifiant, un mot de passe et un secret TOTP aléatoires écrits dans `MOSOLO_BOOTSTRAP_CREDENTIALS_OUT`.
+- Comptes du coffre : créés **seulement s'ils n'existent pas** ; un compte existant n'est jamais modifié par
+  l'amorçage — tout changement passe par la double validation du coffre (deux gestionnaires R19 distincts).
+- L'application est tracée (`bootstrap.applied`, `vault.account.bootstrapped` — numéro de compte réduit à 4 chiffres).
 
 ## Ce qui relève de la démonstration et ce qui est prêt pour la suite
 

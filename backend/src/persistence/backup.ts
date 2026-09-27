@@ -6,7 +6,8 @@
 import { AuditLog, type AuditRecord, type AuditVerification } from '../core/audit.js';
 import { systemClock } from '../core/clock.js';
 import { canonicalJson, hmacSha256Hex, safeEqualHex, sha256Hex } from '../core/crypto.js';
-import { decodeDoc } from './codec.js';
+import { AnchorError, chainOf, compareWithAnchor, type AuditAnchorRecord, type AuditAnchorStore, type AuditHead } from './anchor.js';
+import { decodeDoc, encodeDoc } from './codec.js';
 import { AUDIT_REPO } from './registry.js';
 import { restoreAuditLog } from './runtime.js';
 import { sortRows, type RowKind, type SnapshotRow, type SnapshotStore } from './store.js';
@@ -97,13 +98,83 @@ export async function backupStore(store: SnapshotStore, key: string, now = new D
   return createBackup(await store.loadAll(), key, { source: store.kind, now });
 }
 
-/** Restauration : refusée si la vérification échoue. Remplace tout le contenu du magasin dans une transaction. */
-export async function restoreStore(store: SnapshotStore, doc: BackupDocument, key: string, auditHmacKey?: string, now = new Date()): Promise<BackupVerification> {
+export interface RestoreOptions {
+  /** Ancre externe (MOSOLO_AUDIT_ANCHOR_PATH) : référence du retour arrière, mise à jour après restauration. */
+  anchor?: AuditAnchorStore;
+  /** Retour arrière assumé (`--confirm-rollback`) : la sauvegarde ne prolonge pas la chaîne en place ou ancrée. */
+  confirmRollback?: boolean;
+  /** Opérateur déclaré (trace). */
+  operator?: string;
+}
+
+export interface RestoreResult extends BackupVerification {
+  rollback: boolean;
+  previousHead: AuditHead;
+  anchorHead: AuditHead | null;
+  restoredHead: AuditHead;
+  /** Tête après l'ajout de l'événement `audit.restored`. */
+  newHead: AuditHead;
+}
+
+function headOf(records: { seq: number; hash: string }[]): AuditHead {
+  const last = records.slice().sort((a, b) => a.seq - b.seq).at(-1);
+  return { seq: last?.seq ?? 0, hash: last?.hash ?? '0'.repeat(64) };
+}
+
+/**
+ * Restauration : refusée si la vérification échoue. Remplace tout le contenu du magasin dans une transaction.
+ * Une sauvegarde qui ne PROLONGE pas la chaîne d'audit en place (ni l'ancre externe) est un retour arrière : refusé
+ * sans `confirmRollback`. Dans tous les cas, l'événement `audit.restored` (têtes ancienne / ancrée / restaurée,
+ * retour arrière, empreinte de la sauvegarde) est ajouté à la chaîne restaurée, et l'ancre externe est réécrite.
+ */
+export async function restoreStore(store: SnapshotStore, doc: BackupDocument, key: string, auditHmacKey?: string, now = new Date(), opts: RestoreOptions = {}): Promise<RestoreResult> {
   // Une restauration sans contrôle de la chaîne d'audit accepterait en silence un journal altéré : clé exigée.
   if (!auditHmacKey) throw new Error('Restauration refusée : MOSOLO_AUDIT_HMAC_KEY obligatoire pour vérifier la chaîne d’audit avant restauration.');
   const v = verifyBackup(doc, key, auditHmacKey);
   if (!v.ok) throw new Error(`Restauration refusée : ${v.reasons.join(' ')}`);
   await store.migrate();
-  await store.replaceAll(doc.rows, now);
-  return v;
+
+  const decode = (rows: SnapshotRow[]) => rows.filter((r) => r.repo === AUDIT_REPO).map((r) => decodeDoc(r.doc) as AuditRecord).sort((a, b) => a.seq - b.seq);
+  const current = decode(await store.loadAll());
+  const restored = decode(doc.rows);
+  const restoredChain = chainOf(restored);
+  let anchor: AuditAnchorRecord | null = null;
+  if (opts.anchor) {
+    try {
+      anchor = opts.anchor.read();
+    } catch (e) {
+      // Ancre illisible ou mal signée : on ne peut pas prouver l'absence de retour arrière.
+      if (!(e instanceof AnchorError) || !opts.confirmRollback) throw new Error(`Restauration refusée : ${(e as Error).message} (--confirm-rollback pour passer outre, tracé).`);
+    }
+  }
+  const reasons: string[] = [];
+  const vsCurrent = compareWithAnchor(headOf(current), restoredChain);
+  if (!vsCurrent.ok) reasons.push(`base en place : ${vsCurrent.reason}`);
+  if (anchor) {
+    const vsAnchor = compareWithAnchor(anchor, restoredChain);
+    if (!vsAnchor.ok) reasons.push(`ancre externe : ${vsAnchor.reason}`);
+  }
+  const rollback = reasons.length > 0;
+  if (rollback && !opts.confirmRollback) {
+    throw new Error(`Restauration refusée : RETOUR ARRIÈRE (${reasons.join(' ; ')}). Si ce retour est voulu et approuvé, ajoutez --confirm-rollback (il sera tracé dans la chaîne d’audit).`);
+  }
+
+  // Événement de restauration chaîné à la suite de la chaîne restaurée (même clé : vérifiable au redémarrage).
+  const log = new AuditLog({ now: () => now }, auditHmacKey);
+  restoreAuditLog(log, restored);
+  const rec = log.append({
+    actor: { kind: 'system', id: opts.operator ? `db:restore:${opts.operator}` : 'db:restore' },
+    action: 'audit.restored', resourceType: 'audit_chain', outcome: 'SUCCESS',
+    details: {
+      backup: { createdAt: doc.createdAt, source: doc.source, contentSha256: doc.contentSha256, keyId: doc.signature.keyId, rows: doc.rows.length },
+      previousHead: headOf(current), anchorHead: anchor ? { seq: anchor.seq, hash: anchor.hash, at: anchor.at } : null,
+      restoredHead: headOf(restored), rollback, rollbackReasons: reasons,
+      lostRecords: rollback ? Math.max(0, Math.max(current.length, anchor?.seq ?? 0) - restored.length) : 0,
+    },
+  });
+  const auditRow: SnapshotRow = { repo: AUDIT_REPO, id: rec.id, kind: 'append', seq: rec.seq, doc: encodeDoc(rec) };
+  await store.replaceAll([...doc.rows, auditRow], now);
+  const newHead = { seq: rec.seq, hash: rec.hash };
+  opts.anchor?.write(newHead, now);
+  return { ...v, rollback, previousHead: headOf(current), anchorHead: anchor ? { seq: anchor.seq, hash: anchor.hash } : null, restoredHead: headOf(restored), newHead };
 }
