@@ -141,6 +141,11 @@ export interface CallbackResponse {
   receiptCode?: string;
   receiptStatus?: string;
   replayed?: boolean;
+  /**
+   * Échec annoncé APRÈS l'issue définitive de l'ordre (rappel hors ordre : FAILED reçu après SUCCESS, remboursement,
+   * contrepassation…) : sans effet sur l'ordre, sans avis au contribuable ; statut de l'ordre inchangé rappelé ici.
+   */
+  ignored?: { orderStatus: string; motif: string };
 }
 
 /** Confirmation normalisée (après vérification de signature propre au canal), commune à tous les prestataires. */
@@ -733,6 +738,13 @@ export class PaymentService {
 
     const now = this.clock.now();
     const expired = new Date(order.expiresAt) <= now;
+    if (n.status === 'FAILED' && order.status !== 'INITIE') {
+      // Rappel hors ordre (deuxième passe adverse, 27/09/2026) : un échec annoncé pour un ordre déjà confirmé, réglé,
+      // rapproché, remboursé, contrepassé ou fermé ne change rien. Aucun avis « paiement échoué » n'est envoyé au
+      // contribuable (message faux et source de litige) ; la trace reste dans le journal d'audit.
+      this.audit.append({ actor, action: 'payment.failure_ignored', resourceType: 'payment_order', resourceId: order.id, details: { providerTxnId: n.providerTxnId, orderStatus: order.status } });
+      return record('ECHOUE', { status: 'ECHOUE', paymentReference: order.paymentReference, ignored: { orderStatus: order.status, motif: `Échec annoncé après l'issue de l'ordre (${order.status}) : sans effet.` } });
+    }
     if (n.status === 'FAILED') {
       // Rappel générique : une tentative échouée n'est pas terminale tant que la référence est valable (le payeur peut
       // réessayer, un succès ultérieur avec une nouvelle transaction sera confirmé) — comme les tentatives BitriPay.
