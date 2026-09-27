@@ -825,3 +825,20 @@ Les points suivants ne relèvent pas du logiciel seul ou attendent un acte, un p
 | Partenaires | Connecteurs BSP/GDS et IFA (AVIA), passerelle bancaire réelle (CALCU), immatriculations nationales | Accords et protocoles avec le pouvoir central et les partenaires |
 | Exploitation | Persistance des états encore volatils (idempotence, brouillons serveur, lots terrain, boîtes in-app), clé de signature QR dédiée, secrets TOTP au coffre de secrets | Mise en production (hébergement souverain) |
 | IA | Registre complet des modèles (évaluations, biais, dérive), OCR des baux, « 12 questions » par action | Gouvernance IA validée par le délégué à la protection des données |
+
+## I.21 Document maître FR 2 (nouvelle version) — chapitres 1 à 17 et 19 à 30 : analyse mot à mot et compléments
+
+Le Document maître FR 2 reçu le 27/09/2026 a été rapproché, phrase par phrase, du logiciel construit. La matrice complète (exigence → code → test → statut) figure dans `docs/document-maitre/couverture-nouvelle-version-ch01-30.md` ; elle cite pour chaque exigence un emplacement du code et au moins un test automatisé. Les compléments ci-dessous s’ajoutent à l’existant, sans rien retirer.
+
+| Exigence | Complément | Routes / écrans |
+|---|---|---|
+| § 17.2 identifiant géographique fiscal | Format du Cahier « KIN-<commune>-<quartier>-<voie>-<n°> » attribué EN PLUS du format territorial existant (conservé), comme alias stable et non réattribuable ; résolution dans les deux formats | `GET /v1/fiscal/igf/:code` ; fiche des biens, corrections d’objets |
+| § 30 et § 17.3 cycle de vie de l’objet | Provisoire, actif, suspendu (litige de limites, contestation, habitat informel à qualifier), clos (quatre yeux) ; aucune nouvelle liquidation sur un objet suspendu ou clos ; litige affiché en bleu | `POST /v1/fiscal/objects/:id/suspension`, `/reactivation`, `/closure`, `POST /v1/fiscal/object-closures/:id/decision`, `GET /v1/fiscal/object-closures` ; panneau « Cycle de vie » |
+| § 30 bail | État « résilié » : résiliation datée par une partie, autre partie notifiée, bail conservé | `POST /v1/fiscal/leases/:id/resiliation` ; attestations de bail |
+| § 16.6 couverture locative | Indicateurs par avenue, quartier et commune (enregistré, occupé/loué, bailleurs et locataires, valeur locative annualisée par devise, obligations, concentration) ; estimé et taux de couverture « non mesurés » | `GET /v1/fiscal/couverture-locative` ; vagues de recensement |
+| § 17.1 couches | Catalogue des 21 couches avec source, route et effectif ; couches sans données « non disponibles » | `GET /v1/fiscal/couches` ; carte fiscale |
+| § 15.2 remise d’un avis | Signature recueillie (empreinte) ou refus consigné, position et témoin, par l’agent de constat ; valeur probante à vérifier | `POST /v1/recouvrement/avis/:id/remise` ; aperçu de l’avis |
+| § 23 et § 13.4 recours | Propriétaire dès le dépôt (service compétent) puis agent désigné ; indicateurs de délai pour la direction de la régie et l’audit interne ; écran de traitement des recours (instruction, décision, effet suspensif) | `POST /v1/appeals/:id/assign`, `GET /v1/appeals/indicateurs`, `GET /v1/appeals/proprietaires` ; écrans « Réclamations et recours » et « Journal d’audit » |
+| § 30 et § 12 | Modèle de données (29 entités, états du Cahier ↔ états du code, effectifs sans nom) et matrice des 16 rôles évaluée en direct | `GET /v1/referentiel/modele-donnees`, `GET /v1/referentiel/matrice-habilitations` ; « Modèle de données et habilitations » |
+
+**Contradictions et différences signalées (arbitrage du maître d’ouvrage).** (1) Deux formats d’identifiant géographique coexistent (§ 17.2). (2) Le § 28.1 (« aucune part automatique pour l’administrateur de la plateforme ») contredit le modèle du promoteur (§ 37A) : le § 37A est conservé tel quel. (3) Les modules 59–61 du Cahier (RFCK) entrent en collision avec les numéros 59–61 déjà attribués (grand livre, coffre, découverte). (4) Lignes 41–44 du catalogue et chapitre 27 : repris par le lot « postes de décision ». Tests : `backend/test/document-maitre-fr2.test.ts`, `frontend/test/document-maitre-fr2.test.tsx`.

@@ -18,6 +18,8 @@ import { CATEGORY_LABELS, makeDeps, type FiscalDeps } from './common.js';
 import { DeclarationService } from './declarations.js';
 import { ExemptionService } from './exemptions.js';
 import { GeoRegistry } from './geo.js';
+import { ObjectLifecycleService } from './lifecycle.js';
+import { RentalCoverageService } from './couverture-locative.js';
 import { buildMap, type MapLayer } from './map.js';
 import { PropertyService } from './properties.js';
 import { RelationService, ROLE_LABELS, isHighValue } from './relations.js';
@@ -43,6 +45,10 @@ export class FiscalService {
   readonly imports: ImportService;
   /** § 9.3 : enrôlement par profil, espaces, NIF provisoire, récupération de compte. */
   readonly enrolment: EnrolmentService;
+  /** § 30 (Document maître FR 2) : cycle de vie de l'objet fiscal (provisoire, actif, suspendu, clos). */
+  readonly lifecycle: ObjectLifecycleService;
+  /** § 16.6 (Document maître FR 2) : indicateurs de couverture locative par avenue, quartier et commune. */
+  readonly rentalCoverage: RentalCoverageService;
 
   constructor(readonly ctx: AppContext) {
     this.geo = new GeoRegistry(() => ctx.clock.now().toISOString());
@@ -58,6 +64,8 @@ export class FiscalService {
     this.census = new CensusService(this.d);
     this.imports = new ImportService(this.d, this.relations);
     this.enrolment = new EnrolmentService(this.d);
+    this.lifecycle = new ObjectLifecycleService(this.d);
+    this.rentalCoverage = new RentalCoverageService(this.d);
     // Les exonérations approuvées s'appliquent à toute liquidation (trace dans l'explication).
     ctx.assessment.registerAdjuster(this.exemptions.adjuster());
     // Référentiels (idempotents) : fiches À VÉRIFIER de l'édit 2026, dépendances informatives.
@@ -79,7 +87,8 @@ export class FiscalService {
       localityRank: o.localityRank,
       status: o.status,
       probativeStatus: o.probativeStatus,
-      igf: o.igf ? { code: o.igf.code, uuid: o.igf.uuid, assignedAt: o.igf.assignedAt } : null,
+      lifecycle: this.lifecycle.view(o),
+      igf: o.igf ? { code: o.igf.code, uuid: o.igf.uuid, assignedAt: o.igf.assignedAt, cahierCode: o.igf.cahierCode ?? null } : null,
       holder: o.taxpayerId ? (viewerTaxpayers.includes(o.taxpayerId) || agent ? o.taxpayerId : 'autre') : null,
       highValue: isHighValue(o),
       attributes: o.attributes,

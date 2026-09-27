@@ -110,7 +110,10 @@ export class PropertyService {
       const igf = this.d.geo.generateIgf(obj, parent, siblings);
       validated = this.d.ctx.objects.markValidated(obj.id, user, igf, rank);
     } else {
-      validated = this.d.ctx.objects.markValidated(obj.id, user, obj.igf, rank);
+      // Objet validé avant l'ajout du format du Cahier (§ 17.2) : l'alias est attribué une fois, l'IGF existant ne change pas.
+      let cahierCode = obj.igf.cahierCode;
+      if (!cahierCode && !parent) cahierCode = this.d.geo.nextCahierCode(obj, obj.igf.uuid, obj.igf.code);
+      validated = this.d.ctx.objects.markValidated(obj.id, user, { ...obj.igf, ...(cahierCode ? { cahierCode } : {}) }, rank);
     }
     // Obligations liquidées sur le rang provisoire : réévaluées sur le rang confirmé (hausse comme baisse).
     for (const o of this.d.ctx.assessment.openFor(obj.id, true)) {

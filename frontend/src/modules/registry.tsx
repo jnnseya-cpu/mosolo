@@ -53,6 +53,8 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/mes-arrieres', element: lazy(() => import('./recouvrement/MyArrears')), nav: { label: 'Mes arriérés et échéances', short: 'Arriérés', icon: 'clock', group: 'public', roles: ['R30', 'R31'] } },
   { path: '/recouvrement', element: lazy(() => import('./recouvrement/RecoveryQueue')), nav: { label: 'Recouvrement', icon: 'scale', group: 'operations', roles: ['R06', 'R07', 'R11', 'R20', 'R21', 'R22', 'R23'] } },
   { path: '/recouvrement/avis/:id', element: lazy(() => import('./recouvrement/NoticeView')) },
+  // Réclamations et recours côté administration (module 37 ; § 13.4 et § 23 du Document maître FR 2) : propriétaire, délai, état, décision motivée.
+  { path: '/recours', element: lazy(() => import('./recouvrement/Recours')), nav: { label: 'Réclamations et recours', short: 'Recours', icon: 'scale', group: 'operations', roles: ['R06', 'R07', 'R20', 'R21', 'R22', 'R23'] } },
   // Remises (demande et instruction R20, décision R21) et admission en non-valeur (proposition R20, décision R21) ; lecture : recouvrement:read.
   { path: '/recouvrement/remises', element: lazy(() => import('./recouvrement/Remises')), nav: { label: 'Remises gracieuses', short: 'Remises', icon: 'scale', group: 'operations', roles: ['R06', 'R07', 'R11', 'R20', 'R21', 'R22', 'R23'] } },
   // Campagnes (§ 8, § 45) et prorogations d'échéance (§ 6.2)
@@ -113,6 +115,8 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/verticales/secteurs', element: lazy(() => import('./verticales/Secteurs')), nav: { label: 'Modules sectoriels (acte requis)', short: 'Secteurs', icon: 'grid', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24', 'R30', 'R31', 'R35'] } },
   // Référentiel des recettes (Cahier ch. 7) : transparence publique, inventaire et codes pour les agents habilités.
   { path: '/referentiel/recettes', element: lazy(() => import('./referentiel/Recettes')), nav: { label: 'Référentiel des recettes', short: 'Recettes', icon: 'ledger', group: 'public', roles: [] } },
+  // Modèle de données (ch. 30) et matrice d'habilitations (ch. 12) du Document maître FR 2, évalués en direct.
+  { path: '/referentiel/modele-donnees', element: lazy(() => import('./referentiel/ModeleDonnees')), nav: { label: 'Modèle de données et habilitations', short: 'Modèle', icon: 'table', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R13', 'R14', 'R16', 'R17', 'R22', 'R23', 'R25', 'R26', 'R28'] } },
 
   // Terrain : supervision, sous-traitants, badges
   { path: '/terrain/supervision', element: lazy(() => import('./terrain/Supervision')), nav: { label: 'Supervision terrain', short: 'Supervision', icon: 'gauge', group: 'operations', roles: ['R06', 'R07', 'R09', 'R11', 'R22', 'R23', 'R24', 'R35'] } },

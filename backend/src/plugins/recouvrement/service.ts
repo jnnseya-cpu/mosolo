@@ -37,6 +37,8 @@ definePolicy('recouvrement:decide', { R21: A });
 definePolicy('recouvrement:notice.issue', { R06: A, R07: A, R11: A, R20: A });
 definePolicy('recouvrement:notice.read', { ...AGENTS_READ, R12: A, R30: GRANTS.ownTaxpayer, R31: GRANTS.mandant });
 definePolicy('recouvrement:notice.ack', { R30: GRANTS.ownTaxpayer, R31: GRANTS.mandant });
+// Remise en personne d'un avis formel (§ 15.2) : agent de constat et contrôleur seulement (jamais le recenseur).
+definePolicy('recouvrement:notice.deliver', { R11: A });
 definePolicy('recouvrement:address.verify', { R12: A, R20: A });
 definePolicy('recouvrement:plan.request', { R12: A, R20: A, R30: GRANTS.ownTaxpayer, R31: GRANTS.mandant });
 definePolicy('recouvrement:plan.decide', { R20: A, R21: A });
@@ -110,6 +112,27 @@ export interface LegalNotice {
   readAt?: string;
   readBy?: string;
   demo: boolean;
+  /**
+   * Remise sur le terrain par un agent de constat habilité (Document maître FR 2, § 15.2 : « émettre une notification
+   * numérique lorsque la loi l'y autorise, recueillir une signature ou enregistrer un refus »). La valeur probante de la
+   * remise reste À VÉRIFIER (point juridique) ; la notification numérique et sa preuve d'envoi sont inchangées.
+   */
+  fieldDelivery?: FieldDelivery;
+}
+
+/** Avis qu'un agent de constat peut remettre en personne (notification formelle J+30 et mise en demeure). */
+export const FIELD_DELIVERABLE_KINDS = ['AVIS_FORMEL', 'MISE_EN_DEMEURE'] as const;
+
+export interface FieldDelivery {
+  by: string;
+  at: string;
+  outcome: 'SIGNE' | 'REFUS';
+  /** Empreinte SHA-256 de la signature recueillie (l'image reste sur le terminal ou au dépôt documentaire). */
+  signatureSha256?: string;
+  refusalNote?: string;
+  witness?: string;
+  position: { lat: number; lon: number; accuracyM?: number };
+  legalStatus: 'A_VERIFIER';
 }
 
 export type StepKind =
@@ -458,7 +481,37 @@ export class RecoveryService {
       notice: { id: n.id, number: n.number, kind: n.kind, issuedAt: n.issuedAt, contentHash: n.contentHash, eventCode: n.eventCode },
       deliveries,
       readAcknowledgement: n.readAt ? { at: n.readAt, by: n.readBy } : null,
+      fieldDelivery: n.fieldDelivery ?? null,
     };
+  }
+
+  /**
+   * Remise d'un avis formel sur le terrain (§ 15.2) : signature recueillie (empreinte) ou refus enregistré, position,
+   * horodatage serveur, témoin facultatif. Une seule remise par avis ; aucun effet sur le montant, aucun encaissement.
+   */
+  recordFieldDelivery(user: User, id: string, input: { outcome: 'SIGNE' | 'REFUS'; signatureSha256?: string; refusalNote?: string; witness?: string; position: { lat: number; lon: number; accuracyM?: number } }): LegalNotice {
+    const n = this.notices.get(id);
+    if (!n) throw notFound('NOTICE_NOT_FOUND', `Avis inconnu : ${id}`);
+    authorize(user, 'recouvrement:notice.deliver');
+    assertNotRelated(user, n.taxpayerId, 'Conflit d’intérêts : l’agent est lié au destinataire de l’avis.');
+    if (!(FIELD_DELIVERABLE_KINDS as readonly string[]).includes(n.kind)) {
+      throw unprocessable('NOTICE_NOT_DELIVERABLE_BY_AGENT', 'Seules la notification formelle et la mise en demeure se remettent en personne.');
+    }
+    if (n.fieldDelivery) throw conflict('NOTICE_ALREADY_DELIVERED', `Avis déjà remis le ${n.fieldDelivery.at} (${n.fieldDelivery.outcome}).`);
+    if (input.outcome === 'SIGNE' && !/^[0-9a-f]{64}$/.test(input.signatureSha256 ?? '')) throw badRequest('SIGNATURE_REQUIRED', 'Remise signée : empreinte SHA-256 de la signature requise.');
+    if (input.outcome === 'REFUS' && (input.refusalNote ?? '').trim().length < 5) throw badRequest('REFUSAL_NOTE_REQUIRED', 'Refus : circonstances à consigner (au moins 5 caractères).');
+    const delivery: FieldDelivery = {
+      by: user.id, at: this.nowIso(), outcome: input.outcome, position: input.position, legalStatus: 'A_VERIFIER',
+      ...(input.signatureSha256 ? { signatureSha256: input.signatureSha256 } : {}),
+      ...(input.refusalNote ? { refusalNote: input.refusalNote.trim() } : {}),
+      ...(input.witness ? { witness: input.witness.trim() } : {}),
+    };
+    const updated = this.notices.update({ ...n, fieldDelivery: delivery });
+    this.ctx.audit.append({
+      actor: this.actor(user), action: input.outcome === 'SIGNE' ? 'recovery.notice.hand_delivered' : 'recovery.notice.delivery_refused', resourceType: 'notice', resourceId: id,
+      details: { kind: n.kind, outcome: input.outcome, contentHash: n.contentHash, signatureSha256: delivery.signatureSha256 ?? null, position: delivery.position },
+    });
+    return updated;
   }
 
   acknowledgeRead(user: User, id: string): LegalNotice {

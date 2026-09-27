@@ -60,6 +60,7 @@ function ObjectCard({ o, onChanged }: { o: FiscalObjectView; onChanged: () => vo
             {o.igf ? <>Identifiant interne permanent <span className="mono">{o.igf.uuid.slice(0, 8)}…</span> · attribué le {fmtDate(o.igf.assignedAt)}</> : `Objet provisoire ${o.id}`}
             {o.example && <span className="tag fs-tag-demo">Exemple</span>}
           </p>
+          {o.igf?.cahierCode && <p className="small muted">Identifiant au format du Cahier (§ 17.2) : <span className="mono">{o.igf.cahierCode}</span></p>}
         </div>
         {o.plate && <VerifyQr path={o.plate.verifyPath} code={o.plate.shortCode} caption={o.plate.nfiu} size={96} />}
       </div>

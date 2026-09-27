@@ -5,6 +5,13 @@
  *   - code territorial LISIBLE `KIN-GOM-Q012-P004517-B01-U03` (commune, quartier, parcelle, bâtiment, unité).
  * Le code lisible peut être réédité (redécoupage) sous une nouvelle version ; l'UUID ne change jamais.
  * Le cadastre fiscal ne confère aucun droit de propriété (§ 17.1).
+ *
+ * AJOUT (Document maître FR 2, nouvelle version, § 17.2) : le Cahier propose un autre format lisible,
+ * `KIN-<code commune>-<code quartier>-<code voie>-<numéro séquentiel>` (ex. « KIN-GOM-GOMBE-AV-MONT-001245 »).
+ * Le format territorial existant est CONSERVÉ (règle n° 1 : rien n'est retiré) ; le format du Cahier est attribué EN
+ * PLUS, à la validation, comme alias stable et NON RÉATTRIBUABLE (registre `cahierCodes`, ajout seul) ; les deux
+ * formats désignent le même objet et se résolvent l'un vers l'autre. Différence signalée au maître d'ouvrage : le
+ * format territorial porte la catégorie (P/B/U…) et non la voie ; le format du Cahier porte la voie et non la catégorie.
  */
 import { randomUUID } from 'node:crypto';
 import { notFound, unprocessable } from '../../core/errors.js';
@@ -30,6 +37,54 @@ export const CATEGORY_SEGMENT: Record<ObjectCategory, string> = {
 
 export type GeoLevel = 'COMMUNE' | 'QUARTIER' | 'AVENUE';
 
+/** Alias au format du Cahier (§ 17.2) : attribué une fois, jamais réattribué ni supprimé (même si l'objet est clos). */
+export interface CahierIgf {
+  /** Le code lui-même sert d'identifiant (unicité garantie par le dépôt). */
+  id: string;
+  objectId: string;
+  igfUuid: string;
+  /** Code territorial de l'objet (format existant) au moment de l'attribution. */
+  territorialCode: string;
+  /** Préfixe `KIN-<commune>-<quartier>-<voie>` (compteur séquentiel par préfixe). */
+  prefix: string;
+  sequence: number;
+  assignedAt: string;
+}
+
+/** Abréviations de type de voie (première lettre du code voie, ex. « AV » pour avenue). [Valeurs de conception.] */
+const VOIE_TYPES: [RegExp, string][] = [
+  [/^(avenue|av)$/, 'AV'], [/^(boulevard|bd|blvd)$/, 'BD'], [/^rue$/, 'RUE'], [/^(route|rte)$/, 'RTE'],
+  [/^(chaussee|chee)$/, 'CH'], [/^place$/, 'PL'], [/^(allee)$/, 'AL'], [/^(impasse)$/, 'IMP'], [/^(ruelle)$/, 'RLE'],
+];
+const STOP_WORDS = new Set(['du', 'de', 'des', 'la', 'le', 'les', 'l', 'd', 'et']);
+const alnumWords = (s: string) => norm(s).replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+
+/** Code quartier au format du Cahier : nom normalisé en capitales (ex. « Gombe » → « GOMBE »), 12 caractères au plus. */
+export function cahierQuartierCode(quartier: string): string {
+  const w = alnumWords(quartier).join('').toUpperCase().slice(0, 12);
+  return w || 'SQ';
+}
+
+/**
+ * Code voie au format du Cahier : type abrégé + premier mot significatif (ex. « Avenue du Mont Fleury » → « AV-MONT »).
+ * Objet sans adresse formelle (§ 17.3) : « SV » (sans voie) — l'identifiant repose alors sur le point GPS et le repère.
+ */
+export function cahierVoieCode(avenue: string | undefined): string {
+  if (!avenue?.trim()) return 'SV';
+  const words = alnumWords(avenue);
+  let type = 'V';
+  let rest = words;
+  const t = VOIE_TYPES.find(([re]) => re.test(words[0] ?? ''));
+  if (t) { type = t[1]; rest = words.slice(1); }
+  const main = rest.find((w) => !STOP_WORDS.has(w)) ?? rest[0] ?? '';
+  return main ? `${type}-${main.toUpperCase().slice(0, 8)}` : type;
+}
+
+/** Forme du code au format du Cahier (racine) et de ses prolongements (sous-objets : « …-001245-B01-U03 »). */
+export const CAHIER_IGF_PATTERN = /^KIN-[A-Z]{3}-[A-Z0-9]{1,12}-[A-Z0-9]+(?:-[A-Z0-9]{1,8})?-\d{6}(?:-[A-Z]\d{2})*$/;
+/** Forme du code territorial existant. */
+export const TERRITORIAL_IGF_PATTERN = /^KIN-[A-Z]{3}-Q\d{3}-[A-Z]\d{6}(?:-[A-Z]\d{2})*$/;
+
 export interface GeoUnit {
   id: string;
   level: GeoLevel;
@@ -46,6 +101,8 @@ const norm = (s: string) => s.trim().toLocaleLowerCase('fr').normalize('NFD').re
 
 export class GeoRegistry {
   readonly units = new InMemoryRepository<GeoUnit>();
+  /** Alias au format du Cahier (§ 17.2), stables et non réattribuables. */
+  readonly cahierCodes = new InMemoryRepository<CahierIgf>();
   private readonly ids = new IdGenerator();
   /** Compteurs de numéros de parcelle (ou d'objet racine) par quartier. */
   private readonly rootCounters = new Map<string, number>();
@@ -93,20 +150,52 @@ export class GeoRegistry {
    * Génère l'IGF d'un objet qui n'en a pas encore. Un objet enfant (bâtiment, unité, activité) prolonge le
    * code de son parent (`…-P004517-B01-U03`) ; un objet racine reçoit un numéro séquentiel dans son quartier.
    */
-  generateIgf(obj: FiscalObject, parent: FiscalObject | undefined, siblingsWithIgf: number): { uuid: string; code: string; codeVersion: number } {
+  generateIgf(obj: FiscalObject, parent: FiscalObject | undefined, siblingsWithIgf: number): { uuid: string; code: string; codeVersion: number; cahierCode?: string } {
     const seg = CATEGORY_SEGMENT[obj.category];
+    const uuid = randomUUID();
     if (parent) {
       if (!parent.igf) {
         throw unprocessable('PARENT_NOT_VALIDATED', `L'objet parent ${parent.id} doit être validé (IGF attribué) avant ${obj.id}.`);
       }
-      return { uuid: randomUUID(), code: `${parent.igf.code}-${seg}${String(siblingsWithIgf + 1).padStart(2, '0')}`, codeVersion: 1 };
+      const suffix = `-${seg}${String(siblingsWithIgf + 1).padStart(2, '0')}`;
+      const code = `${parent.igf.code}${suffix}`;
+      const cahierCode = parent.igf.cahierCode ? this.reserveCahier(`${parent.igf.cahierCode}${suffix}`, obj, uuid, code) : undefined;
+      return { uuid, code, codeVersion: 1, ...(cahierCode ? { cahierCode } : {}) };
     }
     const q = this.ensureQuartier(obj.commune, obj.quartier);
     const key = q.id;
     const n = (this.rootCounters.get(key) ?? 0) + 1;
     this.rootCounters.set(key, n);
     const communeCode = COMMUNE_CODES[obj.commune as keyof typeof COMMUNE_CODES];
-    return { uuid: randomUUID(), code: `KIN-${communeCode}-${q.code}-${seg}${String(n).padStart(6, '0')}`, codeVersion: 1 };
+    const code = `KIN-${communeCode}-${q.code}-${seg}${String(n).padStart(6, '0')}`;
+    return { uuid, code, codeVersion: 1, cahierCode: this.nextCahierCode(obj, uuid, code) };
+  }
+
+  /**
+   * Alias au format du Cahier pour un objet racine : `KIN-<commune>-<quartier>-<voie>-<n° séquentiel sur 6 chiffres>`.
+   * Le numéro repart au-delà du plus grand numéro déjà attribué pour le préfixe (jamais de réattribution, même après
+   * redémarrage ou clôture de l'objet).
+   */
+  nextCahierCode(obj: FiscalObject, igfUuid: string, territorialCode: string): string {
+    const communeCode = COMMUNE_CODES[obj.commune as keyof typeof COMMUNE_CODES];
+    const prefix = `KIN-${communeCode}-${cahierQuartierCode(obj.quartier)}-${cahierVoieCode(obj.avenue)}`;
+    const max = this.cahierCodes.find((c) => c.prefix === prefix).reduce((m, c) => Math.max(m, c.sequence), 0);
+    const sequence = max + 1;
+    return this.reserveCahier(`${prefix}-${String(sequence).padStart(6, '0')}`, obj, igfUuid, territorialCode, prefix, sequence);
+  }
+
+  private reserveCahier(code: string, obj: FiscalObject, igfUuid: string, territorialCode: string, prefix = code, sequence = 0): string {
+    if (this.cahierCodes.get(code)) throw unprocessable('IGF_ALREADY_ASSIGNED', `Identifiant ${code} déjà attribué : jamais réattribué.`);
+    this.cahierCodes.insert({ id: code, objectId: obj.id, igfUuid, territorialCode, prefix, sequence, assignedAt: this.now() });
+    return code;
+  }
+
+  /** Objet désigné par un code, quel que soit son format (territorial existant ou format du Cahier). */
+  resolveCode(code: string, objects: { findOne: (p: (o: FiscalObject) => boolean) => FiscalObject | undefined }): FiscalObject | undefined {
+    const c = code.trim().toUpperCase();
+    const alias = this.cahierCodes.get(c);
+    if (alias) return objects.findOne((o) => o.id === alias.objectId);
+    return objects.findOne((o) => o.igf?.code === c || o.igf?.cahierCode === c);
   }
 
   /** Chemin hiérarchique lisible d'un objet (commune › quartier › avenue). */
