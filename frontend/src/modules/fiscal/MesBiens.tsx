@@ -4,6 +4,8 @@
  * QR par bien, relations contribuable–objet (rôle, quote-part, preuve, statut probant).
  */
 import { useState, type FormEvent } from 'react';
+import { Drawer } from '../../components/Drawer';
+import { SeptQuestionsPanel } from '../chaine/SeptQuestions';
 import { useApp } from '../../context';
 import { PageHead } from '../../components/Shell';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -47,6 +49,7 @@ function RelationRow({ r, onChanged }: { r: RelationView; onChanged: () => void 
 
 function ObjectCard({ o, onChanged }: { o: FiscalObjectView; onChanged: () => void }) {
   const { fmtDate } = useApp();
+  const [chain, setChain] = useState(false);
   return (
     <article className="panel fs-object">
       <div className="fs-object-head">
@@ -72,6 +75,13 @@ function ObjectCard({ o, onChanged }: { o: FiscalObjectView; onChanged: () => vo
       {o.relations.length === 0 ? <p className="small muted">Aucune relation enregistrée.</p> : (
         <ul className="fs-rels">{o.relations.map((r, i) => <RelationRow key={r.id ?? `anon-${i}`} r={r} onChanged={onChanged} />)}</ul>
       )}
+      {/* Vision (§ 3) : sept questions et chaîne opératoire du bien, selon les habilitations du lecteur. */}
+      <div className="row-actions">
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setChain(true)} aria-haspopup="dialog"><Icon name="sync" size={16} /> Sept questions et chaîne</button>
+      </div>
+      <Drawer open={chain} onClose={() => setChain(false)} title={`Sept questions — ${o.igf?.code ?? o.id}`}>
+        {chain && <SeptQuestionsPanel objectId={o.id} />}
+      </Drawer>
     </article>
   );
 }

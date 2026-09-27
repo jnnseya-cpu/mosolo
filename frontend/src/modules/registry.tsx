@@ -118,6 +118,11 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/pilotage/piste-audit', element: lazy(() => import('./pilotage/PisteAudit')), nav: { label: 'Piste d’audit par dossier', short: 'Piste', icon: 'history', group: 'operations', roles: ['R22', 'R23', 'R24'] } },
   { path: '/transparence', element: lazy(() => import('./pilotage/Transparence')), nav: { label: 'Transparence publique', short: 'Transparence', icon: 'globe', group: 'public', roles: [] } },
 
+  // Vision : sept questions par objet et par obligation, chaîne opératoire en treize maillons, maillons sautés (audit)
+  { path: '/chaine', element: lazy(() => import('./chaine/Chaine')), nav: { label: 'Sept questions et chaîne', short: 'Chaîne', icon: 'sync', group: 'operations', roles: ['R06', 'R07', 'R11', 'R17', 'R22', 'R23', 'R24', 'R28'] } },
+  { path: '/chaine/:objectId', element: lazy(() => import('./chaine/Chaine')) },
+  { path: '/chaine/obligation/:obligationId', element: lazy(() => import('./chaine/Chaine')) },
+
   // Paiements : prestataires connectés (BitriPay, KODA)
   { path: '/tresor/prestataires', element: lazy(() => import('./prestataires/Prestataires')), nav: { label: 'Prestataires connectés', short: 'Prestataires', icon: 'phone', group: 'operations', roles: ['R17', 'R18', 'R22', 'R26', 'R27'] } },
 
