@@ -19,6 +19,7 @@ import { GardeConfidentialite } from './common';
 import { AideContextuelle } from './AideContextuelle';
 import { PROFIL_LIBELLE, PROFILS_CERTIFIES, type Contenu, type Indicateurs, type LigneRegistre, type Profil, type ProfilCertifie, type Question, type Registre, type StatutVersion } from './types';
 import './apprentissage.css';
+import { IndicateursApprentissageVisuel, RegistreCertificationsVisuel } from './visuels';
 
 const STATUT: Record<StatutVersion, { label: string; tone: Tone }> = {
   BROUILLON: { label: 'Brouillon', tone: 'neutral' }, PROPOSEE: { label: 'Proposée — seconde personne attendue', tone: 'warning' },
@@ -117,6 +118,8 @@ function RegistreTab() {
   if (!q.data) return null;
   return (
     <div className="stack">
+      {/* Visuels (27/09/2026) : registre complet (tous publics), depuis la même réponse. */}
+      <RegistreCertificationsVisuel lignes={q.data.lignes} />
       <div className="field"><label className="label" htmlFor="ap-pf">Public</label>
         <select id="ap-pf" value={profil} onChange={(e) => setProfil(e.target.value as ProfilCertifie | '')}>
           <option value="">Tous les publics</option>{PROFILS_CERTIFIES.map((p) => <option key={p} value={p}>{PROFIL_LIBELLE[p]}</option>)}
@@ -253,6 +256,8 @@ function IndicateursTab() {
   const c = q.data.comprehension;
   return (
     <div className="stack">
+      {/* Visuels (27/09/2026) : couverture et compréhension, depuis les mêmes indicateurs agrégés. */}
+      <IndicateursApprentissageVisuel d={q.data} />
       <section className="panel" aria-labelledby="ap-cmp">
         <h2 id="ap-cmp" className="panel-title">Compréhension des contribuables</h2>
         <p className="kpi-value" aria-label="Taux de dossiers complets du premier coup">{c.libelle}</p>

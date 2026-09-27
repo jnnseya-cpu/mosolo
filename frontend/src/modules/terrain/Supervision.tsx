@@ -20,6 +20,7 @@ import { hasRole, Progress, ReasonDrawer, useFeedback } from './common';
 import { FINDING_STATUS, FLAG_LABEL, fmtPct, MISSION_STATUS, moduleLabel, OUTCOME_LABEL } from './labels';
 import type { CounterVisit, FieldAgent, Finding, Indicators, Lot, Mission, QualityBoard, QualityRow } from './types';
 import './terrain.css';
+import { SupervisionVisuel } from './visuels';
 
 type Tab = 'missions' | 'findings' | 'quality' | 'production';
 
@@ -220,6 +221,8 @@ export default function Supervision() {
       <PageHead eyebrow="Opérations de terrain" title="Supervision terrain" lead="Missions, revue indépendante des constats, contrôle qualité et production. Le système signale les écarts ; la décision revient à une personne habilitée, avec motif tracé." />
       <div className="callout callout-danger" role="note"><Icon name="cash" size={20} /><p><strong>Aucun encaissement sur le terrain.</strong> Agents, superviseurs et sous-traitants ne manipulent jamais d’argent ; un constat ne crée jamais de dette.</p></div>
       {ind.data ? <Kpis ind={ind.data} /> : <Loading />}
+      {/* Visuels (27/09/2026) : missions, constats, communes, équipes — mêmes indicateurs que le bandeau ci-dessus. */}
+      {ind.data && <SupervisionVisuel ind={ind.data} example={(missions.data?.items ?? []).some((m) => m.demo)} />}
       <ExampleNotice text="Missions, agents et constats de démonstration : données fictives." />
 
       <div className="seg seg-wrap tr-tabs" role="group" aria-label="Sections">

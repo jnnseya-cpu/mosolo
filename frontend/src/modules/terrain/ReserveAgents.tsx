@@ -18,6 +18,7 @@ import { StatusBadge, type Tone } from '../../components/StatusBadge';
 import { MoneyText } from '../../components/MoneyText';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
+import { ReserveVisuel } from './visuels';
 
 export type PointKind = 'OBJET_CONFIRME' | 'ENROLEMENT_VALIDE' | 'REGULARISATION_CONFIRMEE';
 export interface ReservePoint {
@@ -225,6 +226,8 @@ export default function ReserveAgents() {
         <label className="pl-filter" htmlFor="reserve-month"><span>Mois</span><input id="reserve-month" type="month" value={period} onChange={(e) => setPeriod(e.target.value || currentMonth())} /></label>
         <button type="button" className="btn btn-secondary btn-sm" onClick={q.reload}><Icon name="refresh" size={16} /> Actualiser</button>
       </PageHead>
+      {/* Visuels (27/09/2026) : points, notes de qualité et répartition par module, depuis la même vue. */}
+      {q.data && !q.error && <ReserveVisuel d={q.data} />}
       {q.loading && !q.data ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : q.data && <ReserveBody d={q.data} onDone={q.reload} />}
     </div>
   );

@@ -12,6 +12,31 @@ import { isDraftLanguage, type UIKey } from '../lib/i18n';
 import { levelLabel } from '../lib/labels';
 import type { RegistrationInput, RegistrationResult } from '../lib/types';
 import '../modules/acces/acces.css';
+import { useApi } from '../hooks/useApi';
+import { asList } from '../lib/api';
+import { PiecesEnAttenteVisuel } from './visuels';
+
+/** Rôles habilités à revoir les pièces d'identité (politique ACCES.proofReview du serveur). */
+const REVUE_PIECES = ['R06', 'R07', 'R11', 'R12'];
+const TYPE_PIECE: Record<string, string> = {
+  OTP_TELEPHONE: 'Code à usage unique (téléphone)', PIECE_IDENTITE: 'Pièce d’identité', ADRESSE: 'Adresse', CONTROLE_DOCUMENTAIRE: 'Contrôle documentaire', VISITE_TERRAIN: 'Visite de terrain',
+  NIF: 'NIF', RCCM: 'RCCM', ID_NAT: 'Identification nationale', MANDAT_NOTARIE: 'Mandat notarié', ENROLEMENT_ASSISTE: 'Enrôlement assisté',
+};
+
+/** Guichet : registre des pièces en attente de revue, en graphique, avec lien vers le registre d'identité. */
+function RegistreGuichet() {
+  const { lang } = useApp();
+  const q = useApi(async () => asList<{ type: string; status: string; taxpayer?: { verificationLevel?: string } }>(await api<unknown>('/v1/acces/identity-proofs')), []);
+  return (
+    <section className="section viz-section" aria-labelledby="reg-guichet">
+      <div className="section-head"><h2 id="reg-guichet">Guichet : pièces en attente de revue</h2>{q.data && <span className="count">{q.data.length}</span>}
+        <Link className="btn btn-secondary btn-sm" to="/acces/identite"><Icon name="user" size={16} /> Ouvrir le registre d’identité</Link></div>
+      {q.error ? <p className="notice notice-err" role="alert">{describeError(q.error).message}</p> : q.loading ? null : (
+        <PiecesEnAttenteVisuel items={q.data ?? []} typeLabel={(t) => TYPE_PIECE[t] ?? t} niveauLabel={(n) => (n ? levelLabel(lang, n) : 'Non renseigné')} />
+      )}
+    </section>
+  );
+}
 
 const PHONE_RE = /^\+?243\s?[0-9 ]{9,12}$|^0[0-9 ]{9,11}$/;
 const FORMS: [string, string][] = [
@@ -107,7 +132,7 @@ function OtpStep({ done, onVerified }: { done: Done; onVerified: (level: string)
 }
 
 export default function Registration() {
-  const { tr, lang } = useApp();
+  const { tr, lang, user } = useApp();
   const [profile, setProfile] = useState<Profile>('PP');
   const draft = useAutosave<RegistrationInput>('registration', { phone: '', fullName: '', language: lang, situation: '' });
   const v = draft.value;
@@ -304,6 +329,7 @@ export default function Registration() {
               )}
             </>
           )}
+          {user?.roles.some((r) => REVUE_PIECES.includes(r)) && <RegistreGuichet />}
         </div>
       </CoverSplit>
     </div>

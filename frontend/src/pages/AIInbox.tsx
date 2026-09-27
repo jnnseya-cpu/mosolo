@@ -8,6 +8,9 @@ import IaAutonomy from '../modules/ia/IaAutonomy';
 import IaMemory from '../modules/ia/IaMemory';
 import IaJournal from '../modules/ia/IaJournal';
 import '../modules/ia/ia.css';
+import { useApi } from '../hooks/useApi';
+import { api, asList } from '../lib/api';
+import { IaVisuel } from './visuels';
 
 const VIEWS = [
   { id: 'boite', label: 'Boîte de réception', icon: 'analysis' },
@@ -37,6 +40,8 @@ export default function AIInbox() {
   });
   const requested = params.get('vue') as View | null;
   const view: View = requested && views.some((v) => v.id === requested) ? requested : 'boite';
+  // Visuel de synthèse (27/09/2026) : la boîte de réception réelle, par agent et par niveau d'autonomie.
+  const recs = useApi(async () => asList<{ agent?: string; autonomy?: string }>(await api<unknown>('/v1/ia/inbox')), [user?.id]);
   const go = (v: View) => setParams(v === 'boite' ? {} : { vue: v }, { replace: true });
 
   return (
@@ -53,6 +58,7 @@ export default function AIInbox() {
           </button>
         ))}
       </div>
+      {view === 'boite' && recs.data && <IaVisuel recs={recs.data} />}
       {view === 'boite' && <IaInbox />}
       {view === 'agents' && <IaAgents onRan={() => undefined} />}
       {view === 'autonomie' && <IaAutonomy />}

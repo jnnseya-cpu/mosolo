@@ -19,6 +19,9 @@ import { api, describeError, safeGet, safeSet } from '../lib/api';
 import type { UIKey } from '../lib/i18n';
 import { ledgerLabel } from '../lib/labels';
 import type { ReconciliationException, VaultChangeRequest } from '../lib/types';
+import { StatusDistribution } from '../components/viz';
+import { countBy } from '../lib/aggregate';
+import { etatsDepuis, TresorVisuel } from './visuels';
 
 interface Balance {
   balanced: boolean; entries?: number;
@@ -119,6 +122,8 @@ function Vault() {
         </form>
         <div>
           <h3 className="h-sub">{tr('vault.requests')}</h3>
+          <StatusDistribution framed={false} title="Demandes de changement par état" unitLabel="demandes" emptyText={tr('vault.none')}
+            items={etatsDepuis({ EN_ATTENTE_APPROBATION: { label: tr('vault.status.EN_ATTENTE_APPROBATION' as UIKey), tone: 'warning' }, EN_REFROIDISSEMENT: { label: tr('vault.status.EN_REFROIDISSEMENT' as UIKey), tone: 'info' }, EFFECTIF: { label: tr('vault.status.EFFECTIF' as UIKey), tone: 'good' } }, countBy(list, 'status'))} />
           {list.length === 0 ? <EmptyState title={tr('vault.none')} /> : (
             <ul className="list-rows">
               {list.map((r) => (
@@ -158,7 +163,19 @@ function StatementForm({ onImported }: { onImported: () => void }) {
   const [err, setErr] = useState<string | null>(null);
   const setLine = (i: number, k: keyof Line, val: string) => draft.setValue((p) => ({ ...p, lines: p.lines.map((l, j) => (j === i ? { ...l, [k]: val } : l)) }));
   async function submit(e: FormEvent) {
-    e.preventDefault(); setBusy(true); setErr(null); setRes(null);
+    e.preventDefault(); setErr(null); setRes(null);
+    // Contrôle avant envoi (27/09/2026) : une ligne incomplète est signalée à l'écran au lieu d'un refus 400 du serveur.
+    const bad = v.lines.map((l, i) => {
+      const miss: string[] = [];
+      if (!l.paymentReference.trim()) miss.push('référence de paiement');
+      if (!/^\d+(\.\d{1,2})?$/.test(l.amount.trim()) || Number(l.amount) <= 0) miss.push('montant décimal positif (ex. 450.00)');
+      if (!l.accountAlias.trim()) miss.push('alias du compte');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(l.valueDate)) miss.push('date de valeur');
+      return miss.length ? `Ligne ${i + 1} : ${miss.join(', ')}` : null;
+    }).filter((x): x is string => x !== null);
+    if (!v.statementId.trim()) bad.unshift('Identifiant du relevé requis');
+    if (bad.length) { setErr(`Relevé incomplet — ${bad.join(' ; ')}.`); return; }
+    setBusy(true);
     try {
       const body = {
         statementId: v.statementId,
@@ -217,6 +234,8 @@ export default function Treasury() {
   return (
     <div className="page page-wide">
       <PageHead eyebrow={tr('treasury.eyebrow')} title={tr('nav.treasury')} lead={tr('treasury.lead')} />
+      {/* Visuel de synthèse (27/09/2026) : équilibre et soldes du grand livre, une devise par graphique. */}
+      {bal.data && <TresorVisuel bal={bal.data} compteLabel={(a) => (ledgerLabel(lang, a.account) === a.account && a.label ? a.label : ledgerLabel(lang, a.account))} />}
       <div className="dash-grid">
         <section className="panel span-5" aria-labelledby="bal-title">
           <header className="panel-head"><h2 className="panel-title" id="bal-title">{tr('treasury.balance')}</h2>

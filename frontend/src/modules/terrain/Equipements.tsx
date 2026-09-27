@@ -10,6 +10,7 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { Section } from '../pilotage/shared';
 import { Field, hasRole } from '../pilotage/planif';
 import { date, Ecran, Indicateurs, useRunner, useVue, type Indicator } from '../decision/commun';
+import { EquipementsVisuel } from './visuels';
 
 interface Equipment {
   id: string; userId: string; userName: string; policyCode: string; policyVersion: number; model: string; os: string; state: string;
@@ -38,6 +39,8 @@ export default function Equipements() {
     <Ecran eyebrow="Terrain · module 58" title="Gestion des équipements terrain" lead="Enregistrer, sécuriser et révoquer les terminaux des agents ; suivi des résultats, pas surveillance intrusive." q={q} msg={r.msg}>
       {(d) => (<>
         <Section title="Indicateurs" sub={d.rule}><Indicateurs items={d.indicators} /></Section>
+        {/* Visuels (27/09/2026) : terminaux, liaison et incidents, depuis la même vue. */}
+        <EquipementsVisuel equipments={d.equipments} incidents={d.incidents} />
         <Section title="Outil de gestion des terminaux (MDM)"><StatusBadge tone={d.mdm.external ? 'good' : 'warning'} label={d.mdm.adapter} /> <span className="small">{d.mdm.label}</span></Section>
         <Section title="Politiques (versionnées)">
           <DataTable caption="Politiques" rows={d.policies} rowKey={(p) => p.id} columns={[

@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { ReasonAction } from '../fiscal/common';
+import { MesPvVisuel } from './visuels';
 
 interface MyPv { id: string; number: string; status: string; commune: string; recordedAt: string; signature: { kind: string }; statements: { observations: string }; contestations: { id: string; text: string; acknowledgement: string; answer?: { text: string } }[] }
 
@@ -19,6 +20,7 @@ export default function MesProcesVerbaux() {
       <PageHead eyebrow="Mes droits" title="Procès-verbaux me concernant" lead="Un procès-verbal constate une situation : il ne crée ni dette ni sanction. Vous pouvez le contester ; la réponse est motivée par une personne distincte de l’agent." />
       {q.loading && <Loading />}
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
+      {q.data && q.data.length > 0 && <MesPvVisuel pvs={q.data} />}
       {q.data && q.data.length === 0 && <EmptyState title="Aucun procès-verbal sur vos biens." />}
       <ul className="stack-sm">{(q.data ?? []).map((p) => (
         <li key={p.id} className="panel stack-sm">

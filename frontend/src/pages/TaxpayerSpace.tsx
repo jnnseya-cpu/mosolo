@@ -24,6 +24,7 @@ import { asMoney } from '../lib/normalize';
 import type { Obligation, ObligationDetail, ObligationExplanation, PaymentOrder, Receipt, TaxpayerProfile } from '../lib/types';
 import '../modules/fiscal/fiscal.css';
 import { SeptQuestionsPanel } from '../modules/chaine/SeptQuestions';
+import { EspaceVisuel, type EtatDef } from './visuels';
 
 /** Accès aux démarches fiscales (module fiscal) depuis l'espace contribuable. */
 const FISCAL_LINKS: { to: string; icon: string; title: string; text: string }[] = [
@@ -314,6 +315,11 @@ export default function TaxpayerSpace() {
 
       {p && (
         <>
+          {/* Visuel de synthèse (27/09/2026) : dérivé du profil déjà chargé, sans appel supplémentaire. */}
+          <EspaceVisuel p={{ obligations, objects: p.objects, receipts: p.receipts }} example
+            obligationEtats={Object.fromEntries(Object.entries(OBLIGATION_TONE).map(([k, tone]) => [k, { label: tr(obligationKey(k)), tone } as EtatDef]))}
+            recuEtats={Object.fromEntries(Object.entries(RECEIPT_TONE).map(([k, v]) => [k, { label: tr(v.key), tone: v.tone } as EtatDef]))}
+            probatoire={(s) => (s ? tr(`probative.${s}` as UIKey) : 'Non renseigné')} />
           <section className="section" aria-labelledby="sec-obl">
             <div className="section-head"><h2 id="sec-obl">{tr('taxpayer.obligations')}</h2><span className="count">{obligations.length}</span></div>
             <DataTable

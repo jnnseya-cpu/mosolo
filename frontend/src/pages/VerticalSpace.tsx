@@ -23,6 +23,7 @@ import { PrintProofLink } from '../modules/preuves/PrintLink';
 import { AviaAutoAirline } from '../modules/verticales/AviaAuto';
 import { ParcoursPanel } from '../modules/verticales/Parcours';
 import { EtablissementObligations } from '../modules/verticales/Determination';
+import { VerticaleVisuel } from './visuels';
 
 export { OBLIGATION_TONE as DUE_TONE };
 
@@ -429,6 +430,8 @@ function VerticalSpaceInner({ slug }: { slug: string }) {
           {isTaxpayer && !!space.error && <ErrorState error={space.error} onRetry={space.reload} />}
           {s && (
             <>
+              {/* Visuel de synthèse (27/09/2026) : dérivé de l'espace déjà chargé (compte unique). */}
+              <VerticaleVisuel s={s} caseTone={CASE_TONE} obligationEtats={Object.fromEntries(Object.entries(OBLIGATION_TONE).map(([k, tone]) => [k, { label: OBLIGATION_LABEL[k] ?? k, tone }]))} />
               <section className="panel" aria-labelledby="vx-obj">
                 <div className="panel-head"><h2 className="panel-title" id="vx-obj">{v.objectsTitle}</h2><span className="count">{objects.length}</span></div>
                 {objects.length === 0 ? <EmptyState title="Aucun élément enregistré" /> : (

@@ -8,6 +8,7 @@ import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import type { Certificat } from './types';
 import './apprentissage.css';
+import { MesCertificatsVisuel } from './visuels';
 
 type Ligne = Certificat & { libelleProfil: string; enVigueur: boolean };
 
@@ -20,6 +21,7 @@ export default function MesCertificats() {
       <PageHead eyebrow="Apprentissage et poste de travail" title="Mes certificats" lead="Certificats délivrés par une personne distincte, sur épreuves réussies et évaluation conforme ; durée de validité par défaut à confirmer." />
       {q.loading && <Loading />}
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
+      {q.data && q.data.length > 0 && <MesCertificatsVisuel items={q.data} />}
       {q.data && (
         <DataTable caption="Mes certificats" rows={q.data} rowKey={(c) => c.id} empty={<EmptyState title="Aucun certificat pour le moment." icon="shieldCheck" />} columns={[
           { key: 'id', label: 'Certificat', primary: true, render: (c) => <span className="mono">{c.id}</span> },

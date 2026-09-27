@@ -9,13 +9,18 @@ import { api, asList } from '../lib/api';
 import type { AuditEvent, AuditVerify } from '../lib/types';
 import { auditActionLabel } from '../lib/labels';
 import { AppealDeadlinesPanel, type AppealIndicators } from '../components/AppealDeadlinesPanel';
+import { AuditVisuel } from './visuels';
 
 type Ev = Omit<AuditEvent, 'actor'> & { resourceType?: string; resourceId?: string; outcome?: string; actor?: string | { id?: string; kind?: string } };
 
 export default function Audit() {
   const { tr, fmtDate, user, lang } = useApp();
   const v = useApi(() => api<AuditVerify>('/v1/audit/verify'), [user?.id]);
-  const ev = useApi(async () => asList<Ev>(await api<unknown>('/v1/audit/events'), 'events', 'records'), [user?.id]);
+  const ev = useApi(async () => {
+    const raw = await api<unknown>('/v1/audit/events');
+    const total = raw && typeof raw === 'object' && !Array.isArray(raw) && typeof (raw as { total?: unknown }).total === 'number' ? (raw as { total: number }).total : null;
+    return Object.assign(asList<Ev>(raw, 'events', 'records'), { total });
+  }, [user?.id]);
   const appeals = useApi(() => api<AppealIndicators>('/v1/appeals/indicateurs'), [user?.id]);
   const events = (ev.data ?? []).slice().reverse();
   const actor = (e: Ev) => (typeof e.actor === 'string' ? e.actor : e.actor?.id ?? '—');
@@ -24,6 +29,9 @@ export default function Audit() {
       <PageHead eyebrow={tr('audit.eyebrow')} title={tr('audit.title')} lead={tr('audit.lead')}>
         <button type="button" className="btn btn-secondary" onClick={() => { v.reload(); ev.reload(); }}><Icon name="refresh" size={18} /> {tr('audit.reverify')}</button>
       </PageHead>
+      {/* Visuel de synthèse (27/09/2026) : chaîne, volume, domaines et issues, sur les événements chargés. */}
+      {(ev.data || v.data) && <AuditVisuel events={ev.data ?? []} total={ev.data?.total ?? null} chaine={v.data ? { ok: v.data.ok, length: v.data.length } : null}
+        recours={appeals.data ? { open: appeals.data.open, overdue: appeals.data.overdue, approaching: appeals.data.approaching } : null} />}
       <section className="panel" aria-labelledby="chain-state">
         <h2 id="chain-state" className="panel-title">{tr('audit.chain')}</h2>
         {v.loading && <Loading />}

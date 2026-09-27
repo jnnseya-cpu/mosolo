@@ -16,6 +16,7 @@ import { GardeConfidentialite } from './common';
 import { EtatCertificationView } from './EtatCertification';
 import type { ContenuVue, Epreuve, Espace as EspaceData } from './types';
 import './apprentissage.css';
+import { EspaceApprentissageVisuel } from './visuels';
 
 function Fiche({ f }: { f: ContenuVue }) {
   const [ln, setLn] = useState(false);
@@ -91,6 +92,8 @@ export default function Espace() {
       {q.data && (
         <div className="stack">
           <ExampleNotice text="Contenus et certificats de démonstration [EXEMPLE] : non contractuels." />
+          {/* Visuels (27/09/2026) : modules, exigences et résultats, depuis l'espace déjà chargé. */}
+          <EspaceApprentissageVisuel d={q.data} />
           <section className="section" aria-labelledby="ap-pub">
             <h2 id="ap-pub">Mes publics</h2>
             <div className="ap-grid">

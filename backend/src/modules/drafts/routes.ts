@@ -16,7 +16,17 @@ export function registerDraftRoutes(app: FastifyInstance, ctx: AppContext): void
     return { key: v.key, version: v.version, savedAt: v.savedAt, changeSummary: v.changeSummary, changes: v.changes };
   });
 
-  app.get<{ Params: { key: string } }>('/v1/drafts/:key', async (req) => ctx.drafts.latest(requireUser(req), req.params.key));
+  // `?siAbsent=vide` (ajout 27/09/2026) : un brouillon absent répond 200 `{ draft: null }` au lieu de 404, pour que la
+  // restauration automatique d'un formulaire neuf ne produise pas d'erreur réseau. Sans ce paramètre : 404 inchangé.
+  app.get<{ Params: { key: string }; Querystring: { siAbsent?: string } }>('/v1/drafts/:key', async (req) => {
+    const user = requireUser(req);
+    try {
+      return ctx.drafts.latest(user, req.params.key);
+    } catch (e) {
+      if (req.query.siAbsent === 'vide' && (e as { code?: string }).code === 'DRAFT_NOT_FOUND') return { draft: null };
+      throw e;
+    }
+  });
 
   app.get<{ Params: { key: string } }>('/v1/drafts/:key/versions', async (req) => ctx.drafts.history(requireUser(req), req.params.key));
 }
