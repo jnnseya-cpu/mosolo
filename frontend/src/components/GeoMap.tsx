@@ -6,7 +6,10 @@
  * © contributeurs OpenStreetMap (ODbL).
  */
 import { useEffect, useRef, useState } from 'react';
-import maplibregl, { type StyleSpecification, type GeoJSONSource } from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+import type { StyleSpecification, GeoJSONSource } from 'maplibre-gl';
+// MapLibre 6 charge son travailleur (worker) depuis un fichier séparé : Vite le construit et en fournit l'adresse.
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Protocol } from 'pmtiles';
 import { layers, namedFlavor } from '@protomaps/basemaps';
@@ -33,6 +36,8 @@ export interface GeoMapProps {
   caption?: string;
   ariaLabel?: string;
 }
+
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 let protocolAdded = false;
 let tilesProbe: Promise<boolean> | null = null;

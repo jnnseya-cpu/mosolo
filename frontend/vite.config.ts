@@ -101,6 +101,8 @@ export default defineConfig({
       },
     }),
   ],
+  // Travailleurs en modules ES (MapLibre 6 crée un Worker de type « module »).
+  worker: { format: 'es' },
   server: { port: 5173 },
   test: {
     environment: 'jsdom',

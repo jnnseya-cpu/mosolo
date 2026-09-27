@@ -56,9 +56,9 @@ jobs:
       - name: Construction — frontend
         run: npm run build -w frontend
 
+      # Bloquant : une vulnérabilité élevée ou critique dans une dépendance de production arrête l'intégration.
       - name: Audit des dépendances (production, niveau élevé)
         run: npm audit --omit=dev --audit-level=high
-        continue-on-error: true
 
   persistance-postgresql:
     name: Persistance sur PostgreSQL réel (migrations, sauvegarde, restauration)
