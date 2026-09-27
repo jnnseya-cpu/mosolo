@@ -19,10 +19,10 @@
 | `docs/KINSHASA_MOSOLO_Document_Maitre_v3.0.md` | Version Markdown assemblée en un seul fichier (générée) |
 | [`docs/sources/`](docs/sources/) | Documents de travail d'origine (Cahier v2.9, Spécification fonctionnelle, Dossier Gouverneur, Note exécutive) |
 | [`docs/assets/`](docs/assets/) | Visuels officiels, utilisés sans modification : couverture Ville de Kinshasa (`couverture-ville-de-kinshasa.webp`, copie PNG sans perte pour Word), logo de la Ville (`logo-ville-de-kinshasa.webp`, et copie PNG sans perte), logo Groupe Nseya |
-| [`specs/`](specs/) | Contrat d'API, OpenAPI 3.1, catalogue des 555 routes (`routes-api.md`), catalogue des 255 événements de communication, référentiel des devises et langues, prompt système de la couche d'intelligence |
-| [`shared/`](shared/) | Paquet partagé `@mosolo/shared` : montants exacts, devises (🇨🇩 CDF principale, drapeaux), langues, catalogue d'événements, fiches de règles, états et rôles, format des recommandations IA |
-| [`backend/`](backend/) | API REST (Node.js, TypeScript, Fastify) : identité, objets, registre juridique, liquidation, paiements, coffre des bénéficiaires, rapprochement, grand livre, quittances, journal d'audit chaîné, communications, autosauvegarde, IA ; **14 modules d'extension** (`src/plugins/`) : accès et entités, fiscal, Trésor, recouvrement, titres, RakaPay et pass wewa, stationnement, publicité, verticales (AVIA, NFIU, CALCU…), canaux (USSD, SVI, points de paiement agréés), terrain, intégrité, pilotage, IA ; persistance PostgreSQL optionnelle et identité compatible OIDC |
-| [`frontend/`](frontend/) | Application web progressive (PWA) React : portail contribuable, vérification de quittance, centre de commandement du Gouverneur, console des communications, registre juridique, Trésor, terrain hors ligne, audit, et 70 écrans des modules (`src/modules/`) |
+| [`specs/`](specs/) | Contrat d'API, OpenAPI 3.1, catalogue des 624 routes (`routes-api.md`, généré par `tools/gen_routes.py`), catalogue des 255 événements de communication, référentiel des devises et langues, prompt système de la couche d'intelligence |
+| [`shared/`](shared/) | Paquet partagé `@mosolo/shared` : montants exacts, devises (🇨🇩 CDF principale, drapeaux), langues, catalogue d'événements, fiches de règles, états et rôles, format des recommandations IA, géodésie (distance haversine) et clé de comparaison des plaques |
+| [`backend/`](backend/) | API REST (Node.js, TypeScript, Fastify) : identité, objets, registre juridique, liquidation, paiements, coffre des bénéficiaires, rapprochement, grand livre, quittances, journal d'audit chaîné, communications, autosauvegarde, IA ; **17 modules d'extension** (`src/plugins/`) : socle (connexion, jetons, limitation de débit), accès et entités, fiscal, Trésor, recouvrement, titres, RakaPay et pass wewa, stationnement, publicité, verticales (AVIA, NFIU, CALCU…), canaux (USSD, SVI, points de paiement agréés), preuves (QR, WhatsApp, SMS), sanctions et commissions, terrain, intégrité, pilotage, IA ; persistance PostgreSQL optionnelle et identité compatible OIDC |
+| [`frontend/`](frontend/) | Application web progressive (PWA) React : portail contribuable, vérification de quittance, centre de commandement du Gouverneur, console des communications, registre juridique, Trésor, terrain hors ligne, audit, et 72 écrans des modules exposés par 79 routes (`src/modules/registry.tsx`) |
 | [`tools/`](tools/) | Générateurs : catalogue d'événements, graphiques, version Word |
 
 Le `frontend` ne dépend du `backend` que par l'API ; la logique commune vit dans `shared`.
@@ -31,7 +31,9 @@ Le `frontend` ne dépend du `backend` que par l'API ; la logique commune vit dan
 
 ```bash
 npm install
-npm test                 # tests des trois paquets
+npm run typecheck        # contrôle de types des trois paquets
+npm run lint             # ESLint (configuration commune eslint.config.mjs)
+npm test                 # tests des trois paquets (664 : shared 32, backend 536, frontend 96)
 npm run dev:backend      # API sur http://localhost:8080 (mode démonstration explicite : --demo)
 npm run dev:frontend     # PWA sur http://localhost:5173
 ```
@@ -56,4 +58,4 @@ MMDC=/chemin/vers/mmdc PUPPETEER_CONFIG=pp.json python3 tools/build_docx.py   # 
 
 ## Statut
 
-Document de travail et socle logiciel de démonstration, soumis à validation juridique provinciale. L'authentification (en-tête de démonstration), le stockage (mémoire) et l'IA (générateur déterministe) sont des implémentations de démonstration ; voir les README de chaque paquet et l'Annexe E du document maître.
+Document de travail et socle logiciel de démonstration, soumis à validation juridique provinciale. En mode démonstration, l'authentification passe par un en-tête et le stockage reste en mémoire ; hors démonstration, la persistance PostgreSQL (`DATABASE_URL`) et la connexion du socle (mot de passe, TOTP, jetons signés) sont disponibles. L'IA reste un générateur déterministe ; voir les README de chaque paquet et l'Annexe E du document maître.

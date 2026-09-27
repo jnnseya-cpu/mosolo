@@ -9,8 +9,9 @@ Depuis la racine du dépôt :
 
 ```bash
 npm run dev -w backend        # serveur avec rechargement, MODE DÉMONSTRATION explicite (--demo), port PORT ou 8080
-npm test -w backend           # tests (vitest + fastify.inject ; vitest.config.ts active MOSOLO_DEMO_MODE=true)
+npm test -w backend           # 536 tests, 45 fichiers (vitest + fastify.inject ; vitest.config.ts active MOSOLO_DEMO_MODE=true)
 npm run typecheck -w backend  # TypeScript strict
+npm run lint                  # ESLint, depuis la racine (configuration commune eslint.config.mjs)
 ```
 
 En mode démonstration (`npm run dev`, `start:demo`, `--demo`), le serveur démarre avec des **données de démonstration**
@@ -47,7 +48,9 @@ src/
     idempotency.ts    clés d'idempotence (même clé + même contenu → même réponse ; sinon 409)
     repository.ts     Repository<T> / AppendOnlyRepository<T> + implémentations en mémoire
     decimal.ts        arithmétique décimale exacte (BigInt)
-    clock.ts, crypto.ts, http.ts
+    clock.ts          horloge injectable, jour de Kinshasa, HOUR_MS / DAY_MS (source unique)
+    percent.ts        pourcentage « 62.5 » en chaîne (source unique ; le pilotage garde sa variante BigInt)
+    crypto.ts, http.ts, validity.ts, demo-flag.ts
   reference/kinshasa.ts   24 communes, entités émettrices
   modules/
     identity          inscription, profil contribuable
@@ -59,7 +62,7 @@ src/
     treasury          relevés, rapprochement à trois voies, grand livre en partie double (ledger.ts)
     receipts          quittances signées Ed25519, vérification publique minimale
     vault             coffre des comptes bénéficiaires (quorum, hors bande, 72 h)
-    communications    moteur d'événements (239 événements), adaptateurs de canaux, aperçu courriel
+    communications    moteur d'événements (255 événements), adaptateurs de canaux, aperçu courriel
     drafts            enregistrement automatique versionné
     ai                couche d'intelligence déterministe derrière l'interface AIProvider
     dashboards        tableau de bord du Gouverneur (données EXEMPLE)
@@ -67,6 +70,9 @@ src/
     appeals           réclamations (instruction ≠ décision), obligations rectificatives
     fx                taux de change (démo, source déclarée)
     alerts, audit, system
+  plugins/            17 modules d'extension (ordre d'enregistrement : plugins/index.ts), 624 routes au total
+                      (catalogue généré : python3 tools/gen_routes.py → specs/routes-api.md)
+  persistence/        PostgreSQL : migrations, journal en ajout seul, ancre d'audit externe, sauvegarde signée, restauration
 db/schema.sql         DDL PostgreSQL de référence (tables en ajout seul protégées par déclencheurs)
 test/                 tests d'acceptation (ch. 41) et tests unitaires
 ```
@@ -291,9 +297,9 @@ il est contrôlé à l'avance par `npm run bootstrap:check -w backend -- amorcag
 
 | Domaine | Dans ce socle | Pour la production |
 |---|---|---|
-| Authentification | **Démo** : en-tête `x-demo-user` | OIDC + passkeys, MFA, jetons courts, appareil enrôlé (ch. 31) |
+| Authentification | **Démo** : en-tête `x-demo-user` ; module `socle` : mot de passe, TOTP, jetons signés, découverte OIDC | OIDC + passkeys, MFA, jetons courts, appareil enrôlé (ch. 31) |
 | Autorisation | **Réelle** : PDP central RBAC + ABAC (entité, territoire, dossier propre), séparation des tâches, garde IA | externaliser dans un moteur de politiques (OPA) avec la même matrice |
-| Stockage | **Démo** : dépôts en mémoire derrière `Repository<T>` | adaptateur PostgreSQL sur `db/schema.sql` (déclencheurs d'ajout seul déjà écrits et vérifiés) |
+| Stockage | Dépôts en mémoire derrière `Repository<T>` ; **PostgreSQL** avec `DATABASE_URL` (`src/persistence/` : migrations, déclencheurs d'ajout seul, sauvegarde et restauration vérifiées en CI) | exploitation : réplication, sauvegardes hors site, rotation des clés |
 | Journal d'audit | **Réel** : chaîne sha256 + HMAC, détection d'altération/suppression/troncature | clé en HSM, copie WORM, ancrage horodaté par un tiers, contrôle horaire |
 | Grand livre | **Réel** : partie double, ajout seul, contre-écritures liées, chaînage | clôture quotidienne signée, export vers la comptabilité du Trésor |
 | Quittances | **Réel** : numérotation, Ed25519, QR, vérification minimale | clé de la PKI provinciale en HSM, limitation de débit de la vérification publique |
