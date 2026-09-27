@@ -4,6 +4,7 @@
  */
 import type { CurrencyCode } from './currencies.js';
 import type { RevenueCategory, RuleStatus } from './domain.js';
+import { kinshasaBoundMs } from './validity.js';
 
 export type RateTable = Record<string, string>; // clé (rang, catégorie) -> valeur décimale en chaîne
 
@@ -51,7 +52,11 @@ export const REQUIRED_APPROVALS: Approval['role'][] = [
   'REDACTEUR', 'VERIFICATEUR_JURIDIQUE', 'VALIDATEUR_FINANCIER', 'AUTORITE_PUBLICATION',
 ];
 
-/** Une règle ne peut produire une obligation que si elle est ACTIVE, certifiée et dans sa période. */
+/**
+ * Une règle ne peut produire une obligation que si elle est ACTIVE, certifiée et dans sa période.
+ * Les dates d'effet sont des journées de Kinshasa (UTC+1) : du 00:00 du jour d'effet au 23:59:59.999 du jour de fin,
+ * heure de Kinshasa (et non minuit UTC).
+ */
 export function isRuleExecutable(rule: RuleSheet, at: Date): { ok: true } | { ok: false; reason: string } {
   if (rule.status !== 'ACTIVE') return { ok: false, reason: `Règle au statut ${rule.status}` };
   if (rule.sourceVerification !== 'OFFICIEL_CERTIFIE') return { ok: false, reason: 'Source non certifiée' };
@@ -59,8 +64,8 @@ export function isRuleExecutable(rule: RuleSheet, at: Date): { ok: true } | { ok
   const roles = new Set(rule.approvals.map((a) => a.role));
   if (!REQUIRED_APPROVALS.every((r) => roles.has(r)) || approvers.size < 4)
     return { ok: false, reason: 'Quatre approbations distinctes requises' };
-  if (at < new Date(rule.effectiveFrom)) return { ok: false, reason: "Date d'effet non atteinte" };
-  if (rule.effectiveTo && at > new Date(rule.effectiveTo)) return { ok: false, reason: 'Règle expirée' };
+  if (at.getTime() < kinshasaBoundMs(rule.effectiveFrom, 'start')) return { ok: false, reason: "Date d'effet non atteinte" };
+  if (rule.effectiveTo && at.getTime() > kinshasaBoundMs(rule.effectiveTo, 'end')) return { ok: false, reason: 'Règle expirée' };
   return { ok: true };
 }
 

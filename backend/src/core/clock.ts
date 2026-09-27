@@ -31,3 +31,11 @@ export const DAY_MS = 24 * HOUR_MS;
 export function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
+
+/** Décalage de Kinshasa (UTC+1, sans heure d'été). */
+export const KINSHASA_OFFSET_MS = HOUR_MS;
+
+/** Date calendaire (AAAA-MM-JJ) à Kinshasa de l'instant `d` : 23 h 30 UTC le 31/12 est déjà le 01/01 à Kinshasa. */
+export function kinshasaDate(d: Date): string {
+  return new Date(d.getTime() + KINSHASA_OFFSET_MS).toISOString().slice(0, 10);
+}

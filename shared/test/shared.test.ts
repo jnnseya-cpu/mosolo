@@ -72,6 +72,17 @@ describe('Règles', () => {
     const distinct = same.map((a, i) => ({ ...a, userId: `u${i}` }));
     expect(isRuleExecutable({ ...base, approvals: distinct }, new Date('2027-01-01')).ok).toBe(true);
   });
+  it('les dates d’effet et de fin sont des journées de Kinshasa (UTC+1), pas des minuits UTC', () => {
+    const approvals = ['REDACTEUR', 'VERIFICATEUR_JURIDIQUE', 'VALIDATEUR_FINANCIER', 'AUTORITE_PUBLICATION'].map((role, i) => ({ role: role as never, userId: `u${i}`, at: '2026-01-01' }));
+    const rule = { ...SAMPLE_RULES[0]!, status: 'ACTIVE' as const, sourceVerification: 'OFFICIEL_CERTIFIE' as const, approvals, effectiveFrom: '2026-10-01', effectiveTo: '2026-12-31' };
+    // 30/09 23:30 UTC = 01/10 00:30 à Kinshasa : la règle est en vigueur.
+    expect(isRuleExecutable(rule, new Date('2026-09-30T23:30:00Z')).ok).toBe(true);
+    // 30/09 22:59 UTC = 30/09 23:59 à Kinshasa : pas encore.
+    expect(isRuleExecutable(rule, new Date('2026-09-30T22:59:59Z')).ok).toBe(false);
+    // 31/12 22:59 UTC = 31/12 23:59 à Kinshasa : encore en vigueur ; 31/12 23:00 UTC = 01/01 00:00 : expirée.
+    expect(isRuleExecutable(rule, new Date('2026-12-31T22:59:59Z')).ok).toBe(true);
+    expect(isRuleExecutable(rule, new Date('2026-12-31T23:00:00Z'))).toEqual({ ok: false, reason: 'Règle expirée' });
+  });
 });
 
 describe('Domaine', () => {

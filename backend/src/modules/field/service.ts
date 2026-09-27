@@ -134,6 +134,17 @@ export class FieldService {
 
     const now = this.clock.now().toISOString();
     const result: BatchResult = { batchId: batch.batchId, accepted: [], rejected: [], conflicts: [], revokedDevices: [] };
+    // Index (objet, champ) → observations, construit en un seul passage pour ce lot puis tenu à jour à chaque ajout :
+    // chaque opération se compare aux seules observations de son champ (et non à tout le journal).
+    const keyOf = (objectId: string, field: string) => `${objectId}\u0000${field}`;
+    const keys = new Set(batch.operations.map((op) => keyOf(op.objectId, op.field)));
+    const byField = new Map<string, Observation[]>();
+    for (const o of this.observations.find((x) => keys.has(keyOf(x.objectId, x.field)))) {
+      const k = keyOf(o.objectId, o.field);
+      const list = byField.get(k);
+      if (list) list.push(o);
+      else byField.set(k, [o]);
+    }
     for (const op of batch.operations) {
       let obj;
       try {
@@ -154,9 +165,12 @@ export class FieldService {
         batchId: batch.batchId, opId: op.opId, observedAt: op.observedAt, receivedAt: now, probativeStatus: 'OBSERVE',
       });
       result.accepted.push(op.opId);
-      const divergent = this.observations.find(
-        (o) => o.objectId === op.objectId && o.field === op.field && o.agentId !== user.id && canonicalJson(o.value) !== canonicalJson(op.value),
-      );
+      const k = keyOf(op.objectId, op.field);
+      const sameField = byField.get(k) ?? [];
+      const value = canonicalJson(op.value);
+      const divergent = sameField.filter((o) => o.agentId !== user.id && canonicalJson(o.value) !== value);
+      sameField.push(obs);
+      byField.set(k, sameField);
       if (divergent.length > 0) {
         const existing = this.conflicts.findOne((c) => c.objectId === op.objectId && c.field === op.field && c.status === 'A_ARBITRER');
         const version = (o: Observation) => ({ observationId: o.id, agentId: o.agentId, value: o.value, observedAt: o.observedAt });

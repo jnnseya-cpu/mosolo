@@ -181,6 +181,8 @@ export interface IssuanceItem {
   /** Rempli à la création des références de paiement (une par commune du fait générateur). */
   paymentOrderId?: string;
   credentialId?: string;
+  /** Paiement reçu mais émission impossible (fenêtre invalide…) : anomalie remontée, jamais de nouvelle tentative silencieuse. */
+  issueError?: string;
 }
 
 export interface IssuancePayment {

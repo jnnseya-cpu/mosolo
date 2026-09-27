@@ -9,7 +9,7 @@
 import { isRuleExecutable, Money, type MoneyJSON, type ObligationStatus } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
-import { isoDate } from '../../core/clock.js';
+import { kinshasaDate } from '../../core/clock.js';
 import { conflict, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, authorize } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
@@ -88,7 +88,7 @@ export class RecalculationService {
   private examine(rule: RuleRecord, o: Obligation): RecalcLine {
     const base = {
       obligationId: o.id, taxpayerId: o.taxpayerId, objectId: o.objectId, fromRuleId: o.ruleId, fromVersion: o.ruleVersion,
-      obligationStatus: o.status, issuedOn: o.createdAt.slice(0, 10), oldAmount: o.amount,
+      obligationStatus: o.status, issuedOn: kinshasaDate(new Date(o.createdAt)), oldAmount: o.amount,
     };
     if (!RECALCULABLE.includes(o.status)) {
       return { ...base, treatment: 'EXCLUE', reason: EXCLUSION_BY_STATUS[o.status] ?? `Statut ${o.status} : hors recalcul.` };
@@ -101,7 +101,7 @@ export class RecalculationService {
     }
     let newMoney: Money;
     try {
-      const ev = this.ctx.rules.evaluate(rule, o.trace.inputs, o.trace.localityRank);
+      const ev = this.ctx.rules.evaluate(rule, this.ctx.rules.pickRequiredInputs(rule, o.trace.inputs), o.trace.localityRank);
       newMoney = Money.of(ev.value, rule.currency, rule.rounding);
     } catch (e) {
       return { ...base, treatment: 'EXCLUE', reason: `Recalcul impossible : ${(e as Error).message}` };
@@ -193,7 +193,7 @@ export class RecalculationService {
         appealId: id, reason: `Recalcul contrôlé ${rule.code} v${rule.version} — ${input.reason}`, decidedBy: user,
       });
       // La nouvelle obligation porte la version de règle appliquée (explication complète).
-      const ev = this.ctx.rules.evaluate(rule, o.trace.inputs, o.trace.localityRank);
+      const ev = this.ctx.rules.evaluate(rule, this.ctx.rules.pickRequiredInputs(rule, o.trace.inputs), o.trace.localityRank);
       const current = this.ctx.assessment.obligations.get(rectified.id)!;
       this.ctx.assessment.obligations.update({
         ...current,
@@ -217,7 +217,7 @@ export class RecalculationService {
     });
     this.ctx.audit.append({
       actor, action: 'rule.recalculation.applied', resourceType: 'rule', resourceId: rule.id,
-      details: { recalculationId: id, reason: input.reason, applied: applied.length, skipped: skipped.length, at: isoDate(this.ctx.clock.now()) },
+      details: { recalculationId: id, reason: input.reason, applied: applied.length, skipped: skipped.length, at: kinshasaDate(this.ctx.clock.now()) },
     });
     return updated;
   }
