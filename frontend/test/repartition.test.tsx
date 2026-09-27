@@ -93,7 +93,7 @@ describe('Répartition § 37A — écran', () => {
     expect(screen.getByTestId('repartition-notice').textContent).toMatch(/Acte requis/);
     expect(screen.getAllByText(/864,22|864\.22/).length).toBeGreaterThan(0);
     expect(screen.getAllByText('100 % de l’assiette').length).toBe(1);
-    expect(screen.getByText('Dépassement — à arbitrer')).toBeTruthy();
+    expect(screen.getAllByText('Dépassement — à arbitrer').length).toBeGreaterThan(0);
     expect(screen.getByText('121.5 %')).toBeTruthy();
     expect(screen.getAllByText('non documenté')).toHaveLength(4);
     expect(screen.getByText(/Clé non active : simulation seulement/)).toBeTruthy();

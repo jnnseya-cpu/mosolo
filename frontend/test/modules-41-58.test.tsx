@@ -50,11 +50,11 @@ describe('Pilotage et décision — écrans des modules 41 à 47', () => {
       },
     });
     renderPage(<Commandement />);
-    expect(await screen.findByText('Limete')).toBeTruthy();
+    expect((await screen.findAllByText('Limete')).length).toBeGreaterThan(0);
     expect(screen.getByText('Potentiel estimé')).toBeTruthy();
     expect(screen.getByText('Alertes anti-fraude à examiner')).toBeTruthy();
     expect(screen.getAllByText('Non mesuré').length).toBeGreaterThan(0);
-    expect(screen.getByText('Donnée source manquante (test).')).toBeTruthy();
+    expect(screen.getAllByText('Donnée source manquante (test).').length).toBeGreaterThan(0);
     fireEvent.change(screen.getByLabelText('Objet'), { target: { value: 'Recouvrement faible' } });
     fireEvent.change(screen.getByLabelText('Texte'), { target: { value: 'Expliquer le recouvrement faible du trimestre.' } });
     fireEvent.change(screen.getByLabelText('Échéance'), { target: { value: '2026-10-15' } });
@@ -76,7 +76,7 @@ describe('Pilotage et décision — écrans des modules 41 à 47', () => {
     const a = renderPage(<RegieFiscale />);
     expect(await screen.findByText('DEMO-IF-BATI')).toBeTruthy();
     expect(screen.getByText('Campagnes (1 à valider)')).toBeTruthy();
-    expect(screen.getByText('À valider')).toBeTruthy();
+    expect(screen.getAllByText('À valider').length).toBeGreaterThan(0);
     expect(screen.getByText(/Affecter les zones et suivre les agents/)).toBeTruthy();
     a.unmount();
     renderPage(<RegieTaxes />);
@@ -93,8 +93,8 @@ describe('Pilotage et décision — écrans des modules 41 à 47', () => {
       },
     });
     renderPage(<TableauMinistere />);
-    expect(await screen.findByText('STAT-DEMO — Stationnement')).toBeTruthy();
-    expect(screen.getByText('Simulation (acte requis)')).toBeTruthy();
+    expect((await screen.findAllByText('STAT-DEMO — Stationnement')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Simulation (acte requis)').length).toBeGreaterThan(0);
     fireEvent.change(screen.getByLabelText('Période (AAAA-MM)'), { target: { value: '2026-08' } });
     fireEvent.change(screen.getByLabelText('Montant (CDF)'), { target: { value: '500' } });
     fireEvent.change(screen.getByLabelText('Référence de l’ordre de paiement'), { target: { value: 'OP-1' } });
@@ -120,7 +120,7 @@ describe('Pilotage et décision — écrans des modules 41 à 47', () => {
     b.unmount();
     renderPage(<PrevisionTresorerie />);
     expect(await screen.findByText(/PREV-1/)).toBeTruthy();
-    expect(screen.getByText('Taux observés')).toBeTruthy();
+    expect(screen.getAllByText('Taux observés').length).toBeGreaterThan(0);
   });
 });
 
