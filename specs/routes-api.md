@@ -1,12 +1,12 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **606 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **616 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
 | extension acces | 63 |
 | extension canaux | 41 |
-| extension fiscal | 40 |
+| extension fiscal | 43 |
 | extension ia | 28 |
 | extension integrite | 52 |
 | extension parking | 36 |
@@ -14,7 +14,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **606 routes** dans 35
 | extension preuves | 14 |
 | extension publicite | 34 |
 | extension rakapay | 23 |
-| extension recouvrement | 33 |
+| extension recouvrement | 37 |
 | extension sanctions | 5 |
 | extension socle | 14 |
 | extension terrain | 47 |
@@ -24,7 +24,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **606 routes** dans 35
 | module ai | 3 |
 | module alerts | 1 |
 | module appeals | 9 |
-| module assessment | 3 |
+| module assessment | 6 |
 | module audit | 2 |
 | module communications | 4 |
 | module dashboards | 1 |
@@ -183,8 +183,11 @@ Généré depuis le code source (`tools/gen_routes.py`) : **606 routes** dans 35
 | POST | `/v1/fiscal/leases/:id/attestations` |
 | GET | `/v1/fiscal/map` |
 | GET | `/v1/fiscal/nearby` |
+| POST | `/v1/fiscal/object-corrections/:id/decision` |
 | GET | `/v1/fiscal/objects` |
 | GET | `/v1/fiscal/objects/:id` |
+| GET | `/v1/fiscal/objects/:id/corrections` |
+| POST | `/v1/fiscal/objects/:id/corrections` |
 | POST | `/v1/fiscal/objects/:id/plate/pose` |
 | POST | `/v1/fiscal/objects/:id/plate/replace` |
 | POST | `/v1/fiscal/objects/:id/validate` |
@@ -461,6 +464,9 @@ Généré depuis le code source (`tools/gen_routes.py`) : **606 routes** dans 35
 | POST | `/v1/recouvrement/echeanciers/:id/defaillance` |
 | GET | `/v1/recouvrement/indicateurs` |
 | GET | `/v1/recouvrement/mes-arrieres` |
+| GET | `/v1/recouvrement/non-valeurs` |
+| POST | `/v1/recouvrement/non-valeurs` |
+| POST | `/v1/recouvrement/non-valeurs/:id/decision` |
 | GET | `/v1/recouvrement/parametres` |
 | GET | `/v1/recouvrement/penalites` |
 | POST | `/v1/recouvrement/penalites` |
@@ -472,6 +478,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **606 routes** dans 35
 | GET | `/v1/recouvrement/remises` |
 | POST | `/v1/recouvrement/remises` |
 | POST | `/v1/recouvrement/remises/:id/decision` |
+| POST | `/v1/recouvrement/remises/:id/instruction` |
 | GET | `/v1/recouvrement/reprises` |
 | POST | `/v1/recouvrement/reprises` |
 | POST | `/v1/recouvrement/reprises/:id/validation` |
@@ -694,6 +701,9 @@ Généré depuis le code source (`tools/gen_routes.py`) : **606 routes** dans 35
 
 | Méthode | Chemin |
 |---|---|
+| GET | `/v1/assessments/base-overrides` |
+| POST | `/v1/assessments/base-overrides` |
+| POST | `/v1/assessments/base-overrides/:id/decision` |
 | POST | `/v1/assessments/calculate` |
 | GET | `/v1/obligations` |
 | GET | `/v1/obligations/:id` |
