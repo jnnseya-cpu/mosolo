@@ -16,6 +16,7 @@ import type { CommunicationService } from '../communications/service.js';
 import { taxpayerRecipient, userRecipient } from '../identity/recipients.js';
 import type { TaxpayerService } from '../identity/service.js';
 import type { PaymentOrder, PaymentService, UnappliedPayment } from '../payments/service.js';
+import { receiptPdf } from '../receipts/quittance-pdf.js';
 import type { ReceiptService } from '../receipts/service.js';
 import type { VaultService } from '../vault/service.js';
 import type { LedgerService } from './ledger.js';
@@ -29,6 +30,13 @@ export interface StatementLine {
   counterparty?: string;
   /** Version du compte du coffre en vigueur à l'import : renseignée par le système, jamais saisie. */
   accountVersion?: number;
+  /**
+   * Crédit groupé d'un prestataire (§ 20.1) : détail par référence de paiement issu du fichier de détail du prestataire.
+   * Apparié automatiquement seulement si chaque détail s'apparie exactement et si le total égale le crédit.
+   */
+  details?: { paymentReference: string; amount: MoneyJSON }[];
+  /** Empreinte SHA-256 du fichier de détail du prestataire (preuve du découpage). */
+  detailFileSha256?: string;
 }
 
 export type ExceptionType =
@@ -37,7 +45,9 @@ export type ExceptionType =
   /** Crédit reçu alors que le compte du coffre a changé de version depuis l'émission de la référence. */
   | 'ACCOUNT_VERSION_MISMATCH'
   /** Crédit d'un paiement confirmé dont la quittance ne peut devenir définitive (annulée, signalée…) : rien n'est passé. */
-  | 'RECEIPT_NOT_FINALIZABLE';
+  | 'RECEIPT_NOT_FINALIZABLE'
+  /** Crédit groupé dont le fichier de détail ne s'apparie pas exactement (total, référence, montant ou compte). */
+  | 'CREDIT_GROUPE_ECART';
 
 /** Cycle de traitement d'une exception (§ 20, C3-113) : ouverte → en cours → résolue ou classée avec motif. */
 export type ExceptionStatus = 'OUVERTE' | 'EN_COURS' | 'RESOLUE' | 'CLASSEE';
@@ -57,6 +67,7 @@ export const EXCEPTION_QUEUE: Record<ExceptionType, ExceptionQueue> = {
   WRONG_ACCOUNT: 'ECART_MONTANT',
   ACCOUNT_VERSION_MISMATCH: 'ECART_MONTANT',
   RECEIPT_NOT_FINALIZABLE: 'REGLEMENT_SANS_PAIEMENT',
+  CREDIT_GROUPE_ECART: 'ECART_MONTANT',
 };
 
 export interface ReconciliationException {
@@ -281,7 +292,11 @@ export class TreasuryService {
     const fully = this.payments.paidOn(ob.id).compare(Money.fromJSON(ob.amount)) >= 0;
     const obligation = ob.status === 'ANNULEE' ? ob : this.assessment.setStatus(ob.id, fully ? 'SOLDEE' : 'PARTIELLEMENT_PAYEE');
     this.audit.append({ actor: opts.actor, action: 'reconciliation.matched', resourceType: 'payment_order', resourceId: order.id, details: { ...opts.details, receipt: receipt.number, ledgerEntryId: entry.id } });
-    this.comms.publish('receipt.finalized', [taxpayerRecipient(this.taxpayers.get(order.taxpayerId))], { reference: receipt.number }, { entity: obligation.entity });
+    // Quittance définitive envoyée par courriel avec son PDF signé (§ 18A.4) ; la page web imprimable reste disponible.
+    const pdf = receiptPdf(receipt, this.receipts, { paymentStatus: 'RAPPROCHE', generatedAt: this.clock.now().toISOString() });
+    this.comms.publish('receipt.finalized', [taxpayerRecipient(this.taxpayers.get(order.taxpayerId))], { reference: receipt.number }, {
+      entity: obligation.entity, attachments: [{ name: pdf.fileName, contentType: 'application/pdf', sha256: sha256Hex(pdf.bytes), size: pdf.bytes.length, content: pdf.bytes }],
+    });
     return { paymentReference: order.paymentReference, receiptNumber: receipt.number, obligationId: obligation.id, amount: order.amount, ledgerEntryId: entry.id };
   }
 
@@ -337,6 +352,15 @@ export class TreasuryService {
    */
   openOrphanCredits(fn: (e: ReconciliationException) => boolean): ReconciliationException[] {
     return this.exceptions.find((e) => e.type === 'ORPHAN_CREDIT' && !!e.line && fn(e)).map((e) => this.view(e))
+      .filter((e) => e.status !== 'RESOLUE' && e.status !== 'CLASSEE' && !e.proposal);
+  }
+
+  /**
+   * Exceptions de relevé (ligne constatée) encore ouvertes, sans proposition de résolution en cours, filtrées par `fn` :
+   * base du rapprochement PROPOSÉ (§ 20.1), qui n'apparie jamais sans confirmation humaine.
+   */
+  openStatementExceptions(fn: (e: ReconciliationException) => boolean = () => true): ReconciliationException[] {
+    return this.exceptions.find((e) => !!e.line && fn(e)).map((e) => this.view(e))
       .filter((e) => e.status !== 'RESOLUE' && e.status !== 'CLASSEE' && !e.proposal);
   }
 

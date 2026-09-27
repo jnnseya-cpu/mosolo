@@ -23,6 +23,7 @@ import { APPEAL_PROCEDURE } from '../../modules/appeals/procedure.js';
 import { declaredReductionTerms, recordReductionGranted, remissionHeadroom } from '../../modules/assessment/reductions.js';
 import type { Obligation } from '../../modules/assessment/service.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
+import type { RecoveryYieldService } from './rendement.js';
 import { AGE_BANDS, LARGE_DEBTOR_THRESHOLD_EXAMPLE, RECOVERY_PROCEDURE, SEGMENTS, type SegmentCode } from './parameters.js';
 
 // ───────────────────────── Politique d'accès (moindre privilège) ─────────────────────────
@@ -306,6 +307,8 @@ export class RecoveryService {
   private readonly ids = new IdGenerator();
   /** Instrument autorisant les échéanciers (absent ⇒ « acte requis », aucun échéancier possible). */
   planLegalBasisInstrumentId: string | null = null;
+  /** Rendement brut et net, priorisation, campagnes mesurées, garanties (§ 21.1, § 21.2) — branché par le module. */
+  rendement?: RecoveryYieldService;
 
   constructor(private readonly ctx: AppContext) {}
 
@@ -1468,7 +1471,8 @@ export class RecoveryService {
           return { count, amount };
         })(),
       },
-      recoveryCost: { status: 'NON_MESURE', detail: 'Coût des actions de recouvrement non encore saisi : récupération nette non calculable.' },
+      // Récupération brute et nette (§ 21.1) : NON_MESURE tant qu'aucun coût n'est saisi.
+      recoveryCost: this.rendement?.summary() ?? { status: 'NON_MESURE', detail: 'Coût des actions de recouvrement non encore saisi : récupération nette non calculable.' },
     };
   }
 

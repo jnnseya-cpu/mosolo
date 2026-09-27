@@ -58,6 +58,28 @@ données réelles ; le mode démonstration ouvre les rôles de démonstration à
 - **Docker** (tout hébergeur) : `docker build -t mosolo-demo . && docker run -p 8080:8080 mosolo-demo` → http://localhost:8080.
 - **Sans Docker** : `npm ci && VITE_API_URL= npm run build -w frontend && MOSOLO_DEMO_MODE=true MOSOLO_STATIC_DIR=frontend/dist npx tsx backend/src/server.ts --demo`.
 
+## Tests de charge et contrôles de sécurité (non bloquants)
+
+Cahier § 44 : « tests de charge calés sur les pics de campagne de fin janvier ». Le scénario k6
+[`tools/charge/pic-fevrier.k6.js`](tools/charge/pic-fevrier.k6.js) simule, sur un serveur de **démonstration** (jamais la
+production), les parcours les plus sollicités au pic : vérification publique d'une quittance (les 429 de la protection
+anti-énumération sont attendus), création d'une référence de paiement, session USSD, points agréés et transparence.
+Montée, plateau au pic, descente ; seuils de réussite : moins de 1 % d'erreurs et p95 sous 1,5 s.
+
+```bash
+npm run dev:backend                                   # serveur de démonstration
+k6 run -e BASE_URL=http://localhost:8080 -e VU_MOYEN=5 -e PIC_FACTEUR=20 -e PALIER=1m tools/charge/pic-fevrier.k6.js
+```
+
+Le facteur de pic (`PIC_FACTEUR`, 20 × le trafic moyen) et le trafic moyen (`VU_MOYEN`) sont des **hypothèses de test,
+par défaut — à confirmer** par la base de référence (§ 38.1) et l'exploitant.
+
+Le flux [`.github/workflows/securite-charge.yml`](.github/workflows/securite-charge.yml) exécute, sans bloquer les
+fusions : l'analyse statique de sécurité **CodeQL** (SAST), la **nomenclature logicielle CycloneDX** (SBOM, artefact
+`sbom-cyclonedx`) et, à la demande ou chaque semaine, le **test de charge** k6 (artefact `charge-pic-fevrier`). L'audit
+des dépendances (`npm audit`) reste bloquant dans `ci.yml`. Les tests d'intrusion et DAST restent à conduire par un
+prestataire indépendant sur l'environnement de recette.
+
 ## Principes non négociables
 
 1. Le système applique le droit, il ne le crée pas : aucune obligation sans règle **active et certifiée** ; les fiches de règles fournies sont au statut `A_VERIFIER` et ne produisent aucun effet financier.

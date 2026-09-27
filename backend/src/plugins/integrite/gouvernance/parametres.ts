@@ -30,6 +30,7 @@ import { DEFAULT_GPS_TOLERANCE_M, MIN_SAMPLE_RATE } from '../../terrain/model.js
 import { DYNAMIC_GRACE_SECONDS, DYNAMIC_WINDOW_SECONDS } from '../../titres/tokens.js';
 import { EXCEPTION_SLA_HOURS, PROVIDER_SETTLEMENT_DELAY_DAYS, REFUND_EXTRA_APPROVAL_THRESHOLDS, SUSPENSE_MAX_DAYS, SUSPENSE_SLA_DAYS } from '../../tresor/service.js';
 import { DETECTION_PARAMS } from '../service.js';
+import { PARAMETRES_COMPLEMENTAIRES } from '../detecteurs/parametres.js';
 import {
   REPARTITION_DUREE_ANS, REPARTITION_NOMBRE_FLUX, REPARTITION_PART_AGENTS_PCT, REPARTITION_PART_GOUVERNEMENT_PCT, REPARTITION_PART_NSEYA_PCT,
   REPARTITION_PART_TUTELLE_PCT,
@@ -158,6 +159,8 @@ export const PARAMETRES_CODE: ParamDefinition[] = [
   C('detection.paiements_fractionnes', 'Détection : paiements fractionnés sur une obligation', 'Détection (Intégrité)', DETECTION_PARAMS.splitPaymentCount, 'paiements', code('plugins/integrite/service.ts', 'DETECTION_PARAMS.splitPaymentCount')),
   C('detection.acces_refuses', 'Détection : refus d’accès répétés', 'Détection (Intégrité)', DETECTION_PARAMS.deniedAccessCount, 'refus', code('plugins/integrite/service.ts', 'DETECTION_PARAMS.deniedAccessCount')),
   C('detection.concentration_part_pct', 'Détection : concentration d’actes sensibles sur une personne', 'Détection (Intégrité)', DETECTION_PARAMS.sensitiveConcentrationShare * 100, '%', code('plugins/integrite/service.ts', 'DETECTION_PARAMS.sensitiveConcentrationShare')),
+  // Rapprochement proposé, sous-traitance terrain, détecteurs complémentaires (§ 15A.5, § 20.1, § 25).
+  ...PARAMETRES_COMPLEMENTAIRES,
 ];
 
 export const ALL_PARAMETERS: ParamDefinition[] = [...REGISTRE_DEFAUTS, ...PARAMETRES_CODE];

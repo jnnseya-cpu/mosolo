@@ -126,6 +126,14 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   // Paiements : prestataires connectés (BitriPay, KODA)
   { path: '/tresor/prestataires', element: lazy(() => import('./prestataires/Prestataires')), nav: { label: 'Prestataires connectés', short: 'Prestataires', icon: 'phone', group: 'operations', roles: ['R17', 'R18', 'R22', 'R26', 'R27'] } },
 
+  // Trésorerie, recouvrement, sous-traitance, détecteurs, CALCU (§ 15A.5, § 20.1, § 21, § 25, § 27A, § 37)
+  { path: '/tresor/appariements', element: lazy(() => import('./tresor/Appariements')), nav: { label: 'Rapprochement proposé et crédits groupés', short: 'Appariements', icon: 'ledger', group: 'operations', roles: ['R17', 'R18', 'R22', 'R23'] } },
+  { path: '/tresor/points-agrees', element: lazy(() => import('./tresor/PointsAgrees')), nav: { label: 'Points agréés — contrats et pénalités', short: 'Points agréés', icon: 'store', group: 'operations', roles: ['R17', 'R18', 'R22', 'R23', 'R05'] } },
+  { path: '/recouvrement/rendement', element: lazy(() => import('./recouvrement/Rendement')), nav: { label: 'Rendement du recouvrement', short: 'Rendement', icon: 'chart', group: 'operations', roles: ['R06', 'R07', 'R11', 'R17', 'R20', 'R21', 'R22', 'R23'] } },
+  { path: '/terrain/qualite', element: lazy(() => import('./terrain/Qualite')), nav: { label: 'Contrôle qualité de la sous-traitance', short: 'Qualité terrain', icon: 'shieldCheck', group: 'operations', roles: ['R06', 'R07', 'R09', 'R11', 'R17', 'R22', 'R23', 'R24'] } },
+  { path: '/integrite/detecteurs', element: lazy(() => import('./integrite/Detecteurs')), nav: { label: 'Détecteurs anti-fraude', short: 'Détecteurs', icon: 'analysis', group: 'operations', roles: ['R22', 'R23', 'R24', 'R28', 'R06'] } },
+  { path: '/controle/calcu/organe', element: lazy(() => import('./verticales/CalcuOrgane')), nav: { label: 'CALCU — organe de contrôle', short: 'Organe CALCU', icon: 'bank', group: 'pilotage', roles: ['R01', 'R05', 'R08', 'R15', 'R17', 'R22', 'R23'] } },
+
   // IA : liens directs
   { path: '/ia/autonomie', element: lazy(() => import('./ia/AutonomyPage')) },
   { path: '/ia/memoire', element: lazy(() => import('./ia/MemoryPage')) },

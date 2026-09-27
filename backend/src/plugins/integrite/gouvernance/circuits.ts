@@ -145,6 +145,51 @@ export const CIRCUITS: Circuit[] = [
     code: 'REGISTRE_SEUILS', label: 'Registre des seuils anti-fraude (confirmation ou modification)',
     proposals: ['integrite.threshold.change_proposed'], approvals: ['integrite.threshold.change_approved'], refusals: ['integrite.threshold.change_rejected'],
   },
+  // Circuits ajoutés par le lot trésorerie / recouvrement / CALCU / détecteurs (§ 15A.7, § 20.1, § 21.2, § 27A.5, § 37).
+  {
+    code: 'TRESOR_APPARIEMENT', label: 'Rapprochement proposé (sous le seuil d’appariement exact)',
+    proposals: ['reconciliation.match.proposed'], approvals: ['reconciliation.match.confirmed'], refusals: ['reconciliation.match.rejected'],
+    guard: { url: '/v1/tresor/appariements/propositions/:id/decision', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'TRESOR_CONTRAT_POINT', label: 'Contrat d’un point de paiement agréé (commission et pénalités)',
+    proposals: ['tresor.point_contract.proposed'], approvals: ['tresor.point_contract.validated'], refusals: ['tresor.point_contract.rejected'],
+    guard: { url: '/v1/tresor/points/contrats/:id/decision', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'TRESOR_PENALITE_POINT', label: 'Pénalité de retard de versement d’un point agréé',
+    proposals: ['tresor.point_penalty.proposed'], approvals: ['tresor.point_penalty.decided'], refusals: [],
+    outcome: decisionIn(['DECIDEE']),
+    guard: { url: '/v1/tresor/points/penalites/:id/decision', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'TERRAIN_RECUPERATION', label: 'Récupération des sommes versées à un sous-traitant (objets fictifs, constats frauduleux)',
+    proposals: ['terrain.clawback.proposed'], approvals: ['terrain.clawback.approved'], refusals: ['terrain.clawback.rejected'],
+    key: detail('clawbackId'),
+    guard: { url: '/v1/terrain/recuperations/:id/decision', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'RECOUVREMENT_GARANTIE', label: 'Garantie d’un grand débiteur',
+    proposals: ['recovery.guarantee.proposed'], approvals: ['recovery.guarantee.decided'], refusals: [],
+    key: detail('guaranteeId'), outcome: decisionIn(['VALIDEE']),
+    guard: { url: '/v1/recouvrement/garanties/:id/decision', key: (p) => p.id!, refusal: (b) => b.decision === 'REJETEE' },
+  },
+  {
+    code: 'CALCU_TRANSMISSION_JUSTICE', label: 'CALCU — transmission d’un dossier à la justice',
+    proposals: ['calcu.referral.proposed'], approvals: ['calcu.referral.transmitted'], refusals: ['calcu.referral.rejected'],
+    key: detail('referralId'),
+    guard: { url: '/v1/verticales/calcu/transmissions/:id/decision', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'CALCU_FOURNISSEUR', label: 'CALCU — validation d’un fournisseur enregistré',
+    proposals: ['calcu.supplier.declared'], approvals: ['calcu.supplier.validated'], refusals: [],
+    guard: { url: '/v1/verticales/calcu/fournisseurs/:id/validation', key: (p) => p.id! },
+  },
+  {
+    code: 'CALCU_LIGNE_BUDGETAIRE', label: 'CALCU — validation d’une ligne budgétaire',
+    proposals: ['calcu.budget_line.declared'], approvals: ['calcu.budget_line.validated'], refusals: [],
+    guard: { url: '/v1/verticales/calcu/lignes-budgetaires/:id/validation', key: (p) => p.id! },
+  },
 ];
 
 export interface TwoPersonDecision {

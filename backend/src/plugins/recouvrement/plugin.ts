@@ -7,6 +7,8 @@
 import { Money } from '@mosolo/shared';
 import { conflict, notFound, unprocessable } from '../../core/errors.js';
 import { definePlugin } from '../types.js';
+import { RecoveryYieldService } from './rendement.js';
+import { registerRecoveryYieldRoutes } from './routes-rendement.js';
 import { registerRecoveryRoutes } from './routes.js';
 import { RecoveryService } from './service.js';
 
@@ -14,6 +16,7 @@ export const recouvrementPlugin = definePlugin({
   name: 'recouvrement',
   create: (ctx) => {
     const svc = new RecoveryService(ctx);
+    svc.rendement = new RecoveryYieldService(ctx, svc);
     // Paiement par échéance : montant de la prochaine échéance non couverte d'un échéancier ACCORDÉ (jamais saisi).
     ctx.payments.setInstallmentResolver((obligationId, planId) => {
       const plan = svc.plans.get(planId);
@@ -30,7 +33,10 @@ export const recouvrementPlugin = definePlugin({
     return svc;
   },
   seed: (_ctx, svc) => svc.seedDemo(),
-  routes: (app, ctx, svc) => registerRecoveryRoutes(app, ctx, svc),
+  routes: (app, ctx, svc) => {
+    registerRecoveryRoutes(app, ctx, svc);
+    registerRecoveryYieldRoutes(app, svc.rendement!);
+  },
 });
 
 export { RecoveryService } from './service.js';

@@ -13,7 +13,7 @@ import { notFound } from '../../core/errors.js';
 import { IdGenerator, InMemoryAppendOnlyRepository } from '../../core/repository.js';
 import {
   InAppProvider, PROVIDER_ENV_KEYS, QueuedExternalProvider, SandboxProvider,
-  type ChannelProvider, type DeliveryStatus, type ProviderMode,
+  type ChannelProvider, type DeliveryStatus, type MessageAttachment, type ProviderMode,
 } from './providers.js';
 import { fillPlaceholders, renderText } from './templates.js';
 
@@ -48,6 +48,8 @@ export interface Delivery {
   lang: LanguageCode;
   attempts: number;
   contentHash: string;
+  /** Pièces jointes transmises (courriel) : nom, empreinte, taille — jamais le contenu. */
+  attachments?: { name: string; sha256: string; size: number }[];
 }
 
 export function maskName(name: string): string {
@@ -89,7 +91,7 @@ export class CommunicationService {
     return e;
   }
 
-  publish(eventCode: string, recipients: Recipient[], vars: Record<string, string> = {}, opts: { entity?: string } = {}): Delivery[] {
+  publish(eventCode: string, recipients: Recipient[], vars: Record<string, string> = {}, opts: { entity?: string; attachments?: MessageAttachment[] } = {}): Delivery[] {
     const event = this.event(eventCode);
     const entity = opts.entity ?? 'GOUVERNORAT';
     const out: Delivery[] = [];
@@ -100,10 +102,13 @@ export class CommunicationService {
       const contentHash = sha256Hex(`${event.objet}\n${body}`);
       for (const channel of channels) {
         const provider = this.providers.get(channel)!;
+        const attachments = channel === 'email' && opts.attachments?.length ? opts.attachments : undefined;
         const res = provider.send({
           channel, recipientId: r.id, eventCode, subject: fillPlaceholders(event.objet, vars), body, entity, lang: r.lang, mandatory: event.obligatoire,
+          ...(attachments ? { attachments } : {}),
         });
-        out.push(this.log(event, r, channel, res.status, provider.name, provider.mode, entity, contentHash));
+        const d = this.log(event, r, channel, res.status, provider.name, provider.mode, entity, contentHash, attachments);
+        out.push(d);
       }
       for (const channel of suppressed) {
         out.push(this.log(event, r, channel, 'supprime_par_preference', 'aucun', 'aucun', entity, contentHash));
@@ -114,7 +119,7 @@ export class CommunicationService {
 
   private log(
     event: CommunicationEvent, r: Recipient, channel: Channel, status: DeliveryStatus,
-    provider: string, providerMode: Delivery['providerMode'], entity: string, contentHash: string,
+    provider: string, providerMode: Delivery['providerMode'], entity: string, contentHash: string, attachments?: MessageAttachment[],
   ): Delivery {
     return this.deliveries.append({
       id: this.ids.next('DLV', 8),
@@ -133,6 +138,7 @@ export class CommunicationService {
       lang: r.lang,
       attempts: status === 'supprime_par_preference' ? 0 : 1,
       contentHash,
+      ...(attachments ? { attachments: attachments.map((a) => ({ name: a.name, sha256: a.sha256, size: a.size })) } : {}),
     });
   }
 

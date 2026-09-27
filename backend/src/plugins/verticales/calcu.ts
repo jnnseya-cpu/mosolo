@@ -16,6 +16,7 @@ import { conflict, forbidden, notFound } from '../../core/errors.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { P } from './policies.js';
 import { kinshasaDay } from '../../core/clock.js';
+import type { BudgetLine, CalcuControlService, ControlMission, JusticeReferral, Recommendation, Recovery, Supplier } from './calcu-controle.js';
 
 export const ACCOUNT_TYPES = ['FONCTIONNEMENT', 'INVESTISSEMENT', 'PROJET', 'SPECIAL'] as const;
 export const DOCUMENT_TYPES = ['DEVIS', 'BON_COMMANDE', 'ENGAGEMENT', 'CONTRAT', 'FOURNISSEUR'] as const;
@@ -47,7 +48,18 @@ export interface SupportingDocument {
   sha256: string;
   registeredBy: string;
   registeredAt: string;
+  /** Justificatif géolocalisé (§ 27A.4 : pièces horodatées, géolocalisées et liées à la transaction). */
+  geo?: { lat: number; lon: number; accuracyM: number; capturedAt: string };
+  /** Commune du lieu de la dépense (zones exposées de l'organe de contrôle). */
+  commune?: string;
+  /** Ligne budgétaire de l'engagement (contrôle de conformité budgétaire). */
+  budgetLineId?: string;
+  /** Fournisseur du registre des fournisseurs enregistrés. */
+  supplierId?: string;
 }
+
+/** Contrôle complémentaire du moteur de correspondance (registre des fournisseurs, conformité budgétaire…). */
+export type CalcuCheck = (tx: { accountId: string | null; amount: MoneyJSON; beneficiary: string; reference: string; accountNumberHash: string }, docs: SupportingDocument[], acc: PublicAccount | undefined) => { score: Score; finding: string }[];
 
 export interface BankTransaction {
   id: string;
@@ -89,6 +101,21 @@ export class CalcuService {
   readonly transactions = new InMemoryAppendOnlyRepository<BankTransaction>();
   readonly reports = new InMemoryRepository<AnomalyReport>();
   private readonly ids = new IdGenerator();
+  /** Contrôles complémentaires branchés par l'organe de contrôle (§ 27A.4). */
+  private readonly checks: CalcuCheck[] = [];
+  /** Registres de l'organe de contrôle (§ 27A.4, § 27A.5), exploités par `controle`. */
+  readonly suppliers = new InMemoryRepository<Supplier>();
+  readonly budgetLines = new InMemoryRepository<BudgetLine>();
+  readonly missions = new InMemoryRepository<ControlMission>();
+  readonly referrals = new InMemoryRepository<JusticeReferral>();
+  readonly recoveries = new InMemoryRepository<Recovery>();
+  readonly recommendations = new InMemoryRepository<Recommendation>();
+  /** Compléments du § 27A.4 et du § 27A.5 (registres, missions, justice, tableaux) — branchés par le module. */
+  controle?: CalcuControlService;
+
+  addCheck(fn: CalcuCheck): void {
+    this.checks.push(fn);
+  }
 
   constructor(private readonly ctx: AppContext) {}
 
@@ -166,6 +193,7 @@ export class CalcuService {
     }
     const sameDay = previous.filter((t) => norm(t.beneficiary) === norm(tx.beneficiary) && kinshasaDay(t.at) === kinshasaDay(tx.at));
     if (sameDay.length >= 2) { findings.push('Plusieurs paiements le même jour au même bénéficiaire : fractionnement présumé.'); worst('AMBRE'); }
+    for (const check of this.checks) for (const r of check(tx, docs, acc)) { findings.push(r.finding); worst(r.score); }
     if (score === 'VERT') findings.push('Conformité totale : compte enregistré, justificatifs complets et cohérents.');
     return { score, findings };
   }

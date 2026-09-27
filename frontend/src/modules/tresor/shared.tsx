@@ -28,7 +28,7 @@ export interface SuspenseItem {
 export interface SuspenseList { items: SuspenseItem[]; open: number; totals: MoneyJSON[]; buckets: { bucket: string; count: number; amounts: MoneyJSON[] }[]; slaDays: number; maxDays: number }
 
 export type OperationKind = 'ANNULATION_QUITTANCE' | 'REMPLACEMENT_QUITTANCE' | 'CONTREPASSATION' | 'REMBOURSEMENT' | 'CONTRE_ECRITURE' | 'APUREMENT_SUSPENS' | 'PARAMETRE_NOMENCLATURE'
-  | 'DECAISSEMENT_REPARTITION';
+  | 'DECAISSEMENT_REPARTITION' | 'RECUPERATION_SOUS_TRAITANT';
 export interface Operation {
   id: string; kind: OperationKind; status: 'PROPOSEE' | 'EXECUTEE' | 'REJETEE';
   input: { reason: string; publicReason?: string; receipt?: string; paymentReference?: string; ledgerEntryId?: string; suspenseId?: string; mode?: string };
@@ -73,6 +73,7 @@ export const TYPE_LABEL: Record<string, string> = {
   ORPHAN_CREDIT: 'Crédit orphelin', CREDIT_WITHOUT_CONFIRMATION: 'Crédit sans confirmation', DUPLICATE_CREDIT: 'Crédit en double',
   WRONG_ACCOUNT: 'Mauvais compte', UNKNOWN_ACCOUNT: 'Compte inconnu du coffre', AMOUNT_MISMATCH: 'Écart de montant',
   MISSING_SETTLEMENT: 'Règlement manquant (J+1)', PROVIDER_AMBIGUOUS: 'Résultat opérateur inconnu',
+  CREDIT_GROUPE_ECART: 'Crédit groupé : fichier de détail non concordant',
   UNAPPLIED_PAYMENT: 'Paiement non affecté (doublon, référence expirée ou obligation soldée) — remboursement au payeur en double validation',
 };
 
@@ -85,6 +86,7 @@ export const OP_LABEL: Record<OperationKind, string> = {
   APUREMENT_SUSPENS: 'Apurement de suspens',
   PARAMETRE_NOMENCLATURE: 'Paramètre de nomenclature',
   DECAISSEMENT_REPARTITION: 'Décaissement de répartition (§ 37A, deux flux)',
+  RECUPERATION_SOUS_TRAITANT: 'Récupération auprès d’un sous-traitant (§ 15A.7, ordre de reversement)',
 };
 
 export const OP_STATUS: Record<Operation['status'], { label: string; tone: Tone }> = {

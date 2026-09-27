@@ -60,6 +60,11 @@ const operationSchema = z.discriminatedUnion('kind', [
     kind: z.literal('DECAISSEMENT_REPARTITION'), reason: motif,
     repartition: z.object({ distributionId: z.string().min(3).max(60), flow: z.string().min(3).max(40) }).strict(),
   }).strict(),
+  // Récupération auprès d'un sous-traitant (§ 15A.7) : décision de récupération du contrôle qualité terrain.
+  z.object({
+    kind: z.literal('RECUPERATION_SOUS_TRAITANT'), reason: motif,
+    recuperation: z.object({ clawbackId: z.string().min(3).max(60) }).strict(),
+  }).strict(),
 ]);
 
 const closeDaySchema = z.object({ date: isoDateString }).strict();

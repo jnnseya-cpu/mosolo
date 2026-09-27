@@ -27,6 +27,7 @@ import {
   type QualitySample, type Subcontractor, type SubcontractorStatus, type TerrainModule,
 } from './model.js';
 import { TERRAIN_ACTIONS as A } from './policy.js';
+import type { TerrainQualityService } from './qualite-fraude.js';
 
 /** Rôles qui voient l'ensemble du dispositif (pas de restriction à un sous-traitant). */
 const BROAD_ROLES: RoleCode[] = ['R06', 'R07', 'R08', 'R09', 'R11', 'R17', 'R22', 'R23', 'R24'];
@@ -83,6 +84,8 @@ export class TerrainService {
   private readonly tolerances = new Map<string, number>();
   private readonly ids = new IdGenerator();
   private readonly badgeKey: string;
+  /** Contrôle qualité renforcé : doublons, objets fictifs, rotation des zones, récupérations (§ 15A.5, § 15A.7). */
+  qualite?: TerrainQualityService;
 
   constructor(private readonly ctx: AppContext) {
     // Clé de signature des QR de badge, dérivée de la clé serveur (production : HSM, clé dédiée).
@@ -671,6 +674,8 @@ export class TerrainService {
       agentsOnLot.add(agentId);
       if (agentsOnLot.size > lot.maxAgents) throw unprocessable('LOT_AGENT_LIMIT', `Nombre maximal d’agents du lot atteint (${lot.maxAgents}).`);
     }
+    // Rotation des zones (§ 15A.5) : alerte au-delà de la durée maximale sur une même commune (blocage facultatif).
+    this.qualite?.checkAssignment(u, m, agentId);
     const updated = this.missions.update({ ...m, assignedAgentId: agentId, assignedBy: u.id, assignedAt: this.now(), status: 'AFFECTEE' });
     this.audit(u, 'terrain.mission.assigned', 'mission', m.id, { agentId, previous: m.assignedAgentId });
     this.notify('mission.assigned', [agentId], { mission: m.id });
@@ -1123,6 +1128,9 @@ export class TerrainService {
     const l1 = Money.fromJSON(c.validatedFinding).multiply(String(validated));
     const l2 = Money.fromJSON(c.missionOnTime).multiply(String(onTime));
     const total = l1.currency === l2.currency ? l1.add(l2).toJSON() : null;
+    // Récupérations décidées (§ 15A.7) : lignes négatives, jamais une retenue automatique.
+    const recoveries = this.qualite?.adjustments(st.id) ?? [];
+    const recovered = recoveries.reduce<Money | null>((acc, r) => (acc && acc.currency === r.amount.currency ? acc.add(Money.fromJSON(r.amount)) : acc), total ? Money.fromJSON(total) : null);
     return {
       subcontractorId: st.id, available: true, indicative: true, example: c.example, contractReference: c.reference, basis: 'LIVRABLES_VERIFIES',
       deliverables,
@@ -1131,6 +1139,7 @@ export class TerrainService {
         { deliverable: 'Missions achevées dans les délais', count: onTime, unitPrice: c.missionOnTime, amount: l2.toJSON() },
       ],
       total, notice,
+      ...(recoveries.length ? { recoveries, totalAfterRecoveries: recovered?.toJSON() ?? null } : {}),
     };
   }
 
