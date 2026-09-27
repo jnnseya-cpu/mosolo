@@ -54,6 +54,7 @@ export const documentsPlugin = definePlugin<DocumentService>({
       return { valid: svc.verifyWatermark(parse(z.object({ text: z.string().min(1).max(2000), signature: z.string().regex(/^[0-9a-f]{64}$/), sha256: z.string().regex(/^[0-9a-f]{64}$/) }).strict(), req.body)) };
     });
     app.get('/v1/documents/purges/apercu', async (req) => svc.purgePreview(requireUser(req)));
+    app.get('/v1/documents/purges', async (req) => svc.listPurges(requireUser(req)));
     app.post('/v1/documents/purges', async (req, reply) => reply.code(201).send(svc.proposePurge(requireUser(req), parse(z.object({ documentIds: z.array(z.string().min(1)).min(1).max(500), motif }).strict(), req.body))));
     app.post<P>('/v1/documents/purges/:id/decision', async (req) => svc.decidePurge(requireUser(req), req.params.id, parse(z.object({ approve: z.boolean(), motif }).strict(), req.body)));
     app.post('/v1/documents/integrite/verification', async (req) => svc.verifyIntegrity(requireUser(req)));

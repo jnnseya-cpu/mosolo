@@ -137,7 +137,7 @@ describe('Plateforme et accès — modules 51 à 55', () => {
     });
     renderPage(<Partenaires />);
     expect(await screen.findByText('Proposé — approbation attendue')).toBeTruthy();
-    expect(screen.getByText('403 HORS_OBJET')).toBeTruthy();
+    expect(screen.getByText('403 Hors de l’objet contracté (HORS_OBJET)')).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/Motif \(approbation/), { target: { value: 'Protocole signé vérifié' } });
     fireEvent.click(screen.getByRole('button', { name: 'Approuver' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/contrats/ITF-1/decision'))).toBe(true));
@@ -149,7 +149,7 @@ describe('Plateforme et accès — modules 51 à 55', () => {
       '/v1/plateforme/supervision': { targets: { availabilityPct: '99.9', rtoHours: { PILOTE: 4, MATURITE: 1 }, phase: 'PILOTE', source: 'Cahier § 28.6' }, thresholds: { latencyP95Ms: 2000, windowMinutes: 15, status: 'PAR_DEFAUT' }, window15: { requests: 10, errors5xx: 0, availabilityPct: '100.000', p95Ms: 12 }, routes: [], alerts: [], onCall: [], incidents: [{ id: 'INC-EXP-1', title: 'Paiements lents', service: 'API', severity: 'S2', status: 'DECLARE', detectedAt: '2026-09-26T09:00:00Z' }], procedure: ['1. Déclarer.'], logs: { note: 'Journaux sans secrets.', redacted: ['authorization'] }, metricsEndpoint: 'GET /v1/plateforme/metrics', indicators: [ind('DELAI_RETABLISSEMENT', 'Délai de rétablissement', null, { target: 4 })] },
     });
     const a = renderPage(<Administration />);
-    expect(await screen.findByText(/CHG-1 — DEPLOIEMENT PRODUCTION 1.1.0/)).toBeTruthy();
+    expect(await screen.findByText(/CHG-1 — Déploiement PRODUCTION 1.1.0/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Avis favorable' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/changements/CHG-1/avis'))).toBe(true));
     a.unmount();

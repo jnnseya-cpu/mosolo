@@ -112,7 +112,7 @@ describe('Écrans sécurité, accès et audit', () => {
     renderApp(<Elevations />);
     expect(await screen.findByText('ELV-00001')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Approuver' })).toBeTruthy();
-    expect(screen.getByText('Demandée')).toBeTruthy();
+    expect(screen.getAllByText('Demandée').length).toBeGreaterThan(0);
   });
 
   it('scellement : racines publiées et contrôles affichés ; accès réservé sinon', async () => {

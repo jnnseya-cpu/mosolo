@@ -13,6 +13,7 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { ReasonAction } from '../fiscal/common';
+import { DocumentsVisuels } from './visuels';
 
 interface Version { id: string; version: number; fileName: string; contentType: string; size: number; sha256: string; seal: string; encrypted: boolean; ocr: { source: string; chars: number; excerpt: string }; uploadedAt: string }
 export interface DocView {
@@ -125,6 +126,41 @@ function DocCard({ d, categories, onChanged }: { d: DocView; categories: Categor
   );
 }
 
+interface PurgeRow { id: string; documentIds: string[]; motif: string; proposedBy: string; proposedAt: string; status: 'PROPOSEE' | 'APPROUVEE' | 'REJETEE'; decision?: { by: string; motif: string }; purged?: string[] }
+const PURGE_STATUS: Record<PurgeRow['status'], { label: string; tone: 'warning' | 'good' | 'neutral' }> = {
+  PROPOSEE: { label: 'Proposée — seconde personne attendue', tone: 'warning' }, APPROUVEE: { label: 'Approuvée — purgée', tone: 'good' }, REJETEE: { label: 'Rejetée', tone: 'neutral' },
+};
+
+/** Demandes de purge (liste servie par GET /v1/documents/purges) : décision depuis la liste, par une seconde personne. */
+function PurgeRequests({ onChanged }: { onChanged: () => void }) {
+  const { user, fmtDate } = useApp();
+  const roles = user?.roles ?? [];
+  const approver = roles.some((r) => r === 'R22' || r === 'R28');
+  const q = useApi(() => api<PurgeRow[]>('/v1/documents/purges'), [user?.id]);
+  const done = () => { q.reload(); onChanged(); };
+  if (q.loading) return <Loading />;
+  if (q.error !== null) return <ErrorState error={q.error} onRetry={q.reload} />;
+  const items = q.data ?? [];
+  return (
+    <div className="stack-sm" aria-label="Demandes de purge">
+      <h3 className="h-sub">Demandes de purge <span className="count">{items.length}</span></h3>
+      {items.length === 0 && <p className="small muted">Aucune demande de purge.</p>}
+      <ul className="stack-sm">{items.map((p) => (
+        <li key={p.id} className="panel stack-sm">
+          <div className="panel-head"><p className="panel-title"><span className="mono">{p.id}</span> · {p.documentIds.length} pièce(s)</p><StatusBadge tone={PURGE_STATUS[p.status].tone} label={PURGE_STATUS[p.status].label} /></div>
+          <p className="small">Motif : {p.motif} — proposée par {p.proposedBy} le {fmtDate(p.proposedAt, true)}{p.decision ? ` · décision de ${p.decision.by} : ${p.decision.motif}` : ''}</p>
+          <p className="small muted mono">{p.documentIds.join(', ')}</p>
+          {approver && p.status === 'PROPOSEE' && p.proposedBy !== user?.id && (
+            <div className="btn-row">
+              <ReasonAction label="Approuver la purge" confirmLabel="Approuver" onSubmit={(motif) => api(`/v1/documents/purges/${p.id}/decision`, { method: 'POST', body: { approve: true, motif } }).then(done)} />
+              <ReasonAction label="Rejeter" confirmLabel="Rejeter" tone="secondary" onSubmit={(motif) => api(`/v1/documents/purges/${p.id}/decision`, { method: 'POST', body: { approve: false, motif } }).then(done)} />
+            </div>
+          )}
+        </li>))}</ul>
+    </div>
+  );
+}
+
 function Governance({ onChanged }: { onChanged: () => void }) {
   const { user } = useApp();
   const roles = user?.roles ?? [];
@@ -146,9 +182,10 @@ function Governance({ onChanged }: { onChanged: () => void }) {
           <ReasonAction label="Proposer la purge" confirmLabel="Proposer (approbation par une seconde personne)" onSubmit={(motif) => api<{ id: string }>('/v1/documents/purges', { method: 'POST', body: { documentIds: preview.map((p) => p.id), motif } }).then((r) => { setMsg(`Demande ${r.id} proposée.`); setPreview(null); })} />
         </div>
       ))}
+      {roles.some((r) => ['R22', 'R28', 'R25'].includes(r)) && <PurgeRequests onChanged={onChanged} />}
       {roles.some((r) => r === 'R22' || r === 'R28') && (
         <div className="btn-row">
-          <label className="small" htmlFor="purge-id">Demande de purge</label><input id="purge-id" value={purgeId} onChange={(e) => setPurgeId(e.target.value)} placeholder="PURG-…" />
+          <label className="small" htmlFor="purge-id">Demande de purge (par identifiant)</label><input id="purge-id" value={purgeId} onChange={(e) => setPurgeId(e.target.value)} placeholder="PURG-…" />
           <ReasonAction label="Approuver la purge" confirmLabel="Approuver" onSubmit={(motif) => api(`/v1/documents/purges/${purgeId}/decision`, { method: 'POST', body: { approve: true, motif } }).then(onChanged)} />
           <ReasonAction label="Rejeter" confirmLabel="Rejeter" tone="secondary" onSubmit={(motif) => api(`/v1/documents/purges/${purgeId}/decision`, { method: 'POST', body: { approve: false, motif } }).then(onChanged)} />
         </div>
@@ -162,14 +199,16 @@ function Governance({ onChanged }: { onChanged: () => void }) {
 export default function Documents() {
   const { user } = useApp();
   const docs = useApi(() => api<DocView[]>('/v1/documents'), [user?.id]);
-  const cats = useApi(() => api<Category[]>('/v1/documents/categories'), [user?.id]);
-  const ind = useApi(() => api<Indicators>('/v1/documents/indicateurs'), [user?.id]);
-  const reload = () => { docs.reload(); ind.reload(); };
+  // Catégories et indicateurs : lus seulement par les rôles internes (le contribuable n'y a pas droit — pas de 403 inutile).
   const staff = (user?.roles ?? []).some((r) => !['R30', 'R31'].includes(r));
+  const cats = useApi(staff ? () => api<Category[]>('/v1/documents/categories') : null, [user?.id]);
+  const ind = useApi(staff ? () => api<Indicators>('/v1/documents/indicateurs') : null, [user?.id]);
+  const reload = () => { docs.reload(); ind.reload(); };
   return (
     <div className="page page-wide">
       <PageHead eyebrow="Documents et preuves" title="Gestion documentaire"
         lead="Chaque pièce est chiffrée au repos, versionnée, scellée (empreinte et sceau inscrits au journal). La lecture automatique propose une catégorie ; une personne la confirme. Les exports sont filigranés et expirent. Les preuves d’audit ne sont jamais purgées." />
+      <DocumentsVisuels ind={ind.data} docs={docs.data} labels={Object.fromEntries((cats.data ?? []).map((c) => [c.code, c.label]))} />
       {ind.data && (
         <section className="panel stack-sm" aria-label="Indicateurs de la gestion documentaire">
           <p className="small">Volume stocké : <strong>{ind.data.volume.documents}</strong> document(s), {ind.data.volume.versions} version(s), <strong>{kb(ind.data.volume.octets)}</strong> chiffrés · {ind.data.volume.purges} purgé(s) · classification : {ind.data.classification.proposees} proposée(s), {ind.data.classification.confirmees} confirmée(s)</p>

@@ -995,3 +995,23 @@ par des propriétés facultatives) :
 | Galerie | `/visualisation/galerie` (rôles internes) | Données réelles, sinon `[EXEMPLE]` |
 
 Tests : `aggregate`, `viz` (frontend). Captures : `docs/captures/visualisation/`.
+
+## I.25.b Visuels du périmètre « intégrité, accès, IA, socle, plateforme, documents, communication, preuves » (27/09/2026)
+
+Chaque écran du périmètre reçoit, en tête, un résumé visuel construit avec la trousse partagée (aucune autre trousse),
+dérivé des seules données que l'écran charge déjà, dans les droits de la personne qui consulte ; les tableaux,
+formulaires et boutons existants restent en place (les anciennes rangées d'indicateurs sont conservées, repliées sous
+« Détail des indicateurs » quand des tuiles les reprennent). Détail écran par écran : `couverture-visuelle-integrite.md`.
+
+| Ajout | Emplacement | Règle |
+|---|---|---|
+| Visuels communs (états d'une liste, activité par jour de Kinshasa, indicateurs de module en tuiles et jauges) | `frontend/src/modules/plateforme/visuels.tsx` | Cible affichée seulement si le serveur la sert ; « non mesuré » avec motif, jamais zéro |
+| Visuels par module | `modules/{integrite,acces,ia,socle,documents,communication}/visuels.tsx`, `modules/plateforme/visuelsPlateforme.tsx`, jauge de validité de `preuves/ProofVerify.tsx` | Tuiles, répartitions par état, anneaux, barres, jauges, carte de chaleur des communes, frises, activité quotidienne |
+| Liste des demandes de purge | `GET /v1/documents/purges` (DPO, audit, sécurité) ; écran « Gestion documentaire » | L'approbateur décide depuis la liste (la saisie par identifiant reste disponible) ; décision toujours à deux personnes |
+| Résultats visibles des actions | Console d'enquête, Collusion, Détecteurs | « N nouvelle(s) alerte(s) — aucun effet automatique » après chaque exécution |
+| Circuit d'arbitrage chiffré | `/acces/arbitrages` | La liste « Circuit » affiche le nombre de dossiers à chaque marche |
+| Libellés français d'abord | Délégations, Registre des modèles, Plateforme (clients, appels, livraisons, changements, incidents) | Codes bruts remplacés par leur libellé (code conservé en repli) |
+| Appels inutiles supprimés | Gestion documentaire (contribuable) | Catégories et indicateurs lus seulement par les rôles internes (plus de 403) ; aucun droit modifié |
+
+Tests : `visuels-integrite` (frontend, 15 cas), `documents-purges-liste` (backend). Captures :
+`docs/captures/visualisation/integrite/`.
