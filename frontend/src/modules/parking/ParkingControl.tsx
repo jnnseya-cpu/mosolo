@@ -3,6 +3,7 @@
  * Contrôle par plaque (résultat minimal : vert, ambre, rouge), constat photographique HUMAIN,
  * vérification par une personne distincte. Aucune sanction, aucun encaissement sur le terrain.
  */
+import { OverduePenalties, type OverduePenaltiesData } from '../../components/OverduePenalties';
 import { AssistedPay } from '../../components/AssistedPay';
 import { useRef, useState, type FormEvent } from 'react';
 import type { MoneyJSON } from '@mosolo/shared';
@@ -23,7 +24,7 @@ import { EvidencePhotos } from './EvidencePhotos';
 import './parking.css';
 
 interface PenaltyLine { module: string; reference: string; nature: string; status: string; createdAt: string; decidedAt: string | null; amount: MoneyJSON | null; payment: string; unpaid: boolean; overdueDays: number | null; zone?: string; obligationId?: string | null }
-interface ControlResult { checkId: string; plate: string; zone: { id: string; code: string; name: string } | null; light: Light; title: string | null; validUntil: string | null; checkedAt: string; guidance: string; penalties?: PenaltyLine[]; penaltiesUnpaid?: number }
+interface ControlResult { checkId: string; plate: string; zone: { id: string; code: string; name: string } | null; light: Light; title: string | null; validUntil: string | null; checkedAt: string; guidance: string; penalties?: PenaltyLine[]; penaltiesUnpaid?: number; penalitesImpayees?: OverduePenaltiesData }
 interface Evidence { photoIds: string[]; place: string; lat: number; lon: number; accuracy: number | null }
 
 export default function ParkingControl() {
@@ -101,6 +102,8 @@ function ControlPanel({ zones, loading, onRecorded }: { zones: Zone[]; loading: 
             <p className="small muted">Contrôle {result.checkId} · {fmtDate(result.checkedAt, true)}</p>
           </div>
           <Penalties items={result.penalties ?? []} />
+          {/* Pénalités des autres modules impayées depuis plus de 30 jours (visibles après ce contrôle). */}
+          <OverduePenalties data={result.penalitesImpayees} />
           {result.light === 'ROUGE' && step === 'result' && zone && (
             <button type="button" className="btn btn-secondary" onClick={() => setStep('camera')}><Icon name="camera" size={18} /> Ouvrir la caméra de preuve</button>
           )}

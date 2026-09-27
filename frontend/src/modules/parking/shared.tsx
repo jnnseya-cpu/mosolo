@@ -109,6 +109,7 @@ export const VIOLATION_STATUS: Record<Violation['status'], { tone: Tone; label: 
 export const PAYMENT_STATE: Record<string, { tone: Tone; label: string }> = {
   AUCUNE_REFERENCE: { tone: 'neutral', label: 'À payer' },
   REFERENCE_EMISE: { tone: 'warning', label: 'Référence émise' },
+  PARTIEL: { tone: 'warning', label: 'Partiellement payé' },
   PAYE: { tone: 'info', label: 'Payé (confirmé)' },
   RAPPROCHE: { tone: 'good', label: 'Payé et rapproché' },
 };

@@ -103,7 +103,13 @@ export function registerParkingRoutes(app: FastifyInstance, ctx: AppContext, svc
       lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180), gpsAccuracyM: z.number().min(0).max(10_000).optional(),
       deviceId: z.string().max(64).optional(), observations: z.string().trim().min(3).max(2000),
     }).strict(), req.body);
-    return reply.code(201).send(svc.recordViolation(requireUser(req), body));
+    const user = requireUser(req);
+    // Clé d'idempotence facultative : une nouvelle tentative après coupure réseau renvoie le constat déjà créé.
+    const rawKey = req.headers['idempotency-key'];
+    if (!rawKey) return reply.code(201).send(svc.recordViolation(user, body));
+    const res = ctx.idempotency.execute(`parking-violation:${user.id}`, IdempotencyStore.requireKey(rawKey), body, () => ({ statusCode: 201, body: svc.recordViolation(user, body) }));
+    if (res.replayed) reply.header('idempotent-replayed', 'true');
+    return reply.code(res.statusCode).send(res.body);
   });
 
   // Caméra de preuve : photo horodatée et géolocalisée (JPEG en base64, empreinte SHA-256 vérifiée), 5 par contrôle rouge.
