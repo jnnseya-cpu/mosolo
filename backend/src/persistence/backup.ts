@@ -144,7 +144,7 @@ export async function restoreStore(store: SnapshotStore, doc: BackupDocument, ke
       anchor = opts.anchor.read();
     } catch (e) {
       // Ancre illisible ou mal signée : on ne peut pas prouver l'absence de retour arrière.
-      if (!(e instanceof AnchorError) || !opts.confirmRollback) throw new Error(`Restauration refusée : ${(e as Error).message} (--confirm-rollback pour passer outre, tracé).`);
+      if (!(e instanceof AnchorError) || !opts.confirmRollback) throw new Error(`Restauration refusée : ${(e as Error).message} (--confirm-rollback pour passer outre, tracé).`, { cause: e });
     }
   }
   const reasons: string[] = [];

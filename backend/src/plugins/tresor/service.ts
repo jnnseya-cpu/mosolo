@@ -468,7 +468,7 @@ export class TresorService {
 
   start(user: User, id: string) {
     authorize(user, 'tresor:exception.work');
-    const e = this.exception(user, id);
+    this.exception(user, id); // contrôle d'accès et d'existence
     const c = this.caseOf(id);
     this.requireAssignee(user, c, id);
     if (c.status !== 'OUVERTE') throw conflict('EXCEPTION_INVALID_TRANSITION', `Exception ${id} : déjà ${c.status}.`);
@@ -480,7 +480,7 @@ export class TresorService {
 
   addEvidence(user: User, id: string, input: { label: string; sha256?: string; note?: string }) {
     authorize(user, 'tresor:exception.work');
-    const e = this.exception(user, id);
+    this.exception(user, id); // contrôle d'accès et d'existence
     const c = this.caseOf(id);
     this.requireAssignee(user, c, id);
     if (c.status === 'RESOLUE' || c.status === 'CLASSEE') throw conflict('EXCEPTION_CLOSED', `L'exception ${id} est close.`);
@@ -612,7 +612,7 @@ export class TresorService {
 
   rejectResolution(user: User, id: string, motif: string) {
     authorize(user, 'tresor:exception.approve');
-    const e = this.exception(user, id);
+    this.exception(user, id); // contrôle d'accès et d'existence
     const c = this.caseOf(id);
     if (!c.proposal || c.decision) throw conflict('NO_PENDING_RESOLUTION', `Aucune résolution en attente pour ${id}.`);
     assertDistinctPerson(user.id, [c.proposal.proposedBy], 'Quatre yeux : le rejet revient à une autre personne que l’auteur.');

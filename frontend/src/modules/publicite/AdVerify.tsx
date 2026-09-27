@@ -24,7 +24,7 @@ export default function AdVerify() {
   const a1 = useAction();
   const a2 = useAction();
   const checkPlate = (v: string) => void a1.run(() => api<PublicDevice>(`/v1/publicite/public/devices/${encodeURIComponent(v.trim())}`), setDev);
-  useEffect(() => { if (params.get('plaque')) checkPlate(params.get('plaque')!); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => { if (params.get('plaque')) checkPlate(params.get('plaque')!); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="page">
       <PageHead eyebrow="KIN PUB CONTROL · vérification publique" title="Vérifier un support ou un contrôleur"

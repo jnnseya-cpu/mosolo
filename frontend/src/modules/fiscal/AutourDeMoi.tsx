@@ -13,7 +13,7 @@ import { ErrorState, ExampleNotice } from '../../components/States';
 import { PreciseLocation } from '../../components/PreciseLocation';
 import { GeoMapLazy } from '../../components/GeoMapLazy';
 import { AssistedPay } from '../../components/AssistedPay';
-import { api, describeError } from '../../lib/api';
+import { api } from '../../lib/api';
 import { circleRing, metersBetween, type PreciseFix } from '../../lib/geo';
 import { MAP_STATUS } from '../../lib/status';
 import './autour.css';

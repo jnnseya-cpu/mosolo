@@ -100,7 +100,7 @@ export class PropertyService {
       reason: input.reason?.trim() || (certified ? `Rang certifié (${certified.instrumentId}, ${certified.article}).` : 'Rang confirmé à la validation par une personne distincte du déclarant.'),
     };
     const parent = this.parentOf(obj);
-    let validated = obj;
+    let validated: typeof obj;
     if (!obj.igf) {
       if (!parent) {
         const q = this.d.geo.ensureQuartier(obj.commune, obj.quartier);

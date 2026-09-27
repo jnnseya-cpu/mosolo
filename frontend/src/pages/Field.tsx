@@ -28,7 +28,6 @@ import type { CounterVisit, Finding, FindingOutcome, MeResponse, Mission } from 
 import '../modules/terrain/terrain.css';
 
 const OCCUPANCY = ['owner_occupied', 'rented', 'mixed', 'vacant', 'under_construction', 'commercial', 'unknown'] as const;
-const NEW_OBJECT = '__nouvel_objet__';
 
 interface Capture {
   outcome: FindingOutcome | '';

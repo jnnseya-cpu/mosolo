@@ -3,7 +3,7 @@
  * aucun secret public de démonstration, aucune usurpation par en-tête, aucune boîte d'envoi exposée, CORS fermé,
  * limitation non contournable par en-tête client, chaîne d'audit jamais restaurée en silence.
  */
-import { createHmac, randomUUID } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp, corsOrigins } from '../src/app.js';
 import { ACR, assertSafeDeployment, ConfigurationError, isDemoMode, type User } from '../src/core/auth.js';

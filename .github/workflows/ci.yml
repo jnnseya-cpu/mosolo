@@ -50,6 +50,10 @@ jobs:
       - name: Contrôle de types — frontend
         run: npm run typecheck -w frontend
 
+      # Bloquant sur les erreurs ESLint (les avertissements, p. ex. `any` explicite, sont affichés sans bloquer).
+      - name: Lint
+        run: npm run lint
+
       - name: Tests — shared
         run: npm test -w shared
       - name: Tests — backend

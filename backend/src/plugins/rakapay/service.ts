@@ -464,7 +464,7 @@ export class RakaPayService {
     this.titres.sync();
     let driver: Driver | undefined;
     let moto: Moto | undefined;
-    let presented = '';
+    let presented: string;
     let method: 'QR_STATIQUE' | 'PLAQUE' | 'QR_DYNAMIQUE' = 'QR_STATIQUE';
     if (input.vest) {
       presented = input.vest;

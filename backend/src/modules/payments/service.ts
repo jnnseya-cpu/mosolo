@@ -24,7 +24,7 @@ import { DEFAULT_KEY_ID, NonceStore, isValidNonce, signCallback, verifyCallbackS
 import { ProviderHttpError } from './connectors/http-client.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
 import {
-  WebhookPayloadError, WebhookVerificationError, type ConfirmationMethod, type ConnectorId, type HeaderBag, type NormalizedProviderEvent,
+  WebhookPayloadError, WebhookVerificationError, type ConfirmationMethod, type ConnectorId, type HeaderBag,
   type HoldEvent, type PaymentEvent, type SettlementEvent, type WebhookChecks,
 } from './connectors/types.js';
 

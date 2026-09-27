@@ -73,7 +73,7 @@ const level = (body: { levels: { level: string }[] }, l: string) => body.levels.
 describe('Pilotage — échelle de la recette sur données réelles (§ 26.1)', () => {
   it('onze niveaux, mesurés sur le socle ; potentiel et disponible déclarés non mesurés ; jamais additionnés', async () => {
     const env = await setupPilotage();
-    let r = await env.req('GET', '/v1/pilotage/echelle', 'u-gouverneur');
+    const r = await env.req('GET', '/v1/pilotage/echelle', 'u-gouverneur');
     expect(r.statusCode).toBe(200);
     let body = r.json();
     expect(body.example).toBe(false);

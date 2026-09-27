@@ -304,7 +304,7 @@ export class MemoryService {
   }
 
   process(u: User, type: string, id: string, iaResolver?: (id: string) => Omit<ProcessState, 'key' | 'history' | 'recentChanges' | 'computedAt' | 'retention'> | null): ProcessState {
-    let base: Omit<ProcessState, 'key' | 'history' | 'recentChanges' | 'computedAt' | 'retention'> | null = null;
+    let base: Omit<ProcessState, 'key' | 'history' | 'recentChanges' | 'computedAt' | 'retention'> | null;
     if (type === 'ia') {
       base = iaResolver?.(id) ?? null;
     } else {

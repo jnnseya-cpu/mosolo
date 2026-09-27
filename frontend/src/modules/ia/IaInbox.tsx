@@ -20,7 +20,7 @@ export default function IaInbox() {
   const [status, setStatus] = useState<'ALL' | IaStatus>('EMISE');
   const [level, setLevel] = useState<'ALL' | Autonomy>('ALL');
   const [agent, setAgent] = useState('ALL');
-  const all = q.data ?? [];
+  const all = useMemo(() => q.data ?? [], [q.data]);
   const agents = useMemo(() => [...new Map(all.map((r) => [r.agentCode, r.agent])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [all]);
   const list = all.filter((r) => (status === 'ALL' || r.status === status) && (level === 'ALL' || r.autonomy === level) && (agent === 'ALL' || r.agentCode === agent));
   const count = (s: 'ALL' | IaStatus) => all.filter((r) => (s === 'ALL' || r.status === s) && (level === 'ALL' || r.autonomy === level) && (agent === 'ALL' || r.agentCode === agent)).length;

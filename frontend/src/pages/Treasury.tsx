@@ -196,7 +196,7 @@ function StatementForm({ onImported }: { onImported: () => void }) {
 }
 
 export default function Treasury() {
-  const { tr, fmtDate, user, lang } = useApp();
+  const { tr, user, lang } = useApp();
   const [tick, setTick] = useState(0);
   const bal = useApi(() => api<Balance>('/v1/ledger/balance'), [user?.id]);
   const ai = useInsight('treasury', [user?.id]);

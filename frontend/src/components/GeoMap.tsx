@@ -130,7 +130,7 @@ export default function GeoMap(props: GeoMapProps) {
     (m.getSource('m-polys') as GeoJSONSource | undefined)?.setData(d.polys as never);
     (m.getSource('m-lines') as GeoJSONSource | undefined)?.setData(d.lines as never);
     (m.getSource('m-points') as GeoJSONSource | undefined)?.setData(d.points as never);
-  }, [props.markers, props.polygons, props.lines, props.accuracy]);
+  }, [props.markers, props.polygons, props.lines, props.accuracy]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!props.bounds) map.current?.easeTo({ center: props.center, duration: 400 }); }, [props.center[0], props.center[1]]); // eslint-disable-line react-hooks/exhaustive-deps
   const b = props.bounds;
   useEffect(() => { if (b && map.current) map.current.fitBounds(b, { padding: 30, maxZoom: 17, duration: 300 }); }, [b?.[0][0], b?.[0][1], b?.[1][0], b?.[1][1]]); // eslint-disable-line react-hooks/exhaustive-deps
