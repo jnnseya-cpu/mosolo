@@ -14,6 +14,7 @@
  *  - EXPORTS FILIGRANÉS (demandeur, heure, référence, signature liée au contenu) et EXPIRABLES (durée du registre
  *    « socle.export_expiration_h », harmonisée avec les exports de données).
  */
+import { checkUpload } from './controle-fichiers.js';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import type { AppContext } from '../../context.js';
 import { actorOf } from '../../core/audit.js';
@@ -164,8 +165,10 @@ export class DocumentService {
   }
 
   private newVersion(u: User, documentId: string, version: number, input: { fileName: string; contentType: string; contentBase64: string; ocrText?: string }): DocumentVersion {
-    const buf = Buffer.from(input.contentBase64, 'base64');
-    if (!buf.length) throw badRequest('EMPTY_DOCUMENT', 'Document vide.');
+    // Type admis vérifié par signature, nom assaini, base64 strict (voir controle-fichiers.ts).
+    const checked = checkUpload(input);
+    const buf = checked.buf;
+    input = { ...input, fileName: checked.fileName, contentType: checked.contentType };
     const native = extractNativeText(input.contentType, buf).slice(0, 200_000);
     const ocr: DocumentVersion['ocr'] = native.trim() ? { text: native, source: 'TEXTE_NATIF', chars: native.length }
       : input.ocrText?.trim() ? { text: input.ocrText.slice(0, 200_000), source: 'OCR_TERMINAL', chars: input.ocrText.length } : { text: '', source: 'AUCUN', chars: 0 };
@@ -180,6 +183,9 @@ export class DocumentService {
     if ((u.roles.includes('R30') || u.roles.includes('R31')) && !input.taxpayerId) throw badRequest('TAXPAYER_REQUIRED', 'Un contribuable dépose une pièce sur son propre compte.');
     const id = this.ids.next('DOC', 8);
     const v = this.newVersion(u, id, 1, input);
+    // Doublon : même contenu déjà déposé dans le MÊME périmètre (même contribuable, ou pièces internes) — signalé,
+    // jamais refusé (une même pièce peut justifier deux dossiers) ; aucun document d'un autre périmètre n'est révélé.
+    const dup = this.versions.findOne((x) => x.sha256 === v.sha256 && x.documentId !== id && (this.documents.get(x.documentId)?.taxpayerId ?? null) === (input.taxpayerId ?? null) && this.documents.get(x.documentId)?.status !== 'PURGE');
     const proposal = classify(v.ocr.text, input.contentType, input.title);
     const category = input.category ?? proposal.category;
     const d = this.documents.insert({
@@ -187,8 +193,8 @@ export class DocumentService {
       ...(input.link ? { link: input.link } : {}), ...(input.taxpayerId ? { taxpayerId: input.taxpayerId } : {}), auditProof: DOCUMENT_CATEGORIES[category].auditProof,
       status: 'ACTIF', currentVersion: 1, createdBy: u.id, createdAt: this.now(),
     });
-    this.ctx.audit.append({ actor: actorOf(u), action: 'document.uploaded', resourceType: 'document', resourceId: id, details: { category, classification: d.classification.status, proposed: proposal.category, confidence: proposal.confidence, link: input.link ?? null } });
-    return this.view(d);
+    this.ctx.audit.append({ actor: actorOf(u), action: 'document.uploaded', resourceType: 'document', resourceId: id, details: { category, classification: d.classification.status, proposed: proposal.category, confidence: proposal.confidence, link: input.link ?? null, ...(dup ? { duplicateOf: dup.documentId } : {}) } });
+    return { ...this.view(d), ...(dup ? { doublon: { documentId: dup.documentId, version: dup.version, detail: 'Contenu identique déjà déposé : vérifiez qu’il ne s’agit pas d’un double dépôt.' } } : {}) };
   }
 
   addVersion(u: User, id: string, input: { fileName: string; contentType: string; contentBase64: string; ocrText?: string }) {

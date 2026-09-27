@@ -71,7 +71,7 @@ function UploadForm({ onDone, categories }: { onDone: () => void; categories: Ca
       <h2 className="h-sub">Déposer une pièce</h2>
       <div className="field-row">
         <div className="field"><label className="label" htmlFor="doc-title">Intitulé</label><input id="doc-title" required minLength={3} value={title} onChange={(e) => setTitle(e.target.value)} /></div>
-        <div className="field"><label className="label" htmlFor="doc-file">Fichier</label><input id="doc-file" type="file" required onChange={(e: ChangeEvent<HTMLInputElement>) => setFile(e.target.files?.[0] ?? null)} /></div>
+        <div className="field"><label className="label" htmlFor="doc-file">Fichier</label><input id="doc-file" type="file" required aria-describedby="doc-file-aide" accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.docx,.xlsx,.odt,.ods,.doc,.xls,application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv" onChange={(e: ChangeEvent<HTMLInputElement>) => setFile(e.target.files?.[0] ?? null)} /><small id="doc-file-aide" className="muted">Types admis : PDF, images JPEG / PNG / WebP, texte, CSV, Word, Excel, OpenDocument. Les fichiers exécutables, HTML et SVG sont refusés.</small></div>
         <div className="field"><label className="label" htmlFor="doc-cat">Catégorie</label>
           <select id="doc-cat" value={category} onChange={(e) => setCategory(e.target.value)}><option value="">Proposée par la lecture automatique</option>{categories.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}</select></div>
       </div>
