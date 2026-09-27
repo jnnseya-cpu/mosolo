@@ -8,6 +8,7 @@ import { api, asList } from '../../lib/api';
 import IaRecCard from './IaRecCard';
 import { AUTONOMY_LABEL, AUTONOMY_SHORT, STATUS_LABEL } from './labels';
 import type { Autonomy, IaRec, IaStatus } from './types';
+import { BoiteVisuels } from './visuels';
 
 const STATUS_FILTERS: ('ALL' | IaStatus)[] = ['EMISE', 'TRAITEE_AUTO', 'ACCEPTEE', 'MODIFIEE', 'REJETEE', 'ANNULEE', 'ALL'];
 const LEVELS: ('ALL' | Autonomy)[] = ['ALL', 'A_AUTO', 'B_VALIDATION', 'C_RECOMMANDATION'];
@@ -40,6 +41,7 @@ export default function IaInbox() {
           <div className="kpi" key={k.label}><div className="kpi-label">{k.label}</div><div className="kpi-value">{q.data ? k.value : '—'}</div></div>
         ))}
       </div>
+      {q.data && <BoiteVisuels recs={all} />}
       <div className="ia-filters">
         <label className="field ia-select">
           <span className="label">Agent</span>

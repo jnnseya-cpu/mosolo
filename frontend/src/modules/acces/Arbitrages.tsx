@@ -14,6 +14,7 @@ import { Icon } from '../../components/Icon';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { FACT_LABEL, hasRole, Status, useAction, type Arbitration } from './common';
+import { ArbitragesVisuels, circuitArbitrage } from './visuels';
 import './acces.css';
 
 interface Rule { id: string; code: string; label: string; status: string; administeringEntity: string }
@@ -73,20 +74,22 @@ export default function Arbitrages() {
   const act = useAction(user?.id);
   const current = (list.data?.items ?? []).find((a) => a.id === open) ?? null;
   const canClaim = hasRole(roles, 'R06', 'R07', 'R11');
+  const circuit = list.data ? circuitArbitrage(list.data.items) : null;
 
   return (
     <div className="page page-wide">
       <PageHead eyebrow="Multi-entités" title="Revendications et arbitrages" lead="Une seule revendication par fait générateur. Lorsque deux entités revendiquent le même objet pour la même période, la seconde est bloquée et le comité juridique et tarifaire tranche : jamais de double perception." />
+      {list.data && <ArbitragesVisuels items={list.data.items} />}
       <div className="ac-grid">
         <div className="ac-stack">
           {canClaim && user && <ClaimForm userId={user.id} entity={user.entity ?? ''} onDone={list.reload} />}
           <div className="panel">
             <h2 className="panel-title">Circuit</h2>
             <ol className="ac-timeline small">
-              <li>Blocage automatique de la seconde revendication (aucune obligation créée).</li>
-              <li>Avis juridique motivé (juriste du comité).</li>
-              <li>Décision par une autorité distincte, étrangère aux entités en litige, avec second facteur.</li>
-              <li>Rectification éventuelle d’une obligation déjà émise : circuit de réclamation, jamais d’office.</li>
+              <li>Blocage automatique de la seconde revendication (aucune obligation créée).{circuit && <strong className="vz-circuit-count">— {circuit.bloques} dossier(s)</strong>}</li>
+              <li>Avis juridique motivé (juriste du comité).{circuit && <strong className="vz-circuit-count">— {circuit.avis} avis rendu(s)</strong>}</li>
+              <li>Décision par une autorité distincte, étrangère aux entités en litige, avec second facteur.{circuit && <strong className="vz-circuit-count">— {circuit.decides} décision(s)</strong>}</li>
+              <li>Rectification éventuelle d’une obligation déjà émise : circuit de réclamation, jamais d’office.{circuit && <strong className="vz-circuit-count">— {circuit.rectifications} rectification(s)</strong>}</li>
             </ol>
           </div>
         </div>

@@ -15,6 +15,7 @@ import { MoneyText } from '../../components/MoneyText';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { hasRole, PURPOSE_LABEL, useAction, type Consultation as C } from './common';
+import { ConsultationsVisuels } from './visuels';
 import './acces.css';
 
 interface Dossier {
@@ -57,6 +58,7 @@ export default function Consultation() {
   return (
     <div className="page page-wide">
       <PageHead eyebrow="Accès aux dossiers" title="Consultation motivée" lead="Toute consultation d’un dossier individuel déclare sa finalité. Hors de votre périmètre, l’accès « bris de glace » est exceptionnel : motivé, limité dans le temps, signalé immédiatement à l’audit et revu." />
+      {list.data && <ConsultationsVisuels items={list.data.items} />}
       {!allowed && !reviewer && <EmptyState title="Fonction réservée aux agents habilités (l’administrateur de la plateforme n’accède à aucune donnée fiscale individuelle)" icon="lock" />}
       <div className="ac-grid">
         {allowed && (

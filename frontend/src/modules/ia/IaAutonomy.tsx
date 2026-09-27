@@ -7,6 +7,7 @@ import { ErrorState, Loading } from '../../components/States';
 import { api, asList, describeError } from '../../lib/api';
 import { AUTONOMY_HELP, AUTONOMY_LABEL, ENTITIES } from './labels';
 import type { AutonomySettings, IaAgent } from './types';
+import { AutonomieVisuels } from './visuels';
 
 /** Paramètres d'autonomie par entité : le niveau A est désactivable par le responsable de l'entité (R08, R06). */
 export default function IaAutonomy() {
@@ -59,6 +60,7 @@ export default function IaAutonomy() {
         {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
         {q.data && form && (
           <div className="form">
+            <AutonomieVisuels actions={q.data.actions.length} disabledActions={form.disabledActions.length} agents={withA.length} disabledAgents={form.disabledAgents.filter((c) => withA.some((a) => a.code === c)).length} levelAEnabled={form.levelAEnabled} />
             <label className="ia-switch">
               <input type="checkbox" checked={form.levelAEnabled} disabled={!q.data.canEdit} onChange={(e) => setForm({ ...form, levelAEnabled: e.target.checked })} />
               <span><strong>Niveau A actif pour {entity}</strong> — brouillons, résumés, tâches, classements et rappels facultatifs préparés automatiquement, puis journalisés.</span>

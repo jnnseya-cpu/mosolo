@@ -7,6 +7,7 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { api, asList, describeError } from '../../lib/api';
 import { ENTITIES } from './labels';
 import type { MemoryLevel } from './types';
+import { MemoireVisuels } from './visuels';
 
 type Level = 'UTILISATEUR' | 'ENTITE' | 'PROCESSUS' | 'INTELLIGENCE';
 const TABS: { id: Level; label: string }[] = [
@@ -73,6 +74,7 @@ function UserMemory() {
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => void act(() => api('/v1/ia/memory/me', { method: 'DELETE' }), 'Mémoire effacée.')}><Icon name="x" size={16} /> Tout effacer</button>
       </header>
       <p className="callout callout-info"><Icon name="info" size={16} /> <span>{m.notice} Conservation : {m.retention} (échéance actuelle : {fmtDate(m.expiresAt)}).</span></p>
+      <MemoireVisuels frequentTasks={m.frequentTasks} items={entries.length} />
       <dl className="kv kv-dense">
         <div><dt>Rôle</dt><dd>{m.role}</dd></div>
         {entries.map(([k, v]) => (

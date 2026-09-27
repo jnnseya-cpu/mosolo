@@ -9,6 +9,7 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { api, asList, describeError } from '../../lib/api';
 import { DOMAIN_LABEL, EFFECT_LABEL, JOURNAL_LABEL, latency, short } from './labels';
 import type { IaEffect, IaRec, JournalEntry } from './types';
+import { JournalVisuels } from './visuels';
 
 interface Reconstitution {
   recommendation: IaRec; outputIntact: boolean; journal: JournalEntry[]; effects: IaEffect[];
@@ -37,6 +38,7 @@ export default function IaJournal() {
       </div>
       {q.loading && <Loading />}
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
+      {q.data && <JournalVisuels entries={q.data} />}
       {q.data && (
         <section className="panel">
           <DataTable<JournalEntry>

@@ -14,6 +14,7 @@ import { Icon } from '../../components/Icon';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { hasRole, MANDATE_ACTION_LABEL, Status, useAction, type Mandate } from './common';
+import { MandatsVisuels } from './visuels';
 import './acces.css';
 
 interface MandatesResp { items: Mandate[]; mandataires: { id: string; name: string; certified: boolean }[] }
@@ -81,6 +82,7 @@ export default function Mandats() {
       {isMandant && !levelOk && <p className="callout callout-warn"><Icon name="alert" size={18} /> <span>Votre compte est au niveau {level} : désigner un mandataire exige le niveau N1 (pièce d’identité contrôlée et adresse déclarée).</span></p>}
       {data.loading && <Loading />}
       {data.error !== null && <ErrorState error={data.error} onRetry={data.reload} />}
+      {data.data && items.length > 0 && <MandatsVisuels items={items} />}
       {data.data && (items.length === 0 ? <EmptyState title="Aucun mandat" icon="users" /> : (
         <div className="ac-card-list">{items.map((m) => <MandateCard key={m.id} m={m} asMandant={isMandant} onRevoke={() => { setTarget(m); setMotif(''); }} />)}</div>
       ))}

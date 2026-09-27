@@ -14,6 +14,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { useApp } from '../../context';
 import './socle.css';
+import { ExtractionsVisuels } from './visuels';
 
 interface BulkRequest {
   id: string; requestedBy: string; reason: string; finalite: string; repos: string[]; rowsAtRequest: number; threshold: number;
@@ -76,6 +77,7 @@ export default function Extractions() {
       {list.loading && <Loading />}
       {list.error !== null && <ErrorState error={list.error} onRetry={list.reload} />}
       {msg && <p className={`notice ${msg.ok ? 'notice-ok' : 'notice-err'}`} role="status">{msg.text}</p>}
+      {list.data && <ExtractionsVisuels items={list.data.items} threshold={list.data.threshold} statuts={STATUS} />}
       {canRequest && (
         <section className="panel">
           <div className="panel-head"><h2 className="panel-title">Nouvelle extraction</h2></div>

@@ -18,6 +18,7 @@ import {
   type AccountRow, type EntityRow, type GrantRow, type InvitationRow, type JournalRow, type LevelsRef, type Me, type ModuleConfig, type ValidationRow,
 } from './common';
 import { AccesIndicatorsPanel } from './IndicateursAcces';
+import { InvitationsVisuels } from './visuels';
 import './acces.css';
 
 type Tab = 'inviter' | 'invitations' | 'validations' | 'comptes' | 'permissions' | 'journal';
@@ -184,6 +185,7 @@ export default function Invitations() {
     <div className="page page-wide">
       <PageHead eyebrow="Accès et entités" title="Invitations et comptes de travail" lead="Aucun compte de travail par inscription publique : du Gouverneur à l’agent de terrain, chacun entre sur invitation nominative, dans le périmètre de celui qui l’invite, sans élévation." />
       <AccesIndicatorsPanel part="74" />
+      {invs.data && <InvitationsVisuels items={invs.data.items} />}
       {me.loading && <Loading />}
       {me.error !== null && !blocked && <ErrorState error={me.error} onRetry={me.reload} />}
       {me.data && <MeStrip me={me.data} />}

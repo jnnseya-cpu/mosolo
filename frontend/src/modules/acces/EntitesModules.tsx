@@ -14,6 +14,7 @@ import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { hasRole, ModuleSteps, splitList, Status, useAction, type EntityRow, type LevelsRef, type ModuleConfig } from './common';
 import { AccesIndicatorsPanel } from './IndicateursAcces';
+import { EntitesVisuels } from './visuels';
 import './acces.css';
 
 const KIND_ICON: Record<string, string> = {
@@ -251,6 +252,7 @@ export default function EntitesModules() {
       <AccesIndicatorsPanel part="72" />
       {(ents.error !== null || mods.error !== null) && <ErrorState error={ents.error ?? mods.error} onRetry={reload} />}
       {(ents.loading || mods.loading) && <Loading />}
+      {ents.data && <EntitesVisuels ents={ents.data.items} />}
       {ents.data && mods.data && (
         <div className="ac-grid">
           <section className="panel" aria-labelledby="ent-title">

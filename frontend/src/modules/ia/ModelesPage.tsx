@@ -13,7 +13,9 @@ import { api } from '../../lib/api';
 import { Section } from '../pilotage/shared';
 import { Field, hasRole, Notice, useRunner } from '../pilotage/planif';
 import '../pilotage/pilotage.css';
-import { Indicateurs, type Indicator } from '../decision/commun';
+import { type Indicator } from '../decision/commun';
+import { IndicateursVisuels } from '../plateforme/visuels';
+import { JEU_STATUS, ModelesVisuels } from './visuels';
 
 interface Version { id: string; version: string; status: string; datasetIds: string[]; evaluations: unknown[]; biasTests: { passed: boolean }[]; registeredBy: string; builtin?: boolean; promotion?: { proposedBy: string }; replaces?: string }
 interface Model { code: string; label: string; kind: string; purpose: string; versions: Version[] }
@@ -38,6 +40,7 @@ export default function ModelesPage() {
       <Notice msg={r.msg} />
       {q.loading && !d ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : d && (
         <div className="dash-grid">
+          <Section title="Vue d’ensemble du registre"><ModelesVisuels d={d} /></Section>
           <Section title="Modèles et versions">
             {d.models.map((m) => (
               <div key={m.code} style={{ marginBottom: 12 }}>
@@ -60,7 +63,7 @@ export default function ModelesPage() {
             ))}
             <Field label="Motif (10 caractères minimum)" value={motif} onChange={setMotif} />
           </Section>
-          {d.indicators && <Section title="Indicateurs (module 49)"><Indicateurs items={d.indicators} /></Section>}
+          {d.indicators && <Section title="Indicateurs (module 49)"><IndicateursVisuels items={d.indicators} /></Section>}
           {d.prompts && (
             <Section title="Registre des prompts (versions)" sub="La version de prompt est l’empreinte de la fiche de contrôle de l’agent : toute modification crée une nouvelle version ; une version observée non inscrite est signalée. Coupe-circuit : écran des agents d’IA.">
               <DataTable caption="Prompts" rows={d.prompts.flatMap((a) => a.versions.map((v) => ({ ...v, agent: a.name, never: a.sheet.never })))} rowKey={(x) => `${x.agent}-${x.promptVersion}`} columns={[
@@ -84,7 +87,7 @@ export default function ModelesPage() {
           <Section title="Jeux de données" sub="Approuvés, datés et documentés par le délégué à la protection des données ; aucune donnée sensible sans base légale">
             <DataTable caption="Jeux" rows={d.datasets} rowKey={(x) => x.id} columns={[
               { key: 'l', label: 'Jeu', primary: true, render: (x) => <><strong>{x.label}</strong><span className="small muted" style={{ display: 'block' }}>{x.code} · {x.source} · {x.legalBasis}</span></> },
-              { key: 's', label: 'Statut', render: (x) => <StatusBadge tone={x.status === 'APPROUVE' ? 'good' : x.status === 'REFUSE' ? 'critical' : 'warning'} label={x.status} /> },
+              { key: 's', label: 'Statut', render: (x) => <StatusBadge tone={x.status === 'APPROUVE' ? 'good' : x.status === 'REFUSE' ? 'critical' : 'warning'} label={JEU_STATUS[x.status]?.label ?? x.status} /> },
               { key: 'a', label: 'Décision', render: (x) => (x.status === 'PROPOSE' && hasRole(user?.roles, 'R25') && x.proposedBy !== user?.id ? <button type="button" className="btn btn-primary btn-sm" disabled={r.busy || motif.trim().length < 10} onClick={() => void r.run(`/v1/ia/jeux-donnees/${x.id}/decision`, { approve: true, motif }, 'Jeu approuvé.')}>Approuver</button> : '—') },
             ]} />
             <ul className="small">{d.governance.map((g) => <li key={g}>{g}</li>)}</ul>

@@ -12,6 +12,7 @@ import { Icon } from '../../components/Icon';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { REQUIREMENT_LABEL, SandboxBox, Status, useAction } from './common';
+import { EtapesInvitation } from './visuels';
 import './acces.css';
 
 interface Lookup {
@@ -70,6 +71,7 @@ export default function InvitationAccept() {
           </section>
           {inv.status === 'ENVOYEE' ? (
             <form className="panel form" onSubmit={(e) => void submit(e)} aria-label="Vérification d’identité">
+              <EtapesInvitation f={f} />
               <div className="field-row">
                 <div className="field"><label className="label" htmlFor="ia-p">Votre numéro</label><input id="ia-p" type="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} required /></div>
                 <div className="field"><label className="label" htmlFor="ia-c">Code reçu</label><input id="ia-c" className="mono ac-code-input" inputMode="numeric" maxLength={6} value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.replace(/\D/g, '') })} required /></div>

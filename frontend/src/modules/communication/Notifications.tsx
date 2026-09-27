@@ -13,6 +13,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { sha256Hex } from '../../lib/crypto';
 import { ReasonAction } from '../fiscal/common';
+import { AvisPlaqueVisuels, CommunicationVisuels, ModelesVisuels } from './visuels';
 
 interface Template { id: string; eventCode: string; revenueCategory: string | null; lang: string; version: number; text: string; status: string; proposedBy: string; legalBasis?: { instrumentId: string; article: string } }
 interface PlateNotice { id: string; objectId: string; plate: string | null; eventCode: string; text: string; verificationCode: string; origin: string; status: string; createdAt: string; posting?: { at: string; distanceM: number } }
@@ -24,12 +25,15 @@ const m = (x: Mesure, unit = '') => (x.statut === 'MESURE' ? `${x.taux ?? x.medi
 
 export function IndicatorsView({ d }: { d: CommIndicators }) {
   return (
+    <>
+    <CommunicationVisuels d={d} />
     <section className="panel stack-sm" aria-label="Indicateurs des notifications">
       <p className="small">Taux de délivrance : <strong>{m(d.delivrance)}</strong>{d.delivrance.statut === 'MESURE' ? ` (${d.delivrance.delivres}/${d.delivrance.mesurables})` : ''}</p>
       <p className="small">Délai de délivrance (médiane) : <strong>{m(d.delai, ' min')}</strong></p>
       <p className="small">Taux d’ouverture : messages <strong>{m(d.ouverture.messages)}</strong> · avis légaux <strong>{m(d.ouverture.avisLegaux)}</strong></p>
       <p className="small muted">{d.bacASable} envoi(s) journalisé(s) en bac à sable · avis sur plaque : {d.avisPlaque.aApposer} à apposer, {d.avisPlaque.apposes} apposé(s) · modèles actifs : {d.modeles.actifs} · {d.raccordement}</p>
     </section>
+    </>
   );
 }
 
@@ -52,6 +56,7 @@ function Templates() {
   return (
     <section className="stack-sm" aria-labelledby="tpl-title">
       <h2 className="h-sub" id="tpl-title">Modèles versionnés (par recette et par langue)</h2>
+      <ModelesVisuels items={q.data?.items ?? []} statuts={T_STATUS as Record<string, { label: string; tone: 'good' | 'warning' | 'neutral' | 'critical' }>} />
       {(q.data?.items ?? []).length === 0 && <EmptyState title="Aucun modèle : le texte par défaut du catalogue s’applique." />}
       <ul className="stack-sm">{(q.data?.items ?? []).map((t) => {
         const st = T_STATUS[t.status] ?? { label: t.status, tone: 'neutral' as Tone };
@@ -107,6 +112,7 @@ function PlateNotices() {
   return (
     <section className="stack-sm" aria-labelledby="plq-title">
       <h2 className="h-sub" id="plq-title">Avis imprimés à apposer sur la plaque</h2>
+      {(q.data ?? []).length > 0 && <AvisPlaqueVisuels items={q.data ?? []} />}
       {(q.data ?? []).length === 0 && <EmptyState title="Aucun avis à apposer." />}
       <ul className="stack-sm">{(q.data ?? []).map((n) => (
         <li key={n.id} className="panel stack-sm">

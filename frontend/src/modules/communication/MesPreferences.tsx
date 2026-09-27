@@ -8,6 +8,7 @@ import { PageHead } from '../../components/Shell';
 import { ErrorState, Loading } from '../../components/States';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
+import { PreferencesVisuels } from './visuels';
 
 interface Prefs { taxpayerId: string; language: string; prefs: { preferredChannel?: string; disabledChannels?: string[]; whatsappConsent?: boolean; optedOut?: boolean }; history: { id: string; at: string; by: string }[] }
 const CHANNELS: Record<string, string> = { sms: 'SMS', email: 'Courriel', 'in-app': 'Application', push: 'Notification du téléphone', whatsapp: 'WhatsApp', ussd: 'USSD', svi: 'Appel vocal', courrier: 'Courrier' };
@@ -37,6 +38,7 @@ export default function MesPreferences() {
       <PageHead eyebrow="Mon compte" title="Mes préférences de communication" lead="Choisissez le canal par lequel vous préférez être informé. Les avis obligatoires (échéance dépassée, décisions) vous sont toujours adressés, jamais par WhatsApp." />
       {q.loading && <Loading />}
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
+      {q.data && <PreferencesVisuels channels={CHANNELS} disabled={f.disabled} preferred={f.preferredChannel} history={q.data.history} />}
       {q.data && (
         <form className="panel stack-sm" onSubmit={(e) => void save(e)} aria-label="Préférences">
           <div className="field-row">
