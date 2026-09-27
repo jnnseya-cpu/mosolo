@@ -231,7 +231,7 @@ export class PubliciteService {
     return d;
   }
 
-  private currentAuthorization(d: AdDevice): AuthorizationRequest | null {
+  currentAuthorization(d: AdDevice): AuthorizationRequest | null {
     if (!d.currentAuthorizationId) return null;
     return this.requests.get(d.currentAuthorizationId) ?? null;
   }

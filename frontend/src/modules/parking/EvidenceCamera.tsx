@@ -1,6 +1,7 @@
 /**
- * Caméra de preuve géolocalisée (plaque ROUGE) — jusqu'à 5 photos : avant, arrière, côté droit, côté gauche avec les
- * abords, une autre vue. Chaque photo porte, INCRUSTÉS dans l'image : date et heure (horloge du serveur, Kinshasa),
+ * Caméra de preuve géolocalisée (plaque ROUGE) — jusqu'à 5 photos des ABORDS du véhicule : devant, derrière, à droite,
+ * à gauche, une autre vue. La preuve porte sur le lieu et les circonstances du stationnement (marquage, panneau, trottoir,
+ * voie), pas sur la plaque : elle est déjà lue au contrôle et incrustée dans chaque image. Chaque photo porte, INCRUSTÉS dans l'image : date et heure (horloge du serveur, Kinshasa),
  * agent, plaque, contrôle, coordonnées GPS et lieu saisi par l'agent. L'empreinte SHA-256 de l'image finale est
  * calculée sur l'appareil et vérifiée par le serveur, qui conserve l'image telle que reçue.
  */
@@ -9,11 +10,11 @@ import { api, describeError, serverNow } from '../../lib/api';
 import { Icon } from '../../components/Icon';
 
 export const SLOTS = [
-  { id: 'AVANT', label: 'Avant du véhicule', hint: 'Face avant et plaque avant' },
-  { id: 'ARRIERE', label: 'Arrière du véhicule', hint: 'Plaque arrière lisible' },
-  { id: 'COTE_DROIT', label: 'Côté droit', hint: 'Véhicule entier, côté droit' },
-  { id: 'COTE_GAUCHE_ABORDS', label: 'Côté gauche et abords', hint: 'Côté gauche avec la rue, la signalisation' },
-  { id: 'AUTRE', label: 'Autre vue', hint: 'Panneau, marquage au sol, contexte' },
+  { id: 'ABORDS_AVANT', label: 'Abords — devant', hint: 'Reculez : montrez ce qui est devant le véhicule (rue, marquage, panneau)' },
+  { id: 'ABORDS_ARRIERE', label: 'Abords — derrière', hint: 'Reculez : montrez ce qui est derrière le véhicule et l’emplacement' },
+  { id: 'ABORDS_DROITE', label: 'Abords — côté droit', hint: 'Le véhicule dans son environnement, côté droit (trottoir, passage)' },
+  { id: 'ABORDS_GAUCHE', label: 'Abords — côté gauche', hint: 'Le véhicule dans son environnement, côté gauche (chaussée, circulation)' },
+  { id: 'AUTRE', label: 'Autre vue', hint: 'Panneau d’interdiction, marquage au sol, horaire affiché, contexte' },
 ] as const;
 type SlotId = (typeof SLOTS)[number]['id'];
 
@@ -70,7 +71,7 @@ export function EvidenceCamera({ checkId, plate, zone, agent, onDone, onCancel }
   const [fix, setFix] = useState<Fix | null>(null);
   const [gpsMsg, setGpsMsg] = useState('Recherche de la position GPS…');
   const [place, setPlace] = useState('');
-  const [slot, setSlot] = useState<SlotId>('AVANT');
+  const [slot, setSlot] = useState<SlotId>('ABORDS_AVANT');
   const [taken, setTaken] = useState<Partial<Record<SlotId, Taken>>>({});
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -137,7 +138,7 @@ export function EvidenceCamera({ checkId, plate, zone, agent, onDone, onCancel }
     <section className="evc panel" aria-label="Caméra de preuve géolocalisée">
       <header className="panel-head"><div>
         <h2 className="panel-title"><Icon name="camera" size={18} /> Photos de preuve — <span className="pk-plate">{plate}</span></h2>
-        <p className="panel-sub">Jusqu’à 5 photos. Date, heure, agent, position GPS et lieu sont incrustés dans chaque image.</p>
+        <p className="panel-sub">Jusqu’à 5 photos des <strong>abords du véhicule</strong> (où et comment il est stationné), pas de la plaque : elle est déjà lue. Date, heure, agent, position GPS et lieu sont incrustés dans chaque image.</p>
       </div></header>
 
       <div className="evc-meta">

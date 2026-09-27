@@ -5,7 +5,9 @@ const OUT = process.argv[2]; fs.mkdirSync(OUT, { recursive: true });
 const W = 'http://localhost:4173';
 const log = (...a) => console.log(...a);
 (async () => {
-  const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${process.cwd()}/plate.y4m`] });
+  const browserA = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${process.cwd()}/plate.y4m`] });
+  const browserB = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${process.cwd()}/street.y4m`] });
+  let browser = browserA;
   const mk = async (user, w = 390, h = 844) => {
     const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, serviceWorkers: 'block', permissions: ['camera', 'geolocation'], geolocation: { latitude: -4.30512, longitude: 15.31077, accuracy: 7 }, timezoneId: 'Africa/Kinshasa', locale: 'fr-FR' });
     await ctx.addInitScript((u) => { localStorage.setItem('mosolo.demoUser', u); localStorage.setItem('mosolo.theme', 'light'); }, user);
@@ -28,7 +30,14 @@ const log = (...a) => console.log(...a);
   await page.locator('.plq-confirm').scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${OUT}/02-plaque-lue-a-confirmer.png` });
   if (read !== 'KN-0777-DM') await page.fill('.plq-confirm input', 'KN-0777-DM');
-  await page.getByRole('button', { name: 'Confirmer et contrôler' }).click();
+  await ctx.close();
+  // Caméra de preuve : les ABORDS du véhicule (scène de rue), pas la plaque.
+  browser = browserB;
+  ctx = await mk('pk-controleur');
+  page = await ctx.newPage();
+  await page.goto(`${W}/stationnement/controle`, { waitUntil: 'networkidle' });
+  await page.fill('.pk-plate-input', 'KN-0777-DM');
+  await page.getByRole('button', { name: 'Contrôler' }).click();
   await page.waitForSelector('.evc', { timeout: 15000 });
   await page.waitForTimeout(1500);
   await page.locator('.pk-light').scrollIntoViewIfNeeded();
@@ -39,6 +48,7 @@ const log = (...a) => console.log(...a);
   await page.screenshot({ path: `${OUT}/04-camera-de-preuve.png` });
   for (let i = 0; i < 5; i++) {
     const btn = page.locator('.evc-actions button', { hasText: 'Photographier' });
+    await page.waitForTimeout(1600); // la vue se déplace le long de la rue
     await btn.click();
     await page.waitForFunction((n) => document.querySelectorAll('.evc-slot.is-done').length >= n, i + 1, { timeout: 20000 });
   }
@@ -66,7 +76,7 @@ const log = (...a) => console.log(...a);
   await page.locator('.pk-pen').scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${OUT}/07-penalites-usager-au-controle.png` });
   // Mes gains (10 %).
-  await page.goto(`${W}/stationnement/mes-gains`, { waitUntil: 'networkidle' });
+  await page.goto(`${W}/mes-gains`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1000);
   await page.screenshot({ path: `${OUT}/08-mes-gains-10-pourcent.png` });
   await page.screenshot({ path: `${OUT}/08b-mes-gains-page.png`, fullPage: true });
@@ -85,6 +95,15 @@ const log = (...a) => console.log(...a);
   if (await tab.count()) { await tab.first().click(); await page.waitForTimeout(1000); }
   await page.screenshot({ path: `${OUT}/10-regie-commissions-agents.png` });
   await ctx.close();
+  // 3 bis. Agent d'un autre module (verticales) : ses gains de 10 %.
+  ctx = await mk('u-agent-gombe'); page = await ctx.newPage();
+  await page.goto(`${W}/mes-gains`, { waitUntil: 'networkidle' }); await page.waitForTimeout(1000);
+  await page.screenshot({ path: `${OUT}/12-mes-gains-agent-verticales.png`, fullPage: true });
+  await ctx.close();
+  // 3 ter. Trésor : commissions de tous les agents, tous modules.
+  ctx = await mk('u-tresor', 1440, 900); page = await ctx.newPage();
+  await page.goto(`${W}/stationnement/tableau-de-bord`, { waitUntil: 'networkidle' }); await page.waitForTimeout(800);
+  await ctx.close();
   // 4. Autre module : contrôle d'un titre (moto-taxi, ticket) — pénalité impayée depuis plus de 30 jours.
   ctx = await mk('rk-controleur'); page = await ctx.newPage();
   await page.goto(`${W}/titres/controle`, { waitUntil: 'networkidle' });
@@ -96,5 +115,5 @@ const log = (...a) => console.log(...a);
   await page.locator('.overdue-pen').scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${OUT}/11-autre-module-penalite-30-jours.png` });
   await ctx.close();
-  await browser.close();
+  await browserA.close(); await browserB.close();
 })();

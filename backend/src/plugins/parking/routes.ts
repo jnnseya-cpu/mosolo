@@ -129,7 +129,9 @@ export function registerParkingRoutes(app: FastifyInstance, ctx: AppContext, svc
   app.get('/v1/parking/agents/me/earnings', async (req) => {
     const user = requireUser(req);
     authorize(user, 'parking:violation.record', { communes: user.territory ?? [] });
-    return svc.field.earningsSummary(user.id);
+    // Commission de tous les modules si le registre transversal est chargé ; sinon, celle du stationnement seul.
+    const all = ctx.ext.sanctions as { commissions: { summary(a: string): unknown } } | undefined;
+    return all ? all.commissions.summary(user.id) : svc.field.earningsSummary(user.id);
   });
   app.get('/v1/parking/agents/earnings', async (req) => {
     const user = requireUser(req);

@@ -64,7 +64,8 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   // Stationnement (ParkSmart)
   { path: '/stationnement', element: lazy(() => import('./parking/ParkingDriver')), nav: { label: 'Stationnement', icon: 'parking', group: 'public', roles: ['R30', 'R31'] } },
   { path: '/stationnement/controle', element: lazy(() => import('./parking/ParkingControl')), nav: { label: 'Contrôle du stationnement', short: 'Stationnement', icon: 'car', group: 'operations', roles: ['R11', 'R09'] } },
-  { path: '/stationnement/mes-gains', element: lazy(() => import('./parking/AgentEarnings')), nav: { label: 'Mes gains (10 %)', short: 'Gains', icon: 'cash', group: 'operations', roles: ['R11'] } },
+  { path: '/mes-gains', element: lazy(() => import('./parking/AgentEarnings')), nav: { label: 'Mes gains (10 %)', short: 'Gains', icon: 'cash', group: 'operations', roles: ['R09', 'R10', 'R11', 'R12', 'R35'] } },
+  { path: '/stationnement/mes-gains', element: lazy(() => import('./parking/AgentEarnings')) },
   { path: '/stationnement/regie', element: lazy(() => import('./parking/ParkingRegie')), nav: { label: 'Régie du stationnement', short: 'Zones', icon: 'parking', group: 'operations', roles: ['R06', 'R07'] } },
   { path: '/stationnement/tableau-de-bord', element: lazy(() => import('./parking/ParkingDashboard')), nav: { label: 'Tableau de bord stationnement', short: 'Parking', icon: 'chart', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R09', 'R22', 'R23'] } },
 

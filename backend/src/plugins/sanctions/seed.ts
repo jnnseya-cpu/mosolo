@@ -2,13 +2,16 @@
  * Données de démonstration du registre des pénalités (fictives, non opposables) — seulement quand le module
  * « sanctions » est chargé avec le stationnement :
  * - une pénalité décidée il y a 35 jours et restée impayée : visible de tout agent de tout module après un contrôle ;
- * - un paiement de stationnement effectué dans l'heure qui suit un contrôle rouge : commission « paiement généré ».
+ * - un paiement de stationnement effectué dans l'heure qui suit un contrôle rouge : commission « paiement généré » ;
+ * - un autre module : scan d'une plaque d'étal par un agent de terrain, puis dette de l'étal payée par le titulaire
+ *   (commission de 10 % pour l'agent des verticales, même règle que pour le stationnement).
  */
 import type { AppContext } from '../../context.js';
 import { sha256Hex } from '../../core/crypto.js';
 import type { ParkingService } from '../parking/service.js';
 import { PARKING_DEMO } from '../parking/seed.js';
 import { demoPay } from '../parking/support.js';
+import type { VerticalesService } from '../verticales/service.js';
 
 export function seedSanctions(ctx: AppContext): void {
   const svc = ctx.ext.parking as ParkingService | undefined;
@@ -34,4 +37,19 @@ export function seedSanctions(ctx: AppContext): void {
   svc.control(controleur, 'KN-0321-DM', PARKING_DEMO.zoneGombe);
   const s3 = svc.startSession(owner, { zoneId: PARKING_DEMO.zoneGombe, plate: 'KN-0321-DM', durationMinutes: 60 });
   demoPay(ctx, owner, s3.obligation.id);
+
+  // Verticales : scan d'une plaque par un agent habilité du périmètre, puis paiement d'une dette de l'objet.
+  const vx = ctx.ext.verticales as VerticalesService | undefined;
+  if (vx) {
+    const agents = ctx.users.all().filter((u) => u.roles.some((r) => r === 'R10') && u.territory?.length);
+    for (const p of vx.plates.all()) {
+      const agent = agents.find((a) => a.territory!.includes(p.commune));
+      const ob = ctx.assessment.obligations.find((o) => o.objectId === p.objectId && o.status !== 'SOLDEE' && o.status !== 'ANNULEE')[0];
+      const payer = ob ? ctx.users.all().find((u) => u.taxpayerId === ob.taxpayerId) : undefined;
+      if (!agent || !ob || !payer) continue;
+      vx.scanPlate(agent, p.code);
+      demoPay(ctx, payer, ob.id);
+      break;
+    }
+  }
 }

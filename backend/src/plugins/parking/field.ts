@@ -2,7 +2,8 @@
  * ParkSmart — travail de terrain (décision du maître d'ouvrage du 27/09/2026) :
  *
  * 1. PREUVES PHOTOGRAPHIQUES : quand une plaque est ROUGE, la caméra géolocalisée s'ouvre ; l'agent prend jusqu'à
- *    5 photos (avant, arrière, côté droit, côté gauche avec les abords, une autre). Chaque photo porte, incrustés dans
+ *    5 photos des ABORDS du véhicule (devant, derrière, à droite, à gauche, une autre vue) — la preuve du lieu et des
+ *    circonstances du stationnement, pas un gros plan de la plaque. Chaque photo porte, incrustés dans
  *    l'image : date et heure (horloge du serveur), agent, coordonnées GPS et lieu saisi par l'agent. Le serveur vérifie
  *    l'empreinte SHA-256, conserve l'image telle que reçue (jamais modifiable), et note l'écart d'horloge.
  * 2. PÉNALITÉS VISIBLES : tout agent du module stationnement voit les pénalités d'un usager au contrôle ; au-delà de
@@ -21,10 +22,15 @@ import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import { actorOf, paymentState, sumByCurrency } from './support.js';
 import type { ParkingService, ParkingViolation } from './service.js';
 
-export const EVIDENCE_SLOTS = ['AVANT', 'ARRIERE', 'COTE_DROIT', 'COTE_GAUCHE_ABORDS', 'AUTRE'] as const;
+/**
+ * Vues de preuve : les ABORDS du véhicule (où et comment il est stationné), pas la plaque — la plaque est déjà lue
+ * au contrôle. Devant, derrière, à droite, à gauche, plus une vue libre (panneau, marquage au sol, contexte).
+ */
+export const EVIDENCE_SLOTS = ['ABORDS_AVANT', 'ABORDS_ARRIERE', 'ABORDS_DROITE', 'ABORDS_GAUCHE', 'AUTRE'] as const;
 export type EvidenceSlot = (typeof EVIDENCE_SLOTS)[number];
 export const SLOT_LABEL: Record<EvidenceSlot, string> = {
-  AVANT: 'Avant du véhicule', ARRIERE: 'Arrière du véhicule (plaque)', COTE_DROIT: 'Côté droit', COTE_GAUCHE_ABORDS: 'Côté gauche et abords', AUTRE: 'Autre vue (signalisation, contexte)',
+  ABORDS_AVANT: 'Abords — devant le véhicule', ABORDS_ARRIERE: 'Abords — derrière le véhicule', ABORDS_DROITE: 'Abords — côté droit',
+  ABORDS_GAUCHE: 'Abords — côté gauche', AUTRE: 'Autre vue (panneau, marquage, contexte)',
 };
 export const MAX_PHOTOS_PER_CHECK = 5;
 export const MAX_PHOTO_BYTES = 900_000;
@@ -85,6 +91,12 @@ export interface PenaltyLine {
 }
 
 export interface EarningLine {
+  module?: string;
+  moduleLabel?: string;
+  obligationId?: string;
+  /** Instant du fait générateur (contrôle, constat) : sert à attribuer un paiement une seule fois, au premier. */
+  triggerAt?: string;
+  agentId?: string;
   source: 'PENALITE' | 'PAIEMENT';
   reference: string;
   plate: string;
@@ -245,7 +257,7 @@ export class ParkingField {
       const ob = this.ctx.assessment.get(v.decision!.obligationId!);
       const pay = paymentState(this.ctx, ob.id).state;
       const state: EarningLine['state'] = ob.status === 'ANNULEE' ? 'ANNULEE' : pay === 'RAPPROCHE' ? 'ACQUISE' : pay === 'PAYE' ? 'CONFIRMEE' : 'EN_ATTENTE';
-      lines.push({ source: 'PENALITE', reference: v.reference, plate: v.plate, zone: this.svc.zones.get(v.zoneId)?.name ?? v.zoneId, at: v.decision!.at, base: ob.amount, commission: this.pct(ob.amount), state, stateLabel: label[state] });
+      lines.push({ module: 'STATIONNEMENT', moduleLabel: 'Stationnement', obligationId: ob.id, triggerAt: v.createdAt, agentId, source: 'PENALITE', reference: v.reference, plate: v.plate, zone: this.svc.zones.get(v.zoneId)?.name ?? v.zoneId, at: v.decision!.at, base: ob.amount, commission: this.pct(ob.amount), state, stateLabel: label[state] });
     }
     // Attribution des paiements : premier contrôle ROUGE (tous agents) précédant la session dans le délai.
     const reds = this.svc.checks.all().filter((c) => c.light === 'ROUGE' && c.zoneId);
@@ -260,7 +272,7 @@ export class ParkingField {
       for (const p of d.payments) {
         const ob = this.ctx.assessment.get(p.obligationId);
         const state: EarningLine['state'] = p.state === 'RAPPROCHE' ? 'ACQUISE' : p.state === 'PAYE' ? 'CONFIRMEE' : 'EN_ATTENTE';
-        lines.push({ source: 'PAIEMENT', reference: `${s.ticketCode ?? s.id} · ${p.kind === 'INITIALE' ? 'session' : 'prolongation'}`, plate: s.plate, zone: this.svc.zones.get(s.zoneId)?.name ?? s.zoneId, at: s.createdAt, base: ob.amount, commission: this.pct(ob.amount), state, stateLabel: label[state] });
+        lines.push({ module: 'STATIONNEMENT', moduleLabel: 'Stationnement', obligationId: ob.id, triggerAt: trigger.at, agentId, source: 'PAIEMENT', reference: `${s.ticketCode ?? s.id} · ${p.kind === 'INITIALE' ? 'session' : 'prolongation'}`, plate: s.plate, zone: this.svc.zones.get(s.zoneId)?.name ?? s.zoneId, at: s.createdAt, base: ob.amount, commission: this.pct(ob.amount), state, stateLabel: label[state] });
       }
     }
     return lines.sort((a, b) => b.at.localeCompare(a.at));

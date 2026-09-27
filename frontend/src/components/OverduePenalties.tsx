@@ -1,12 +1,14 @@
 /**
  * Pénalités impayées depuis plus de 30 jours, rendues visibles à tout agent contrôleur après un contrôle,
- * quel que soit le module d'origine. Aucun montant par construction (anti-extorsion) : l'agent informe,
- * n'encaisse rien et ne prend aucune mesure sur place.
+ * quel que soit le module d'origine, AVEC le montant fixé par la décision (décision du maître d'ouvrage) :
+ * le montant ne se négocie pas ; l'agent invite l'usager à payer par les canaux officiels, il n'encaisse rien.
  */
+import type { MoneyJSON } from '@mosolo/shared';
 import { Icon } from './Icon';
+import { MoneyText } from './MoneyText';
 
 export interface OverduePenaltyLine {
-  module: string; moduleLabel: string; reference: string; nature: string; decidedAt: string; overdueDays: number;
+  module: string; moduleLabel: string; reference: string; nature: string; decidedAt: string; overdueDays: number; amount?: MoneyJSON | null;
 }
 export interface OverduePenaltiesData {
   count: number; thresholdDays: number; guidance: string; lines: OverduePenaltyLine[];
@@ -32,13 +34,14 @@ export function OverduePenalties({ data }: { data: OverduePenaltiesData | null |
               <span className="overdue-pen-mod">{l.moduleLabel}</span>
               <span className="mono">{l.reference}</span>
               <span>{l.nature}</span>
+              {l.amount && <strong className="overdue-pen-amount"><MoneyText money={l.amount} /></strong>}
               <span className="muted">décidée le {kinshasaDate(l.decidedAt)}</span>
               <span className="overdue-pen-days">impayée depuis {l.overdueDays} jours</span>
             </li>
           ))}
         </ul>
         {data.guidance && <p className="overdue-pen-guidance">{data.guidance}</p>}
-        <p className="overdue-pen-note">Aucun montant n’est affiché ici ; aucun encaissement ni mesure sur place.</p>
+        {!data.guidance && <p className="overdue-pen-note">Montant fixé par la décision : il ne se négocie pas. N’encaissez rien ; aucune mesure sur place.</p>}
       </div>
     </section>
   );

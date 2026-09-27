@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **575 routes** dans 34 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **577 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -15,6 +15,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **575 routes** dans 34
 | extension publicite | 27 |
 | extension rakapay | 23 |
 | extension recouvrement | 33 |
+| extension sanctions | 2 |
 | extension socle | 14 |
 | extension terrain | 47 |
 | extension titres | 20 |
@@ -455,6 +456,13 @@ Généré depuis le code source (`tools/gen_routes.py`) : **575 routes** dans 34
 | GET | `/v1/recouvrement/reprises` |
 | POST | `/v1/recouvrement/reprises` |
 | POST | `/v1/recouvrement/reprises/:id/validation` |
+
+## Extension sanctions
+
+| Méthode | Chemin |
+|---|---|
+| GET | `/v1/agents/earnings` |
+| GET | `/v1/agents/me/earnings` |
 
 ## Extension socle
 

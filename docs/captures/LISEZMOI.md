@@ -71,17 +71,17 @@ Les pages 1 à 36 du PDF de la galerie reprennent ces écrans. Régénération :
 Régénération : `tools/captures/scanqr.cjs` (caméra simulée par un fichier Y4M qui filme la preuve imprimée).
 
 
-## Partie 7 — Terrain ParkSmart (`galerie/terrain-parking/`)
+## Partie 7 — Terrain (`galerie/terrain-parking/`)
 
-Parcours réel dans le navigateur (caméra simulée filmant l'arrière d'un véhicule) :
+Parcours réel dans le navigateur, avec deux caméras simulées : un gros plan de plaque pour la lecture, puis une scène de rue pour les preuves.
+
 - lecture de la plaque à la caméra ;
 - plaque rouge, puis ouverture automatique de la caméra de preuve ;
-- cinq photos horodatées et géolocalisées, avec le lieu saisi ;
-- constat enregistré avec ses photos ;
+- cinq photos des **abords du véhicule** (panneau d'interdiction, passage piéton, rue), horodatées, géolocalisées, avec le lieu saisi ;
+- constat enregistré ;
 - pénalités de l'usager au contrôle ;
-- « Mes gains (10 %) » ;
-- vérification par le superviseur avec les photos ;
-- commissions des agents (régie) ;
-- pénalité impayée depuis plus de 30 jours visible dans un autre module (sans montant).
+- « Mes gains (10 %) » de l'agent du stationnement et de l'agent des verticales ;
+- commissions de tous les agents (régie) ;
+- pénalité impayée depuis plus de 30 jours visible **avec son montant** dans un autre module.
 
-Les cinq photos réelles sont dans `photo-*.jpg`, avec leurs mentions incrustées. Régénération : `tools/captures/field.cjs`.
+Les cinq photos réelles sont dans `photo-*.jpg`. Régénération : `tools/captures/field.cjs`.

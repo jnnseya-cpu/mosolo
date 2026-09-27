@@ -4,10 +4,13 @@
  * - au-delà de 30 jours sans paiement après la décision, TOUT agent de TOUT module les voit à l'occasion d'un contrôle
  *   (titre, pass wewa, plaque d'étal ou de chantier, support publicitaire…).
  * Garde-fous : visibles seulement APRÈS un contrôle réel de l'agent (référence du contrôle exigée) ; divulgation
- * journalisée (qui, quoi, quand, à quel contrôle) ; hors du module d'origine, aucun montant n'est affiché — l'agent
- * invite l'usager à régulariser par les canaux officiels, il n'encaisse rien et ne prend aucune mesure sur place.
+ * journalisée (qui, quoi, quand, à quel contrôle). Le montant est affiché à tous les agents (décision du maître
+ * d'ouvrage du 27/09/2026) : c'est le montant fixé par la décision, non négociable ; l'agent invite l'usager à payer
+ * par les canaux officiels avec sa référence, il n'encaisse rien et ne prend aucune mesure sur place.
  */
+import type { MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
+import { CommissionService } from './commissions.js';
 import type { User } from '../../core/auth.js';
 import type { ParkingService } from '../parking/service.js';
 import { OVERDUE_VISIBILITY_DAYS } from '../parking/field.js';
@@ -21,6 +24,8 @@ export interface OverdueLine {
   nature: string;
   decidedAt: string;
   overdueDays: number;
+  /** Montant fixé par la décision (non négociable). */
+  amount: MoneyJSON;
 }
 
 export interface OverdueDisclosure {
@@ -36,7 +41,12 @@ const alnum = (p: string) => p.toUpperCase().replace(/[^0-9A-Z]/g, '');
 const DAY_MS = 86_400_000;
 
 export class SanctionsService {
-  constructor(private readonly ctx: AppContext) {}
+  /** Commission de 10 % des agents de tous les modules. */
+  readonly commissions: CommissionService;
+
+  constructor(private readonly ctx: AppContext) {
+    this.commissions = new CommissionService(ctx);
+  }
 
   /** Pénalités impayées depuis plus de 30 jours (sans montant), pour un titulaire et/ou une plaque. */
   overdue(subject: { taxpayerId?: string | null; plate?: string | null }): OverdueLine[] {
@@ -73,7 +83,7 @@ export class SanctionsService {
     if (pay === 'PAYE' || pay === 'RAPPROCHE') return null;
     const days = Math.floor((now - Date.parse(decision.at)) / DAY_MS);
     if (days < OVERDUE_VISIBILITY_DAYS) return null;
-    return { module, moduleLabel, reference, nature: nature.replace(/_/g, ' ').toLowerCase(), decidedAt: decision.at, overdueDays: days };
+    return { module, moduleLabel, reference, nature: nature.replace(/_/g, ' ').toLowerCase(), decidedAt: decision.at, overdueDays: days, amount: ob.amount };
   }
 
   /**
@@ -90,7 +100,7 @@ export class SanctionsService {
     });
     return {
       count: lines.length, lines, thresholdDays: OVERDUE_VISIBILITY_DAYS,
-      guidance: `Pénalité(s) impayée(s) depuis plus de ${OVERDUE_VISIBILITY_DAYS} jours. Informez l’usager qu’il peut régulariser par les canaux officiels (USSD, application, banque, point agréé). Aucun encaissement, aucune mesure sur place ; le montant n’est affiché qu’à l’usager et au module d’origine.`,
+      guidance: `Pénalité(s) impayée(s) depuis plus de ${OVERDUE_VISIBILITY_DAYS} jours. Le montant est celui fixé par la décision : il ne se négocie pas. Invitez l’usager à payer par les canaux officiels (USSD, application, banque, point agréé) avec sa référence. N’encaissez rien ; aucune mesure sur place.`,
     };
   }
 }
