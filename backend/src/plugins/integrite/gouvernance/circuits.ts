@@ -153,6 +153,8 @@ export const CIRCUITS: Circuit[] = [
     code: 'SECTEURS_RAPPROCHEMENT', label: 'Déclaration sectorielle rapprochée puis décidée (volumes, carrières, produits forestiers)',
     proposals: ['verticales.sector.reconciled'], approvals: ['verticales.sector.decided'], refusals: [],
     outcome: decisionIn(['VALIDER']),
+  },
+  {
     code: 'POINT_JURIDIQUE', label: 'Point juridique tranché sur acte (J1–J30)',
     proposals: ['juridique.point.decision_proposed'], approvals: ['juridique.point.tranche'], refusals: ['juridique.point.decision_rejected'],
     guard: { url: '/v1/juridique/points/:code/decision', key: (p) => (p.code ?? '').toUpperCase(), refusal: approveFalse },
@@ -190,6 +192,7 @@ export const CIRCUITS: Circuit[] = [
   {
     code: 'REGLE_PROROGATION', label: 'Prorogation d’échéance enregistrée sur une fiche de règle',
     proposals: ['rule.due_extension.proposed'], approvals: ['rule.due_extension.recorded'], refusals: ['rule.due_extension.rejected'],
+  },
   {
     code: 'ACCES_ELEVATION', label: 'Élévation d’accès privilégié juste-à-temps (demande motivée → approbation sécurité)',
     proposals: ['acces.elevation.requested'], approvals: ['acces.elevation.approved'], refusals: ['acces.elevation.refused'],

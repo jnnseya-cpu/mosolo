@@ -3,8 +3,7 @@
  * Déterministe : mêmes règle, version, entrées ⇒ même montant. Chaque obligation fige la version de règle
  * appliquée et porte son explication complète (AC-ASS-01). Aucune obligation sans règle exécutable (AC-LEG-01).
  */
-import { effectiveDue, isRuleExecutable, Money, type MoneyJSON, type ObligationStatus, type RevenueCategory, type TerritorialAttribution } from '@mosolo/shared';
-import { isRuleExecutable, Money, refusParCategorie, type MoneyJSON, type ObligationStatus, type RevenueCategory, type TerritorialAttribution } from '@mosolo/shared';
+import { effectiveDue, isRuleExecutable, Money, refusParCategorie, type MoneyJSON, type ObligationStatus, type RevenueCategory, type TerritorialAttribution } from '@mosolo/shared';
 import type { AuditLog } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { DAY_MS, kinshasaDate, type Clock } from '../../core/clock.js';
