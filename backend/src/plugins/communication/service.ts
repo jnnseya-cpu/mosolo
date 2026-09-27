@@ -201,7 +201,9 @@ export class CommunicationExtService {
     let fallbackDeliveryIds: string[] | undefined;
     if (status === 'echoue') {
       const ob = this.outbox.get(deliveryId);
-      if (ob) fallbackDeliveryIds = this.ctx.comms.retryOnFallback(d, ob.recipient, { subject: ob.subject, body: ob.body }).map((x) => x.id);
+      // Message secret (code à usage unique) : jamais renvoyé depuis la boîte d'envoi (contenu masqué) ; la personne
+      // demande un nouveau code.
+      if (ob && !d.secret) fallbackDeliveryIds = this.ctx.comms.retryOnFallback(d, ob.recipient, { subject: ob.subject, body: ob.body }).map((x) => x.id);
     }
     const r = this.receipts.insert({ id: this.ids.next('ACC', 8), deliveryId, status, providerAt, receivedAt: this.now(), source, ...(fallbackDeliveryIds ? { fallbackDeliveryIds } : {}) });
     this.ctx.audit.append({ actor: { kind: 'system', id: 'communication' }, action: `communication.receipt.${status}`, resourceType: 'delivery', resourceId: deliveryId, details: { receiptId: r.id, source, channel: d.channel, fallback: fallbackDeliveryIds ?? [] } });
@@ -224,6 +226,8 @@ export class CommunicationExtService {
   private onChannelsExhausted(d: Delivery): void {
     const event = getEvent(d.eventCode);
     if (!event?.obligatoire || d.recipientKind !== 'taxpayer') return;
+    // Jamais d'avis apposé pour un message secret (code à usage unique) : il serait lisible par tous sur la plaque.
+    if (d.secret) return;
     const obj = this.ctx.objects.objects.find((o) => o.taxpayerId === d.recipientId)[0];
     if (!obj) return;
     if (this.plateNotices.findOne((p) => p.sourceDeliveryId === d.id)) return;

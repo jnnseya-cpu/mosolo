@@ -78,6 +78,31 @@ export interface Delivery {
   template?: { id: string; version: number };
   /** Catégorie de recette du message (choix du modèle). */
   revenueCategory?: string;
+  /** Variables attendues par le texte mais non fournies : texte du catalogue utilisé, marque « — » (à corriger par l'émetteur). */
+  missingVariables?: string[];
+  /** Contenu secret (code à usage unique…) : jamais conservé en clair après l'envoi (boîte d'envoi, avis apposé). */
+  secret?: boolean;
+}
+
+/** Masque d'un secret dans les contenus conservés. */
+export const SECRET_MASK = '••••••';
+/** Variables toujours secrètes ; `code` l'est aussi pour les événements de la catégorie « sécurité » (codes à usage unique). */
+const SECRET_VAR_NAMES = new Set(['otp', 'motDePasse', 'password', 'token', 'secret', 'pin']);
+const PLACEHOLDER = /\{\{(\w+)\}\}/g;
+
+/**
+ * Variables d'un message (deuxième passe adverse, 27/09/2026) : texte simple d'une ligne (aucun caractère de contrôle,
+ * donc aucun retour à la ligne injectable dans l'objet d'un courriel ni dans un SMS), 300 caractères au plus, sans
+ * accolades de gabarit (aucune injection de variable au second degré).
+ */
+export function sanitizeVars(vars: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(vars)) {
+    const clean = [...String(v ?? '')].filter((c) => { const cp = c.codePointAt(0)!; return cp > 0x1f && !(cp >= 0x7f && cp <= 0x9f) && !(cp >= 0x202a && cp <= 0x202e) && !(cp >= 0x2066 && cp <= 0x2069); })
+      .join('').replace(/[{}]/g, '').replace(/\s+/g, ' ').trim();
+    out[k] = clean.length > 300 ? `${clean.slice(0, 299)}…` : clean;
+  }
+  return out;
 }
 
 export function maskName(name: string): string {
@@ -149,6 +174,10 @@ export class CommunicationService {
     const event = this.event(eventCode);
     const entity = opts.entity ?? 'GOUVERNORAT';
     const out: Delivery[] = [];
+    vars = sanitizeVars(vars);
+    // Secrets (code à usage unique…) : envoyés au destinataire, jamais conservés en clair (voir `secret`).
+    const secrets = Object.entries(vars).filter(([k, v]) => v && v !== SECRET_MASK && v.length >= 3 && (SECRET_VAR_NAMES.has(k) || (k === 'code' && event.categorie === 'securite'))).map(([, v]) => v);
+    const redact = (t: string) => secrets.reduce((acc, x) => acc.split(x).join(SECRET_MASK), t);
     for (const r of recipients) {
       const resolved = resolveChannels(event, r.prefs);
       // Canal choisi par la personne : ajouté en tête s'il n'est ni désactivé, ni WhatsApp sans consentement ou pour un avis obligatoire.
@@ -157,18 +186,30 @@ export class CommunicationService {
         && !(pref === 'whatsapp' && (event.obligatoire || !r.prefs.whatsappConsent)) && !(r.prefs.optedOut && !event.obligatoire)) resolved.unshift(pref);
       const channels = opts.onlyChannels ? resolved.filter((c) => opts.onlyChannels!.includes(c)) : resolved;
       const suppressed = event.canaux_defaut.filter((c) => !resolved.includes(c) && (!opts.onlyChannels || opts.onlyChannels.includes(c)));
-      const template = this.templateResolver?.(eventCode, r.lang, opts.revenueCategory);
-      const body = template ? `${fillPlaceholders(template.text, vars)} — Détail : espace MOSOLO ou code USSD officiel.` : renderText(event, vars);
-      const contentHash = sha256Hex(`${event.objet}\n${body}`);
-      const meta: Partial<Delivery> = { ...(template ? { template: { id: template.id, version: template.version } } : {}), ...(opts.revenueCategory ? { revenueCategory: opts.revenueCategory } : {}) };
-      const subject = fillPlaceholders(event.objet, vars);
+      const found = this.templateResolver?.(eventCode, r.lang, opts.revenueCategory);
+      // Variable manquante : jamais de « {{variable}} » brut envoyé ; le modèle versionné est écarté au profit du texte du
+      // catalogue, les manques sont marqués « — » et relevés sur la ligne de délivrance.
+      const missing = new Set<string>();
+      const unresolved = (t: string) => { for (const m of t.matchAll(PLACEHOLDER)) missing.add(m[1]!); return t.replace(PLACEHOLDER, '—'); };
+      const filledTemplate = found ? fillPlaceholders(found.text, vars) : '';
+      const template = found && !/\{\{\w+\}\}/.test(filledTemplate) ? found : undefined;
+      if (found && !template) for (const m of filledTemplate.matchAll(PLACEHOLDER)) missing.add(m[1]!);
+      const body = unresolved(template ? `${filledTemplate} — Détail : espace MOSOLO ou code USSD officiel.` : renderText(event, vars));
+      const subject = unresolved(fillPlaceholders(event.objet, vars));
+      // Empreinte calculée sur le contenu MASQUÉ : un code à 6 chiffres ne se retrouve pas par essais sur l'empreinte.
+      const contentHash = sha256Hex(`${event.objet}\n${redact(body)}`);
+      const meta: Partial<Delivery> = {
+        ...(template ? { template: { id: template.id, version: template.version } } : {}), ...(opts.revenueCategory ? { revenueCategory: opts.revenueCategory } : {}),
+        ...(missing.size ? { missingVariables: [...missing].sort() } : {}), ...(secrets.length ? { secret: true } : {}),
+      };
+      const kept = secrets.length ? { subject: redact(subject), body: redact(body) } : undefined;
       const tried = new Set<Channel>();
       for (const channel of channels) {
         tried.add(channel);
         const attachments = channel === 'email' && opts.attachments?.length ? opts.attachments : undefined;
-        const d = this.sendOne(event, r, channel, { subject, body, entity, contentHash, attachments, meta });
+        const d = this.sendOne(event, r, channel, { subject, body, entity, contentHash, attachments, meta, kept });
         out.push(d);
-        if (d.status === 'echoue') out.push(...this.fallback(event, r, d, tried, { subject, body, entity, contentHash, meta }));
+        if (d.status === 'echoue') out.push(...this.fallback(event, r, d, tried, { subject, body, entity, contentHash, meta, kept }));
       }
       for (const channel of suppressed) {
         out.push(this.log(event, r, channel, 'supprime_par_preference', 'aucun', 'aucun', entity, contentHash, undefined, meta));
@@ -179,7 +220,7 @@ export class CommunicationService {
 
   private sendOne(
     event: CommunicationEvent, r: Recipient, channel: Channel,
-    m: { subject: string; body: string; entity: string; contentHash: string; attachments?: MessageAttachment[] | undefined; meta: Partial<Delivery>; fallbackOf?: string },
+    m: { subject: string; body: string; entity: string; contentHash: string; attachments?: MessageAttachment[] | undefined; meta: Partial<Delivery>; fallbackOf?: string; kept?: { subject: string; body: string } | undefined },
   ): Delivery {
     const provider = this.providers.get(channel)!;
     let status: DeliveryStatus;
@@ -193,7 +234,8 @@ export class CommunicationService {
     }
     const d = this.log(event, r, channel, status, provider.name, provider.mode, m.entity, m.contentHash, m.attachments, { ...m.meta, ...(m.fallbackOf ? { fallbackOf: m.fallbackOf } : {}) });
     for (const fn of this.sentListeners) {
-      try { fn(d, { subject: m.subject, body: m.body }, r); } catch { /* un abonné ne bloque jamais l'envoi */ }
+      // Les abonnés (boîte d'envoi, preuve de remise) ne reçoivent que le contenu conservable (secret masqué).
+      try { fn(d, m.kept ?? { subject: m.subject, body: m.body }, r); } catch { /* un abonné ne bloque jamais l'envoi */ }
     }
     return d;
   }
@@ -201,7 +243,7 @@ export class CommunicationService {
   /** Envoi de secours après un échec : premier canal admissible de FALLBACK_ORDER, jamais un canal déjà essayé. */
   private fallback(
     event: CommunicationEvent, r: Recipient, failed: Delivery, tried: Set<Channel>,
-    m: { subject: string; body: string; entity: string; contentHash: string; meta: Partial<Delivery> },
+    m: { subject: string; body: string; entity: string; contentHash: string; meta: Partial<Delivery>; kept?: { subject: string; body: string } | undefined },
   ): Delivery[] {
     const out: Delivery[] = [];
     let current = failed;
@@ -255,6 +297,8 @@ export class CommunicationService {
       ...(meta.fallbackOf ? { fallbackOf: meta.fallbackOf } : {}),
       ...(meta.template ? { template: meta.template } : {}),
       ...(meta.revenueCategory ? { revenueCategory: meta.revenueCategory } : {}),
+      ...(meta.missingVariables ? { missingVariables: meta.missingVariables } : {}),
+      ...(meta.secret ? { secret: true } : {}),
     });
   }
 
