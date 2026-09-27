@@ -6,6 +6,8 @@
  */
 import type { AppContext } from '../../context.js';
 import { sha256Hex } from '../../core/crypto.js';
+import type { User } from '../../core/auth.js';
+import { EVIDENCE_SLOTS } from './field.js';
 import type { ParkingService } from './service.js';
 import { demoPay, DEMO_INSTRUMENT, DGTK, DGTK_ALIAS, publishDemoRule } from './support.js';
 
@@ -22,6 +24,20 @@ export const PARKING_DEMO = {
   plateMerchant: 'KN-0100-DM',
   plateUnknown: 'KN-0777-DM',
 } as const;
+
+/**
+ * Photos de DÉMONSTRATION versées par le vrai chemin de la caméra de preuve (images JPEG fictives, empreinte vérifiée,
+ * rattachées au contrôle rouge de l'agent) : le constat de démonstration suit le même circuit que la production.
+ */
+export function demoEvidencePhotos(svc: ParkingService, agent: User, checkId: string, seeds: string[], at: { lat: number; lon: number; place: string }): string[] {
+  return seeds.map((seed, i) => {
+    const buf = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from(`MOSOLO-DEMO-${seed}`), Buffer.from([0xff, 0xd9])]);
+    return svc.field.upload(agent, {
+      checkId, slot: EVIDENCE_SLOTS[i % EVIDENCE_SLOTS.length]!, imageBase64: buf.toString('base64'), sha256: sha256Hex(buf),
+      lat: at.lat, lon: at.lon, accuracyM: 6, gpsSource: 'GPS', place: at.place, stampedAt: svc.now().toISOString(),
+    }).id;
+  });
+}
 
 export function seedParking(ctx: AppContext, svc: ParkingService): void {
   const add = (u: Parameters<typeof ctx.users.add>[0]) => (ctx.users.get(u.id) ? ctx.users.get(u.id)! : ctx.users.add(u));
@@ -112,15 +128,17 @@ export function seedParking(ctx: AppContext, svc: ParkingService): void {
   // Contrôles et constats (circuit RW1).
   svc.control(controleur, PARKING_DEMO.plateOwner, PARKING_DEMO.zoneGombe);
   const red = svc.control(controleur, PARKING_DEMO.plateUnknown, PARKING_DEMO.zoneGombe);
+  const at1 = { lat: -4.3055, lon: 15.3088, place: 'Secteur fictif Gombe-Centre (démonstration)' };
   svc.recordViolation(controleur, {
     zoneId: PARKING_DEMO.zoneGombe, plate: PARKING_DEMO.plateUnknown, nature: 'NON_PAIEMENT', checkId: red.checkId,
-    photoSha256: [sha256Hex('demo-photo-constat-1')], lat: -4.3055, lon: 15.3088, gpsAccuracyM: 6, deviceId: 'dev-terrain-001',
+    photoIds: demoEvidencePhotos(svc, controleur, red.checkId, ['constat-1'], at1), lat: at1.lat, lon: at1.lon, gpsAccuracyM: 6, deviceId: 'dev-terrain-001',
     observations: 'Véhicule stationné sans titre sur place standard (démonstration).',
   });
-  svc.control(controleur, PARKING_DEMO.plateTenant, PARKING_DEMO.zoneGombe);
+  const red2 = svc.control(controleur, PARKING_DEMO.plateTenant, PARKING_DEMO.zoneGombe);
+  const at2 = { lat: -4.3062, lon: 15.3091, place: 'Aire de livraison, secteur fictif Gombe-Centre (démonstration)' };
   const v2 = svc.recordViolation(controleur, {
-    zoneId: PARKING_DEMO.zoneGombe, plate: PARKING_DEMO.plateTenant, nature: 'PLACE_RESERVEE',
-    photoSha256: [sha256Hex('demo-photo-constat-2'), sha256Hex('demo-photo-constat-3')], lat: -4.3062, lon: 15.3091, gpsAccuracyM: 8,
+    zoneId: PARKING_DEMO.zoneGombe, plate: PARKING_DEMO.plateTenant, nature: 'PLACE_RESERVEE', checkId: red2.checkId,
+    photoIds: demoEvidencePhotos(svc, controleur, red2.checkId, ['constat-2', 'constat-3'], at2), lat: at2.lat, lon: at2.lon, gpsAccuracyM: 8,
     observations: 'Véhicule sur l’aire de livraison pendant les heures réservées (démonstration).',
   });
   svc.verifyViolation(superviseur, v2.id, { confirm: true, note: 'Photographies nettes, aire de livraison signalée (démonstration).' });

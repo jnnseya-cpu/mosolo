@@ -112,7 +112,13 @@ export interface Plate {
   signature: string;
 }
 
-export interface PlateScan { id: string; plateCode: string; by: string; at: string; access: Access }
+export interface PlateScan {
+  id: string; plateCode: string; by: string; at: string; access: Access;
+  /** Couleur de situation de l'objet AU MOMENT du scan (rouge = défaut révélé : impayé à l'échéance). */
+  situation?: 'green' | 'amber' | 'red' | 'grey';
+  /** Obligations de l'objet exigibles et impayées au moment du scan (seules attribuables au scan). */
+  dueObligationIds?: string[];
+}
 
 export interface Market { id: string; name: string; commune: string; quartier: string }
 export interface Stall {
@@ -225,7 +231,8 @@ export class VerticalesService {
     return VERTICALS.find((v) => v.objectCategories.includes(o.category))?.slug;
   }
 
-  describeObject(o: FiscalObject): { label: string; ref: string; detail: string } {
+  /** `withName: false` (accès minimal, « Autour de moi ») : type seul, sans nom ni raison sociale. */
+  describeObject(o: FiscalObject, opts: { withName?: boolean } = {}): { label: string; ref: string; detail: string } {
     const a = o.attributes;
     const s = (k: string) => (typeof a[k] === 'string' || typeof a[k] === 'number' ? String(a[k]) : undefined);
     const type = s('objectType');
@@ -238,7 +245,7 @@ export class VerticalesService {
       POINT_COLLECTE: 'Point de collecte', EMBARCATION: 'Embarcation', EVENEMENT: 'Événement', CHANTIER: 'Chantier', AERONEF: 'Aéronef',
     };
     const base = (type && typeLabels[type]) ?? labels[o.category] ?? 'Objet';
-    const name = s('nom') ?? s('raisonSociale') ?? s('nature') ?? s('usage') ?? s('description');
+    const name = opts.withName === false ? undefined : s('nom') ?? s('raisonSociale') ?? s('nature') ?? s('usage') ?? s('description');
     const label = name ? `${base} — ${name}` : base;
     const ref = s('immatriculation') ?? s('plaque') ?? s('reference') ?? s('stallId') ?? o.id;
     const extra = [s('lieu'), s('dateDebut') && `du ${s('dateDebut')}`, s('dateFin') && `au ${s('dateFin')}`, s('usage_vehicule'), s('type')].filter(Boolean).join(' · ');
@@ -778,21 +785,23 @@ export class VerticalesService {
   }
 
   /** Situation fiscale de l'objet (couleur) : calculée serveur ; l'agent ne peut rien modifier ni négocier. */
-  private objectSituation(objectId: string): { color: 'green' | 'amber' | 'red' | 'grey'; label: string; lastPaymentAt: string | null } {
+  private objectSituation(objectId: string): { color: 'green' | 'amber' | 'red' | 'grey'; label: string; lastPaymentAt: string | null; dueIds: string[] } {
     const obls = this.ctx.assessment.obligations.find((o) => o.objectId === objectId && o.status !== 'ANNULEE');
-    if (!obls.length) return { color: 'grey', label: 'Aucune obligation émise', lastPaymentAt: null };
+    if (!obls.length) return { color: 'grey', label: 'Aucune obligation émise', lastPaymentAt: null, dueIds: [] };
     let late = false; let open = false; let last: string | null = null;
+    const dueIds: string[] = [];
     for (const o of obls) {
       const paid = this.ctx.payments.byObligation(o.id).filter((p) => CONFIRMED.includes(p.status));
       for (const p of paid) if (p.confirmedAt && (!last || p.confirmedAt > last)) last = p.confirmedAt;
       if (o.status === 'SOLDEE' || paid.length) continue;
       if (o.status === 'CONTESTEE') continue;
+      dueIds.push(o.id);
       if (o.dueDate < isoDate(this.now()) || o.status === 'EN_RETARD') late = true;
       else open = true;
     }
-    if (late) return { color: 'red', label: 'Impayé à l’échéance', lastPaymentAt: last };
-    if (open) return { color: 'amber', label: 'En attente de paiement', lastPaymentAt: last };
-    return { color: 'green', label: 'À jour', lastPaymentAt: last };
+    if (late) return { color: 'red', label: 'Impayé à l’échéance', lastPaymentAt: last, dueIds };
+    if (open) return { color: 'amber', label: 'En attente de paiement', lastPaymentAt: last, dueIds };
+    return { color: 'green', label: 'À jour', lastPaymentAt: last, dueIds };
   }
 
   /** Scan par un agent habilité : lecture seule, journalisée ; accès minimal sans montant. */
@@ -800,11 +809,13 @@ export class VerticalesService {
     const p = this.getPlate(code);
     const access = authorize(user, P.plateScan, { communes: [p.commune] });
     const o = this.ctx.objects.get(p.objectId);
-    this.scans.append({ id: this.ids.next('SCAN', 8), plateCode: p.code, by: user.id, at: this.now().toISOString(), access });
+    // Situation constatée au scan, conservée : seul un scan ROUGE (défaut révélé) peut fonder une commission.
+    const found = this.objectSituation(o.id);
+    this.scans.append({ id: this.ids.next('SCAN', 8), plateCode: p.code, by: user.id, at: this.now().toISOString(), access, situation: found.color, dueObligationIds: found.dueIds });
     this.ctx.audit.append({ actor: actorOf(user), action: 'vertical.plate.scanned', resourceType: 'plate', resourceId: p.code, details: { access, objectId: o.id } });
     const leases = this.ctx.objects.leases.find((l) => l.unitObjectId === o.id || this.ctx.objects.objects.get(l.unitObjectId)?.attributes.parcelleId === o.id);
     const occupation = p.kind === 'NFIU' ? (leases.length ? 'MIS_EN_BAIL' : 'OCCUPE_PAR_LE_PROPRIETAIRE_OU_NON_DECLARE') : null;
-    const situation = this.objectSituation(o.id);
+    const situation = { color: found.color, label: found.label, lastPaymentAt: found.lastPaymentAt };
     const stall = p.kind === 'ETAL' ? this.stalls.findOne((s) => s.objectId === o.id) : undefined;
     const lastVisit = this.cases.find((c) => c.objectId === o.id).flatMap((c) => c.visits).sort((a, b) => b.at.localeCompare(a.at))[0];
     const base = {

@@ -8,6 +8,8 @@
  * Un signal n'entraîne AUCUNE mesure automatique : il ouvre un examen humain (superviseur, contrôle mystère § 15A).
  */
 import type { AppContext } from '../../context.js';
+import type { User } from '../../core/auth.js';
+import { GPS_WARN_ACCURACY_M, lowAccuracy } from '../parking/field.js';
 import type { ParkingService } from '../parking/service.js';
 import type { PubliciteService } from '../publicite/service.js';
 import type { TitresService } from '../titres/service.js';
@@ -50,6 +52,9 @@ const median = (xs: number[]) => {
   return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
 };
 
+/** Rôles de portée générale (pilotage, régies, audit, anti-fraude) : rapport complet, sans filtre de périmètre. */
+const CITYWIDE_MONITOR_ROLES = new Set(['R01', 'R02', 'R05', 'R06', 'R07', 'R22', 'R23', 'R24']);
+
 /** Seuils des signaux (paramètres à valider par l'inspection des services ; aucun effet automatique). */
 export const MONITORING_THRESHOLDS = {
   minControls: 5, constatRateVsMedian: 2, minConstats: 3, rejectionPct: 30, dismissalPct: 40, contestPct: 30, weakEvidencePct: 30, penaltySharePct: 70,
@@ -62,9 +67,13 @@ export class AgentMonitoring {
     return { module, moduleLabel: LABEL[module] ?? module, controls: 0, defects: 0, constats: 0, rejected: 0, retained: 0, dismissed: 0, contested: 0, annulled: 0, weakEvidence: 0 };
   }
 
-  /** Statistiques brutes : agent → module → compteurs. */
-  private stats(): Map<string, Map<string, AgentModuleStats>> {
+  /**
+   * Statistiques brutes : agent → module → compteurs. `communes` : périmètre du lecteur (superviseur territorial) —
+   * seuls les contrôles, constats et preuves situés dans ces communes sont comptés.
+   */
+  private stats(communes: string[] | null): Map<string, Map<string, AgentModuleStats>> {
     const byAgent = new Map<string, Map<string, AgentModuleStats>>();
+    const inScope = (c: string | null | undefined) => !communes || (!!c && communes.includes(c));
     const get = (agent: string, module: string) => {
       if (!byAgent.has(agent)) byAgent.set(agent, new Map());
       const m = byAgent.get(agent)!;
@@ -75,8 +84,9 @@ export class AgentMonitoring {
 
     const pk = this.ctx.ext.parking as ParkingService | undefined;
     if (pk) {
-      for (const c of pk.checks.all()) { const s = get(c.agentId, 'STATIONNEMENT'); s.controls += 1; if (c.light === 'ROUGE') s.defects += 1; }
+      for (const c of pk.checks.all()) { if (!inScope(c.commune)) continue; const s = get(c.agentId, 'STATIONNEMENT'); s.controls += 1; if (c.light === 'ROUGE') s.defects += 1; }
       for (const v of pk.violations.all()) {
+        if (!inScope(v.commune)) continue;
         const s = get(v.agentId, 'STATIONNEMENT');
         s.constats += 1;
         if (v.status === 'REJETE') s.rejected += 1;
@@ -85,14 +95,21 @@ export class AgentMonitoring {
         if (v.contests.length) s.contested += 1;
         if (annulled(v.decision?.obligationId)) s.annulled += 1;
       }
-      for (const p of pk.field.photos.all()) if (!p.supersededBy && (p.gpsSource !== 'GPS' || p.clockSkewSeconds > 300 || (p.accuracyM ?? 0) > 50)) get(p.agentId, 'STATIONNEMENT').weakEvidence += 1;
+      // Même règle que les signaux montrés au vérificateur (précision inconnue ou > 30 m, source autre que GPS, loin de
+      // la zone, horloge décalée).
+      for (const p of pk.field.photos.all()) if (!p.supersededBy && inScope(p.commune) && pk.field.weakEvidence(p)) get(p.agentId, 'STATIONNEMENT').weakEvidence += 1;
     }
     const pub = this.ctx.ext.publicite as PubliciteService | undefined;
     if (pub) {
-      for (const i of pub.inspections.all()) { const s = get(i.inspectorId, 'PUBLICITE'); s.controls += 1; if (i.finding !== 'CONFORME') s.defects += 1; }
+      for (const i of pub.inspections.all()) {
+        const kase = i.caseId ? pub.cases.get(i.caseId) : undefined;
+        if (!inScope(kase?.commune ?? pub.devices.get(i.deviceId)?.commune)) continue;
+        const s = get(i.inspectorId, 'PUBLICITE'); s.controls += 1; if (i.finding !== 'CONFORME') s.defects += 1;
+        if (lowAccuracy(i.gpsSource ?? 'GPS', i.gpsAccuracyM)) s.weakEvidence += 1;
+      }
       for (const c of pub.cases.all()) {
         const insp = pub.inspections.get(c.inspectionId);
-        if (!insp) continue;
+        if (!insp || !inScope(c.commune)) continue;
         const s = get(insp.inspectorId, 'PUBLICITE');
         s.constats += 1;
         if (c.status === 'REJETE_QA') s.rejected += 1;
@@ -104,8 +121,10 @@ export class AgentMonitoring {
     }
     const ti = this.ctx.ext.titres as TitresService | undefined;
     if (ti) {
-      for (const e of ti.controls.all()) { const s = get(e.controllerId, 'TITRES'); s.controls += 1; if (e.result !== 'VALIDE') s.defects += 1; }
+      const communeOf = (p: unknown) => (p as { commune?: string } | undefined)?.commune;
+      for (const e of ti.controls.all()) { if (!inScope(communeOf(e.place))) continue; const s = get(e.controllerId, 'TITRES'); s.controls += 1; if (e.result !== 'VALIDE') s.defects += 1; }
       for (const k of ti.constats.all()) {
+        if (!inScope(communeOf(k.place))) continue;
         const s = get(k.controllerId, 'TITRES');
         s.constats += 1;
         if (k.status === 'CLASSE') s.dismissed += 1;
@@ -113,22 +132,33 @@ export class AgentMonitoring {
       }
     }
     const vx = this.ctx.ext.verticales as VerticalesService | undefined;
-    if (vx) for (const sc of vx.scans.all()) get(sc.by, 'VERTICALES').controls += 1;
+    if (vx) {
+      for (const sc of vx.scans.all()) {
+        if (!inScope(vx.plates.get(sc.plateCode)?.commune)) continue;
+        const s = get(sc.by, 'VERTICALES'); s.controls += 1; if (sc.situation === 'red') s.defects += 1;
+      }
+    }
     const te = this.ctx.ext.terrain as TerrainService | undefined;
     if (te) {
       for (const f of te.findings.all()) {
+        if (!inScope(f.commune)) continue;
         const s = get(f.agentId, 'TERRAIN');
         s.controls += 1;
         if (f.outcome === 'CONSTATE' || f.outcome === 'OBJET_NON_ENREGISTRE') { s.defects += 1; s.constats += 1; }
-        if (f.gps.accuracyM > 50) s.weakEvidence += 1;
+        // Position ajustée à la main ou déduite de la zone, ou précision au-delà du seuil (source absente : GPS).
+        if (f.gps.accuracyM > GPS_WARN_ACCURACY_M || (!!f.gps.source && f.gps.source !== 'GPS')) s.weakEvidence += 1;
       }
     }
     return byAgent;
   }
 
-  report() {
+  /** Rapport ; un superviseur territorial (sans rôle de portée générale) ne voit que son périmètre. */
+  report(viewer?: User) {
     const T = MONITORING_THRESHOLDS;
-    const raw = this.stats();
+    const scoped = !!viewer?.territory?.length && !viewer.roles.some((r) => CITYWIDE_MONITOR_ROLES.has(r));
+    const raw = this.stats(scoped ? viewer!.territory! : null);
+    // Commissions : un seul calcul pour tous les agents, groupé par agent.
+    const earnings = this.commissions.byAgent();
     // Médiane des pairs par module : taux de constats des agents ayant au moins `minControls` contrôles.
     const peerRates = new Map<string, { agent: string; rate: number }[]>();
     for (const [agent, mods] of raw) for (const s of mods.values()) {
@@ -154,9 +184,9 @@ export class AgentMonitoring {
         const decided = s.retained + s.dismissed;
         if (decided >= T.minConstats && (s.dismissed * 100) / decided >= T.dismissalPct) signals.push({ code: 'CONSTATS_CLASSES', module: s.module, level: 'A_EXAMINER', text: `${s.moduleLabel} : ${pct(s.dismissed, decided)} % des constats classés sans suite par la décision.` });
         if (s.retained >= T.minConstats && ((s.contested + s.annulled) * 100) / s.retained >= T.contestPct) signals.push({ code: 'CONTESTATIONS', module: s.module, level: 'A_EXAMINER', text: `${s.moduleLabel} : ${pct(s.contested + s.annulled, s.retained)} % des pénalités retenues contestées ou annulées.` });
-        if (s.constats >= T.minConstats && (s.weakEvidence * 100) / Math.max(1, s.constats * (s.module === 'STATIONNEMENT' ? 5 : 1)) >= T.weakEvidencePct) signals.push({ code: 'PREUVES_FAIBLES', module: s.module, level: 'A_EXAMINER', text: `${s.moduleLabel} : photos ou positions souvent imprécises (GPS absent ou > 50 m, horloge décalée).` });
+        if (s.constats >= T.minConstats && (s.weakEvidence * 100) / Math.max(1, s.constats * (s.module === 'STATIONNEMENT' ? 5 : 1)) >= T.weakEvidencePct) signals.push({ code: 'PREUVES_FAIBLES', module: s.module, level: 'A_EXAMINER', text: `${s.moduleLabel} : photos ou positions souvent imprécises (GPS absent, ajusté à la main ou > ${GPS_WARN_ACCURACY_M} m, loin de la zone, horloge décalée).` });
       }
-      const earn = this.commissions.lines(agentId).filter((l) => l.state !== 'ANNULEE');
+      const earn = (earnings.get(agentId) ?? []).filter((l) => l.state !== 'ANNULEE');
       const pen = earn.filter((l) => l.source === 'PENALITE').length;
       const share = pct(pen, earn.length);
       if (earn.length >= T.minConstats && share !== null && Number(share) >= T.penaltySharePct) signals.push({ code: 'COMMISSION_PENALITES', module: 'TOUS', level: 'INFO', text: `${share} % de la commission provient de pénalités (plutôt que de paiements provoqués) : à suivre.` });

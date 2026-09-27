@@ -31,6 +31,16 @@ export const NEARBY_MAX_RADIUS_M = 1000;
 const AREA_OBJECT_RADIUS_M = 1500;
 /** Catégories non rattachées à un lieu fixe : exclues. */
 const MOBILE_CATEGORIES = new Set(['VEHICULE']);
+/** Rôles à accès complet (direction, régie, pilotage, audit) : seuls à voir le nom d'un commerce ou d'un bien. */
+export const NEARBY_NAMED_ROLES = new Set(['R06', 'R07', 'R22', 'R24']);
+
+/**
+ * Objet rattaché à un lieu fixe : ni véhicule, ni publicité portée par un véhicule (objet PANNEAU de placement
+ * VEHICULE, dont la position est celle du recensement, pas celle du véhicule).
+ */
+export function isFixedObject(o: FiscalObject): boolean {
+  return !MOBILE_CATEGORIES.has(o.category) && o.attributes['placement'] !== 'VEHICULE' && Number.isFinite(o.lat) && Number.isFinite(o.lon);
+}
 
 /**
  * Commune où se trouve une position : celle du plus proche objet connu (1,5 km au plus), sinon du centre de commune
@@ -62,7 +72,9 @@ export function buildNearby(d: FiscalDeps, properties: PropertyService, user: Us
   }
   const radius = Math.min(NEARBY_MAX_RADIUS_M, Math.max(50, Math.round(q.radiusM ?? NEARBY_DEFAULT_RADIUS_M)));
   const here = { lat: q.lat, lon: q.lon };
-  const all = d.ctx.objects.objects.all().filter((o) => !MOBILE_CATEGORIES.has(o.category) && Number.isFinite(o.lat) && Number.isFinite(o.lon));
+  const all = d.ctx.objects.objects.all().filter(isFixedObject);
+  // Accès minimal (agents de terrain) : type ou catégorie seulement, jamais le nom (nom, raison sociale) du bien.
+  const named = user.roles.some((r) => NEARBY_NAMED_ROLES.has(r));
 
   const { commune, basis: communeBasis } = estimateCommune(all, here);
   const inArea = !user.territory?.length || user.territory.includes(commune);
@@ -86,7 +98,7 @@ export function buildNearby(d: FiscalDeps, properties: PropertyService, user: Us
       if (m > radius) continue;
       if (!evaluate(user, 'fiscal:nearby', { communes: [o.commune] })) continue;
       const s = situationOf(d, o);
-      const desc = vx?.describeObject(o);
+      const desc = vx?.describeObject(o, { withName: named });
       items.push({
         id: o.id, reference: o.igf?.code ?? desc?.ref ?? o.id, label: desc?.label ?? CATEGORY_LABELS[o.category] ?? o.category,
         category: o.category, categoryLabel: CATEGORY_LABELS[o.category] ?? o.category, vertical: verticalName(o),

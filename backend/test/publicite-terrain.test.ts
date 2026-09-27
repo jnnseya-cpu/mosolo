@@ -37,10 +37,20 @@ describe('KIN PUB CONTROL sur le terrain — Autour de moi, commerces, publicit�
     const ds = items.map((i) => i.distanceM);
     expect(ds).toEqual([...ds].sort((x, y) => x - y));
     // Le commerce avec enseigne déclarée n'est pas « à vérifier » ; l'autre l'est.
-    const labels = (b.businessesToCheck as { label: string }[]).map((x) => x.label).join(' | ');
-    expect(labels).toMatch(/Boutique Mode 243/);
-    expect(labels).not.toMatch(/Pharmacie du Fleuve/);
+    // Accès minimal de l'inspectrice : type du commerce seulement, jamais son nom.
+    const toCheck = b.businessesToCheck as { label: string; objectId: string }[];
+    expect(toCheck.length).toBeGreaterThan(0);
+    expect(toCheck.map((x) => x.label).join(' | ')).not.toMatch(/Boutique Mode 243|Pharmacie du Fleuve/);
     expect(e.app.ctx.audit.list({ action: 'publicite.nearby.viewed' }).total).toBe(1);
+    // Régie (R07, R06) : habilitée par son entité (DGTK) ; accès complet, nom du commerce visible.
+    for (const regie of ['pb-instructeur', 'pb-autorite']) {
+      const rr = await e.req('GET', near(BD30), regie);
+      expect(rr.statusCode, rr.body).toBe(200);
+      const labels = (rr.json().businessesToCheck as { label: string }[]).map((x) => x.label).join(' | ');
+      expect(labels).toMatch(/Boutique Mode 243/);
+      expect(labels).not.toMatch(/Pharmacie du Fleuve/);
+    }
+    expect((await e.req('GET', '/v1/publicite/vehicles/KN-4521-BB', 'pb-instructeur')).statusCode).toBe(200);
   });
 
   it('hors secteur, position imprécise, usager : refusé ou rien montré', async () => {
@@ -71,6 +81,23 @@ describe('KIN PUB CONTROL sur le terrain — Autour de moi, commerces, publicit�
     const spec = { widthM: '1.00', heightM: '1.00', faces: 1, lighting: 'NON_ECLAIRE', commune: 'Gombe', quartier: 'Centre', address: 'Adresse fictive', localityRank: 1, lat: BD30.lat, lon: BD30.lon, photos: [sha256Hex('x')] };
     expect((await e.req('POST', '/v1/publicite/devices', 'pb-annonceur', { ...spec, type: 'HABILLAGE_VEHICULE' })).json().code).toBe('VEHICLE_PLATE_REQUIRED');
     expect((await e.req('POST', '/v1/publicite/devices', 'pb-annonceur', { ...spec, type: 'ENSEIGNE', placement: 'FACADE_COMMERCE' })).json().code).toBe('BUSINESS_REQUIRED');
+  });
+
+  it('publicité mobile : l’inspection relève de la commune où se trouve l’inspecteur, pas de la commune déclarée', async () => {
+    const e = await env();
+    const bus = (await e.req('GET', '/v1/publicite/vehicles/KN-4521-BB', 'pb-inspecteur')).json().items[0];
+    expect(bus.commune).toBe('Gombe');
+    const body = { deviceId: bus.id, finding: 'NON_CONFORME', photos: [sha256Hex('photo-bus')], gpsAccuracyM: 5, observations: 'Habillage différent du visuel autorisé.' };
+    // Bus déclaré à Gombe mais contrôlé à Limete (hors accréditation de l'inspectrice) : refusé.
+    const out = await e.req('POST', '/v1/publicite/inspections', 'pb-inspecteur', { ...body, lat: -4.3721, lon: 15.3462 });
+    expect(out.statusCode).toBe(403);
+    // Contrôlé dans son périmètre : le dossier porte la commune du lieu de l'inspection.
+    const here = { lat: -4.3100, lon: 15.3250 };
+    const { adCommuneAt } = await import('../src/plugins/publicite/service.js');
+    const expected = adCommuneAt(e.app.ctx, e.app.ctx.ext.publicite as never, here).commune;
+    const ok = await e.req('POST', '/v1/publicite/inspections', 'pb-inspecteur', { ...body, ...here });
+    expect(ok.statusCode, ok.body).toBe(201);
+    expect(ok.json().case.commune).toBe(expected);
   });
 
   it('droits impayés d’un chevalet devant un commerce : paiement numérique assisté sur place, jamais d’espèces', async () => {

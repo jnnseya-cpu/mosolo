@@ -7,9 +7,8 @@
  *   (commission de 10 % pour l'agent des verticales, même règle que pour le stationnement).
  */
 import type { AppContext } from '../../context.js';
-import { sha256Hex } from '../../core/crypto.js';
 import type { ParkingService } from '../parking/service.js';
-import { PARKING_DEMO } from '../parking/seed.js';
+import { demoEvidencePhotos, PARKING_DEMO } from '../parking/seed.js';
 import { demoPay } from '../parking/support.js';
 import type { VerticalesService } from '../verticales/service.js';
 
@@ -20,9 +19,12 @@ export function seedSanctions(ctx: AppContext): void {
   const autorite = ctx.users.get('pk-autorite');
   const owner = ctx.users.get('u-contribuable');
   if (!svc || !controleur || !superviseur || !autorite || !owner) return;
+  // Contrôle rouge sur le boulevard Lumumba (la session payée de la plaque est à Gombe), photo, puis constat.
+  const red = svc.control(controleur, PARKING_DEMO.plateOwner, PARKING_DEMO.zoneLimete);
+  const at = { lat: -4.3721, lon: 15.3462, place: 'Boulevard Lumumba, passage piéton (démonstration)' };
   const v3 = svc.recordViolation(controleur, {
-    zoneId: PARKING_DEMO.zoneGombe, plate: PARKING_DEMO.plateOwner, nature: 'STATIONNEMENT_INTERDIT',
-    photoSha256: [sha256Hex('demo-photo-constat-4')], lat: -4.3049, lon: 15.3097, gpsAccuracyM: 5,
+    zoneId: PARKING_DEMO.zoneLimete, plate: PARKING_DEMO.plateOwner, nature: 'STATIONNEMENT_INTERDIT', checkId: red.checkId,
+    photoIds: demoEvidencePhotos(svc, controleur, red.checkId, ['constat-4'], at), lat: at.lat, lon: at.lon, gpsAccuracyM: 5,
     observations: 'Stationnement sur passage piéton signalé (démonstration, antidatée de 35 jours).',
   });
   svc.verifyViolation(superviseur, v3.id, { confirm: true, note: 'Photographie nette, marquage au sol visible (démonstration).' });
@@ -44,7 +46,9 @@ export function seedSanctions(ctx: AppContext): void {
     const agents = ctx.users.all().filter((u) => u.roles.some((r) => r === 'R10') && u.territory?.length);
     for (const p of vx.plates.all()) {
       const agent = agents.find((a) => a.territory!.includes(p.commune));
-      const ob = ctx.assessment.obligations.find((o) => o.objectId === p.objectId && o.status !== 'SOLDEE' && o.status !== 'ANNULEE')[0];
+      // Dette ÉCHUE (situation rouge au scan) : seul un scan qui révèle un défaut fonde une commission.
+      const today = ctx.clock.now().toISOString().slice(0, 10);
+      const ob = ctx.assessment.obligations.find((o) => o.objectId === p.objectId && o.status !== 'SOLDEE' && o.status !== 'ANNULEE' && o.status !== 'CONTESTEE' && (o.dueDate < today || o.status === 'EN_RETARD'))[0];
       const payer = ob ? ctx.users.all().find((u) => u.taxpayerId === ob.taxpayerId) : undefined;
       if (!agent || !ob || !payer) continue;
       vx.scanPlate(agent, p.code);

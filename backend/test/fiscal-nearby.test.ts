@@ -35,6 +35,13 @@ describe('Autour de moi — biens et commerces proches en vert, ambre ou rouge',
     expect(Object.values(b.counts as Record<string, number>).reduce((a, c) => a + c, 0)).toBe(b.items.length);
     expect(JSON.stringify(b)).not.toMatch(/"amount"/);
     expect(e.app.ctx.audit.list({ action: 'fiscal.nearby.viewed' }).total).toBe(1);
+    // Accès minimal : aucun nom ni raison sociale, seulement le type ou la catégorie ; jamais une publicité de véhicule.
+    const objects = e.app.ctx.objects.objects;
+    for (const i of b.items as { id: string; label: string }[]) {
+      const o = objects.get(i.id)!;
+      for (const k of ['nom', 'raisonSociale']) if (typeof o.attributes[k] === 'string') expect(i.label).not.toContain(o.attributes[k] as string);
+      expect(o.attributes['placement']).not.toBe('VEHICULE');
+    }
   });
 
   it('hors de son secteur : rien n’est montré (et la tentative est journalisée)', async () => {

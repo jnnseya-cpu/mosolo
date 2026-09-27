@@ -24,6 +24,7 @@ import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '.
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
 import { isCommune } from '../../reference/kinshasa.js';
 import { actorOf, activeRule, DGTK, latestRule, paymentState, pct, perUnit, sumByCurrency } from '../parking/support.js';
+import { estimateCommune, isFixedObject } from '../fiscal/nearby.js';
 
 export const AD_TYPES = ['PANNEAU', 'ENSEIGNE', 'ECRAN_NUMERIQUE', 'BACHE', 'BANDEROLE', 'KAKEMONO', 'CHEVALET', 'AFFICHE_MURALE', 'HABILLAGE_VEHICULE', 'AUTRE'] as const;
 /**
@@ -168,6 +169,7 @@ export interface AdCase {
   reference: string;
   inspectionId: string;
   deviceId: string;
+  /** Commune du dossier : celle du support ; pour une publicité mobile, celle où l'inspection a eu lieu. */
   commune: string;
   finding: Exclude<AdInspection['finding'], 'CONFORME'>;
   status: 'CONSTATE' | 'VERIFIE' | 'REJETE_QA' | 'RETENU' | 'CLASSE';
@@ -577,7 +579,11 @@ export class PubliciteService {
     qrScanned?: string; ocrText?: string; presumedOperator?: string; observations: string;
   }) {
     let device = input.deviceId ? this.getDevice(input.deviceId) : input.qrScanned ? this.devices.findOne((d) => d.qrToken === input.qrScanned) ?? null : null;
-    const commune = device?.commune ?? input.newDevice?.commune ?? '';
+    // Publicité mobile : le véhicule circule dans toute la ville ; l'inspection relève de la commune où se trouve
+    // l'inspecteur (position de l'inspection), non de la commune déclarée du support.
+    const newType = input.newDevice?.type;
+    const mobile = (device?.placement ?? input.newDevice?.placement ?? (newType === 'HABILLAGE_VEHICULE' ? 'VEHICULE' : null)) === 'VEHICULE';
+    const commune = mobile ? adCommuneAt(this.ctx, this, { lat: input.lat, lon: input.lon }).commune : device?.commune ?? input.newDevice?.commune ?? '';
     authorize(user, 'publicite:inspection.create', { communes: [commune] });
     const acc = this.accreditations.get(user.id);
     if (!this.accreditationValid(acc, commune)) {
@@ -603,7 +609,7 @@ export class PubliciteService {
     if (input.finding !== 'CONFORME') {
       caseId = this.ids.next('ADC');
       this.cases.insert({
-        id: caseId, reference: this.ids.next(`DOS-PUB-${now.getUTCFullYear()}`), inspectionId, deviceId: device.id, commune: device.commune,
+        id: caseId, reference: this.ids.next(`DOS-PUB-${now.getUTCFullYear()}`), inspectionId, deviceId: device.id, commune: mobile ? commune : device.commune,
         finding: input.finding, status: 'CONSTATE', createdAt: now.toISOString(), contests: [],
       });
     }
@@ -788,7 +794,8 @@ export class PubliciteService {
     for (const o of obligations) {
       liquidated += 1;
       const p = paymentState(this.ctx, o.obligationId);
-      if (p.state === 'PAYE' || p.state === 'RAPPROCHE') {
+      // Échéances déjà payées comprises (paiement partiel) : recette encaissée au compte public.
+      if (p.state === 'PAYE' || p.state === 'RAPPROCHE' || p.state === 'PARTIEL') {
         paid.push(p.amount!);
         byCommuneMoney.set(o.commune, [...(byCommuneMoney.get(o.commune) ?? []), p.amount!]);
       }
@@ -855,6 +862,15 @@ export class PubliciteService {
 }
 
 /** Avis au redevable : obligation expliquée (base, formule, taux, échéance, voie de recours) et état de paiement. */
+/**
+ * Commune où se trouve une position, estimée sur les seuls lieux FIXES (supports non mobiles, objets fiscaux hors
+ * véhicules et hors publicités portées par un véhicule) : sert à l'« Autour de moi » et aux inspections mobiles.
+ */
+export function adCommuneAt(ctx: AppContext, svc: PubliciteService, here: { lat: number; lon: number }) {
+  const fixed = svc.devices.all().filter((d) => d.placement !== 'VEHICULE' && d.registration !== 'RETIRE');
+  return estimateCommune([...fixed, ...ctx.objects.objects.all().filter(isFixedObject)], here);
+}
+
 export function noticeOf(ob: { id: string; label: string; amount: MoneyJSON; dueDate: string; status: string; ruleCode: string; ruleVersion: number; attribution: { commune: string | null }; explanation: { base: Record<string, string>; formula: string; rates: Record<string, string>; appealPath: string; legalBasis: { title: string }[] } }, payment: string) {
   return {
     obligationId: ob.id, label: ob.label, amount: ob.amount, dueDate: ob.dueDate, status: ob.status, ruleCode: ob.ruleCode, ruleVersion: ob.ruleVersion,

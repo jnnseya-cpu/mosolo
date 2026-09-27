@@ -14,13 +14,15 @@
 import type { MoneyJSON } from '@mosolo/shared';
 import { Money } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
+import type { Obligation } from '../../modules/assessment/service.js';
+import type { PaymentOrder } from '../../modules/payments/service.js';
 import type { User } from '../../core/auth.js';
 import { sha256Hex } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { authorize, evaluate } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
-import { actorOf, paymentState, sumByCurrency } from './support.js';
-import type { ParkingService, ParkingViolation } from './service.js';
+import { actorOf, kinshasaMonth, ordersByObligation, paidOrders, paymentState, sumByCurrency, type PaidOrder } from './support.js';
+import type { ControlCheck, ParkingService, ParkingViolation } from './service.js';
 
 /**
  * Vues de preuve : les ABORDS du véhicule (où et comment il est stationné), pas la plaque — la plaque est déjà lue
@@ -83,6 +85,11 @@ export const GPS_WARN_ACCURACY_M = 30;
 /** Distance au centre de la zone au-delà de laquelle la photo est signalée (m). */
 export const ZONE_WARN_DISTANCE_M = 600;
 
+/** Position imprécise : source autre que le GPS, précision inconnue ou au-delà du seuil. */
+export function lowAccuracy(source: string | null | undefined, accuracyM: number | null | undefined): boolean {
+  return source !== 'GPS' || (accuracyM ?? Infinity) > GPS_WARN_ACCURACY_M;
+}
+
 /** Distance géodésique (haversine), en mètres. */
 export function distanceM(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
   const R = 6_371_000; const r = Math.PI / 180;
@@ -123,6 +130,10 @@ export interface EarningLine {
   commission: MoneyJSON;
   state: 'EN_ATTENTE' | 'CONFIRMEE' | 'ACQUISE' | 'ANNULEE';
   stateLabel: string;
+  /** Ordre de paiement (échéance) qui fonde la ligne ; absent pour le solde en attente. */
+  orderId?: string;
+  /** Date du paiement confirmé (null tant que rien n'est payé). */
+  paidAt?: string | null;
 }
 
 const NATURE_LABEL: Record<string, string> = {
@@ -146,8 +157,14 @@ export class ParkingField {
     const dist = z?.center ? distanceM({ lat: p.lat, lon: p.lon }, z.center) : null;
     return {
       ...rest, slotLabel: SLOT_LABEL[p.slot], url: `/v1/parking/evidence-photos/${p.id}`, clockWarning: p.clockSkewSeconds > CLOCK_SKEW_WARN_SECONDS,
-      distanceFromZoneM: dist, lowAccuracy: p.gpsSource !== 'GPS' || (p.accuracyM ?? Infinity) > GPS_WARN_ACCURACY_M, farFromZone: dist !== null && dist > ZONE_WARN_DISTANCE_M,
+      distanceFromZoneM: dist, lowAccuracy: lowAccuracy(p.gpsSource, p.accuracyM), farFromZone: dist !== null && dist > ZONE_WARN_DISTANCE_M,
     };
+  }
+
+  /** Preuve faible (même règle que les signaux montrés au vérificateur) : position imprécise, loin de la zone, horloge décalée. */
+  weakEvidence(p: EvidencePhoto): boolean {
+    const m = this.meta(p);
+    return m.lowAccuracy || m.farFromZone || m.clockWarning;
   }
 
   activeForCheck(checkId: string): EvidencePhoto[] {
@@ -250,9 +267,10 @@ export class ParkingField {
         const ob = v.decision?.obligationId ? this.ctx.assessment.get(v.decision.obligationId) : null;
         const pay = ob ? paymentState(this.ctx, ob.id).state : 'AUCUNE_REFERENCE';
         const unpaid = !!ob && pay !== 'PAYE' && pay !== 'RAPPROCHE' && ob.status !== 'ANNULEE' && ob.status !== 'SOLDEE';
+        // Montant : seulement celui fixé par la décision ; jamais le montant proposé d'un constat non encore décidé.
         return {
           module: 'STATIONNEMENT' as const, reference: v.reference, nature: NATURE_LABEL[v.nature] ?? v.nature, status: v.status, createdAt: v.createdAt,
-          decidedAt: v.decision?.at ?? null, obligationId: ob?.id ?? null, amount: ob?.amount ?? v.proposal?.amount ?? null, payment: pay, unpaid,
+          decidedAt: v.decision?.at ?? null, obligationId: ob?.id ?? null, amount: ob?.amount ?? null, payment: pay, unpaid,
           overdueDays: this.overdueDays(v, unpaid), plate: v.plate, zone: this.svc.zones.get(v.zoneId)?.name ?? v.zoneId,
         };
       });
@@ -260,57 +278,59 @@ export class ParkingField {
 
   // ------------------------------------------------------------------ Commission des agents (10 %)
 
-  private pct(m: MoneyJSON): MoneyJSON {
-    return Money.fromJSON(m).multiply(`${AGENT_COMMISSION_PCT / 100}`).toJSON();
-  }
-
   /**
-   * Lignes de commission d'un agent :
+   * Lignes de commission du stationnement, TOUS agents, calculées une seule fois (contrôles rouges indexés par plaque,
+   * ordres de paiement indexés par obligation) :
    * - PÉNALITÉ : constat de l'agent, vérifié et retenu par deux autres personnes, pénalité émise ;
    * - PAIEMENT : session de stationnement ouverte pour la plaque dans l'heure qui suit un contrôle ROUGE de l'agent
    *   (régularisation provoquée par le contrôle ; une session n'est attribuée qu'une fois, au premier contrôle).
-   * État : EN_ATTENTE (non payé) → CONFIRMEE (payé, rapprochement bancaire en cours) → ACQUISE (rapproché au compte
-   * public : due par le Trésor) ; ANNULEE si la pénalité est annulée (recours).
+   * Base : montants réellement payés, échéance par échéance (un paiement partiel ne vaut pas paiement complet).
+   * État de chaque ligne : celui de SES ordres — CONFIRMEE (payé, rapprochement bancaire en cours) → ACQUISE (rapproché
+   * au compte public : due par le Trésor) ; EN_ATTENTE pour le solde d'une pénalité ; ANNULEE si la pénalité est annulée.
    */
-  earningsLines(agentId: string): EarningLine[] {
+  allEarningsLines(orders: Map<string, PaymentOrder[]> = ordersByObligation(this.ctx)): EarningLine[] {
     const lines: EarningLine[] = [];
-    const label = { EN_ATTENTE: 'En attente du paiement de l’usager', CONFIRMEE: 'Payé — rapprochement bancaire en cours', ACQUISE: 'Acquise — à verser par le Trésor', ANNULEE: 'Annulée (pénalité annulée)' };
-    for (const v of this.svc.violations.find((x) => x.agentId === agentId && x.status === 'RETENU' && !!x.decision?.obligationId)) {
-      const ob = this.ctx.assessment.get(v.decision!.obligationId!);
-      const pay = paymentState(this.ctx, ob.id).state;
-      const state: EarningLine['state'] = ob.status === 'ANNULEE' ? 'ANNULEE' : pay === 'RAPPROCHE' ? 'ACQUISE' : pay === 'PAYE' ? 'CONFIRMEE' : 'EN_ATTENTE';
-      lines.push({ module: 'STATIONNEMENT', moduleLabel: 'Stationnement', obligationId: ob.id, triggerAt: v.createdAt, agentId, source: 'PENALITE', reference: v.reference, plate: v.plate, zone: this.svc.zones.get(v.zoneId)?.name ?? v.zoneId, at: v.decision!.at, base: ob.amount, commission: this.pct(ob.amount), state, stateLabel: label[state] });
+    const zoneName = (id: string) => this.svc.zones.get(id)?.name ?? id;
+    for (const v of this.svc.violations.find((x) => x.status === 'RETENU' && !!x.decision?.obligationId)) {
+      const ob = this.ctx.assessment.obligations.get(v.decision!.obligationId!);
+      if (!ob) continue;
+      lines.push(...obligationEarningLines(this.ctx, ob, orders, {
+        module: 'STATIONNEMENT', moduleLabel: 'Stationnement', obligationId: ob.id, triggerAt: v.createdAt, agentId: v.agentId, source: 'PENALITE',
+        reference: v.reference, plate: v.plate, zone: zoneName(v.zoneId), at: v.decision!.at,
+      }, { withBalance: true }));
     }
     // Attribution des paiements : premier contrôle ROUGE (tous agents) précédant la session dans le délai.
-    const reds = this.svc.checks.all().filter((c) => c.light === 'ROUGE' && c.zoneId);
-    const now = this.svc.now();
+    const reds = new Map<string, ControlCheck[]>();
+    for (const c of this.svc.checks.all()) {
+      if (c.light !== 'ROUGE' || !c.zoneId) continue;
+      const l = reds.get(c.plate);
+      if (l) l.push(c); else reds.set(c.plate, [c]);
+    }
+    for (const l of reds.values()) l.sort((a, b) => a.at.localeCompare(b.at));
     for (const s of this.svc.sessions.all()) {
       const created = Date.parse(s.createdAt);
-      const trigger = reds
-        .filter((c) => c.plate === s.plate && c.zoneId === s.zoneId && Date.parse(c.at) <= created && created - Date.parse(c.at) <= PAYMENT_ATTRIBUTION_MINUTES * 60_000)
-        .sort((a, b) => a.at.localeCompare(b.at))[0];
-      if (!trigger || trigger.agentId !== agentId) continue;
-      const d = this.svc.sessionDerived(s, now);
-      for (const p of d.payments) {
-        const ob = this.ctx.assessment.get(p.obligationId);
-        const state: EarningLine['state'] = p.state === 'RAPPROCHE' ? 'ACQUISE' : p.state === 'PAYE' ? 'CONFIRMEE' : 'EN_ATTENTE';
-        lines.push({ module: 'STATIONNEMENT', moduleLabel: 'Stationnement', obligationId: ob.id, triggerAt: trigger.at, agentId, source: 'PAIEMENT', reference: `${s.ticketCode ?? s.id} · ${p.kind === 'INITIALE' ? 'session' : 'prolongation'}`, plate: s.plate, zone: this.svc.zones.get(s.zoneId)?.name ?? s.zoneId, at: s.createdAt, base: ob.amount, commission: this.pct(ob.amount), state, stateLabel: label[state] });
+      const trigger = (reds.get(s.plate) ?? []).find((c) => c.zoneId === s.zoneId && Date.parse(c.at) <= created && created - Date.parse(c.at) <= PAYMENT_ATTRIBUTION_MINUTES * 60_000);
+      if (!trigger) continue;
+      for (const g of s.segments) {
+        const ob = this.ctx.assessment.obligations.get(g.obligationId);
+        if (!ob) continue;
+        lines.push(...obligationEarningLines(this.ctx, ob, orders, {
+          module: 'STATIONNEMENT', moduleLabel: 'Stationnement', obligationId: ob.id, triggerAt: trigger.at, agentId: trigger.agentId, source: 'PAIEMENT',
+          reference: `${s.ticketCode ?? s.id} · ${g.kind === 'INITIALE' ? 'session' : 'prolongation'}`, plate: s.plate, zone: zoneName(s.zoneId), at: s.createdAt,
+        }, { withBalance: false }));
       }
     }
     return lines.sort((a, b) => b.at.localeCompare(a.at));
   }
 
-  earningsSummary(agentId: string) {
-    const lines = this.earningsLines(agentId);
-    const by = (st: EarningLine['state']) => sumByCurrency(lines.filter((l) => l.state === st).map((l) => l.commission));
-    const month = this.svc.now().toISOString().slice(0, 7);
+  earningsLines(agentId: string): EarningLine[] {
+    return this.allEarningsLines().filter((l) => l.agentId === agentId);
+  }
+
+  earningsSummary(agentId: string, lines: EarningLine[] = this.earningsLines(agentId)) {
     return {
       agentId, ratePct: AGENT_COMMISSION_PCT,
-      totals: {
-        acquise: by('ACQUISE'), confirmee: by('CONFIRMEE'), enAttente: by('EN_ATTENTE'), annulee: by('ANNULEE'),
-        base: sumByCurrency(lines.filter((l) => l.state !== 'ANNULEE').map((l) => l.base)),
-        ceMois: sumByCurrency(lines.filter((l) => l.state !== 'ANNULEE' && l.at.startsWith(month)).map((l) => l.commission)),
-      },
+      totals: earningTotals(lines, this.svc.now()),
       counts: { penalites: lines.filter((l) => l.source === 'PENALITE').length, paiements: lines.filter((l) => l.source === 'PAIEMENT').length },
       lines,
       rules: [
@@ -321,4 +341,56 @@ export class ParkingField {
       ],
     };
   }
+
+  /** Récapitulatif de tous les agents du stationnement, calculé en une seule passe. */
+  earningsByAgent(): { agentId: string; totals: ReturnType<typeof earningTotals>; counts: { penalites: number; paiements: number } }[] {
+    const by = new Map<string, EarningLine[]>();
+    for (const a of new Set([...this.svc.checks.all().map((c) => c.agentId), ...this.svc.violations.all().map((v) => v.agentId)])) by.set(a, []);
+    for (const l of this.allEarningsLines()) by.get(l.agentId!)?.push(l);
+    return [...by].map(([agentId, lines]) => { const e = this.earningsSummary(agentId, lines); return { agentId, totals: e.totals, counts: e.counts }; });
+  }
+}
+
+export const EARNING_STATE_LABEL: Record<EarningLine['state'], string> = {
+  EN_ATTENTE: 'En attente du paiement de l’usager', CONFIRMEE: 'Payé — rapprochement bancaire en cours', ACQUISE: 'Acquise — à verser par le Trésor', ANNULEE: 'Annulée (pénalité annulée)',
+};
+
+export function commissionOf(m: MoneyJSON): MoneyJSON {
+  return Money.fromJSON(m).multiply(`${AGENT_COMMISSION_PCT / 100}`).toJSON();
+}
+
+/**
+ * Lignes de commission d'une obligation : une par ordre payé (échéance), base = montant de l'ordre, état = celui de
+ * l'ordre ; `accept` filtre les ordres attribuables (fenêtre du module). Avec `withBalance` (pénalité) : le solde
+ * restant dû en attente, ou une ligne annulée si l'obligation est annulée.
+ */
+export function obligationEarningLines(
+  ctx: AppContext, ob: Obligation, orders: Map<string, PaymentOrder[]> | undefined,
+  line: Omit<EarningLine, 'base' | 'commission' | 'state' | 'stateLabel' | 'orderId' | 'paidAt'>,
+  opts: { withBalance: boolean; accept?: (o: PaidOrder) => boolean },
+): EarningLine[] {
+  if (ob.status === 'ANNULEE') {
+    return opts.withBalance ? [{ ...line, base: ob.amount, commission: commissionOf(ob.amount), state: 'ANNULEE', stateLabel: EARNING_STATE_LABEL.ANNULEE, paidAt: null }] : [];
+  }
+  const paid = paidOrders(ctx, ob.id, orders);
+  const out: EarningLine[] = paid.filter((o) => !opts.accept || opts.accept(o)).map((o) => {
+    const state: EarningLine['state'] = o.reconciled ? 'ACQUISE' : 'CONFIRMEE';
+    return { ...line, orderId: o.id, paidAt: o.at, base: o.amount, commission: commissionOf(o.amount), state, stateLabel: EARNING_STATE_LABEL[state] };
+  });
+  if (opts.withBalance && ob.status !== 'SOLDEE') {
+    const rest = paid.reduce((m, o) => m.subtract(Money.fromJSON(o.amount)), Money.fromJSON(ob.amount));
+    if (rest.compare(Money.zero(rest.currency)) > 0) out.push({ ...line, base: rest.toJSON(), commission: commissionOf(rest.toJSON()), state: 'EN_ATTENTE', stateLabel: EARNING_STATE_LABEL.EN_ATTENTE, paidAt: null });
+  }
+  return out;
+}
+
+/** Totaux par état et par devise ; « ce mois » : commissions payées (confirmées ou acquises) ce mois-ci à Kinshasa. */
+export function earningTotals(lines: EarningLine[], now: Date) {
+  const by = (st: EarningLine['state']) => sumByCurrency(lines.filter((l) => l.state === st).map((l) => l.commission));
+  const month = kinshasaMonth(now);
+  return {
+    acquise: by('ACQUISE'), confirmee: by('CONFIRMEE'), enAttente: by('EN_ATTENTE'), annulee: by('ANNULEE'),
+    base: sumByCurrency(lines.filter((l) => l.state !== 'ANNULEE').map((l) => l.base)),
+    ceMois: sumByCurrency(lines.filter((l) => (l.state === 'CONFIRMEE' || l.state === 'ACQUISE') && !!l.paidAt && kinshasaMonth(l.paidAt) === month).map((l) => l.commission)),
+  };
 }

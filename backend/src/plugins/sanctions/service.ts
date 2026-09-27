@@ -29,6 +29,8 @@ export interface OverdueLine {
   obligationId?: string;
   /** Montant fixé par la décision (non négociable). */
   amount: MoneyJSON;
+  /** Solde restant dû si une partie a déjà été payée (échéances). */
+  remaining?: MoneyJSON;
   /** Pénalité du module de l'agent qui contrôle (visible sans délai). */
   sameModule?: boolean;
 }
@@ -78,11 +80,16 @@ export class SanctionsService {
         if (line) out.push(line);
       }
     }
+    // Publicité : par exploitant, ou par plaque pour une publicité mobile (véhicule).
     const pub = this.ctx.ext.publicite as PubliciteService | undefined;
-    if (pub && subject.taxpayerId) {
+    const plate = subject.plate ? alnum(subject.plate) : null;
+    if (pub && (subject.taxpayerId || plate)) {
       for (const c of pub.cases.all()) {
         const d = pub.devices.get(c.deviceId);
-        if (d?.ownerTaxpayerId !== subject.taxpayerId) continue;
+        if (!d) continue;
+        const byOwner = !!subject.taxpayerId && d.ownerTaxpayerId === subject.taxpayerId;
+        const byPlate = !!plate && d.placement === 'VEHICULE' && !!d.vehiclePlate && alnum(d.vehiclePlate) === plate;
+        if (!byOwner && !byPlate) continue;
         const line = this.fromDecision('PUBLICITE', 'Publicité (KIN PUB CONTROL)', c.reference, c.finding, c.status === 'RETENU' ? c.decision : undefined, now);
         if (line) out.push(line);
       }
@@ -93,11 +100,18 @@ export class SanctionsService {
   private fromDecision(module: string, moduleLabel: string, reference: string, nature: string, decision: { at: string; obligationId: string | null } | undefined, now: number): OverdueLine | null {
     if (!decision?.obligationId) return null;
     const ob = this.ctx.assessment.obligations.get(decision.obligationId);
-    if (!ob || ob.status === 'ANNULEE' || ob.status === 'SOLDEE' || ob.status === 'CONTESTEE') return null;
-    const pay = paymentState(this.ctx, ob.id).state;
-    if (pay === 'PAYE' || pay === 'RAPPROCHE') return null;
+    // Seules les obligations nées d'une décision de PÉNALITÉ figurent au registre (jamais des droits ou redevances :
+    // la liquidation des droits d'un support publicitaire n'est pas une pénalité).
+    if (!ob || ob.revenueCategory !== 'PENALITE') return null;
+    if (ob.status === 'ANNULEE' || ob.status === 'SOLDEE' || ob.status === 'CONTESTEE') return null;
+    // Paiement par échéances : la pénalité reste affichée tant qu'un solde est dû.
+    const pay = paymentState(this.ctx, ob.id);
+    if (pay.state === 'PAYE' || pay.state === 'RAPPROCHE') return null;
     const days = Math.floor((now - Date.parse(decision.at)) / DAY_MS);
-    return { module, moduleLabel, reference, nature: nature.replace(/_/g, ' ').toLowerCase(), decidedAt: decision.at, overdueDays: days, amount: ob.amount, obligationId: ob.id };
+    return {
+      module, moduleLabel, reference, nature: nature.replace(/_/g, ' ').toLowerCase(), decidedAt: decision.at, overdueDays: days, amount: ob.amount, obligationId: ob.id,
+      ...(pay.state === 'PARTIEL' && pay.remaining ? { remaining: pay.remaining } : {}),
+    };
   }
 
   /**
@@ -106,12 +120,13 @@ export class SanctionsService {
    * - pénalités des AUTRES modules : visibles seulement après 30 jours d'impayé.
    * Le montant est affiché dans les deux cas. Rien pour un usager ; divulgation journalisée.
    */
-  afterControl(user: User, subject: { taxpayerId?: string | null; plate?: string | null }, module: string, controlRef: string): OverdueDisclosure | null {
+  afterControl(user: User, subject: { taxpayerId?: string | null; plate?: string | null }, module: string, controlRef: string, opts: { otherModulesOnly?: boolean } = {}): OverdueDisclosure | null {
     if (user.roles.every((r) => NON_AGENT_ROLES.has(r))) return null;
     const own = PENALTY_MODULE_OF_CONTROL[module] ?? module;
+    // otherModulesOnly : le module montre déjà ses propres pénalités dans sa réponse (ex. stationnement).
     const lines = this.unpaid(subject)
       .map((l) => ({ ...l, sameModule: l.module === own }))
-      .filter((l) => l.sameModule || l.overdueDays >= OVERDUE_VISIBILITY_DAYS);
+      .filter((l) => (l.sameModule && !opts.otherModulesOnly) || (!l.sameModule && l.overdueDays >= OVERDUE_VISIBILITY_DAYS));
     if (!lines.length) return null;
     this.ctx.audit.append({
       actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'penalties.overdue.disclosed', resourceType: 'control', resourceId: controlRef,
@@ -125,8 +140,8 @@ export class SanctionsService {
 }
 
 /** Ajoute `penalitesImpayees` à la réponse d'un contrôle si le registre est chargé et qu'il y a quelque chose à montrer. */
-export function withOverdue<T extends object>(ctx: AppContext, user: User, result: T, subject: { taxpayerId?: string | null; plate?: string | null }, module: string, controlRef: string): T & { penalitesImpayees?: OverdueDisclosure } {
+export function withOverdue<T extends object>(ctx: AppContext, user: User, result: T, subject: { taxpayerId?: string | null; plate?: string | null }, module: string, controlRef: string, opts: { otherModulesOnly?: boolean } = {}): T & { penalitesImpayees?: OverdueDisclosure } {
   const s = ctx.ext.sanctions as SanctionsService | undefined;
-  const d = s?.afterControl(user, subject, module, controlRef);
+  const d = s?.afterControl(user, subject, module, controlRef, opts);
   return d ? { ...result, penalitesImpayees: d } : result;
 }
