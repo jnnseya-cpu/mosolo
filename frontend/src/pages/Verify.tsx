@@ -12,6 +12,7 @@ import { revenueCategoryLabel } from '../lib/labels';
 import type { PublicReceiptResult } from '../lib/types';
 import '../modules/tresor/tresor.css';
 import { QrScanner } from '../components/QrScanner';
+import { AttenteBaseLegale } from '../modules/juridique/AttenteBaseLegale';
 
 /** Statuts publics étendus (§ 19.2) : contrepassée et remboursée s'ajoutent au vocabulaire du socle. */
 type PublicStatus = PublicReceiptCheck | 'REVERSED' | 'REFUNDED';
@@ -164,6 +165,8 @@ export default function Verify() {
                     {(result.taxpayerRefSuffix ?? result.taxpayerRefLast4) && <div><dt>{tr('verify.ref4')}</dt><dd className="mono">{result.taxpayerRefSuffix ?? `…${result.taxpayerRefLast4}`}</dd></div>}
                   </dl>
                 )}
+                {/* Valeur juridique de la quittance électronique : points J7 et J17 (registre des points juridiques). */}
+                {(result.status === 'VALID' || result.status === 'PENDING') && <AttenteBaseLegale fonction="QUITTANCE_ELECTRONIQUE" compact />}
               </div>
             )}
           </div>

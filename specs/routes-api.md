@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **862 routes** dans 38 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **881 routes** dans 39 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -10,6 +10,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **862 routes** dans 38
 | extension fiscal | 80 |
 | extension ia | 28 |
 | extension integrite | 68 |
+| extension juridique | 11 |
 | extension opportunites | 29 |
 | extension parking | 64 |
 | extension pilotage | 24 |
@@ -38,7 +39,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **862 routes** dans 38
 | module objects | 2 |
 | module payments | 8 |
 | module receipts | 2 |
-| module rules | 15 |
+| module rules | 23 |
 | module system | 3 |
 | module treasury | 6 |
 | module vault | 4 |
@@ -365,6 +366,22 @@ Généré depuis le code source (`tools/gen_routes.py`) : **862 routes** dans 38
 | POST | `/v1/public/integrite/reports/track` |
 | POST | `/v1/public/integrite/reports/track/complement` |
 | GET | `/v1/public/integrite/summary` |
+
+## Extension juridique
+
+| Méthode | Chemin |
+|---|---|
+| GET | `/v1/juridique/donnees/classification` |
+| GET | `/v1/juridique/donnees/purges` |
+| POST | `/v1/juridique/donnees/purges` |
+| POST | `/v1/juridique/donnees/purges/:id/decision` |
+| GET | `/v1/juridique/donnees/purges/apercu` |
+| GET | `/v1/juridique/points` |
+| GET | `/v1/juridique/points/:code` |
+| POST | `/v1/juridique/points/:code/decision` |
+| POST | `/v1/juridique/points/:code/propositions` |
+| GET | `/v1/public/juridique/fonctions` |
+| GET | `/v1/public/juridique/fonctions/:code` |
 
 ## Extension opportunites
 
@@ -1053,16 +1070,24 @@ Généré depuis le code source (`tools/gen_routes.py`) : **862 routes** dans 38
 |---|---|
 | GET | `/v1/legal-instruments` |
 | POST | `/v1/legal-instruments/:id/abrogate` |
+| GET | `/v1/legal-instruments/completude` |
 | GET | `/v1/legal-rules` |
 | POST | `/v1/legal-rules` |
 | GET | `/v1/legal-rules/:id` |
 | POST | `/v1/legal-rules/:id/abrogate` |
 | POST | `/v1/legal-rules/:id/approve` |
+| GET | `/v1/legal-rules/:id/fiche-technique` |
 | POST | `/v1/legal-rules/:id/impact-simulations` |
 | POST | `/v1/legal-rules/:id/lift-suspension` |
+| POST | `/v1/legal-rules/:id/sample-simulations` |
 | POST | `/v1/legal-rules/:id/suspend` |
 | POST | `/v1/legal-rules/:id/suspension-change/decide` |
+| GET | `/v1/legal-rules/:id/test-cases` |
+| POST | `/v1/legal-rules/:id/test-cases` |
+| POST | `/v1/legal-rules/:id/test-cases/:caseId/validate` |
+| POST | `/v1/legal-rules/:id/test-cases/run` |
 | GET | `/v1/legal-rules/:id/versions` |
+| GET | `/v1/legal-rules/attributs-techniques` |
 | GET | `/v1/recalculations` |
 | GET | `/v1/recalculations/:id` |
 | POST | `/v1/recalculations/:id/decide` |

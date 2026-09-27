@@ -68,6 +68,8 @@ export function seed(ctx: AppContext): void {
     { id: 'demo-instrument-001', title: 'Instrument FICTIF de démonstration — aucune valeur juridique', status: 'EN_VIGUEUR' as const, demo: true, note: 'Utilisé uniquement pour démontrer le circuit de publication.' },
   ];
   for (const i of instruments) ctx.rules.instruments.insert(i);
+  // Tableau des textes du § 6.1 : textes manquants ajoutés au statut A_VERIFIER (jamais activés sans relevé certifié).
+  ctx.rules.seedLegalTexts();
 
   // Fiches modèles de l'Annexe B (statut A_VERIFIER : ne peuvent produire aucune obligation).
   ctx.rules.seedSamples();

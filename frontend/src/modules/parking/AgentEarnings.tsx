@@ -16,6 +16,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { Kpis, Money } from './shared';
 import './parking.css';
+import { AttenteBaseLegale } from '../juridique/AttenteBaseLegale';
 
 type EarningState = 'EN_ATTENTE' | 'CONFIRMEE' | 'ACQUISE' | 'ANNULEE';
 export interface EarningTotals { acquise: MoneyJSON[]; confirmee: MoneyJSON[]; enAttente: MoneyJSON[]; annulee: MoneyJSON[]; base: MoneyJSON[]; ceMois: MoneyJSON[]; payable?: MoneyJSON[] }
@@ -50,6 +51,8 @@ export default function AgentEarnings() {
         lead={`Vous percevez ${rate} % des pénalités issues de vos constats et des paiements provoqués par vos contrôles, quel que soit votre module. Calcul sur la recette publique confirmée ; versement par le Trésor. N’acceptez jamais d’argent d’un usager.`}>
         <button type="button" className="btn btn-secondary btn-sm" onClick={data.reload}><Icon name="refresh" size={16} /> Actualiser</button>
       </PageHead>
+      {/* Versement des commissions : régime des incitations des agents (J10) — le calcul n'est pas modifié. */}
+      <AttenteBaseLegale fonction="COMMISSIONS_VERSEMENT" />
       {data.loading && !data.data ? <Loading /> : data.error ? <ErrorState error={data.error} onRetry={data.reload} /> : data.data && (
         <EarningsBody d={data.data} fmtDate={fmtDate} onChanged={data.reload} />
       )}

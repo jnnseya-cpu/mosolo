@@ -3,6 +3,7 @@ export * from './currencies.js';
 export * from './format.js';
 export * from './domain.js';
 export * from './rules.js';
+export * from './juridique.js';
 export * from './events.js';
 export * from './ai.js';
 export * from './i18n/index.js';

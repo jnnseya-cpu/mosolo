@@ -153,6 +153,14 @@ export const CIRCUITS: Circuit[] = [
     code: 'SECTEURS_RAPPROCHEMENT', label: 'Déclaration sectorielle rapprochée puis décidée (volumes, carrières, produits forestiers)',
     proposals: ['verticales.sector.reconciled'], approvals: ['verticales.sector.decided'], refusals: [],
     outcome: decisionIn(['VALIDER']),
+    code: 'POINT_JURIDIQUE', label: 'Point juridique tranché sur acte (J1–J30)',
+    proposals: ['juridique.point.decision_proposed'], approvals: ['juridique.point.tranche'], refusals: ['juridique.point.decision_rejected'],
+    guard: { url: '/v1/juridique/points/:code/decision', key: (p) => (p.code ?? '').toUpperCase(), refusal: approveFalse },
+  },
+  {
+    code: 'PURGE_CONSERVATION', label: 'Purge des données à l’échéance de conservation',
+    proposals: ['privacy.purge.proposed'], approvals: ['privacy.purge.executed'], refusals: ['privacy.purge.rejected'],
+    guard: { url: '/v1/juridique/donnees/purges/:id/decision', key: (p) => p.id!, refusal: approveFalse },
   },
   {
     code: 'REGISTRE_SEUILS', label: 'Registre des seuils anti-fraude (confirmation ou modification)',

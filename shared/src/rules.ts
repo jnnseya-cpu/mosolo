@@ -5,6 +5,7 @@
 import type { CurrencyCode } from './currencies.js';
 import type { RevenueCategory, RuleStatus } from './domain.js';
 import { kinshasaBoundMs } from './validity.js';
+import { acteRequisBloque, type TaxableEventKind } from './juridique.js';
 
 export type RateTable = Record<string, string>; // clé (rang, catégorie) -> valeur décimale en chaîne
 
@@ -25,6 +26,8 @@ export interface RuleSheet {
   competentAuthority: string;
   administeringEntity: string;
   taxableEvent: string;
+  /** Fait générateur typé (§ 6.2) — facultatif, en plus du libellé `taxableEvent`. */
+  taxableEventKind?: TaxableEventKind;
   liableParty: string;
   withholdingAgent?: string;
   baseDefinition: string;
@@ -113,6 +116,8 @@ export const REQUIRED_APPROVALS: Approval['role'][] = [
  */
 export function isRuleExecutable(rule: RuleSheet, at: Date): { ok: true } | { ok: false; reason: string } {
   if (rule.status !== 'ACTIVE') return { ok: false, reason: `Règle au statut ${rule.status}` };
+  // § 6.3 / § 6.11 : une règle ACTE_REQUIS n'est jamais exécutable (hors clés à circuit d'activation propre).
+  if (acteRequisBloque(rule)) return { ok: false, reason: 'Catégorie ACTE_REQUIS : acte nouveau requis, non activable' };
   if (rule.sourceVerification !== 'OFFICIEL_CERTIFIE') return { ok: false, reason: 'Source non certifiée' };
   const approvers = new Set(rule.approvals.map((a) => a.userId));
   const roles = new Set(rule.approvals.map((a) => a.role));

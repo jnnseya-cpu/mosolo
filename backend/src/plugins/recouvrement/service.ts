@@ -23,6 +23,7 @@ import { APPEAL_PROCEDURE } from '../../modules/appeals/procedure.js';
 import { declaredReductionTerms, recordReductionGranted, remissionHeadroom } from '../../modules/assessment/reductions.js';
 import type { Obligation } from '../../modules/assessment/service.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
+import { etatFonction } from '../juridique/gates.js';
 import { AGE_BANDS, LARGE_DEBTOR_THRESHOLD_EXAMPLE, RECOVERY_PROCEDURE, SEGMENTS, type SegmentCode } from './parameters.js';
 
 // ───────────────────────── Politique d'accès (moindre privilège) ─────────────────────────
@@ -177,7 +178,7 @@ export interface InstallmentPlan {
   requestedAt: string;
   requestedCount: number;
   reason: string;
-  legalBasis: { instrumentId: string; title: string; demo: boolean };
+  legalBasis: { instrumentId: string; title: string; demo: boolean; /** Point juridique J14 au dépôt (§ 6.4 : échéanciers par monnaie mobile). */ pointJuridiqueJ14?: 'OUVERT' | 'TRANCHE' };
   status: 'DEMANDE' | 'ACCORDE' | 'REFUSE' | 'DEFAILLANT' | 'SOLDE';
   decision?: { by: string; at: string; motivation: string; granted: boolean };
   installments: { seq: number; dueDate: string; amount: MoneyJSON }[];
@@ -1004,7 +1005,14 @@ export class RecoveryService {
   }
 
   // ── Échéanciers ──
-  planBasis(): { available: boolean; instrumentId?: string; title?: string; demo?: boolean; detail: string } {
+  planBasis(): { available: boolean; instrumentId?: string; title?: string; demo?: boolean; detail: string; pointJuridique?: ReturnType<typeof etatFonction> } {
+    // Registre des points juridiques (J14) : information affichée, aucun échéancier existant n'est désactivé.
+    const pointJuridique = etatFonction(this.ctx, 'ECHEANCIERS_MOBILE_MONEY');
+    const b = this.planBasisFromInstrument();
+    return { ...b, pointJuridique };
+  }
+
+  private planBasisFromInstrument(): { available: boolean; instrumentId?: string; title?: string; demo?: boolean; detail: string } {
     const id = this.planLegalBasisInstrumentId;
     const inst = id ? this.ctx.rules.instrument(id) : undefined;
     if (!inst || (inst.status !== 'EN_VIGUEUR' && inst.status !== 'MODIFIE')) {
@@ -1026,7 +1034,7 @@ export class RecoveryService {
     const plan = this.plans.insert({
       id: this.ids.next('ECH', 6), taxpayerId: o.taxpayerId, obligationId: o.id, requestedBy: user.id, requestedAt: this.nowIso(),
       requestedCount: input.installments, reason: input.reason,
-      legalBasis: { instrumentId: basis.instrumentId!, title: basis.title!, demo: !!basis.demo },
+      legalBasis: { instrumentId: basis.instrumentId!, title: basis.title!, demo: !!basis.demo, pointJuridiqueJ14: basis.pointJuridique?.enAttente === false ? 'TRANCHE' : 'OUVERT' },
       status: 'DEMANDE', installments: [],
     });
     this.ctx.audit.append({ actor: this.actor(user), action: 'installment_plan.requested', resourceType: 'installment_plan', resourceId: plan.id, details: { obligationId: o.id, installments: input.installments } });

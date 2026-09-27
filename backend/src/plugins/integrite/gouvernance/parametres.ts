@@ -97,6 +97,11 @@ export const REGISTRE_DEFAUTS: ParamDefinition[] = [
   R('cles.age_max_jours', 'Âge maximal d’une clé avant rotation recommandée', 'Gestion des clés', 365, 'jours', { min: 30, max: 3650 }),
   // Sécurité, accès et audit (élévation, extraction massive, DLP, appareils, GPS, plafonds, clés d'accès, scellement).
   ...PARAMETRES_SECURITE,
+  // Conservation des données (§ 32) : 0 = durée non fixée ⇒ aucune purge. Durées à fixer par acte (J4, J8).
+  R('conservation.codes_otp_jours', 'Conservation des codes à usage unique et défis de connexion (0 = non fixée : aucune purge)', 'Conservation des données (§ 32)', 0, 'jours', { min: 0, max: 3650 },
+    'Durée à fixer par acte (prescription, archives publiques, J4, J8) ; purge par effacement des champs personnels, après aperçu et approbation à deux personnes.'),
+  R('conservation.sessions_canaux_jours', 'Conservation des sessions USSD / SVI terminées (0 = non fixée : aucune purge)', 'Conservation des données (§ 32)', 0, 'jours', { min: 0, max: 3650 },
+    'Durée à fixer par acte (J8) ; seules les sessions terminées sont concernées.'),
 ];
 
 /** Paramètres anti-fraude du code (constantes importées : la valeur affichée est TOUJOURS celle du code en service). */

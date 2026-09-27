@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { REQUIRED_APPROVALS, SAMPLE_RULES, CURRENCIES, type Approval, type MoneyJSON, type RuleSheet } from '@mosolo/shared';
+import { REQUIRED_APPROVALS, SAMPLE_RULES, CURRENCIES, TAXABLE_EVENT_KINDS, TAXABLE_EVENT_LABELS, type Approval, type MoneyJSON, type RuleSheet } from '@mosolo/shared';
 import { useApp } from '../context';
 import { useApi } from '../hooks/useApi';
 import { useAutosave } from '../hooks/useAutosave';
@@ -15,6 +15,7 @@ import { api, asList, describeError, NetworkError } from '../lib/api';
 import type { UIKey } from '../lib/i18n';
 import { periodicityLabel, revenueCategoryLabel } from '../lib/labels';
 import '../modules/recouvrement/recouvrement.css';
+import { RuleLegalTests, RuleTechnicalView } from '../modules/juridique/RuleJuridiqueTools';
 
 interface HistoryEntry { at: string; action: string; by: string; status: string; detail?: string }
 interface Suspension { reason: string; authority: string; instrumentRef?: string; by: string; at: string; previousStatus: string; liftedAt?: string; liftReason?: string }
@@ -26,6 +27,8 @@ type Rule = RuleSheet & {
   abrogation?: { date: string; instrumentId: string; reason: string; by: string; at: string };
   retroactivity?: { instrumentId: string; article: string; justification: string };
   supersededBy?: string; history?: HistoryEntry[];
+  /** Avertissements de citation (texte abrogé cité, catégorie ACTE_REQUIS). */
+  citationWarnings?: string[];
 };
 interface Instrument { id: string; title: string; status: string; demo?: boolean; abrogatedOn?: string }
 interface RecalcLine {
@@ -322,6 +325,8 @@ function ImpactSimulation({ rule }: { rule: Rule }) {
 
 function RuleDetail({ rule, instruments, onChanged, onNewVersion }: { rule: Rule; instruments: Instrument[]; onChanged: () => void; onNewVersion: (r: Rule) => void }) {
   const { tr, fmtDate, lang, user } = useApp();
+  // Vue juriste (libellés de la fiche) ou vue technique (attributs du registre, § 6.2).
+  const [vue, setVue] = useState<'juriste' | 'technique'>('juriste');
   const rows: [UIKey, ReactNode][] = [
     ['rules.f.code', <span className="mono">{rule.code} · v{rule.version}</span>],
     ['rules.f.category', revenueCategoryLabel(lang, rule.revenueCategory)],
@@ -349,7 +354,16 @@ function RuleDetail({ rule, instruments, onChanged, onNewVersion }: { rule: Rule
     <div className="stack">
       <div className="row-between"><RuleStatusBadge status={rule.status} />{rule.sample && <span className="tag">{tr('rules.sample')}</span>}</div>
       {rule.status === 'A_VERIFIER' && <div className="callout callout-danger"><Icon name="alert" size={18} /><p>{tr('rules.aVerifierExplain')}</p></div>}
-      <dl className="kv kv-dense">{rows.map(([k, v]) => <div key={k}><dt>{tr(k)}</dt><dd>{v}</dd></div>)}</dl>
+      {rule.citationWarnings?.map((w) => <p key={w} className="callout callout-warn small" role="note">{w}</p>)}
+      <div className="seg seg-sm" role="group" aria-label="Vue de la fiche">
+        <button type="button" aria-pressed={vue === 'juriste'} onClick={() => setVue('juriste')}>Vue juriste</button>
+        <button type="button" aria-pressed={vue === 'technique'} onClick={() => setVue('technique')}>Vue technique</button>
+      </div>
+      {vue === 'juriste'
+        ? <dl className="kv kv-dense">{rows.map(([k, v]) => <div key={k}><dt>{tr(k)}</dt><dd>{v}</dd></div>)}</dl>
+        : <RuleTechnicalView rule={rule} />}
+      <h3 className="h-sub">Cas de tests juridiques et contrôle fiscal</h3>
+      <RuleLegalTests rule={rule} onChanged={onChanged} />
       <h3 className="h-sub">{tr('rules.approvals')}</h3>
       <ApprovalTimeline rule={rule} onDone={onChanged} />
       {!rule.sample || rule.status !== 'A_VERIFIER' ? (
@@ -374,6 +388,8 @@ interface NewRule {
   administeringEntity: string; taxableEvent: string; liableParty: string; baseDefinition: string; formula: string; rateTable: string;
   currency: string; rounding: string; periodicity: string; dueRule: string; effectiveFrom: string; beneficiaryAccountAlias: string;
   appealPath: string; sourceVerification: string; changeReason: string;
+  /** Fait générateur typé (§ 6.2), facultatif. */
+  taxableEventKind?: string;
   retroInstrumentId: string; retroArticle: string; retroJustification: string;
 }
 const EMPTY: NewRule = {
@@ -423,9 +439,9 @@ function NewRuleForm({ onCreated, initial }: { onCreated: () => void; initial?: 
       await api('/v1/legal-rules', {
         method: 'POST',
         body: (() => {
-          const { retroInstrumentId, retroArticle, retroJustification, ...rest } = v;
+          const { retroInstrumentId, retroArticle, retroJustification, taxableEventKind, ...rest } = v;
           return {
-            ...rest, legalInstrumentIds: split(v.legalInstrumentIds), articles: split(v.articles), rateTable, exemptions: [], penalties: [],
+            ...rest, ...(taxableEventKind ? { taxableEventKind } : {}), legalInstrumentIds: split(v.legalInstrumentIds), articles: split(v.articles), rateTable, exemptions: [], penalties: [],
             changeReason: v.changeReason || undefined,
             ...(retroInstrumentId ? { retroactivity: { instrumentId: retroInstrumentId, article: retroArticle, justification: retroJustification } } : {}),
           };
@@ -461,6 +477,13 @@ function NewRuleForm({ onCreated, initial }: { onCreated: () => void; initial?: 
       {text('articles', 'rules.f.articles')}
       <div className="field-row">{text('competentAuthority', 'rules.f.authority')}{text('administeringEntity', 'rules.f.entity')}</div>
       <div className="field-row">{text('taxableEvent', 'rules.f.event')}{text('liableParty', 'rules.f.liable')}</div>
+      <div className="field">
+        <label className="label" htmlFor="nr-tek">Fait générateur typé (facultatif)</label>
+        <select id="nr-tek" value={v.taxableEventKind ?? ''} onChange={set('taxableEventKind')}>
+          <option value="">—</option>
+          {TAXABLE_EVENT_KINDS.map((k) => <option key={k} value={k}>{TAXABLE_EVENT_LABELS[k]}</option>)}
+        </select>
+      </div>
       {text('baseDefinition', 'rules.f.base')}
       {text('formula', 'rules.f.formula', { mono: true, hint: 'rules.hint.formula' })}
       {text('rateTable', 'rules.f.rates', { mono: true, area: true, hint: 'rules.hint.rates' })}

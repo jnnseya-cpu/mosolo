@@ -152,6 +152,10 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/chaine/:objectId', element: lazy(() => import('./chaine/Chaine')) },
   { path: '/chaine/obligation/:obligationId', element: lazy(() => import('./chaine/Chaine')) },
 
+  // Registre juridique : points à trancher (J1–J30, § 6.4, annexe B), textes (§ 6.1), fonctions en attente ; données C1–C5
+  { path: '/juridique/points', element: lazy(() => import('./juridique/PointsJuridiques')), nav: { label: 'Points juridiques à trancher', short: 'Points J', icon: 'scale', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R05', 'R06', 'R13', 'R14', 'R15', 'R16', 'R22', 'R23', 'R25', 'R36'] } },
+  { path: '/juridique/donnees', element: lazy(() => import('./juridique/DonneesConservation')), nav: { label: 'Classification et conservation des données', short: 'Données', icon: 'lock', group: 'operations', roles: ['R25', 'R28', 'R26', 'R22', 'R23'] } },
+
   // Paiements : prestataires connectés (BitriPay, KODA)
   { path: '/tresor/prestataires', element: lazy(() => import('./prestataires/Prestataires')), nav: { label: 'Prestataires connectés', short: 'Prestataires', icon: 'phone', group: 'operations', roles: ['R17', 'R18', 'R22', 'R26', 'R27'] } },
 
