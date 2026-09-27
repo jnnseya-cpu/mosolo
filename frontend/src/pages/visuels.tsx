@@ -391,3 +391,20 @@ export function RakaPayHistoriqueVisuel({ orders }: { orders: readonly { status:
     </ChartGrid>
   );
 }
+
+const ETAT_TITRE: Record<string, EtatDef> = {
+  EMIS: { label: 'Émis (valable selon sa période)', tone: 'good' }, SUSPENDU: { label: 'Suspendu', tone: 'warning' }, CONSOMME: { label: 'Consommé', tone: 'neutral' },
+  REVOQUE: { label: 'Révoqué', tone: 'critical' }, ANNULE: { label: 'Annulé', tone: 'neutral' }, REMPLACE: { label: 'Remplacé', tone: 'info' },
+};
+
+/** Pass wewa : répartition par état et frise des débuts de validité (données de démonstration [EXEMPLE]). */
+export function PassVisuel({ passes }: { passes: readonly { id: string; number: string; state: string; validFrom: string; validUntil: string; demo?: boolean }[] }) {
+  const ex = passes.some((p) => p.demo);
+  return (
+    <ChartGrid min={280}>
+      <StatusDistribution framed={false} title="Mes pass par état" unitLabel="pass" example={ex} items={etatsDepuis(ETAT_TITRE, countBy(passes, 'state'), { masquerZeros: true })} />
+      <TimelineStrip framed={false} title="Début de validité de mes pass" example={ex}
+        events={passes.map((p) => ({ id: p.id, at: p.validFrom, category: ETAT_TITRE[p.state]?.label ?? p.state, label: `${p.number} — jusqu’au ${p.validUntil.slice(0, 10)}` }))} />
+    </ChartGrid>
+  );
+}

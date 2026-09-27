@@ -995,3 +995,28 @@ par des propriétés facultatives) :
 | Galerie | `/visualisation/galerie` (rôles internes) | Données réelles, sinon `[EXEMPLE]` |
 
 Tests : `aggregate`, `viz` (frontend). Captures : `docs/captures/visualisation/`.
+
+## I.26 Écrans généraux, terrain, apprentissage et prestataires : visuels et contrôle fonctionnel (27/09/2026)
+
+Ajout par-dessus l'existant (aucun tableau, formulaire ni bouton retiré). Chaque écran reçoit en tête une synthèse
+visuelle construite avec la trousse partagée (§ I.25), **dérivée des données qu'il charge déjà** (aucun droit élargi,
+aucun chiffre inventé ; données de démonstration marquées `[EXEMPLE]` ; devises jamais additionnées).
+
+| Écran | Visuels ajoutés |
+|---|---|
+| Accueil `/` | Catalogue d'événements par catégorie (obligatoires / facultatifs) |
+| Espace contribuable `/espace` | Tuiles (obligations à régler, reste dû **par devise**, quittances, biens) ; obligations et quittances par état ; biens par statut probant et par commune ; frise des échéances |
+| Inscription `/inscription` (guichet R06, R07, R11, R12) | Pièces en attente de revue par type et niveau de vérification, lien vers le registre d'identité |
+| Trésor `/tresor` | Tuiles d'équilibre ; soldes des comptes, un graphique par devise ; demandes de changement du coffre par état |
+| Audit `/audit` | Chaîne de hachage, volume par jour, domaines les plus actifs, issues (réussie / refusée / échec), recours |
+| Terrain `/terrain` | Missions ouvertes, constats vs objectif, file hors ligne par état |
+| Communications, registre des règles, services, verticales, IA, RakaPay | Remise des messages, envois par état, gravité ; règles par état, visas sur 4, devise ; statut juridique des services ; obligations et démarches ; recommandations par agent et niveau d'autonomie ; pass et commandes par état |
+| Terrain : supervision, inspection, PV, sous-traitants, qualité, équipements, réserve, vérification d'agent | Missions et constats par état, constats par jour, **carte des 24 communes**, agents et sous-traitants ; PV et contestations ; rotation des zones (seuil servi, « par défaut — à confirmer ») ; terminaux ; points par agent et réserve par module et par devise ; contrôles mystère agrégés |
+| Apprentissage : espace, certificats, certifications, procédures | Résultats d'épreuve vs seuil (non passés = non mesurés), exigences de certification, couverture par public, compréhension, publication des procédures |
+| Prestataires connectés `/tresor/prestataires` | Ordres par prestataire, webhooks par issue, ordres par état |
+
+Correctifs fonctionnels : relevé bancaire du Trésor contrôlé avant envoi (plus de refus 400 pour une ligne
+incomplète) ; `GET /v1/drafts/:key?siAbsent=vide` (200 `{ draft: null }`, 404 inchangé sans le paramètre) supprime
+l'erreur réseau des formulaires neufs ; `TimelineStrip` sans événement affiche l'état vide. Tests :
+`frontend/test/visuels-ecrans.test.tsx`, `backend/test/brouillons-absents.test.ts`. Détail écran par écran :
+`couverture-visuelle-pages.md`. Captures : `docs/captures/visualisation/pages/`.
