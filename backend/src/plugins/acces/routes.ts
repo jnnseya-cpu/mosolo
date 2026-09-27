@@ -13,6 +13,7 @@ import {
 } from './model.js';
 import { ACCES } from './policy.js';
 import type { AccesService } from './service.js';
+import { isAliasRoute } from '../../core/alias.js';
 
 const roleCode = z.enum(Object.keys(ROLES) as [RoleCode, ...RoleCode[]]);
 const phone = z.string().regex(/^\+?[0-9 -]{9,20}$/, 'numéro de téléphone invalide');
@@ -538,7 +539,8 @@ export function registerAccesRoutes(app: FastifyInstance, ctx: AppContext, svc: 
       });
     }
     // § 13.5 : tout acte d'écriture réussi d'un mandataire est notifié au(x) mandant(s) concerné(s).
-    if (req.user && reply.statusCode < 400 && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    // Route-alias du catalogue des API : la requête relayée vers la route canonique a déjà notifié (même corrélation).
+    if (req.user && reply.statusCode < 400 && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && !isAliasRoute(req)) {
       const route = req.routeOptions.url ?? req.url;
       if (!route.startsWith('/v1/acces/mandates') && !route.startsWith('/v1/auth')) {
         try { svc.notifyMandateActs(req.user, { ...(req.correlationId ? { correlationId: req.correlationId } : {}), method: req.method, route }); } catch { /* la notification n'annule jamais l'acte */ }

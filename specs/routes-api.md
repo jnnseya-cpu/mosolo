@@ -1,12 +1,13 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1012 routes** dans 41 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
 | extension acces | 68 |
 | extension apprentissage | 16 |
 | extension canaux | 46 |
+| extension catalogue-api | 20 |
 | extension chaine | 3 |
 | extension fiscal | 80 |
 | extension ia | 39 |
@@ -189,6 +190,31 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | GET | `/v1/public/short-codes/:code` |
 | POST | `/v1/ussd/sessions` |
 | POST | `/v1/ussd/sessions/:id/input` |
+
+## Extension catalogue-api
+
+| Méthode | Chemin |
+|---|---|
+| POST | `/v1/affectations/scenarios` |
+| GET | `/v1/alertes-fraude` |
+| POST | `/v1/baux` |
+| GET | `/v1/catalogue-api` |
+| POST | `/v1/comptes` |
+| POST | `/v1/constats` |
+| POST | `/v1/identites/verification` |
+| POST | `/v1/liquidations/simulation` |
+| POST | `/v1/missions/synchronisation` |
+| POST | `/v1/objets` |
+| GET | `/v1/objets/:id/obligations` |
+| POST | `/v1/paiements/callback` |
+| POST | `/v1/paiements/ordres` |
+| GET | `/v1/previsions` |
+| GET | `/v1/quittances/:ref/verification` |
+| GET | `/v1/rapprochements/exceptions` |
+| POST | `/v1/recours` |
+| POST | `/v1/reglements/import` |
+| POST | `/v1/regles` |
+| POST | `/v1/regles/:id/publication` |
 
 ## Extension chaine
 

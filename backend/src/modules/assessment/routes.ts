@@ -54,13 +54,20 @@ export function registerAssessmentRoutes(app: FastifyInstance, ctx: AppContext):
     return ctx.assessment.decideBaseOverride(requireUser(req), req.params.id, parse(baseOverrideDecisionSchema, req.body));
   });
 
-  app.get<{ Querystring: { taxpayerId?: string } }>('/v1/obligations', async (req) => {
+  app.get<{ Querystring: { taxpayerId?: string; objectId?: string } }>('/v1/obligations', async (req) => {
     const user = requireUser(req);
     if (!hasAnyGrant(user, 'obligation.read')) {
       throw forbidden('FORBIDDEN', 'Ce rôle ne peut consulter que des agrégats, jamais des obligations nominatives.');
     }
     const taxpayerId = req.query.taxpayerId ?? (user.roles.includes('R30') ? user.taxpayerId : undefined);
-    const candidates = taxpayerId ? ctx.assessment.byTaxpayer(taxpayerId) : ctx.assessment.obligations.all();
+    let candidates = taxpayerId ? ctx.assessment.byTaxpayer(taxpayerId) : ctx.assessment.obligations.all();
+    // Filtre facultatif par objet (catalogue des API : GET /v1/objets/:id/obligations) : refus explicite sans droit sur l'objet.
+    if (req.query.objectId !== undefined) {
+      const obj = ctx.objects.get(req.query.objectId);
+      const ofObject = ctx.assessment.obligations.find((o) => o.objectId === obj.id);
+      authorize(user, 'obligation.read', { taxpayerId: obj.taxpayerId, entities: [...new Set(['DGIPK', ...ofObject.map((o) => o.entity)])], communes: [obj.commune] });
+      candidates = candidates.filter((o) => o.objectId === obj.id);
+    }
     if (taxpayerId) {
       // Refus explicite si le demandeur n'a aucun droit sur ce contribuable.
       const objs = ctx.objects.byTaxpayer(taxpayerId);

@@ -825,3 +825,35 @@ Les points suivants ne relèvent pas du logiciel seul ou attendent un acte, un p
 | Partenaires | Connecteurs BSP/GDS et IFA (AVIA), passerelle bancaire réelle (CALCU), immatriculations nationales | Accords et protocoles avec le pouvoir central et les partenaires |
 | Exploitation | Persistance des états encore volatils (idempotence, brouillons serveur, lots terrain, boîtes in-app), clé de signature QR dédiée, secrets TOTP au coffre de secrets | Mise en production (hébergement souverain) |
 | IA | Registre complet des modèles (évaluations, biais, dérive), OCR des baux, « 12 questions » par action | Gouvernance IA validée par le délégué à la protection des données |
+| Catalogue des API | Simulation de liquidation par le contribuable : le Cahier (ch. 31) cite « Contribuable, agent » pour `POST /v1/liquidations/simulation`, la politique d'accès actuelle réserve la simulation aux rôles de liquidation et de contrôle (R06, R07, R11) ; non élargie | Arbitrage du maître d'ouvrage (élargir au contribuable sur ses seuls objets, ou maintenir) |
+
+## I.21 Catalogue des API : routes françaises du Cahier (chapitre 31)
+
+#### Module « catalogue-api » — 20 routes du Cahier, relais réels vers les routes construites
+
+Les routes du noyau du Cahier (chapitre 31) existent désormais sous leur nom français, **en plus** des routes canoniques (inchangées). Chaque route relaie vers la route canonique par le pipeline complet du serveur (aucune règle métier dupliquée) : en-têtes conservés (`Authorization`, `Idempotency-Key`, `X-Request-Id`, cookies, signatures), corps brut conservé octet pour octet quand il n'est pas transformé (rappels des prestataires, lots signés des terminaux), adresse du client conservée (limitation par poste de la vérification publique), audit sous le même identifiant de corrélation, débit compté une seule fois, notifications au mandant émises une seule fois. Table lisible par machine : `GET /v1/catalogue-api` (méthode, route française, objet, acteur autorisé, contrôles, route canonique).
+
+| # | Route française (Cahier) | Objet | Acteur autorisé | Contrôles | Route canonique relayée |
+|---|---|---|---|---|---|
+| 1 | `POST /v1/comptes` | Créer un compte | Public | Vérification téléphone, anti-doublon, journal | `POST /v1/registrations` |
+| 2 | `POST /v1/identites/verification` | Élever le niveau de vérification | Contribuable, agent | Pièces, double validation N3 | POST /v1/acces/identity/{id}/otp · …/otp/verify · …/proofs · POST /v1/acces/identity-proofs/{id}/review (champ `etape`) |
+| 3 | `POST /v1/objets` | Déclarer un objet | Contribuable, agent | Géolocalisation, catégorie, preuve | `POST /v1/fiscal-objects` |
+| 4 | `POST /v1/baux` | Déclarer un bail | Bailleur, locataire | Cohérence loyer, unité, période | `POST /v1/leases` |
+| 5 | `GET /v1/objets/{id}/obligations` | Obligations applicables | Contribuable, agent habilité | Filtrage par rôle et territoire | GET /v1/obligations?objectId={id} (filtre ajouté) |
+| 6 | `POST /v1/liquidations/simulation` | Simuler une liquidation | Contribuable, agent | Règle publiée uniquement | POST /v1/assessments/calculate (simulate: true imposé ; règle non ACTIVE ⇒ 422 RULE_NOT_PUBLISHED) |
+| 7 | `POST /v1/regles` | Proposer une règle | Juriste | Interdiction de créer, valider et publier par la même personne | `POST /v1/legal-rules` |
+| 8 | `POST /v1/regles/{id}/publication` | Publier une règle | Approbateur | Quatre yeux, texte légal obligatoire | `POST /v1/legal-rules/{id}/approve` |
+| 9 | `POST /v1/paiements/ordres` | Créer un ordre de paiement | Contribuable | Idempotence, référence unique, expiration | POST /v1/obligations/{id}/payment-orders (obligation dans le corps, Idempotency-Key relayée) |
+| 10 | `POST /v1/paiements/callback` | Confirmation prestataire | Partenaire agréé | Signature, anti-rejeu, vérification serveur | POST /v1/providers/{provider}/callbacks (prestataire : en-tête X-Provider ou champ `provider` ; corps brut relayé octet pour octet) |
+| 11 | `POST /v1/reglements/import` | Relevé de compte public | Trésorerie, banque | Contrôle d'intégrité, double validation | `POST /v1/settlements/statements` |
+| 12 | `GET /v1/rapprochements/exceptions` | Files d'exception | Trésorerie, contrôle interne | Lecture seule, journalisée | `GET /v1/reconciliation/exceptions` |
+| 13 | `GET /v1/quittances/{ref}/verification` | Vérifier une quittance | Public | Divulgation minimale | `GET /v1/public/receipts/{code}` |
+| 14 | `POST /v1/missions/synchronisation` | Synchroniser le terrain | Agent | Appareil enregistré, résolution de conflits | POST /v1/field-sync/batches (corps brut signé par le terminal) |
+| 15 | `POST /v1/constats` | Enregistrer un constat | Agent habilité | GPS, photo, horodatage, géorepérage | POST /v1/terrain/missions/{id}/findings (mission dans le corps) |
+| 16 | `POST /v1/recours` | Introduire une contestation | Contribuable | Délai légal, accusé de réception | `POST /v1/appeals` |
+| 17 | `GET /v1/alertes-fraude` | Consulter les alertes | Enquêteur, audit | Aucune action automatique | GET /v1/integrite/alerts (ou GET /v1/security/alerts avec `?source=securite`) |
+| 18 | `GET /v1/tableaux/{profil}` | Données de tableau de bord | Selon rôle | Agrégation conforme au périmètre | GET /v1/tableaux/{profil} (déjà construite ; = GET /v1/pilotage/tableaux/{profil}) |
+| 19 | `GET /v1/previsions` | Scénarios de recettes | Direction, Gouverneur | Hypothèses jointes | `GET /v1/pilotage/scenarios` |
+| 20 | `POST /v1/affectations/scenarios` | Générer des scénarios d'affectation | Finances | Aucune exécution de dépense | `POST /v1/pilotage/projets/recommandations` |
+
+Ajouts au socle : filtre facultatif `objectId` sur `GET /v1/obligations` (refus explicite sans droit sur l'objet, puis filtrage de chaque obligation par rôle et territoire) ; contrôle « règle publiée uniquement » propre à la simulation du catalogue (journalisé `assessment.simulation.refused`). Tests : `backend/test/catalogue-api.test.ts` (16 tests : chaque route, rôle non habilité refusé, même personne refusée à la publication, simulation sans obligation, rejeu idempotent de l'ordre de paiement, signature du rappel vérifiée sur le corps brut et rejeu refusé, vérification publique minimale, débit compté une fois, corrélation d'audit).
