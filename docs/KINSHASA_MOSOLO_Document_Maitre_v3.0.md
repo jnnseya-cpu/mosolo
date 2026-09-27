@@ -6884,7 +6884,7 @@ Chaque verticale ou fonction transverse est un **module d’extension** qui réu
 | Pilotage sur données réelles, indicateurs et transparence | `pilotage` | 15 | 4 | 16 |
 | Système d’exploitation de l’IA (AI OS) | `ia` | 28 | 3 | 19 |
 
-Ensemble : **555 routes** (catalogue : `specs/routes-api.md`), **70 écrans** en plus des 13 écrans du socle, **335 tests backend**, 37 tests d’interface et 16 tests du paquet partagé, tous au vert ; l’application complète (socle et 14 modules) est couverte par un test d’intégration. Chaque écran a été contrôlé à 390 px et 1 440 px sans défilement horizontal.
+Ensemble (27/09/2026) : **616 routes** (catalogue généré et vérifié en intégration continue : `specs/routes-api.md`), 69 écrans de modules en plus des écrans du socle, **491 tests backend**, 73 tests d’interface et 30 tests du paquet partagé, tous au vert ; l’application complète (socle et 17 modules d’extension) est couverte par un test d’intégration et par la persistance sur un vrai PostgreSQL en intégration continue. Chaque écran a été contrôlé à 390 px et 1 440 px sans défilement horizontal.
 
 **Garde-fous vérifiés par les tests, pour tous les modules.** Aucun montant sans règle ACTIVE ; aucune sanction, pénalité, immobilisation, suspension ou blocage automatique (le système constate et propose, une personne habilitée décide avec motif, séparation des tâches) ; fonds uniquement vers les comptes publics du coffre ; aucun encaissement par un agent, un contrôleur, une coopérative ou un sous-traitant ; aucune quittance sur capture d’écran ou SMS ; jamais de double perception d’un même fait générateur (garde du moteur de liquidation et revendication unique par entité) ; vérifications publiques sans nom ni adresse ; l’IA propose, l’humain décide.
 
@@ -7566,3 +7566,110 @@ Tests (`backend/test/parking-field.test.ts`) :
 - **Journalisation** : chaque consultation est tracée (position, précision, rayon, commune, nombre de biens et de rouges montrés), ce qui alimente la surveillance des agents.
 - **Rôles** : agent de terrain, superviseur, contrôleur et sous-traitant de terrain dans leur secteur ; direction, chef de service, audit et anti-fraude partout. Les véhicules (objets mobiles) sont exclus.
 - Tests : `backend/test/fiscal-nearby.test.ts` (dans le secteur, hors secteur, précision insuffisante, rayon plafonné, rôles refusés).
+
+## I.17 Paiement numérique assisté par l’agent : jamais d’espèces
+
+Décision du maître d’ouvrage du 27/09/2026 : **un agent de terrain ne reçoit jamais d’espèces**. Les espèces se paient uniquement dans les lieux prévus (point de paiement agréé, guichet bancaire MOSOLO). En revanche, l’agent peut **faire payer sur place par les canaux numériques**, comme partout dans le système.
+
+**Aucun circuit parallèle.** L’agent émet (ou ré-affiche) la **référence officielle du circuit commun, au nom du seul titulaire** ; c’est le même ordre de paiement que dans l’application, l’USSD ou au guichet :
+
+| Canal proposé par l’agent | Ce que fait l’usager |
+|---|---|
+| Monnaie mobile | Paie depuis **son** téléphone vers le compte public, avec la référence |
+| USSD | Compose le code USSD officiel sur **son** téléphone et saisit la référence (tout téléphone, sans internet) |
+| QR | Scanne le QR du prestataire connecté avec **son** application ; montant et compte public déjà renseignés |
+| Carte | Paie par **sa** carte sur un terminal agréé ou dans l’application |
+| Espèces | **Refusées à l’agent** (`CASH_NOT_ALLOWED_FOR_AGENT`) : l’usager va dans un point agréé ou au guichet bancaire, avec la même référence |
+
+**Garde-fous.**
+
+- Le montant est le **solde de l’obligation** : il ne se saisit pas et ne se négocie pas.
+- L’agent ne touche ni argent, ni téléphone, ni carte, ni code secret de l’usager ; l’ordre appartient au titulaire ; le bénéficiaire est le compte public.
+- **Sur place** : position GPS précise (100 m au plus) ; pour un bien fixe, 300 m au plus du bien ; **dans le secteur** de l’agent.
+- **Une seule référence active** par obligation ; une obligation déjà couverte par un paiement confirmé n’est plus proposée.
+- La **quittance** part à l’usager dès la confirmation signée du prestataire ; l’agent voit « Paiement confirmé ».
+- Chaque référence assistée est **journalisée** (agent, position, distance au bien, canal, référence). La commission reste régie par § I.15.
+
+Où : pénalités au contrôle du stationnement, bandeau des pénalités impayées, biens ambre ou rouges de « Autour de moi », scan d’une plaque de verticale, supports publicitaires aux droits impayés. Routes : `GET /v1/agents/assist/payables`, `POST /v1/agents/assist/payment-orders`, `GET /v1/agents/assist/payment-orders/:reference`. Tests : `backend/test/assisted-payment.test.ts`.
+
+## I.18 KIN PUB CONTROL sur le terrain : « Autour de moi », enseignes, commerces, publicité mobile
+
+Construit **dans le module de publicité existant**. Les supports restent rattachés au registre fiscal une fois leur exploitant identifié.
+
+**Tout ce qui s’affiche est assujetti.** Chaque support porte son **emplacement** :
+
+| Emplacement | Exemples | Contrôle |
+|---|---|---|
+| Support dédié | Panneau, écran, bâche, **banderole** | Sur place (position) |
+| Façade ou porte d’un commerce | **Enseigne** du commerce | Sur place, lié à l’établissement enregistré |
+| Devant un commerce | **Chevalet**, kakémono sur le trottoir | Sur place, lié à l’établissement |
+| Véhicule ou objet mobile | **Publicité sur véhicule** : voiture, taxi, bus, camion, moto, tricycle, remorque | **Par la plaque du véhicule**, où qu’il soit |
+
+**« Autour de moi » de l’inspecteur** : sur place, dans son secteur, position GPS précise ; supports en **rouge** (affiché sans autorisation, autorisation expirée, droits impayés), **ambre** (demande en cours, échéance proche, barème non publié), **vert** (autorisé et à jour) ; commerces enregistrés **sans enseigne déclarée, à vérifier** (jamais présumés en infraction), avec constat pré-rempli. **Publicité mobile** : onglet « Véhicules », plaque saisie ou lue à la caméra. Droits impayés : « Faire payer (numérique) » (§ I.17).
+
+**Tarifs : rien n’est inventé.** Supports fixes, enseignes et chevalets : règle existante (taxe au m², fictive de démonstration), à confirmer par l’acte pour les enseignes. Publicité sur véhicule : règle distincte ; sans acte publié, l’autorisation est « acte requis » **sans montant**, puis liquidée en double validation dès que la règle devient active.
+
+Routes : `GET /v1/publicite/nearby`, `GET /v1/publicite/vehicles/:plate`. Tests : `backend/test/publicite-terrain.test.ts`.
+
+## I.19 Verrouillage de la fraude et des fuites financières
+
+Demande du maître d’ouvrage du 27/09/2026 : « que la fraude et les fuites financières soient complètement verrouillées ». Six revues de code puis trois revues adverses (flux de l’argent de bout en bout ; fraude interne, agents et collusion ; fuites par les données, les réductions, le rapprochement et l’audit) ont été menées sur l’ensemble du système. Chaque chemin trouvé a été fermé (**bloqué**) ou rendu visible (**détecté** : alerte, exception, signal d’examen), et un test automatisé **rejoue l’attaque** pour prouver qu’elle échoue. Aucun système n’est inviolable : l’objectif est qu’aucune personne seule ne puisse détourner, effacer ou réduire une recette, et qu’aucune collusion ne passe inaperçue.
+
+**Principes appliqués partout.**
+
+- **Une personne physique, un compte de travail** : chaque compte est lié à l’empreinte (jamais le numéro en clair) de la pièce d’identité ; un second compte pour la même personne est refusé et signalé ; la séparation des tâches (auteur ≠ vérificateur ≠ décideur) s’applique **par personne**, pas par compte.
+- **Conflit d’intérêts** : nul ne vérifie, ne décide ni n’accorde ce qui profite à un contribuable auquel il est lié.
+- **Jamais d’espèces à un agent** : un opérateur de point agréé (R32) ne peut détenir aucun rôle d’agent public ; les agents font payer uniquement par canal numérique, au nom du titulaire, vers le compte public (§ I.17).
+- **Montants jamais saisis** : un montant vient d’une règle ACTIVE certifiée ; les taux certifiés ne peuvent pas être remplacés par une donnée de la requête.
+- **Double validation** pour toute opération qui touche l’argent ou les recettes : remboursement, restitution, contrepassation, contre-écriture, changement de compte bénéficiaire (avec veto pendant le délai de carence), suspension ou levée d’une règle, remise, admission en non-valeur, correction à la baisse, correction d’un objet, dérogation de clôture, rapprochement d’un versement de point agréé.
+
+**Menaces et contrôles.**
+
+| Menace | Contrôle | Nature |
+|---|---|---|
+| Confirmation de paiement forgée (secret public) | Secrets des prestataires obligatoires hors démonstration ; valeurs de démonstration refusées ; webhooks désactivés sans secret réel | Bloqué |
+| Données de démonstration en production | Aucun amorçage hors démonstration ; installation par fichier d’amorçage qui n’écrase jamais un compte | Bloqué |
+| Référence expirée, double paiement, paiement sur obligation annulée | Référence expirée close ; paiement tardif ou en double porté en compte d’attente, sans quittance, remboursable une seule fois | Bloqué + détecté |
+| Montant arrondi à la baisse (149,995) | Montants à plus de décimales que la devise refusés | Bloqué |
+| Doublon remboursé deux fois | Ligne de relevé rapprochée du paiement non affecté ; une restitution par unité d’argent | Bloqué |
+| Crédit bancaire orphelin ou règlement manquant « classé » | Exception d’argent close seulement par suspens, rapprochement ou opération exécutée, avec justificatif ; créances prestataires vieillies, alerte à 3 jours, clôture bloquée | Bloqué + détecté |
+| Contre-écriture qui efface une recette | Interdite sur les écritures liées à un paiement, une obligation ou un suspens ; contrôle de cohérence grand livre ↔ états métier avec alerte | Bloqué + détecté |
+| Remboursement vers un autre compte | Destination = instrument d’origine seulement ; référence du remboursement et pièce obligatoires ; troisième approbation au-delà d’un seuil | Bloqué |
+| Détournement du compte bénéficiaire | Double validation, délai de carence avec veto, version du compte enregistrée sur chaque ordre et chaque ligne de relevé | Bloqué + détecté |
+| Espèces gardées par un point agréé, faux bordereau | Délai compté depuis la fin de la journée de caisse ; versement « déclaré » jusqu’au rapprochement bancaire en double validation ; bordereau unique ; contrôle horaire des retards | Bloqué + détecté |
+| Espèces sur une obligation annulée | Référence close à l’annulation ; encaissement refusé | Bloqué |
+| Point suspendu rétabli par complicité | Rétablissement et rejet de proposition en double validation | Bloqué |
+| Dette réduite à zéro par une seule personne | Remise calculée depuis le taux certifié, plafond cumulé sur toute la chaîne, instruction puis décision par des personnes distinctes ; mise à zéro seulement par admission en non-valeur, jamais « soldée » | Bloqué |
+| Réclamation, correction de déclaration, exonération complaisantes | Montant justifié, instructeur ≠ décideur, conflit d’intérêts, taux plafonné par la règle, double validation des baisses | Bloqué |
+| Rang de localité ou base d’imposition minorés | Rang déclaré provisoire, confirmé par une autre personne, re-liquidation ; base inférieure aux données connues soumise à approbation | Bloqué + détecté |
+| Plan d’échelonnement abandonné | Défaut proposé automatiquement, alerte, obligation en retard à la dernière échéance | Détecté |
+| Suspension d’un barème pour « oublier » des pénalités | Suspension et levée en double validation ; alerte si courte ou si des décisions ont eu lieu pendant la suspension | Bloqué + détecté |
+| Commission sur de faux constats ou des paiements spontanés | Commission seulement sur dossiers retenus et constats validés avec photo ; présence GPS et délai de grâce ; premier contrôle classé à l’heure serveur ; attribution figée après rapprochement | Bloqué |
+| Agent qui multiplie les constats | Signaux comparés aux pairs, alertes, contre-vérification aléatoire de 5 % des constats retenus | Détecté |
+| Journal d’audit tronqué ou sauvegarde ancienne restaurée | Tête de la chaîne ancrée hors base ; démarrage refusé si la chaîne est plus courte ou différente ; restauration tracée, retour arrière sur confirmation explicite ; déclencheur d’ajout seul non contournable | Bloqué + détecté |
+| Réductions dispersées, invisibles | Rapport des réductions de recettes (brut, réductions par type et par décideur, net, recouvré, rapproché au centime) ; alertes de concentration ; recettes potentielles non liquidées (sans montant inventé) | Détecté |
+
+**Mise en production : paramètres obligatoires.** Hors démonstration, le serveur refuse de démarrer sans : secrets des prestataires (`MOSOLO_PROVIDER_SECRET_*`), clés de signature des quittances et des clôtures (`MOSOLO_RECEIPT_SIGNING_KEY`, `MOSOLO_CLOSURE_SIGNING_KEY`), clé et ancre de l’audit (`MOSOLO_AUDIT_HMAC_KEY`, `MOSOLO_AUDIT_ANCHOR_PATH`), adresse publique (`MOSOLO_PUBLIC_URL`) et origines autorisées (`MOSOLO_CORS_ORIGINS`). Le détail figure dans `backend/README.md`.
+
+**Risques résiduels (organisationnels, hors logiciel).** Collusion de trois personnes habilitées ou plus ; fausses pièces d’identité à l’enrôlement ; complicité au sein d’un prestataire de paiement ou d’une banque ; accès physique aux serveurs. Parades : rotation des agents, contrôles mystère, inspection des services, revue des alertes par l’audit interne, ancrage externe de l’audit conservé par une autorité distincte, contrats et audits des prestataires. Les seuils (délais, montants, pourcentages) sont des **paramètres de démonstration à valider par l’inspection des services et le Trésor**.
+
+Tests : `backend/test/{tresor-fuites,fraude-agents,reductions,reductions-gouvernance,plateforme-integrite,securite,money-path,commissions-terrain}.test.ts` et ajouts dans `acces`, `canaux`, `titres`.
+
+## I.20 Ce qui reste ouvert
+
+Les points suivants ne relèvent pas du logiciel seul ou attendent un acte, un protocole ou une convention ; ils sont signalés dans les écrans concernés et ne produisent aucun effet financier tant qu’ils ne sont pas levés.
+
+| Domaine | Point ouvert | Condition de levée |
+|---|---|---|
+| Commission et surveillance | Arrêté fixant le taux de 10 % ; validation des seuils de surveillance des constats | Arrêté du Gouverneur ; avis de l’inspection des services |
+| Publicité | Barème de la publicité sur véhicule ; régime des enseignes (taxe au m² ou barème propre) | Actes de l’Hôtel de Ville et fiches de règles certifiées |
+| Contrôles anti-fraude | Validation des seuils (remboursement, alertes, grâce de stationnement, rayon de présence, contre-vérification) et des taux maximaux de remise par règle ; table certifiée des rangs de localité | Inspection des services, Trésor, acte fixant les rangs |
+| Tarifs et assiettes | Tarifs réels du pass wewa, du stationnement, des titres de transport, de la publicité, des redevances AVIA et portuaires, de la contribution plastique | Actes J21, J23, J24, J25, J28 et fiches de règles certifiées (quatre visas) |
+| Quitus fiscal | Effet bloquant sur les mutations et services | Acte J6 ; le quitus reste informatif jusque-là |
+| Répartition | Parts légales éventuelles entre entités | Lecture de l’OL 18/004 et actes provinciaux ; aucune clé paramétrée |
+| Identité | Clés d’accès FIDO2 (passkeys), récupération de compte | Raccordement WebAuthn ; procédure de récupération validée |
+| Canaux | Passerelles USSD, SMS, SVI et courrier réelles ; code court et numéro vert ; compte WhatsApp Business certifié et fournisseur contractualisé ; validation des textes lingala de l’assistant | Conventions opérateurs (J29), contrat du fournisseur WhatsApp, avis de l’autorité de protection des données |
+| Données géographiques | Géométries PostGIS, référentiel officiel des codes de communes, cartographie de la population ; installation du fond OSM de Kinshasa sur le serveur de la Ville (`tools/maps/construire-tuiles-kinshasa.sh`) et complétion des quartiers | Protocoles de données et référentiel arrêté ; accès réseau à `build.protomaps.com` ou `download.geofabrik.de` depuis le serveur |
+| Partenaires | Connecteurs BSP/GDS et IFA (AVIA), passerelle bancaire réelle (CALCU), immatriculations nationales | Accords et protocoles avec le pouvoir central et les partenaires |
+| Exploitation | Persistance des états encore volatils (idempotence, brouillons serveur, lots terrain, boîtes in-app), clé de signature QR dédiée, secrets TOTP au coffre de secrets | Mise en production (hébergement souverain) |
+| IA | Registre complet des modèles (évaluations, biais, dérive), OCR des baux, « 12 questions » par action | Gouvernance IA validée par le délégué à la protection des données |
