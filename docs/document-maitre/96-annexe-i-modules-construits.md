@@ -977,3 +977,21 @@ droits. Rapport, preuves et fiches de défauts : `docs/production-readiness.md`,
 Tests : `concurrence-adverse`, `fuzz-ecritures`, `entrees-metier-hostiles`, `televersements-adverses`,
 `injection-pannes`, `notifications-adverses`, `droits-des-personnes`, `sessions-abus`, `menu-droits`,
 `limitation-debit-site` (backend) ; `accessibilite-clavier`, `labels-nav` (frontend).
+
+## I.25 Trousse de visualisation partagée (27/09/2026)
+
+Demande du maître d'ouvrage : une plateforme très visuelle, du Gouverneur à chaque écran. Ajouts, sans rien retirer
+(palette, `ChartCard`, `useChartColors`, `ChartTooltip` et tous les graphiques existants conservés ; `ChartCard` étendue
+par des propriétés facultatives) :
+
+| Ajout | Emplacement | Règle |
+|---|---|---|
+| Trousse de graphiques : `KpiTile`/`KpiGrid`, `BarChartViz`, `StackedBarViz`, `LineAreaViz`, `DonutViz`, `GaugeMeter`/`ProgressMeter`, `StatusDistribution`, `HeatGrid`/`MatrixHeat`, `LadderFunnel`, `Sparkline`/`TrendBadge`, `TimelineStrip`, `ChartGrid` | `frontend/src/components/viz/` | Français, clair et sombre sélectionnés, 360 px d'abord, infobulle (survol, toucher, clavier), vue tableau, légende dès 2 séries, jamais la couleur seule, un seul axe, états chargement / vide / erreur / non mesuré |
+| Agrégations pures | `frontend/src/lib/aggregate.ts` | Comptages, sommes exactes par devise (jamais de mélange), contre-valeur seulement avec un taux affiché, jours / semaines / mois de Kinshasa, « Autres », parts, tendances |
+| Rampes validées (séquentielle sombre, ordinale des six états) | `frontend/src/lib/palette.ts` | Validation consignée dans la charte |
+| Charte de visualisation | `docs/document-maitre/charte-visualisation.md` | Règles, résultats du validateur, catalogue avec exemples |
+| Poste du Gouverneur visuel | `/poste-de-decision` | Structure des maquettes conservée ; tuiles + courbes (bloc 2), six états, vignette des communes en carte de chaleur |
+| Tableau du Gouverneur visuel | `/gouverneur` | Tuiles, tendances, six états, jauge, carte de chaleur, anneaux, série ; graphiques existants conservés |
+| Galerie | `/visualisation/galerie` (rôles internes) | Données réelles, sinon `[EXEMPLE]` |
+
+Tests : `aggregate`, `viz` (frontend). Captures : `docs/captures/visualisation/`.

@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
@@ -14,22 +14,26 @@ import { ErrorState, ExampleNotice, Loading } from '../components/States';
 import { Icon } from '../components/Icon';
 import { api, ApiError, describeError, NetworkError } from '../lib/api';
 import { compact, convertIndicative, plotValue } from '../lib/money';
-import { SEQ_NAVY } from '../lib/palette';
 import { normalizeGovernor, type GovView } from '../lib/normalize';
 import type { UIKey } from '../lib/i18n';
-import { COMMUNE_GRID, DEMO_ACTIONS, DEMO_GOVERNOR_RAW } from '../demo/governor';
+import { DEMO_ACTIONS, DEMO_GOVERNOR_RAW } from '../demo/governor';
 import { Link } from 'react-router-dom';
 import {
   DrillChart, ExportButton, FiltersBar, LadderChart, qs, ScopeLine, SeriesChart,
   type Amounts, type Contested, type DrillResult, type Filters, type Kpi, type LadderLevel, type Scope, type SeriesPoint,
 } from '../modules/pilotage/shared';
 import '../modules/pilotage/pilotage.css';
+import {
+  ChartGrid, DonutViz, fmtCompact, GaugeMeter, HeatGrid, KpiGrid, KpiTile, LadderFunnel, LineAreaViz, sixEtatsFromLadder, StatusDistribution,
+} from '../components/viz';
+import { countBy, periodLabel } from '../lib/aggregate';
+import { CATEGORY_LABELS, CHANNEL_LABELS, KPI_STATUS, kpiTone, useFmt } from '../modules/pilotage/shared';
 
 /** Tableau du Gouverneur calculé sur les données RÉELLES du socle (module pilotage). */
 interface LiveGovernor {
   generatedAt: string; scope: Scope; ladder: LadderLevel[]; contested: Contested; kpis: Kpi[]; criticalAlerts: number;
   tiles: { today: string; confirmed: Record<'today' | 'yesterday', Amounts>; settled: Record<'today' | 'yesterday', Amounts>; reconciled: Record<'today' | 'yesterday', Amounts> };
-  byCommune: DrillResult; byCategory: DrillResult; byEntity: DrillResult; series: SeriesPoint[];
+  byCommune: DrillResult; byCategory: DrillResult; byEntity: DrillResult; byChannel?: DrillResult; series: SeriesPoint[];
 }
 
 /** Données réelles ; null si le module de pilotage n'est pas servi (serveur injoignable ou module absent). */
@@ -56,17 +60,26 @@ async function loadDashboard(): Promise<{ d: GovView; fallback: boolean }> {
   }
 }
 
-function Tile({ label, value, sub, tone, toneLabel }: { label: string; value: string; sub?: string; tone?: Tone; toneLabel?: string }) {
+/**
+ * Tuile d'indicateur du tableau (ancienne tuile « kpi ») : désormais une KpiTile de la trousse de visualisation, avec
+ * le même libellé, la même valeur, le même état et la même ligne secondaire, plus tendance et courbe miniature.
+ */
+function Tile({ label, value, sub, tone, toneLabel, spark, sparkLabels, delta, hero }: {
+  label: string; value: string; sub?: string; tone?: Tone; toneLabel?: string; spark?: number[]; sparkLabels?: string[];
+  delta?: { current: number | null; previous: number | null; versus: string }; hero?: boolean;
+}) {
   return (
-    <div className="kpi">
-      <p className="kpi-label">{label}</p>
-      <p className="kpi-value">{value}</p>
-      <div className="kpi-foot">
-        {tone && toneLabel && <StatusBadge tone={tone} label={toneLabel} />}
-        {sub && <span className="kpi-sub">{sub}</span>}
-      </div>
-    </div>
+    <KpiTile label={label} value={value === '—' ? null : value} reason="Pas encore calculable" sub={sub} hero={hero}
+      state={tone && toneLabel ? { label: toneLabel, tone } : undefined}
+      delta={delta ? { ...delta, format: fmtCompact } : undefined}
+      spark={spark ? { values: spark, labels: sparkLabels, label: `${label} — 12 derniers mois (contre-valeur CDF)`, format: fmtCompact } : undefined} />
   );
+}
+
+/** Cible numérique lue dans le libellé de cible servi (« ≥ 95 % ») ; aucune cible inventée. */
+function targetOf(label: string | undefined): { value: number; better: 'HAUSSE' | 'BAISSE' } | null {
+  const m = label ? /([≥≤<>])\s*(\d+(?:[.,]\d+)?)\s*%/.exec(label) : null;
+  return m ? { value: Number(m[2]!.replace(',', '.')), better: m[1] === '≥' || m[1] === '>' ? 'HAUSSE' : 'BAISSE' } : null;
 }
 
 /** Étiquette de valeur en bout de barre (une ligne, chiffres tabulaires). */
@@ -97,6 +110,11 @@ export default function Governor() {
   }, [user?.id]);
   const [filters, setFilters] = useState<Filters>({});
   const live = useApi(() => loadLive(filters), [user?.id, JSON.stringify(filters)]);
+  // Mois par mois, tous les niveaux (dont le réglé) : courbes miniatures des tuiles.
+  const monthly = useApi(async () => {
+    try { return await api<DrillResult>(`/v1/pilotage/drill/month${qs({ ...filters })}`); } catch { return null; }
+  }, [user?.id, JSON.stringify(filters)]);
+  const pf = useFmt();
   const [disp, setDisp] = useState<Disp>('CDF');
   const [sort, setSort] = useState<'value' | 'alpha'>('value');
   const [allCommunes, setAllCommunes] = useState(false);
@@ -149,7 +167,18 @@ export default function Governor() {
   const scenColors = [cat[0]!, cat[1]!, cat[2]!];
   const L = live.data ?? null;
   const cdfOf = (a?: Amounts) => (a?.consolidatedCdf ? bigMoney(a.consolidatedCdf) : '—');
+  /** Contre-valeur CDF indicative d'un agrégat, pour la géométrie des graphiques uniquement. */
+  const num = (a?: Amounts | null): number | null => (a?.consolidatedCdf ? plotValue(a.consolidatedCdf) : null);
+  const months = (monthly.data?.rows ?? []).map((r) => r.key).sort().slice(-12);
+  const sparkMonths = months.length >= 2 ? months : (L?.series ?? []).map((m) => m.month);
+  const sparkLabels = sparkMonths.map((m) => periodLabel(m, 'month'));
+  const sparkOf = (level: 'confirmed' | 'settled' | 'reconciled'): number[] | undefined => {
+    if (months.length >= 2) return months.map((m) => num(monthly.data!.rows.find((r) => r.key === m)?.values[level]) ?? 0);
+    if (level === 'settled' || !L?.series.length) return undefined;
+    return L.series.map((m) => num(m[level]) ?? 0);
+  };
   const liveRecon = L?.kpis.find((k) => k.code === 'RAPPROCHEMENT_J1');
+  const reconTarget = targetOf(liveRecon?.targetLabel);
   const liveReconTone: Tone = !liveRecon || liveRecon.value === null ? 'neutral' : liveRecon.status === 'ATTEINTE' ? 'good' : Number(liveRecon.value) >= 90 ? 'warning' : 'critical';
 
   return (
@@ -179,14 +208,38 @@ export default function Governor() {
               <ExportButton kind="echelle" params={{ ...filters }} label="Rapport signé" />
             </span>
           </div>
-          <div className="kpi-row">
-            <Tile label={tr('governor.confirmedToday')} value={cdfOf(L.tiles.confirmed.today)} sub={`Veille : ${cdfOf(L.tiles.confirmed.yesterday)} · ${L.tiles.confirmed.today.count ?? 0} paiement(s)`} />
-            <Tile label={tr('governor.settled')} value={cdfOf(L.tiles.settled.today)} sub={`Veille : ${cdfOf(L.tiles.settled.yesterday)}`} />
-            <Tile label={tr('governor.reconciled')} value={cdfOf(L.tiles.reconciled.today)} sub={`Veille : ${cdfOf(L.tiles.reconciled.yesterday)}`} />
+          <KpiGrid max={5} label="Chiffres du jour">
+            <Tile hero label={tr('governor.confirmedToday')} value={cdfOf(L.tiles.confirmed.today)} sub={`Veille : ${cdfOf(L.tiles.confirmed.yesterday)} · ${L.tiles.confirmed.today.count ?? 0} paiement(s)`}
+              delta={{ current: num(L.tiles.confirmed.today), previous: num(L.tiles.confirmed.yesterday), versus: 'vs veille' }} spark={sparkOf('confirmed')} sparkLabels={sparkLabels} />
+            <Tile label={tr('governor.settled')} value={cdfOf(L.tiles.settled.today)} sub={`Veille : ${cdfOf(L.tiles.settled.yesterday)}`}
+              delta={{ current: num(L.tiles.settled.today), previous: num(L.tiles.settled.yesterday), versus: 'vs veille' }} spark={sparkOf('settled')} sparkLabels={sparkLabels} />
+            <Tile label={tr('governor.reconciled')} value={cdfOf(L.tiles.reconciled.today)} sub={`Veille : ${cdfOf(L.tiles.reconciled.yesterday)}`}
+              delta={{ current: num(L.tiles.reconciled.today), previous: num(L.tiles.reconciled.yesterday), versus: 'vs veille' }} spark={sparkOf('reconciled')} sparkLabels={sparkLabels} />
             <Tile label={tr('governor.reconRate')} value={liveRecon?.value != null ? `${Number(liveRecon.value).toLocaleString(nloc)} %` : '—'}
               tone={liveReconTone} toneLabel={liveRecon?.value == null ? 'Pas encore calculable' : liveRecon.status === 'ATTEINTE' ? tr('gov.onTarget') : tr('gov.belowTarget')} sub={liveRecon?.targetLabel ?? ''} />
             <Tile label={tr('governor.criticalAlerts')} value={String(L.criticalAlerts)} tone={L.criticalAlerts > 0 ? 'critical' : 'good'} toneLabel={tr(L.criticalAlerts > 0 ? 'gov.toHandle' : 'gov.noAlert')} />
-          </div>
+          </KpiGrid>
+          <ChartGrid min={300} label="Vue d’ensemble en graphiques">
+            <LadderFunnel className="viz-span-2" title="Les six états de la recette" subtitle="Potentiel → disponible — emboîtés, jamais additionnés ; montants par devise"
+              steps={sixEtatsFromLadder(L.ladder, pf.amounts)} note="Barres : contre-valeur indicative CDF (taux du jour). Un état non mesuré est hachuré et motivé." />
+            {reconTarget && liveRecon ? (
+              <GaugeMeter title={liveRecon.label} subtitle={liveRecon.question ?? 'Paiements rapprochés à J+1'} value={liveRecon.value === null ? null : Number(liveRecon.value)} unit="%"
+                target={reconTarget.value} better={reconTarget.better} targetLabel={liveRecon.targetLabel} tone={liveReconTone}
+                toneLabel={liveRecon.value == null ? 'Pas encore calculable' : KPI_STATUS[liveRecon.status]} reason={liveRecon.detail ?? 'Pas encore calculable'} />
+            ) : null}
+            <HeatGrid className="viz-span-2" title="Rapproché par commune" subtitle="Fait générateur — contre-valeur indicative CDF ; disposition schématique ouest → est"
+              measureLabel="Rapproché (contre-valeur CDF)" format={fmtCompact} unit="CDF" unmeasuredReason="aucun paiement rapproché rattaché à cette commune"
+              cells={L.byCommune.rows.filter((r) => r.key !== 'NON_ATTRIBUE').map((r) => ({ commune: r.key, value: num(r.values.reconciled), detail: `Liquidé : ${cdfOf(r.values.assessed)} · confirmé : ${cdfOf(r.values.confirmed)}` }))} />
+            <StatusDistribution title="Indicateurs par état" subtitle={`${L.kpis.length} indicateurs du tableau de bord`} unitLabel="indicateurs"
+              items={countBy(L.kpis, 'status').map((r) => ({ key: r.key, label: KPI_STATUS[r.key as Kpi['status']] ?? r.key, count: r.count, tone: kpiTone({ status: r.key } as Kpi) }))} />
+            <DonutViz title="Liquidé par catégorie" subtitle="Part de chaque catégorie — contre-valeur indicative CDF" centerLabel="CDF liquidés" format={fmtCompact}
+              slices={L.byCategory.rows.map((r) => ({ key: r.key, label: CATEGORY_LABELS[r.key] ?? r.key, value: num(r.values.assessed) ?? 0 }))} />
+            <DonutViz title="Encaissé par canal" subtitle="Paiements confirmés — contre-valeur indicative CDF" centerLabel="CDF encaissés" format={fmtCompact}
+              slices={L.byChannel?.rows.map((r) => ({ key: r.key, label: CHANNEL_LABELS[r.key] ?? r.key, value: num(r.values.confirmed) ?? 0 })) ?? []} />
+            <LineAreaViz className="viz-span-2" title="Encaissé et rapproché, mois par mois" subtitle="12 derniers mois — contre-valeur indicative CDF" granularity="month" area format={fmtCompact}
+              series={[{ key: 'confirmed', label: 'Encaissé (confirmé)' }, { key: 'reconciled', label: 'Rapproché' }]}
+              points={L.series.map((m) => ({ date: m.month, values: { confirmed: num(m.confirmed), reconciled: num(m.reconciled) } }))} />
+          </ChartGrid>
           <div className="dash-grid" style={{ marginBottom: 24 }}>
             <LadderChart className="span-7" levels={L.ladder} contested={L.contested} />
             <DrillChart className="span-5" drill={L.byCommune} title="Par commune (fait générateur)" subtitle="Liquidé, confirmé et rapproché — contre-valeur indicative CDF" />
@@ -201,14 +254,14 @@ export default function Governor() {
         <>
           {ex && <ExampleNotice text={fallback ? tr('gov.fallback') : tr('common.example')} />}
 
-          <div className="kpi-row">
-            <Tile label={tr('governor.confirmedToday')} value={bigMoney(t.confirmedToday)} sub={t.delta ? tr('gov.vsYesterday', { n: /%/.test(t.delta) ? t.delta : `${t.delta.replace('.', ',')} %` }) : undefined} />
+          <KpiGrid max={5} label="Chiffres du jour (exemple)">
+            <Tile hero label={tr('governor.confirmedToday')} value={bigMoney(t.confirmedToday)} sub={t.delta ? tr('gov.vsYesterday', { n: /%/.test(t.delta) ? t.delta : `${t.delta.replace('.', ',')} %` }) : undefined} />
             <Tile label={tr('governor.settled')} value={bigMoney(t.settled)} sub={tr('gov.ofConfirmed', { n: pct(t.settled, t.confirmedToday) })} />
             <Tile label={tr('governor.reconciled')} value={bigMoney(t.reconciled)} sub={tr('gov.ofSettled', { n: pct(t.reconciled, t.settled) })} />
             <Tile label={tr('governor.reconRate')} value={rate !== undefined ? `${rate.toLocaleString(nloc)} %` : '—'}
               tone={reconTone} toneLabel={tr(reconTone === 'good' ? 'gov.onTarget' : 'gov.belowTarget')} sub={tr('gov.target', { n: t.reconTarget })} />
             <Tile label={tr('governor.criticalAlerts')} value={String(t.criticalAlerts)} tone={alertTone} toneLabel={tr(alertTone === 'good' ? 'gov.noAlert' : 'gov.toHandle')} />
-          </div>
+          </KpiGrid>
 
           {live.error ? <p className="small err" role="alert">Données réelles indisponibles : {describeError(live.error).message}</p> : null}
         </>
@@ -275,30 +328,9 @@ export default function Governor() {
           <p className="small muted chart-note">{tr('gov.ladderNote')}</p>
         </ChartCard>}
 
-        <section className="panel span-5" aria-labelledby="heat-title">
-          <header className="panel-head">
-            <div><h2 className="panel-title" id="heat-title">{tr('gov.heatTitle')}</h2><p className="panel-sub">{tr('gov.heatSub')}</p></div>
-            {ex && <span className="ribbon">{tr('common.exampleShort')}</span>}
-          </header>
-          <ul className="heat-grid" aria-label={tr('gov.heatTitle')}>
-            {d.communes.map((c) => {
-              const pos = COMMUNE_GRID[c.name];
-              const v = c.compliance ?? 0;
-              const step = Math.min(SEQ_NAVY.length - 1, Math.floor(v / (100 / SEQ_NAVY.length)));
-              return (
-                <li key={c.name} className="heat-tile" style={{ background: SEQ_NAVY[step], color: step >= 3 ? '#fff' : '#111', ...(pos ? { '--gc': pos[0], '--gr': pos[1] } : {}) } as CSSProperties}
-                  title={`${c.name} — ${v} %`}>
-                  <span className="heat-name">{c.name}</span>
-                  <span className="heat-val">{c.compliance !== undefined ? `${Math.round(v)} %` : '—'}</span>
-                </li>
-              );
-            })}
-          </ul>
-          <div className="heat-legend" aria-hidden="true">
-            <span>0 %</span>{SEQ_NAVY.map((c) => <i key={c} style={{ background: c }} />)}<span>100 %</span>
-          </div>
-          <p className="small muted">{tr('gov.heatNote')}</p>
-        </section>
+        <HeatGrid className="span-5" title={tr('gov.heatTitle')} subtitle={tr('gov.heatSub')} example={ex} measureLabel={tr('gov.compliance')} unit="%" domain={[0, 100]}
+          format={(v) => String(Math.round(v))} note={tr('gov.heatNote')} unmeasuredReason="taux de conformité non servi pour cette commune"
+          cells={d.communes.map((c) => ({ commune: c.name, value: c.compliance ?? null, detail: `${tr('explain.amount')} : ${formatMoney(dispMoney(c.amount), { locale: loc })}` }))} />
 
         <ChartCard className="span-6" title={tr('gov.campaign')} subtitle={tr('gov.campaignSub', { unit })} example={ex} height={260}
           legend={<Legend items={[{ label: tr('gov.actual'), color: cat[0]! }, { label: tr('gov.targetLine'), color: theme.reference, dashed: true }]} />}

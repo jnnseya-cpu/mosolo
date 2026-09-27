@@ -899,3 +899,214 @@ input[type='file'] { font-size: 13.5px; max-width: 100%; }
 .apay-guide { text-align: left; margin: 0; padding-left: 18px; display: grid; gap: 4px; }
 .apay-paid { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--good-ink); font-size: 16px; }
 .apay-issued.is-paid { background: var(--good-bg); }
+
+/* ==========================================================================
+   Trousse de visualisation (27/09/2026) — identité des graphiques
+   Charte : bleu marine du blason, filet tricolore bleu / jaune / rouge. La couleur des données vient de
+   lib/palette.ts (validée) ; ici seulement le cadre : cartes, tuiles, dégradés discrets de la marque.
+   Téléphone d'abord (360 px, aucun défilement horizontal), mode sombre sélectionné.
+   ========================================================================== */
+:root {
+  --viz-accent: var(--flag-blue);
+  --viz-card-top: linear-gradient(90deg, var(--flag-blue) 0 33.3%, var(--flag-yellow) 33.3% 66.6%, var(--flag-red) 66.6% 100%);
+  --viz-kpi-bg: linear-gradient(160deg, #FFFFFF 0%, #F3F6FC 100%);
+  --viz-kpi-hero-bg: linear-gradient(135deg, #232C6B 0%, #1A2256 60%, #14306B 100%);
+  --viz-hatch-fg: #B9C0D0;
+  --viz-hatch-bg: #EEF1F6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --viz-kpi-bg: linear-gradient(160deg, #161D3A 0%, #121831 100%);
+    --viz-kpi-hero-bg: linear-gradient(135deg, #1E2A63 0%, #172050 60%, #10284F 100%);
+    --viz-hatch-fg: #3A4468; --viz-hatch-bg: #1B2342;
+  }
+}
+:root[data-theme='dark'] {
+  --viz-kpi-bg: linear-gradient(160deg, #161D3A 0%, #121831 100%);
+  --viz-kpi-hero-bg: linear-gradient(135deg, #1E2A63 0%, #172050 60%, #10284F 100%);
+  --viz-hatch-fg: #3A4468; --viz-hatch-bg: #1B2342;
+}
+
+.viz-num { font-variant-numeric: tabular-nums; }
+.viz-rel { position: relative; }
+.btn-xs { min-height: 30px; padding: 2px 8px; font-size: 12.5px; }
+@media (pointer: coarse) { .btn-xs { min-height: 40px; } }
+
+/* Carte de graphique : filet tricolore fin en tête, rien de plus. */
+.viz-card { position: relative; overflow: hidden; }
+.viz-card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--viz-card-top); opacity: 0.9; }
+.viz-card .chart-box { position: relative; }
+.viz-fill { width: 100%; height: 100%; min-width: 0; }
+.viz-note { margin-top: 8px; }
+.viz-inline { display: grid; gap: 6px; min-width: 0; }
+.viz-inline-tools { display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
+.viz-body { position: relative; min-width: 0; }
+
+/* États */
+.viz-state { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 96px; padding: 16px; text-align: center; font-size: 13.5px; color: var(--ink-2); border: 1px dashed var(--line); border-radius: var(--r); background: var(--surface-2); }
+.viz-state-unmeasured { background: repeating-linear-gradient(135deg, var(--viz-hatch-bg) 0 6px, var(--surface-2) 6px 12px); }
+.viz-state-unmeasured strong { color: var(--ink); }
+.viz-hatch { background: repeating-linear-gradient(135deg, var(--viz-hatch-fg) 0 1.5px, var(--viz-hatch-bg) 1.5px 6px) !important; }
+
+/* Infobulles : valeur forte d'abord, libellé ensuite, clé en trait court. */
+.viz-tip { position: absolute; z-index: 20; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-pop); padding: 8px 10px; font-size: 12.5px; min-width: 120px; max-width: min(280px, 86vw); }
+.viz-tip-static { position: static; }
+.viz-tip ul { display: grid; gap: 2px; }
+.viz-tip li { display: grid; grid-template-columns: 14px auto 1fr; gap: 6px; align-items: baseline; }
+.viz-tip-title { font-weight: 600; margin-bottom: 4px; color: var(--ink-2); font-size: 12px; }
+.viz-tip-key { display: inline-block; width: 12px; border-top: 2px solid; transform: translateY(-3px); }
+.viz-tip-key.dashed { border-top-style: dashed; }
+.viz-tip-val { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+.viz-tip-name { color: var(--ink-2); overflow-wrap: anywhere; }
+.viz-tip-note { margin-top: 4px; font-size: 11.5px; color: var(--ink-3); max-width: 36ch; }
+
+/* Tuiles d'indicateurs */
+.viz-kpi-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+@media (min-width: 720px) { .viz-kpi-grid { gap: 12px; } .viz-cols-3, .viz-cols-4, .viz-cols-5, .viz-cols-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1024px) {
+  .viz-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .viz-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .viz-cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+.viz-kpi { position: relative; display: grid; align-content: start; gap: 4px; min-width: 0; padding: 12px 12px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--viz-kpi-bg); overflow: hidden; }
+.viz-kpi::after { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--viz-accent); }
+.viz-kpi.is-example { border-style: dashed; }
+.viz-kpi-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin: 0; line-height: 1.35; overflow-wrap: anywhere; }
+.viz-kpi-link { display: inline-flex; align-items: center; gap: 2px; color: inherit; text-decoration: none; }
+.viz-kpi-link:hover { color: var(--link); }
+.viz-kpi-value { margin: 2px 0 0; font-size: clamp(20px, 5.4vw, 28px); font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; overflow-wrap: anywhere; }
+.viz-kpi-value.is-unmeasured { font-size: 18px; color: var(--ink-2); font-weight: 600; }
+.viz-kpi-unit { font-size: 13px; font-weight: 500; color: var(--ink-3); letter-spacing: 0; }
+.viz-kpi-foot { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; min-width: 0; }
+.viz-kpi-spark { margin-top: 2px; }
+.viz-kpi-sub { font-size: 12px; color: var(--ink-3); overflow-wrap: anywhere; }
+.viz-kpi-reason { margin: 0; }
+.viz-kpi-error { color: var(--critical-ink); display: flex; gap: 4px; align-items: center; }
+.viz-kpi-loading { display: flex; align-items: center; gap: 6px; min-height: 32px; }
+.viz-kpi-hero { background: var(--viz-kpi-hero-bg); border-color: transparent; color: #fff; }
+.viz-kpi-hero::after { background: var(--flag-yellow); }
+.viz-kpi-hero .viz-kpi-label, .viz-kpi-hero .viz-kpi-unit, .viz-kpi-hero .viz-kpi-sub { color: #C9CFEA; }
+.viz-kpi-hero .viz-kpi-value { font-size: clamp(28px, 7vw, 48px); }
+
+/* Courbe miniature et tendance */
+.viz-spark { position: relative; display: block; width: 100%; min-width: 0; }
+.viz-spark svg { overflow: visible; touch-action: pan-y; }
+.viz-spark-tip { position: absolute; bottom: calc(100% + 4px); transform: translateX(-50%); white-space: nowrap; font-size: 11.5px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; box-shadow: var(--shadow-pop); pointer-events: none; z-index: 5; }
+.viz-trend { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 600; padding: 1px 6px; border-radius: 4px; white-space: normal; max-width: 100%; overflow-wrap: anywhere; line-height: 1.35; }
+.viz-trend .icon { flex: none; }
+.viz-trend-good { color: var(--good-ink); background: var(--good-bg); }
+.viz-trend-bad { color: var(--critical-ink); background: var(--critical-bg); }
+.viz-trend-neutral { color: var(--ink-2); background: var(--pale); font-weight: 500; }
+.viz-rot-up { transform: rotate(-45deg); }
+.viz-rot-down { transform: rotate(45deg); }
+
+/* Jauges */
+.viz-meter { display: grid; gap: 4px; min-width: 0; }
+.viz-meter-label { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+.viz-meter-track { position: relative; height: 10px; border-radius: 5px; overflow: visible; }
+.viz-meter-compact .viz-meter-track { height: 6px; }
+.viz-meter-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 4px 4px 0; }
+.viz-meter-fill:first-child { border-top-left-radius: 5px; border-bottom-left-radius: 5px; }
+.viz-meter-target { position: absolute; top: -3px; bottom: -3px; width: 2px; transform: translateX(-1px); border-radius: 1px; }
+.viz-meter-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12.5px; }
+.viz-meter-compact .viz-meter-foot { font-size: 11.5px; }
+.viz-meter-compact .viz-meter-value { display: none; }
+.viz-meter-value { font-variant-numeric: tabular-nums; }
+.viz-gauge { display: grid; justify-items: center; gap: 6px; max-width: 280px; margin: 0 auto; }
+.viz-gauge > svg { width: 100%; height: auto; overflow: visible; }
+.viz-gauge-value { font-size: 22px; font-weight: 700; font-family: var(--font-sans); }
+.viz-axis-text { font-size: 10px; font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+.viz-gauge-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; text-align: center; }
+
+/* Anneau */
+.viz-donut { position: relative; width: 100%; height: 100%; }
+.viz-donut-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
+.viz-donut-center strong { font-size: clamp(16px, 4.6vw, 22px); font-weight: 700; }
+.viz-donut-center span { font-size: 11.5px; color: var(--ink-3); }
+
+/* Répartition par état */
+.viz-status { position: relative; display: grid; gap: 10px; }
+.viz-status-bar { display: flex; gap: 2px; height: 16px; border-radius: 4px; overflow: hidden; }
+.viz-status-seg { min-width: 4px; flex-basis: 0; cursor: default; }
+.viz-status-seg:first-child { border-radius: 4px 0 0 4px; }
+.viz-status-seg:last-child { border-radius: 0 4px 4px 0; }
+.viz-status-seg:only-child { border-radius: 4px; }
+.viz-status-seg:hover, .viz-status-seg:focus-visible { filter: brightness(1.12); }
+.viz-status-list { display: grid; gap: 4px; }
+.viz-status-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto 44px; gap: 8px; align-items: center; font-size: 13px; }
+.viz-status-list .small { text-align: right; }
+.viz-status-key { justify-self: start; }
+
+/* Cartes de chaleur */
+.viz-heat-wrap, .viz-matrix-wrap { position: relative; min-width: 0; }
+.viz-heat { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 3px; }
+.viz-heat-geo { grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: 54px; }
+.viz-heat-geo .viz-heat-cell { grid-column: var(--gc, auto); grid-row: var(--gr, auto); }
+.viz-heat-compact { grid-template-columns: repeat(8, minmax(0, 1fr)) !important; grid-auto-rows: 30px !important; gap: 2px; }
+.viz-heat-compact .viz-heat-cell { grid-column: var(--gc, auto); grid-row: var(--gr, auto); }
+.viz-heat-cell { border-radius: 4px; min-width: 0; min-height: 48px; }
+.viz-heat-compact .viz-heat-cell { min-height: 0; }
+.viz-heat-cell > a, .viz-heat-cell > span { display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 4px 6px; color: inherit; text-decoration: none; border-radius: 4px; font-size: 11.5px; line-height: 1.2; }
+.viz-heat-compact .viz-heat-cell > span { align-items: center; justify-content: center; padding: 0; font-size: 10.5px; font-weight: 600; }
+.viz-heat-cell.is-unmeasured, .viz-matrix-cell.is-unmeasured { background: repeating-linear-gradient(135deg, var(--viz-hatch-bg) 0 4px, var(--viz-hatch-fg) 4px 5.5px) !important; box-shadow: inset 0 0 0 1px var(--line); }
+.viz-heat-cell > a:hover, .viz-heat-cell > span:hover { box-shadow: inset 0 0 0 2px var(--ink); }
+.viz-heat-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viz-heat-val { font-weight: 600; font-size: 12.5px; }
+.viz-heat-link { display: block; text-decoration: none; color: inherit; }
+.viz-scale { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; font-size: 11.5px; color: var(--ink-3); }
+.viz-scale-ramp { display: inline-flex; gap: 1px; }
+.viz-scale-ramp i { display: inline-block; width: 18px; height: 8px; }
+.viz-scale-ramp i:first-child { border-radius: 2px 0 0 2px; } .viz-scale-ramp i:last-child { border-radius: 0 2px 2px 0; }
+.viz-scale-nm { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
+.viz-scale-nm i { display: inline-block; width: 14px; height: 8px; border-radius: 2px; }
+.viz-matrix { display: grid; gap: 2px; align-items: center; min-width: 0; }
+.viz-matrix-col { font-size: 10px; color: var(--ink-3); text-align: left; overflow: visible; white-space: nowrap; min-width: 0; }
+.viz-matrix-rowlabel { font-size: 11.5px; color: var(--ink-2); padding-right: 6px; white-space: nowrap; }
+.viz-matrix-cell { display: block; height: 18px; border-radius: 2px; min-width: 0; }
+.viz-matrix-cell:hover, .viz-matrix-cell:focus-visible { box-shadow: inset 0 0 0 2px var(--ink); }
+
+/* Échelle des six états : libellé et montant en tête, barre pleine largeur dessous (jamais de texte rogné). */
+.viz-ladder { display: grid; gap: 10px; }
+.viz-ladder-row { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 3px 10px; align-items: baseline; }
+.viz-ladder-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; min-width: 0; }
+.viz-ladder-rank { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-size: 11px; font-weight: 700; flex: none; }
+.viz-ladder-val { justify-self: end; text-align: right; font-size: 12.5px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; min-width: 0; }
+.viz-ladder-val.is-nm { color: var(--ink-2); font-style: italic; font-weight: 500; }
+.viz-ladder-track { grid-column: 1 / -1; display: block; height: 14px; min-width: 0; border-radius: 0 4px 4px 0; }
+.viz-ladder-track:focus-visible { outline-offset: 3px; }
+.viz-ladder-bar { display: block; height: 100%; border-radius: 0 4px 4px 0; min-width: 4px; }
+.viz-ladder-row.is-unmeasured .viz-ladder-bar { border-radius: 4px; }
+.viz-ladder-ratio { grid-column: 1 / -1; overflow-wrap: anywhere; line-height: 1.3; }
+
+/* Frise d'événements */
+.viz-timeline { position: relative; display: grid; gap: 6px; }
+.viz-timeline-lane { display: grid; grid-template-columns: minmax(64px, 26%) minmax(0, 1fr); gap: 8px; align-items: center; }
+.viz-timeline-cat { color: var(--ink-2); overflow-wrap: anywhere; line-height: 1.25; }
+.viz-timeline-track { position: relative; height: 24px; border-bottom: 1px solid; margin: 0 8px; }
+.viz-timeline-dot { position: absolute; top: 50%; width: 10px; height: 10px; border-radius: 50%; transform: translate(-50%, -50%); cursor: default; }
+.viz-timeline-dot::before { content: ''; position: absolute; inset: -8px; border-radius: 50%; }
+.viz-timeline-dot:hover, .viz-timeline-dot:focus-visible { width: 14px; height: 14px; }
+.viz-timeline-axis { display: flex; justify-content: space-between; margin-left: calc(26% + 16px); }
+@media (max-width: 380px) { .viz-timeline-axis { margin-left: calc(64px + 16px); } }
+
+/* Grille de cartes */
+.viz-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--viz-min, 320px)), 1fr)); grid-auto-flow: row dense; gap: 16px; margin-bottom: 16px; }
+.viz-grid > * { min-width: 0; }
+@media (min-width: 900px) { .viz-grid > .viz-span-2 { grid-column: span 2; } }
+.viz-grid > .viz-span-all { grid-column: 1 / -1; }
+
+/* Galerie */
+.viz-gallery-head { display: grid; gap: 8px; margin-bottom: 16px; }
+.viz-source { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink-3); }
+
+/* Postes de décision : tuiles plus serrées dans le cadre « téléphone ». */
+.ps-phone .viz-kpi-grid { margin-bottom: 4px; }
+.ps-phone .viz-kpi-grid, .ps-phone .viz-kpi-grid.viz-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ps-phone .viz-kpi { padding: 10px 10px 8px; }
+.ps-phone .viz-kpi-value { font-size: 22px; }
+.ps-details summary { cursor: pointer; font-size: 12.5px; color: var(--ink-2); padding: 4px 0; }
+.ps-details[open] summary { margin-bottom: 8px; }
+@media (forced-colors: active) {
+  .viz-status-seg, .viz-heat-cell, .viz-ladder-bar, .viz-meter-fill, .viz-timeline-dot { forced-color-adjust: none; }
+}
+.viz-inline-title { margin: 0 auto 0 0; font-size: 12.5px; font-weight: 600; color: var(--ink-2); min-width: 0; overflow-wrap: anywhere; }
