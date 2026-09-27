@@ -3,6 +3,7 @@ import { useApi } from '../../hooks/useApi';
 import { DataTable } from '../../components/DataTable';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { api } from '../../lib/api';
+import { VerificationsVisuel } from './visuels';
 
 interface Journal {
   days: { date: string; total: number; byStatus: Record<string, number>; distinctClients: number }[];
@@ -27,6 +28,7 @@ export default function VerificationJournal() {
       </header>
       {j.loading && <Loading />}
       {j.error !== null && <ErrorState error={j.error} onRetry={j.reload} />}
+      {j.data && <VerificationsVisuel days={j.data.days} />}
       {j.data && (
         <DataTable rows={j.data.days} rowKey={(d) => d.date} caption="Vérifications par jour"
           empty={<EmptyState title="Aucune vérification enregistrée." icon="qr" />}

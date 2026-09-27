@@ -7,6 +7,7 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
 import { sha256Hex } from '../../lib/crypto';
+import { OperationsVisuel } from './visuels';
 import { hasRole, Message, OP_LABEL, OP_STATUS, useAction, type Operation, type OperationKind } from './shared';
 
 // Les décaissements de répartition (§ 37A) sont proposés depuis l'écran « Répartition des recettes » (mois clos, deux flux).
@@ -105,6 +106,7 @@ export default function OperationsPanel({ onChanged }: { onChanged?: () => void 
           <button type="button" aria-pressed={filter === ''} onClick={() => setFilter('')}>Historique</button>
         </div>
       </header>
+      {ops.data && <OperationsVisuel ops={ops.data} />}
       <div className="two-col">
         <div>
           {ops.loading && <Loading />}

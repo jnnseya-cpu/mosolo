@@ -7,7 +7,9 @@ import { useInsight } from '../hooks/useInsight';
 import TresorWorkbench from '../modules/tresor/TresorWorkbench';
 import { GrandLivrePanel } from '../modules/tresor/GrandLivrePanel';
 import { VaultRegistryPanel } from '../modules/tresor/VaultRegistry';
-import { ImportsRelevesPanel } from '../modules/tresor/ImportsReleves';
+import { ImportsRelevesPanel, type StatementImport } from '../modules/tresor/ImportsReleves';
+import { TresorSynthese } from '../modules/tresor/visuels';
+import type { Overview, SuspenseList } from '../modules/tresor/shared';
 import { PageHead } from '../components/Shell';
 import { AIInsightPanel } from '../components/AIInsightPanel';
 import { MoneyText } from '../components/MoneyText';
@@ -53,7 +55,7 @@ function readVault(): VaultChangeRequest[] {
   try { return JSON.parse(safeGet(VAULT_KEY) ?? '[]') as VaultChangeRequest[]; } catch { return []; }
 }
 
-function Vault() {
+function Vault({ canRead = true }: { canRead?: boolean }) {
   const { tr, fmtDate } = useApp();
   const [list, setList] = useState<VaultChangeRequest[]>(readVault);
   const [form, setForm] = useState({ alias: 'KIN-DGIPK-RECETTES-01', bankName: '', accountNumber: '', holderName: '', reason: '' });
@@ -65,6 +67,7 @@ function Vault() {
   const save = (l: VaultChangeRequest[]) => { setList(l); safeSet(VAULT_KEY, JSON.stringify(l)); };
   // Liste serveur (GET /v1/beneficiary-accounts → changeRequests) fusionnée avec les demandes de la session
   useEffect(() => {
+    if (!canRead) return;
     api<{ changeRequests?: VaultChangeRequest[] }>('/v1/beneficiary-accounts')
       .then((v) => {
         const server = v?.changeRequests ?? [];
@@ -76,7 +79,7 @@ function Vault() {
         });
       })
       .catch(() => { /* hors ligne ou non habilité : liste locale */ });
-  }, []);
+  }, [canRead]);
   const upsert = (r: VaultChangeRequest) => save([r, ...list.filter((x) => x.id !== r.id)]);
 
   async function propose(e: FormEvent) {
@@ -211,16 +214,29 @@ function StatementForm({ onImported }: { onImported: () => void }) {
 export default function Treasury() {
   const { tr, user, lang } = useApp();
   const [tick, setTick] = useState(0);
-  const bal = useApi(() => api<Balance>('/v1/ledger/balance'), [user?.id]);
-  const ai = useInsight('treasury', [user?.id]);
+  // Lectures limitées aux rôles habilités (mêmes règles que le serveur : ledger.read, beneficiary.read,
+  // tresor:closure.read, ai.insight « treasury ») : pas d'appel voué au refus 403, un message clair à la place.
+  const roles = user?.roles ?? [];
+  const lecteurGrandLivre = roles.some((r) => ['R17', 'R22', 'R23'].includes(r));
+  const lecteurCoffre = roles.some((r) => ['R17', 'R19', 'R22'].includes(r));
+  const lecteurClotures = roles.some((r) => ['R17', 'R18', 'R22', 'R23', 'R05'].includes(r));
+  const bal = useApi(lecteurGrandLivre ? () => api<Balance>('/v1/ledger/balance') : null, [user?.id]);
+  const lecteurTresor = roles.some((r) => ['R17', 'R18', 'R22', 'R23', 'R05'].includes(r));
+  const lecteurReleves = roles.some((r) => ['R17', 'R18', 'R22', 'R23'].includes(r));
+  const ov = useApi(lecteurTresor ? () => api<Overview>('/v1/tresor/overview') : null, [user?.id, tick]);
+  const susp = useApi(lecteurTresor ? () => api<SuspenseList>('/v1/tresor/suspense') : null, [user?.id, tick]);
+  const imps = useApi(lecteurReleves ? () => api<StatementImport[]>('/v1/settlements/imports') : null, [user?.id, tick]);
+  const ai = useInsight('treasury', [user?.id], undefined, roles.some((r) => ['R17', 'R18', 'R22'].includes(r)));
   const loc = lang === 'en' ? 'en' : 'fr';
   return (
     <div className="page page-wide">
       <PageHead eyebrow={tr('treasury.eyebrow')} title={tr('nav.treasury')} lead={tr('treasury.lead')} />
       <div className="dash-grid">
+        <div className="span-12"><TresorSynthese balance={bal.data} overview={ov.data} suspense={susp.data} imports={imps.data} /></div>
         <section className="panel span-5" aria-labelledby="bal-title">
           <header className="panel-head"><h2 className="panel-title" id="bal-title">{tr('treasury.balance')}</h2>
             {bal.data && <StatusBadge tone={bal.data.balanced ? 'good' : 'critical'} label={tr(bal.data.balanced ? 'treasury.balanced' : 'treasury.unbalanced')} />}</header>
+          {!lecteurGrandLivre && <EmptyState title="Balance réservée au Trésor et à l’audit" icon="lock">Lecture du grand livre : comptable public (R17), audit interne (R22) et externe (R23).</EmptyState>}
           {bal.loading && <Loading />}
           {bal.error !== null && <ErrorState error={bal.error} onRetry={bal.reload} />}
           {bal.data && (
@@ -252,10 +268,10 @@ export default function Treasury() {
         <div className="span-12"><ImportsRelevesPanel key={`imp-${tick}`} onChanged={() => { bal.reload(); setTick((n) => n + 1); }} /></div>
         <div className="span-12"><TresorWorkbench key={tick} onChanged={bal.reload} /></div>
 
-        <div className="span-12"><AIInsightPanel rec={ai.rec} loading={ai.loading} error={ai.error} onRefresh={ai.reload} compact /></div>
-        <div className="span-12"><GrandLivrePanel /></div>
-        <div className="span-12"><Vault /></div>
-        <div className="span-12"><VaultRegistryPanel /></div>
+        {roles.some((r) => ['R17', 'R18', 'R22'].includes(r)) && <div className="span-12"><AIInsightPanel rec={ai.rec} loading={ai.loading} error={ai.error} onRefresh={ai.reload} compact /></div>}
+        {lecteurClotures && <div className="span-12"><GrandLivrePanel /></div>}
+        <div className="span-12"><Vault canRead={lecteurCoffre} /></div>
+        {lecteurCoffre ? <div className="span-12"><VaultRegistryPanel /></div> : <div className="span-12"><EmptyState title="Registre du coffre réservé" icon="lock">Lecture : comptable public (R17), gestionnaires du coffre (R19) et audit interne (R22).</EmptyState></div>}
       </div>
     </div>
   );

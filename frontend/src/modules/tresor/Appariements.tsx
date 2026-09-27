@@ -13,6 +13,7 @@ import { api } from '../../lib/api';
 import { sha256Hex } from '../../lib/crypto';
 import { useApp } from '../../context';
 import { hasRole, Message, TYPE_LABEL, useAction } from './shared';
+import { AppariementsVisuel } from './visuels';
 import './tresor.css';
 
 interface Factor { code: string; points: number; max: number; detail: string }
@@ -36,6 +37,7 @@ export function AppariementsView({ board, canPropose, canDecide, onChanged }: { 
   }
   return (
     <>
+      <AppariementsVisuel board={board} />
       <p className="callout callout-info">{board.policy.note} Seuil de proposition : {board.policy.threshold}/100 ; tolérance de change : {board.policy.fxTolerancePct} % ({board.policy.statut}).</p>
       <Message msg={msg} />
       <section className="panel" aria-labelledby="app-items">

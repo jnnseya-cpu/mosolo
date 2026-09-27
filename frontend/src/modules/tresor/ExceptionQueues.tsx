@@ -9,6 +9,7 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
 import { sha256Hex } from '../../lib/crypto';
+import { ExceptionsVisuel } from './visuels';
 import { EXC_STATUS, hasRole, Message, QUEUE_LABEL, TYPE_LABEL, useAction, type ExceptionList, type Queue, type TreasuryException } from './shared';
 
 /** Types d'exception qui portent de l'argent (clôture uniquement par une action financière). */
@@ -189,6 +190,7 @@ export default function ExceptionQueues({ onChanged }: { onChanged?: () => void 
       {list.error !== null && <ErrorState error={list.error} onRetry={list.reload} />}
       {list.data && (
         <>
+          <ExceptionsVisuel list={list.data} />
           <div className="tr-queues" role="group" aria-label="Files">
             <button type="button" className="tr-queue" aria-pressed={queue === ''} onClick={() => setQueue('')}>
               <span className="tr-queue-name">Toutes les files</span>

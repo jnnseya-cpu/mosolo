@@ -11,6 +11,7 @@ import { ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { StatusBadge } from '../../components/StatusBadge';
 import { useApi } from '../../hooks/useApi';
+import { CoffreVisuel } from './visuels';
 import { api, describeError } from '../../lib/api';
 
 export interface VaultAccount { alias: string; entity: string; kind: 'BANCAIRE' | 'MOBILE_MONEY'; bankName: string; accountNumber: string; holderName: string; currency: string; version: number; effectiveSince: string }
@@ -53,6 +54,7 @@ export function VaultRegistryPanel() {
           <div className="kpi"><span className="kpi-label">Comptes verrouillés</span><span className="kpi-value">{ind.accounts.total}</span><span className="kpi-sub">{ind.accounts.bank} bancaire(s) · {ind.accounts.mobileMoney} Mobile Money</span></div>
         </div>
       )}
+      <CoffreVisuel accounts={d.accounts} requests={d.changeRequests} />
       <DataTable caption="Comptes verrouillés" rows={d.accounts} rowKey={(a) => a.alias} columns={[
         { key: 'a', label: 'Alias', primary: true, render: (a) => <span className="mono">{a.alias}</span> },
         { key: 'k', label: 'Nature', render: (a) => (a.kind === 'MOBILE_MONEY' ? 'Mobile Money public' : 'Compte bancaire') },

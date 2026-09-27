@@ -6,6 +6,7 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { api } from '../../lib/api';
 import type { SuspenseList } from './shared';
+import { SuspensVisuel } from './visuels';
 
 export default function SuspensePanel() {
   const { user, fmtDate } = useApp();
@@ -20,6 +21,7 @@ export default function SuspensePanel() {
       {s.error !== null && <ErrorState error={s.error} onRetry={s.reload} />}
       {s.data && (
         <>
+          <SuspensVisuel s={s.data} />
           <dl className="tr-buckets">
             {s.data.buckets.map((b) => (
               <div key={b.bucket} className={b.bucket.startsWith('>') && b.count > 0 ? 'tr-bucket tr-bucket-late' : 'tr-bucket'}>
