@@ -11,15 +11,16 @@
  *  - chaque avis est numéroté, porte ses mentions obligatoires (base légale, montant, échéance, voie et délai de
  *    recours), son empreinte, sa preuve de notification (journal de délivrance) et son accusé de lecture.
  */
-import { isRuleExecutable, Money, type CurrencyCode, type MoneyJSON, type ObligationStatus } from '@mosolo/shared';
+import { isRuleExecutable, Money, type CurrencyCode, type MoneyJSON, type ObligationStatus, type RuleSheet } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
 import { DAY_MS, isoDate } from '../../core/clock.js';
 import { canonicalJson, sha256Hex } from '../../core/crypto.js';
 import { badRequest, conflict, notFound, unprocessable } from '../../core/errors.js';
-import { assertDistinctPerson, authorize, definePolicy, GRANTS } from '../../core/policy.js';
+import { assertDistinctPerson, assertNotRelated, authorize, definePolicy, GRANTS } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import { APPEAL_PROCEDURE } from '../../modules/appeals/procedure.js';
+import { recordReductionGranted, remissionHeadroom } from '../../modules/assessment/reductions.js';
 import type { Obligation } from '../../modules/assessment/service.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
 import { AGE_BANDS, LARGE_DEBTOR_THRESHOLD_EXAMPLE, RECOVERY_PROCEDURE, SEGMENTS, type SegmentCode } from './parameters.js';
@@ -42,6 +43,10 @@ definePolicy('recouvrement:takeover.propose', { R20: A });
 definePolicy('recouvrement:takeover.validate', { R06: A });
 definePolicy('recouvrement:penalty.propose', { R20: A });
 definePolicy('recouvrement:remission.request', { R20: A, R30: GRANTS.ownTaxpayer, R31: GRANTS.mandant });
+// Instruction d'une remise demandée par le contribuable : agent de recouvrement distinct du décideur (R21).
+definePolicy('recouvrement:remission.instruct', { R20: A });
+// Admission en non-valeur (seule voie d'effacement total) : proposition R20, décision R21.
+definePolicy('recouvrement:writeoff.propose', { R20: A });
 definePolicy('recouvrement:mine', { R30: GRANTS.ownTaxpayer, R31: GRANTS.mandant });
 definePolicy('recouvrement:observations', { R20: A, R30: GRANTS.ownTaxpayer, R31: GRANTS.mandant });
 
@@ -180,6 +185,11 @@ export interface InstallmentPlan {
   noticeId?: string;
   /** Échéances déjà rappelées (rappel J−3, une seule fois par échéance). */
   remindedSeqs?: number[];
+  /**
+   * Défaillance PROPOSÉE par la planification (échéance impayée au-delà du délai de grâce) : alerte R20/R21 ;
+   * la défaillance reste constatée par une personne habilitée (R20).
+   */
+  defaultProposal?: { at: string; overdueSeqs: number[]; reason: string };
 }
 
 export interface ArrearTakeover {
@@ -216,18 +226,52 @@ export interface PenaltyProposal {
   liquidatedBy?: string;
 }
 
+type RuleRecordLike = RuleSheet;
+
+/** Calcul de la remise selon la règle (taux et plafond déclarés, cumul sur la chaîne de remplacement). */
+export interface RemissionComputation {
+  rate: string;
+  cap?: MoneyJSON;
+  declaredBy: string[];
+  originalAmount: MoneyJSON;
+  maxReduction: MoneyJSON;
+  alreadyRemitted: MoneyJSON;
+  available: MoneyJSON;
+  currentAmount: MoneyJSON;
+  /** Montant après remise calculé (plancher de la décision). */
+  computedAmount: MoneyJSON;
+  chain: string[];
+}
+
 export interface RemissionRequest {
   id: string;
   obligationId: string;
   taxpayerId: string;
   basisRuleId: string;
+  /** Montant APRÈS remise demandé (> 0). */
   requestedAmount: MoneyJSON;
   motivation: string;
   requestedBy: string;
   requestedAt: string;
-  status: 'DEMANDEE' | 'ACCORDEE' | 'REFUSEE';
-  decision?: { by: string; at: string; motivation: string; grantedAmount?: MoneyJSON };
+  status: 'DEMANDEE' | 'INSTRUITE' | 'ACCORDEE' | 'REFUSEE';
+  instruction?: { by: string; at: string; favorable: boolean; analysis: string };
+  computation?: RemissionComputation;
+  decision?: { by: string; at: string; motivation: string; grantedAmount?: MoneyJSON; fromAmount?: MoneyJSON };
   rectifyingObligationId?: string;
+}
+
+/** Admission en non-valeur (créance irrécouvrable) : statut ADMISE_EN_NON_VALEUR, jamais SOLDEE. */
+export interface WriteOff {
+  id: string;
+  obligationId: string;
+  taxpayerId: string;
+  amount: MoneyJSON;
+  motivation: string;
+  evidence: string[];
+  proposedBy: string;
+  proposedAt: string;
+  status: 'PROPOSEE' | 'ADMISE' | 'REJETEE';
+  decision?: { by: string; at: string; motivation: string };
 }
 
 export interface NotificationAddress {
@@ -257,6 +301,7 @@ export class RecoveryService {
   readonly takeovers = new InMemoryRepository<ArrearTakeover>();
   readonly penalties = new InMemoryRepository<PenaltyProposal>();
   readonly remissions = new InMemoryRepository<RemissionRequest>();
+  readonly writeOffs = new InMemoryRepository<WriteOff>();
   readonly addresses = new InMemoryRepository<NotificationAddress>();
   private readonly ids = new IdGenerator();
   /** Instrument autorisant les échéanciers (absent ⇒ « acte requis », aucun échéancier possible). */
@@ -508,7 +553,8 @@ export class RecoveryService {
     if (this.ctx.payments.orders.find((p) => p.obligationId === o.id && (p.status === 'CONFIRME' || p.status === 'REGLE')).length) {
       b.push({ code: 'PAYMENT_IN_PROGRESS', detail: 'Paiement confirmé en cours de règlement ou de rapprochement.' });
     }
-    if (this.activePlan(o.id)) b.push({ code: 'INSTALLMENT_PLAN_ACTIVE', detail: 'Échéancier en vigueur : aucune mesure tant qu’il est respecté.' });
+    const plan = this.activePlan(o.id);
+    if (plan && !this.planView(plan).defaultToExamine) b.push({ code: 'INSTALLMENT_PLAN_ACTIVE', detail: 'Échéancier en vigueur : aucune mesure tant qu’il est respecté.' });
     const rule = this.ctx.rules.rules.get(o.ruleId);
     if (rule?.status === 'SUSPENDUE') b.push({ code: 'RULE_SUSPENDED', detail: `Règle ${rule.code} v${rule.version} suspendue.` });
     if (this.prescription(o.dueDate).state === 'ATTEINTE_A_EXAMINER') b.push({ code: 'PRESCRIPTION_TO_EXAMINE', detail: 'Délai de prescription indicatif atteint : examen juridique préalable.' });
@@ -680,7 +726,7 @@ export class RecoveryService {
   runSchedule(by: User | 'systeme') {
     if (by !== 'systeme') authorize(by, 'recouvrement:schedule');
     const today = this.today();
-    const out = { remindersSent: [] as { obligationId: string; step: StepKind }[], overdueRecorded: 0, casesOpened: 0, casesRegularised: 0, liftProposed: 0, installmentReminders: 0, appealSlaBreaches: [] as string[] };
+    const out = { remindersSent: [] as { obligationId: string; step: StepKind }[], overdueRecorded: 0, casesOpened: 0, casesRegularised: 0, liftProposed: 0, installmentReminders: 0, defaultsProposed: 0, appealSlaBreaches: [] as string[] };
     for (const o0 of this.ctx.assessment.obligations.all()) {
       let o = o0;
       if (!PAYABLE.includes(o.status) || this.activePlan(o.id)) continue;
@@ -713,6 +759,25 @@ export class RecoveryService {
       }
       this.cases.update({ ...c, status: 'REGULARISE' });
       out.casesRegularised++;
+    }
+    // Échéanciers abandonnés : une échéance impayée au-delà du délai de grâce ⇒ défaillance PROPOSÉE (alerte R20/R21,
+    // constat par une personne) ; dernière échéance dépassée ⇒ l'obligation est constatée EN_RETARD. Jamais de gel.
+    for (const plan of this.plans.find((p) => p.status === 'ACCORDE')) {
+      const view = this.planView(plan);
+      const o = this.ctx.assessment.obligations.get(plan.obligationId);
+      if (view.defaultToExamine && !plan.defaultProposal) {
+        const overdueSeqs = view.overdueRows.map((r) => r.seq);
+        this.plans.update({ ...this.plans.get(plan.id)!, defaultProposal: { at: this.nowIso(), overdueSeqs, reason: `Échéance(s) ${overdueSeqs.join(', ')} impayée(s) au-delà du délai de grâce de ${RECOVERY_PROCEDURE.installmentGraceDays} jours.` } });
+        this.ctx.audit.append({ actor: { kind: 'system', id: 'recouvrement' }, action: 'installment_plan.default.proposed', resourceType: 'installment_plan', resourceId: plan.id, details: { obligationId: plan.obligationId, overdueSeqs, amountAtRisk: view.outstanding } });
+        const recipients = [...this.ctx.users.withRole('R20'), ...this.ctx.users.withRole('R21')];
+        this.ctx.comms.publish('approval.requested', recipients.map(userRecipient), { objet: `Défaillance proposée — échéancier ${plan.id} (${plan.obligationId})` }, { entity: o?.entity ?? 'DGIPK' });
+        out.defaultsProposed++;
+      }
+      if (o && view.finalDueDate && view.finalDueDate < today && (o.status === 'EMISE' || o.status === 'EXIGIBLE')) {
+        this.ctx.assessment.setStatus(o.id, 'EN_RETARD');
+        out.overdueRecorded++;
+        this.ctx.audit.append({ actor: { kind: 'system', id: 'recouvrement' }, action: 'obligation.overdue.recorded', resourceType: 'obligation', resourceId: o.id, details: { dueDate: view.finalDueDate, planId: plan.id } });
+      }
     }
     // Échéanciers : rappel amiable avant chaque échéance non payée (jamais de sanction).
     for (const plan of this.plans.find((p) => p.status === 'ACCORDE')) {
@@ -1022,11 +1087,17 @@ export class RecoveryService {
       return { ...i, state };
     });
     const overdue = rows.filter((r) => r.state === 'ECHUE_IMPAYEE' && daysBetween(r.dueDate, today) > RECOVERY_PROCEDURE.installmentGraceDays);
+    const total = o ? Money.fromJSON(o.amount) : Money.zero(currency);
+    const outstanding = total.subtract(paid);
     return {
       ...plan,
       rows,
       paid: paid.toJSON(),
       nextDue: rows.find((r) => r.state !== 'PAYEE') ?? null,
+      finalDueDate: plan.installments.length ? plan.installments[plan.installments.length - 1]!.dueDate : null,
+      overdueRows: overdue,
+      /** Encours restant dû (montant à risque si des échéances sont impayées). */
+      outstanding: (outstanding.isNegative() ? Money.zero(currency) : outstanding).toJSON(),
       /** Signal seulement : la défaillance est constatée par une personne habilitée. */
       defaultToExamine: plan.status === 'ACCORDE' && overdue.length > 0,
     };
@@ -1142,59 +1213,177 @@ export class RecoveryService {
     return updated;
   }
 
-  // ── Remises : règle ACTIVE déclarant la base de remise + décision humaine motivée ──
-  requestRemission(user: User, input: { obligationId: string; basisRuleId: string; requestedAmount: MoneyJSON; motivation: string }): RemissionRequest {
-    const o = this.ctx.assessment.get(input.obligationId);
-    authorize(user, 'recouvrement:remission.request', { taxpayerId: o.taxpayerId });
-    const rule = this.ctx.rules.get(input.basisRuleId);
+  // ── Remises : règle ACTIVE déclarant la base ET le taux de remise + instruction + décision humaine motivée ──
+  /** Fiche de règle fondant la remise : même code que l'obligation, ACTIVE, déclarant un taux de remise. */
+  private remissionRule(basisRuleId: string, o: Obligation) {
+    const rule = this.ctx.rules.get(basisRuleId);
     const exec = isRuleExecutable(rule, this.ctx.clock.now());
     if (!exec.ok) throw unprocessable('ACTE_REQUIS', `Aucune remise hors règle ACTIVE : ${rule.code} v${rule.version} — ${exec.reason}.`, { ruleStatus: rule.status });
     if (!rule.exemptions.length) throw unprocessable('REMISSION_BASIS_NOT_DECLARED', `La règle ${rule.code} ne déclare aucune base de remise ou d’exonération.`);
     // La base de remise est la règle même de l'obligation (une version en vigueur de son code), jamais une autre recette.
     if (rule.code !== o.ruleCode) throw unprocessable('REMISSION_BASIS_RULE_MISMATCH', `La règle ${rule.code} ne fonde pas l’obligation (${o.ruleCode}) : remise impossible sur cette base.`);
+    return rule;
+  }
+
+  /**
+   * Montant après remise CALCULÉ (jamais saisi librement) : réduction plafonnée par le taux (et le plafond) déclarés
+   * par la règle, appliqués au montant ORIGINAL de la chaîne de remplacement, moins les remises déjà accordées sur
+   * toute la chaîne ; jamais en deçà du montant demandé.
+   */
+  remissionComputation(o: Obligation, rule: RuleRecordLike, requested: Money): RemissionComputation {
+    const rank = this.ctx.objects.objects.get(o.objectId)?.localityRank;
+    const h = remissionHeadroom((id) => this.ctx.assessment.obligations.get(id), o.id, rule, rank);
+    if (!h.terms.maxRate) {
+      throw unprocessable('REMISSION_RATE_NOT_DECLARED', `La règle ${rule.code} v${rule.version} ne déclare aucun taux de remise (taux_remise_max) : aucun taux n’est inventé, acte requis.`);
+    }
+    const current = Money.fromJSON(o.amount);
+    const floor = current.subtract(h.available);
+    const computed = requested.compare(floor) > 0 ? requested : floor.isNegative() ? Money.zero(current.currency) : floor;
+    return {
+      rate: h.terms.maxRate, ...(h.terms.cap ? { cap: h.terms.cap.toJSON() } : {}), declaredBy: h.terms.source,
+      originalAmount: h.original.toJSON(), maxReduction: h.max.toJSON(), alreadyRemitted: h.already.toJSON(), available: h.available.toJSON(),
+      currentAmount: current.toJSON(), computedAmount: computed.toJSON(), chain: h.chain.map((x) => x.id),
+    };
+  }
+
+  requestRemission(user: User, input: { obligationId: string; basisRuleId: string; requestedAmount: MoneyJSON; motivation: string }): RemissionRequest {
+    const o = this.ctx.assessment.get(input.obligationId);
+    authorize(user, 'recouvrement:remission.request', { taxpayerId: o.taxpayerId });
+    const rule = this.remissionRule(input.basisRuleId, o);
     if (!PAYABLE.includes(o.status) || o.supersededBy) throw unprocessable('OBLIGATION_NOT_PAYABLE', `Obligation au statut ${o.status}${o.supersededBy ? `, remplacée par ${o.supersededBy}` : ''}.`);
-    const pending = this.remissions.findOne((x) => x.obligationId === o.id && x.status === 'DEMANDEE');
+    const pending = this.remissions.findOne((x) => x.obligationId === o.id && (x.status === 'DEMANDEE' || x.status === 'INSTRUITE'));
     if (pending) throw conflict('REMISSION_ALREADY_PENDING', `Une demande de remise ${pending.id} est déjà en attente de décision pour cette obligation.`, { remissionId: pending.id });
     const req = Money.fromJSON(input.requestedAmount);
     const orig = Money.fromJSON(o.amount);
     if (req.currency !== orig.currency) throw badRequest('CURRENCY_MISMATCH', `Montant attendu en ${orig.currency}.`);
     if (req.isNegative() || req.compare(orig) >= 0) throw unprocessable('INVALID_REMISSION_AMOUNT', 'Le montant après remise doit être positif et inférieur au montant dû.');
+    // Une remise ne ramène jamais une créance à zéro : l'effacement total relève de l'admission en non-valeur.
+    if (req.isZero()) throw unprocessable('REMISSION_TO_ZERO_FORBIDDEN', 'Une remise ne peut ramener la créance à zéro : l’effacement total relève de l’admission en non-valeur (proposition motivée R20, décision R21).');
+    const computation = this.remissionComputation(o, rule, req);
+    if (Money.fromJSON(computation.available).isZero()) {
+      throw unprocessable('REMISSION_CAP_EXHAUSTED', `Plafond de remise déclaré par la règle (${computation.rate} %) déjà atteint sur la chaîne de l’obligation originale ${computation.chain[0]}.`, { computation });
+    }
+    // Demande d'un agent de recouvrement : il instruit lui-même (proposition) ; demande du contribuable : instruction R20.
+    const agentInstructs = user.roles.includes('R20') && !user.roles.includes('R30') && !user.roles.includes('R31');
+    if (agentInstructs) assertNotRelated(user, o.taxpayerId, 'Conflit d’intérêts : l’agent est lié au contribuable bénéficiaire de la remise.');
+    const now = this.nowIso();
     const r = this.remissions.insert({
       id: this.ids.next('REM', 6), obligationId: o.id, taxpayerId: o.taxpayerId, basisRuleId: rule.id, requestedAmount: req.toJSON(),
-      motivation: input.motivation, requestedBy: user.id, requestedAt: this.nowIso(), status: 'DEMANDEE',
+      motivation: input.motivation, requestedBy: user.id, requestedAt: now, status: agentInstructs ? 'INSTRUITE' : 'DEMANDEE', computation,
+      ...(agentInstructs ? { instruction: { by: user.id, at: now, favorable: true, analysis: input.motivation } } : {}),
     });
-    this.ctx.audit.append({ actor: this.actor(user), action: 'recovery.remission.requested', resourceType: 'obligation', resourceId: o.id, details: { remissionId: r.id, basisRuleId: rule.id } });
+    this.ctx.audit.append({ actor: this.actor(user), action: 'recovery.remission.requested', resourceType: 'obligation', resourceId: o.id, details: { remissionId: r.id, basisRuleId: rule.id, requested: r.requestedAmount, computed: computation.computedAmount } });
+    if (!agentInstructs) this.ctx.comms.publish('approval.requested', this.ctx.users.withRole('R20').map(userRecipient), { objet: `Instruction de la remise ${r.id} — ${o.id}` }, { entity: o.entity });
     return r;
+  }
+
+  /** Instruction par un agent de recouvrement (R20) distinct du demandeur et sans lien avec le contribuable. */
+  instructRemission(user: User, id: string, input: { favorable: boolean; analysis: string }): RemissionRequest {
+    authorize(user, 'recouvrement:remission.instruct');
+    const r = this.remissions.get(id);
+    if (!r) throw notFound('REMISSION_NOT_FOUND', `Demande de remise inconnue : ${id}`);
+    if (r.status !== 'DEMANDEE') throw conflict('REMISSION_NOT_AWAITING_INSTRUCTION', `Remise au statut ${r.status}.`);
+    assertDistinctPerson(user.id, [r.requestedBy], 'L’instruction d’une remise appartient à un agent distinct du demandeur.');
+    assertNotRelated(user, r.taxpayerId, 'Conflit d’intérêts : l’instructeur est lié au contribuable bénéficiaire de la remise.');
+    if (input.analysis.trim().length < 10) throw badRequest('ANALYSIS_REQUIRED', 'Analyse motivée obligatoire (au moins 10 caractères).');
+    const updated = this.remissions.update({ ...r, status: 'INSTRUITE', instruction: { by: user.id, at: this.nowIso(), favorable: input.favorable, analysis: input.analysis.trim() } });
+    this.ctx.audit.append({ actor: this.actor(user), action: 'recovery.remission.instructed', resourceType: 'obligation', resourceId: r.obligationId, details: { remissionId: id, favorable: input.favorable } });
+    this.ctx.comms.publish('approval.requested', this.ctx.users.withRole('R21').map(userRecipient), { objet: `Décision sur la remise ${r.id}` }, { entity: 'DGIPK' });
+    return updated;
   }
 
   decideRemission(user: User, id: string, input: { granted: boolean; motivation: string; grantedAmount?: MoneyJSON }): RemissionRequest {
     authorize(user, 'recouvrement:decide');
     const r = this.remissions.get(id);
     if (!r) throw notFound('REMISSION_NOT_FOUND', `Demande de remise inconnue : ${id}`);
-    if (r.status !== 'DEMANDEE') throw conflict('REMISSION_ALREADY_DECIDED', `Remise au statut ${r.status}.`);
-    assertDistinctPerson(user.id, [r.requestedBy], 'La décision de remise appartient à une autorité distincte du demandeur.');
+    if (r.status === 'DEMANDEE') throw conflict('REMISSION_NOT_INSTRUCTED', 'La demande de remise doit être instruite par un agent de recouvrement (R20) avant décision.');
+    if (r.status !== 'INSTRUITE') throw conflict('REMISSION_ALREADY_DECIDED', `Remise au statut ${r.status}.`);
+    assertDistinctPerson(user.id, [r.requestedBy, ...(r.instruction ? [r.instruction.by] : [])], 'La décision de remise appartient à une autorité distincte du demandeur et de l’instructeur.');
+    assertNotRelated(user, r.taxpayerId, 'Conflit d’intérêts : l’autorité de décision est liée au contribuable bénéficiaire de la remise.');
     const now = this.nowIso();
     if (!input.granted) {
       const refused = this.remissions.update({ ...r, status: 'REFUSEE', decision: { by: user.id, at: now, motivation: input.motivation } });
       this.ctx.audit.append({ actor: this.actor(user), action: 'recovery.remission.refused', resourceType: 'obligation', resourceId: r.obligationId, details: { remissionId: id } });
       return refused;
     }
-    const rule = this.ctx.rules.get(r.basisRuleId);
-    const exec = isRuleExecutable(rule, this.ctx.clock.now());
-    if (!exec.ok) throw unprocessable('ACTE_REQUIS', `Règle de remise non exécutable : ${exec.reason}.`);
+    if (r.instruction && !r.instruction.favorable) throw unprocessable('REMISSION_INSTRUCTION_UNFAVORABLE', 'Instruction défavorable : la remise ne peut être accordée (nouvelle demande et nouvelle instruction requises).');
     const o = this.ctx.assessment.get(r.obligationId);
     // L'obligation a pu être payée, rectifiée ou annulée depuis la demande : contrôles rejoués à la décision.
     if (!PAYABLE.includes(o.status) || o.supersededBy) {
       throw conflict('OBLIGATION_NOT_PAYABLE', `Obligation au statut ${o.status}${o.supersededBy ? `, remplacée par ${o.supersededBy}` : ''} : remise sans objet.`);
     }
-    if (rule.code !== o.ruleCode) throw unprocessable('REMISSION_BASIS_RULE_MISMATCH', `La règle ${rule.code} ne fonde pas l’obligation (${o.ruleCode}).`);
-    const amount = input.grantedAmount ? Money.fromJSON(input.grantedAmount) : Money.fromJSON(r.requestedAmount);
-    if (amount.currency !== o.amount.currency || amount.isNegative() || amount.compare(Money.fromJSON(o.amount)) >= 0) {
-      throw unprocessable('INVALID_REMISSION_AMOUNT', 'Le montant après remise doit être positif, dans la devise de l’obligation et inférieur au montant dû.');
+    const rule = this.remissionRule(r.basisRuleId, o);
+    const requested = Money.fromJSON(r.requestedAmount);
+    const computation = this.remissionComputation(o, rule, requested);
+    const current = Money.fromJSON(o.amount);
+    const computed = Money.fromJSON(computation.computedAmount);
+    if (computed.compare(current) >= 0) {
+      throw unprocessable('REMISSION_CAP_EXHAUSTED', `Plafond de remise déclaré par la règle (${computation.rate} %) déjà atteint sur la chaîne de l’obligation originale ${computation.chain[0]}.`, { computation });
     }
-    const rectified = this.ctx.assessment.rectify(o.id, amount.toJSON(), { appealId: id, reason: `Remise ${id} (${rule.code}) — ${input.motivation}`, decidedBy: user });
-    const updated = this.remissions.update({ ...r, status: 'ACCORDEE', decision: { by: user.id, at: now, motivation: input.motivation, grantedAmount: amount.toJSON() }, rectifyingObligationId: rectified.id });
+    // Le décideur peut accorder MOINS que le calcul (montant après remise plus élevé), jamais davantage.
+    let amount = computed;
+    if (input.grantedAmount) {
+      const g = Money.fromJSON(input.grantedAmount);
+      if (g.currency !== current.currency) throw badRequest('CURRENCY_MISMATCH', `Montant attendu en ${current.currency}.`);
+      if (g.compare(computed) < 0) {
+        throw unprocessable('REMISSION_BELOW_COMPUTED', `Montant après remise ${g.toDecimalString()} inférieur au montant calculé selon la règle (${computed.toDecimalString()} ${computed.currency}) et la demande : jamais de remise librement saisie.`, { computation });
+      }
+      if (g.compare(current) >= 0) throw unprocessable('INVALID_REMISSION_AMOUNT', 'Le montant après remise doit être inférieur au montant dû.');
+      amount = g;
+    }
+    if (amount.isZero()) throw unprocessable('REMISSION_TO_ZERO_FORBIDDEN', 'Une remise ne peut ramener la créance à zéro : l’effacement total relève de l’admission en non-valeur.');
+    const rectified = this.ctx.assessment.rectify(o.id, amount.toJSON(), { appealId: id, reason: `Remise ${id} (${rule.code}, taux déclaré ${computation.rate} %) — ${input.motivation}`, decidedBy: user, decisionType: 'REMISE' });
+    const updated = this.remissions.update({ ...r, status: 'ACCORDEE', computation, decision: { by: user.id, at: now, motivation: input.motivation, grantedAmount: amount.toJSON(), fromAmount: o.amount }, rectifyingObligationId: rectified.id });
     this.ctx.audit.append({ actor: this.actor(user), action: 'recovery.remission.granted', resourceType: 'obligation', resourceId: o.id, details: { remissionId: id, rectifyingObligationId: rectified.id } });
+    recordReductionGranted(this.ctx.audit, this.actor(user), {
+      path: 'REMISE_RECOUVREMENT', obligationId: o.id, fromAmount: o.amount, toAmount: amount.toJSON(), deciderId: user.id, taxpayerId: o.taxpayerId,
+      resultingObligationId: rectified.id, sourceId: id, approvers: [...new Set([r.requestedBy, ...(r.instruction ? [r.instruction.by] : []), user.id])], basis: `${rule.code} v${rule.version} (${computation.rate} %)`,
+    });
+    return updated;
+  }
+
+  // ── Admission en non-valeur : seule voie d'effacement total, proposée (R20) puis décidée (R21) ──
+  proposeWriteOff(user: User, input: { obligationId: string; motivation: string; evidence: string[] }): WriteOff {
+    authorize(user, 'recouvrement:writeoff.propose');
+    const o = this.ctx.assessment.get(input.obligationId);
+    if (!PAYABLE.includes(o.status) || o.supersededBy) throw unprocessable('OBLIGATION_NOT_PAYABLE', `Obligation au statut ${o.status}.`);
+    if (o.dueDate >= this.today()) throw unprocessable('NOT_YET_DUE', `Échéance au ${o.dueDate} non dépassée : aucune admission en non-valeur.`);
+    if (input.motivation.trim().length < 20) throw badRequest('MOTIVATION_REQUIRED', 'Motivation circonstanciée obligatoire (au moins 20 caractères : insolvabilité, disparition, prescription…).');
+    const evidence = input.evidence.map((e) => e.trim()).filter(Boolean);
+    if (!evidence.length) throw unprocessable('EVIDENCE_REQUIRED', 'Au moins une pièce justifiant l’irrécouvrabilité est requise.');
+    assertNotRelated(user, o.taxpayerId, 'Conflit d’intérêts : l’agent est lié au contribuable concerné.');
+    if (this.writeOffs.findOne((w) => w.obligationId === o.id && w.status === 'PROPOSEE')) throw conflict('WRITE_OFF_PENDING', 'Une admission en non-valeur est déjà proposée pour cette obligation.');
+    const w = this.writeOffs.insert({
+      id: this.ids.next('ANV', 6), obligationId: o.id, taxpayerId: o.taxpayerId, amount: o.amount, motivation: input.motivation.trim(), evidence,
+      proposedBy: user.id, proposedAt: this.nowIso(), status: 'PROPOSEE',
+    });
+    this.ctx.audit.append({ actor: this.actor(user), action: 'recovery.write_off.proposed', resourceType: 'obligation', resourceId: o.id, details: { writeOffId: w.id, amount: o.amount } });
+    this.ctx.comms.publish('approval.requested', this.ctx.users.withRole('R21').map(userRecipient), { objet: `Admission en non-valeur ${w.id} — ${o.id}` }, { entity: o.entity });
+    return w;
+  }
+
+  decideWriteOff(user: User, id: string, input: { decision: 'ADMISE' | 'REJETEE'; motivation: string }): WriteOff {
+    authorize(user, 'recouvrement:decide');
+    const w = this.writeOffs.get(id);
+    if (!w) throw notFound('WRITE_OFF_NOT_FOUND', `Admission en non-valeur inconnue : ${id}`);
+    if (w.status !== 'PROPOSEE') throw conflict('WRITE_OFF_ALREADY_DECIDED', `Admission au statut ${w.status}.`);
+    const o = this.ctx.assessment.get(w.obligationId);
+    assertDistinctPerson(user.id, [w.proposedBy, o.createdBy], 'L’admission en non-valeur est décidée par une autorité distincte de l’agent qui la propose et du liquidateur.');
+    assertNotRelated(user, w.taxpayerId, 'Conflit d’intérêts : l’autorité de décision est liée au contribuable concerné.');
+    const now = this.nowIso();
+    if (input.decision === 'ADMISE') {
+      if (!PAYABLE.includes(o.status) || o.supersededBy) throw conflict('OBLIGATION_NOT_PAYABLE', `Obligation au statut ${o.status} : admission sans objet.`);
+      // Statut distinct : jamais « SOLDEE » (la créance n'est pas payée) ; la créance reste tracée pour le comptable.
+      this.ctx.assessment.setStatus(o.id, 'ADMISE_EN_NON_VALEUR');
+      const c = this.caseFor(o.id);
+      if (c) this.cases.update({ ...c, status: 'CLASSE' });
+      recordReductionGranted(this.ctx.audit, this.actor(user), {
+        path: 'ADMISSION_NON_VALEUR', obligationId: o.id, fromAmount: o.amount, toAmount: Money.zero(o.amount.currency as CurrencyCode).toJSON(),
+        deciderId: user.id, taxpayerId: o.taxpayerId, sourceId: id, approvers: [w.proposedBy, user.id],
+      });
+    }
+    const updated = this.writeOffs.update({ ...w, status: input.decision, decision: { by: user.id, at: now, motivation: input.motivation } });
+    this.ctx.audit.append({ actor: this.actor(user), action: 'recovery.write_off.decided', resourceType: 'obligation', resourceId: o.id, details: { writeOffId: id, decision: input.decision, motivation: input.motivation } });
     return updated;
   }
 
@@ -1225,7 +1414,22 @@ export class RecoveryService {
         overdue: appeals.filter((a) => a.deadlines.state === 'DELAI_DEPASSE').length,
         decidedWithinDeadline: decidedAppeals.length ? `${Math.round((decidedAppeals.filter((a) => a.deadlines.state === 'DECIDE_DANS_LE_DELAI').length / decidedAppeals.length) * 100)} %` : null,
       },
-      plans: { requested: this.plans.find((p) => p.status === 'DEMANDE').length, active: this.plans.find((p) => p.status === 'ACCORDE').length, defaulted: this.plans.find((p) => p.status === 'DEFAILLANT').length },
+      plans: {
+        requested: this.plans.find((p) => p.status === 'DEMANDE').length, active: this.plans.find((p) => p.status === 'ACCORDE').length, defaulted: this.plans.find((p) => p.status === 'DEFAILLANT').length,
+        defaultProposed: this.plans.find((p) => p.status === 'ACCORDE' && !!p.defaultProposal).length,
+        /** Échéanciers en vigueur avec au moins une échéance échue impayée : encours restant dû, par devise. */
+        atRisk: (() => {
+          const amount: Record<string, string> = {};
+          let count = 0;
+          for (const p of this.plans.find((x) => x.status === 'ACCORDE')) {
+            const v = this.planView(p);
+            if (!v.rows.some((r) => r.state === 'ECHUE_IMPAYEE')) continue;
+            count++;
+            amount[v.outstanding.currency] = Money.fromJSON({ amount: amount[v.outstanding.currency] ?? '0', currency: v.outstanding.currency }).add(Money.fromJSON(v.outstanding)).toDecimalString();
+          }
+          return { count, amount };
+        })(),
+      },
       recoveryCost: { status: 'NON_MESURE', detail: 'Coût des actions de recouvrement non encore saisi : récupération nette non calculable.' },
     };
   }

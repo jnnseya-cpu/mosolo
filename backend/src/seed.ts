@@ -99,7 +99,8 @@ export function seed(ctx: AppContext): void {
     competentAuthority: 'Ministère provincial des Finances', administeringEntity: 'DGIPK',
     taxableEvent: 'Propriété d’un immeuble bâti (démonstration)', liableParty: 'Propriétaire',
     baseDefinition: 'Forfait par propriété selon le rang de localité', formula: 'forfait',
-    rateTable: { 'forfait:1': '450', 'forfait:2': '150', 'forfait:3': '50', 'forfait:4': '10' },
+    // Taux maximaux de remise et d'exonération DÉCLARÉS par la fiche (fictive) : aucun taux n'est jamais saisi librement.
+    rateTable: { 'forfait:1': '450', 'forfait:2': '150', 'forfait:3': '50', 'forfait:4': '10', taux_exoneration_max: '100', taux_remise_max: '50' },
     currency: 'USD', rounding: 'HALF_UP', periodicity: 'ANNUELLE', dueRule: '30 jours après émission (démonstration)',
     exemptions: [], penalties: [], effectiveFrom: '2026-01-01', beneficiaryAccountAlias: DEMO.dgipkAlias,
     appealPath: 'Réclamation auprès de la DGIPK via MOSOLO (démonstration)', sourceVerification: 'OFFICIEL_CERTIFIE',

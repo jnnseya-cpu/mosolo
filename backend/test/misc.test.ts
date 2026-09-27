@@ -86,7 +86,11 @@ describe('Socle', () => {
     const real = await env.req('POST', '/v1/assessments/calculate', 'u-controleur', { ...body, simulate: false });
     expect(real.statusCode).toBe(201);
     expect(real.json().obligation.amount).toEqual({ amount: '1501.25', currency: 'USD' });
-    const missing = await env.req('POST', '/v1/assessments/calculate', 'u-controleur', { ...body, inputs: {} });
+    // Base absente : pré-remplie depuis l'objet (attribut superficie_m2 = 600), tracée dans la liquidation.
+    const prefilled = (await env.req('POST', '/v1/assessments/calculate', 'u-controleur', { ...body, inputs: {} })).json();
+    expect(prefilled.trace).toMatchObject({ inputs: { superficie_m2: '600' }, prefilled: { superficie_m2: { value: '600', source: 'ATTRIBUT' } } });
+    // Objet sans valeur connue pour ce champ : l'entrée manquante reste refusée.
+    const missing = await env.req('POST', '/v1/assessments/calculate', 'u-controleur', { ...body, objectId: DEMO.unitId, inputs: {} });
     expect(missing.json().code).toBe('FORMULA_UNKNOWN_IDENTIFIER');
   });
 

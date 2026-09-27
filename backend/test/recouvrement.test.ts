@@ -514,24 +514,30 @@ describe('Pénalités et remises : règle ACTIVE et décision humaine uniquement
     // La base de remise doit être la règle même de l'obligation (une autre recette ne fonde rien).
     const other = await publishCertifiedRule(env, { code: 'TEST-REMISE', exemptions });
     expect((await env.req('POST', '/v1/recouvrement/remises', 'u-locataire', { obligationId: obl, basisRuleId: other.id, requestedAmount: { amount: '30.00', currency: 'USD' }, motivation })).json().code).toBe('REMISSION_BASIS_RULE_MISMATCH');
-    // Nouvelle version de la règle de l'obligation, en vigueur dès aujourd'hui (aucune rétroactivité).
-    const basis = await publishCertifiedRule(env, { code: demoRule.code, exemptions, effectiveFrom: env.clock.now().toISOString().slice(0, 10) });
+    // Nouvelle version de la règle de l'obligation, en vigueur dès aujourd'hui (aucune rétroactivité), sans taux déclaré.
+    const today = env.clock.now().toISOString().slice(0, 10);
+    const noRate = await publishCertifiedRule(env, { code: demoRule.code, exemptions, effectiveFrom: today });
+    expect((await env.req('POST', '/v1/recouvrement/remises', 'u-locataire', { obligationId: obl, basisRuleId: noRate.id, requestedAmount: { amount: '30.00', currency: 'USD' }, motivation })).json().code).toBe('REMISSION_RATE_NOT_DECLARED');
+    // Version déclarant un taux de remise maximal de 40 % (aucun taux n'est jamais saisi librement).
+    const basis = await publishCertifiedRule(env, { code: demoRule.code, exemptions, effectiveFrom: today, rateTable: { 'tarif_m2:1': '3.5', 'tarif_m2:2': '2.5', 'tarif_m2:3': '2', 'tarif_m2:4': '1.5', taux_remise_max: '40' } });
     const r = await env.req('POST', '/v1/recouvrement/remises', 'u-locataire', { obligationId: obl, basisRuleId: basis.id, requestedAmount: { amount: '30.00', currency: 'USD' }, motivation });
-    expect(r.json().status).toBe('DEMANDEE');
+    expect(r.json()).toMatchObject({ status: 'DEMANDEE', computation: { rate: '40', computedAmount: { amount: '30.00', currency: 'USD' } } });
     // Une seule demande en attente par obligation.
     expect((await env.req('POST', '/v1/recouvrement/remises', 'u-locataire', { obligationId: obl, basisRuleId: basis.id, requestedAmount: { amount: '20.00', currency: 'USD' }, motivation })).json().code).toBe('REMISSION_ALREADY_PENDING');
     expect((await env.req('POST', `/v1/recouvrement/remises/${r.json().id}/decision`, 'u-contentieux', { granted: true, motivation: 'Sans habilitation de décision' })).statusCode).toBe(403);
+    // Demande du contribuable : instruction préalable par un agent de recouvrement (R20), distinct du décideur.
+    expect((await env.req('POST', `/v1/recouvrement/remises/${r.json().id}/decision`, 'u-decideur', { granted: true, motivation: 'Remise conforme à l’article 3 fictif' })).json().code).toBe('REMISSION_NOT_INSTRUCTED');
+    await env.req('POST', `/v1/recouvrement/remises/${r.json().id}/instruction`, 'u-contentieux', { favorable: true, analysis: 'Situation sociale vérifiée sur pièces.' });
     const d = await env.req('POST', `/v1/recouvrement/remises/${r.json().id}/decision`, 'u-decideur', { granted: true, motivation: 'Remise conforme à l’article 3 fictif' });
     expect(d.json().status).toBe('ACCORDEE');
     expect(env.app.ctx.assessment.get(obl)).toMatchObject({ status: 'ANNULEE', supersededBy: d.json().rectifyingObligationId });
     expect(env.app.ctx.assessment.get(d.json().rectifyingObligationId).amount).toEqual({ amount: '30.00', currency: 'USD' });
-    // Contrôles rejoués à la décision : une demande sur une obligation soldée entre-temps est sans objet.
+    expect(env.app.ctx.audit.list({ action: 'reduction.granted' }).items.at(-1)?.details).toMatchObject({ path: 'REMISE_RECOUVREMENT', obligationId: obl, fromAmount: { amount: '50.00' }, toAmount: { amount: '30.00' }, deciderId: 'u-decideur' });
+    // Plafond cumulé sur la chaîne : 40 % de 50,00 déjà remis ⇒ aucune nouvelle remise sur la rectificative.
     const rect = d.json().rectifyingObligationId as string;
     const again = await env.req('POST', '/v1/recouvrement/remises', 'u-locataire', { obligationId: rect, basisRuleId: basis.id, requestedAmount: { amount: '20.00', currency: 'USD' }, motivation });
-    expect(again.json().status).toBe('DEMANDEE');
-    env.app.ctx.assessment.setStatus(rect, 'SOLDEE');
-    const late = await env.req('POST', `/v1/recouvrement/remises/${again.json().id}/decision`, 'u-decideur', { granted: true, motivation: 'Remise conforme à l’article 3 fictif' });
-    expect(late.json().code).toBe('OBLIGATION_NOT_PAYABLE');
+    expect(again.json().code).toBe('REMISSION_CAP_EXHAUSTED');
+    expect(env.app.ctx.assessment.get(rect).supersededBy).toBeUndefined();
     expect(env.app.ctx.assessment.get(rect).supersededBy).toBeUndefined();
   });
 });

@@ -16,7 +16,18 @@ const calculateSchema = z.object({
   inputs: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/, 'Identifiant d’entrée invalide'), decimalString)
     .refine((o) => Object.keys(o).length <= 50, 'Au plus 50 entrées').default({}),
   simulate: z.boolean(),
+  /** Dérogation approuvée (base inférieure aux données connues de l'objet au-delà de la tolérance). */
+  baseOverrideId: z.string().min(1).optional(),
 }).strict();
+
+const baseOverrideSchema = z.object({
+  ruleId: z.string(),
+  taxpayerId: z.string(),
+  objectId: z.string(),
+  inputs: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/, 'Identifiant d’entrée invalide'), decimalString).default({}),
+  motive: z.string().trim().min(10).max(2000),
+}).strict();
+const baseOverrideDecisionSchema = z.object({ approve: z.boolean(), reason: z.string().trim().min(10).max(2000) }).strict();
 
 export function registerAssessmentRoutes(app: FastifyInstance, ctx: AppContext): void {
   app.post('/v1/assessments/calculate', async (req, reply) => {
@@ -24,6 +35,23 @@ export function registerAssessmentRoutes(app: FastifyInstance, ctx: AppContext):
     const body = parse(calculateSchema, req.body);
     const res = ctx.assessment.calculate(user, body);
     return reply.code(res.obligation ? 201 : 200).send({ trace: res.trace, obligation: res.obligation ? obligationDetail(res.obligation) : null });
+  });
+
+  // Dérogation à la base connue de l'objet : demande motivée (liquidateur) puis seconde approbation (hiérarchie).
+  app.post('/v1/assessments/base-overrides', async (req, reply) => {
+    return reply.code(201).send(ctx.assessment.requestBaseOverride(requireUser(req), parse(baseOverrideSchema, req.body)));
+  });
+
+  app.get('/v1/assessments/base-overrides', async (req) => {
+    const user = requireUser(req);
+    if (!evaluate(user, 'assessment.liquidate') && !evaluate(user, 'assessment:base-override.approve') && !evaluate(user, 'audit.read')) {
+      throw forbidden('FORBIDDEN', 'Consultation des dérogations réservée à la liquidation, à la hiérarchie et à l’audit.');
+    }
+    return ctx.assessment.baseOverrides.all();
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/assessments/base-overrides/:id/decision', async (req) => {
+    return ctx.assessment.decideBaseOverride(requireUser(req), req.params.id, parse(baseOverrideDecisionSchema, req.body));
   });
 
   app.get<{ Querystring: { taxpayerId?: string } }>('/v1/obligations', async (req) => {

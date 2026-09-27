@@ -150,7 +150,8 @@ export class FiscalService {
       this.relations.validate(controller, r.id, { approve: true, reason: 'Titre foncier concordant (démonstration).' });
     }
     // Exonération approuvée (circuit complet, quatre yeux) pour B, puis liquidation qui l'applique.
-    const exo = this.exemptions.request(u('u-guichet'), {
+    // Initiateur (contrôleur) ≠ instructeur (guichet) ≠ juriste ≠ décideur.
+    const exo = this.exemptions.request(u('u-controleur'), {
       taxpayerId: tpB.id, kind: 'EXONERATION', objectId: 'OBJ-FISC-DEMO-004', ruleCode: 'DEMO-IF-BATI', rate: '50',
       grounds: 'Exemple fictif : immeuble affecté partiellement à une œuvre sociale reconnue.',
       proofs: [{ type: 'DECISION_RECONNAISSANCE', reference: 'Décision fictive DEMO-OS-12' }],

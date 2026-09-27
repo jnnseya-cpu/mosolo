@@ -34,6 +34,9 @@ const schemas = {
   penalty: z.object({ obligationId: z.string().min(1), penaltyRuleId: z.string().min(1), inputs: z.record(z.string().regex(/^-?\d{1,18}(\.\d{1,18})?$/)).default({}), motivation: motive }).strict(),
   remission: z.object({ obligationId: z.string().min(1), basisRuleId: z.string().min(1), requestedAmount: moneySchema, motivation: motive }).strict(),
   remissionDecision: z.object({ granted: z.boolean(), motivation: motive, grantedAmount: moneySchema.optional() }).strict(),
+  remissionInstruction: z.object({ favorable: z.boolean(), analysis: motive }).strict(),
+  writeOff: z.object({ obligationId: z.string().min(1), motivation: z.string().trim().min(20).max(4000), evidence: z.array(z.string().trim().min(3).max(300)).min(1).max(20) }).strict(),
+  writeOffDecision: z.object({ decision: z.enum(['ADMISE', 'REJETEE']), motivation: motive }).strict(),
 };
 
 /** Contribuables accessibles à un usager public (lui-même et ses mandants). */
@@ -208,7 +211,25 @@ export function registerRecoveryRoutes(app: FastifyInstance, ctx: AppContext, sv
     return reply.code(201).send(svc.requestRemission(requireUser(req), parse(schemas.remission, req.body)));
   });
 
+  app.post<{ Params: { id: string } }>('/v1/recouvrement/remises/:id/instruction', async (req) => {
+    return svc.instructRemission(requireUser(req), req.params.id, parse(schemas.remissionInstruction, req.body));
+  });
+
   app.post<{ Params: { id: string } }>('/v1/recouvrement/remises/:id/decision', async (req) => {
     return svc.decideRemission(requireUser(req), req.params.id, parse(schemas.remissionDecision, req.body));
+  });
+
+  // ── Admission en non-valeur (seule voie d'effacement total) ──
+  app.get('/v1/recouvrement/non-valeurs', async (req) => {
+    authorize(requireUser(req), 'recouvrement:read');
+    return svc.writeOffs.all();
+  });
+
+  app.post('/v1/recouvrement/non-valeurs', async (req, reply) => {
+    return reply.code(201).send(svc.proposeWriteOff(requireUser(req), parse(schemas.writeOff, req.body)));
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/recouvrement/non-valeurs/:id/decision', async (req) => {
+    return svc.decideWriteOff(requireUser(req), req.params.id, parse(schemas.writeOffDecision, req.body));
   });
 }
