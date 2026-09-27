@@ -9,7 +9,7 @@ Depuis la racine du dépôt :
 
 ```bash
 npm run dev -w backend        # serveur avec rechargement, MODE DÉMONSTRATION explicite (--demo), port PORT ou 8080
-npm test -w backend           # 536 tests, 45 fichiers (vitest + fastify.inject ; vitest.config.ts active MOSOLO_DEMO_MODE=true)
+npm test -w backend           # 548 tests, 46 fichiers (vitest + fastify.inject ; vitest.config.ts active MOSOLO_DEMO_MODE=true)
 npm run typecheck -w backend  # TypeScript strict
 npm run lint                  # ESLint, depuis la racine (configuration commune eslint.config.mjs)
 ```
@@ -70,7 +70,7 @@ src/
     appeals           réclamations (instruction ≠ décision), obligations rectificatives
     fx                taux de change (démo, source déclarée)
     alerts, audit, system
-  plugins/            17 modules d'extension (ordre d'enregistrement : plugins/index.ts), 624 routes au total
+  plugins/            17 modules d'extension (ordre d'enregistrement : plugins/index.ts), 631 routes au total
                       (catalogue généré : python3 tools/gen_routes.py → specs/routes-api.md)
   persistence/        PostgreSQL : migrations, journal en ajout seul, ancre d'audit externe, sauvegarde signée, restauration
 db/schema.sql         DDL PostgreSQL de référence (tables en ajout seul protégées par déclencheurs)
