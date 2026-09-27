@@ -105,8 +105,14 @@ export class SlidingWindowLimiter {
 export function tierOf(url: string): 'auth' | 'public' | 'global' {
   const path = url.split('?')[0] ?? url;
   if (path === '/v1/auth/login' || path === '/v1/auth/otp') return 'auth';
+  // Autres échanges d'authentification sans session établie (clés d'accès, renouvellement de jeton) : même palier.
+  if (path === '/v1/auth/refresh' || path.startsWith('/v1/auth/passkeys/authentication/')) return 'auth';
   // Pages légères sans JavaScript (/l : vérification de preuves, signalement anonyme) : palier public elles aussi.
   if (path.startsWith('/v1/public/') || path.startsWith('/v1/verify') || path.startsWith('/.well-known/') || path === '/l' || path.startsWith('/l/')) return 'public';
+  // Inscription libre et consultations publiques hors du préfixe /v1/public/ (badges, afficheurs de la publicité).
+  // Les rappels signés des prestataires et des passerelles (USSD, SMS) restent au palier global : volume légitime
+  // élevé depuis quelques adresses, authenticité garantie par signature.
+  if (path === '/v1/registrations' || path.startsWith('/v1/publicite/public/')) return 'public';
   return 'global';
 }
 

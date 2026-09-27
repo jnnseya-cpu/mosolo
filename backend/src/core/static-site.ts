@@ -23,7 +23,14 @@ export function staticSiteFromEnv(env: NodeJS.ProcessEnv = process.env): ((url: 
   if (!existsSync(join(root, 'index.html'))) throw new Error(`MOSOLO_STATIC_DIR : index.html introuvable dans ${root} (construire d'abord : npm run build -w frontend).`);
   const index = readFileSync(join(root, 'index.html'));
   return (url: string) => {
-    const path = decodeURIComponent(url.split('?')[0] ?? '/');
+    let path: string;
+    try {
+      path = decodeURIComponent(url.split('?')[0] ?? '/');
+    } catch {
+      return null; // Encodage invalide (« %E0%A4%A ») : 404, jamais une erreur interne.
+    }
+    // Octet nul : jamais transmis au système de fichiers.
+    if (path.includes('\0')) return null;
     if (path.startsWith('/v1/') || path === '/v1') return null;
     const file = normalize(join(root, path));
     // Jamais hors du dossier publié (« ../ »).

@@ -8,6 +8,7 @@ import { createContext, type AppContext, type AppOptions } from './context.js';
 import { assertSafeDeployment, ConfigurationError, isDemoMode, resolveDemoUser } from './core/auth.js';
 import { ApiError } from './core/errors.js';
 import { installRequestCorrelation } from './core/http.js';
+import { applySecurityHeaders } from './core/security-headers.js';
 import { httpsOptionsFromEnv } from './plugins/socle/mtls.js';
 import { registerAiRoutes } from './modules/ai/routes.js';
 import { registerAlertRoutes } from './modules/alerts/routes.js';
@@ -119,10 +120,8 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
   // Heure de référence = heure du SERVEUR (§ H.11.6) : chaque réponse la porte ; le client s'y cale pour ses comptes à rebours.
   app.addHook('onSend', async (_req, reply) => {
     reply.header('x-mosolo-server-time', ctx.clock.now().toISOString());
-    // En-têtes de sécurité de base (API JSON et pages légères) : pas de reniflage de type, pas d'intégration en cadre.
-    reply.header('x-content-type-options', 'nosniff');
-    reply.header('x-frame-options', 'DENY');
-    reply.header('referrer-policy', 'no-referrer');
+    // En-têtes de sécurité (API JSON, pages légères, application web) : voir core/security-headers.ts.
+    applySecurityHeaders(reply);
   });
 
   // Corps brut conservé : nécessaire à la vérification des signatures (prestataires, terminaux).

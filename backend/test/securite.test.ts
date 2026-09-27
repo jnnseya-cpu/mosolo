@@ -328,6 +328,13 @@ describe('Socle : connexion par téléphone, export minimisé, chaîne d’audit
     expect(tierOf('/l/v?c=ABC')).toBe('public');
     expect(tierOf('/l/signaler')).toBe('public');
     expect(tierOf('/login')).toBe('global');
+    // Autres échanges d'authentification et inscription libre (audit de préparation à la production).
+    expect(tierOf('/v1/auth/refresh')).toBe('auth');
+    expect(tierOf('/v1/auth/passkeys/authentication/verify')).toBe('auth');
+    expect(tierOf('/v1/auth/passkeys/registration')).toBe('global');
+    expect(tierOf('/v1/registrations')).toBe('public');
+    expect(tierOf('/v1/publicite/public/badges/u-1')).toBe('public');
+    expect(tierOf('/v1/providers/mm-operator-a/callbacks')).toBe('global');
   });
 });
 
