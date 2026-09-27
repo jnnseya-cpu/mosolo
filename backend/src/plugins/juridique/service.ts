@@ -184,6 +184,7 @@ export class JuridiqueService {
   private eligibles(regle: RegleConservation, repo: InMemoryRepository<Entity>, dureeJours: number): string[] {
     const cutoff = this.ctx.clock.now().getTime() - dureeJours * 86_400_000;
     return repo.all().filter((r) => {
+      // Conversion justifiée : purge générique de conservation, indépendante du type d'entité du dépôt (champs listés par la règle).
       const rec = r as unknown as Record<string, unknown>;
       if (rec.purgedAt) return false;
       if (regle.statutsExclus?.includes(String(rec.status ?? ''))) return false;
@@ -261,6 +262,7 @@ export class JuridiqueService {
       let n = 0;
       for (const id of l.ids) {
         if (!still.has(id)) { ignores.push({ depot: l.depot, id, raison: 'Plus éligible (durée modifiée ou enregistrement actif)' }); continue; }
+        // Conversion justifiée : purge générique de conservation, indépendante du type d'entité du dépôt (champs listés par la règle).
         const rec = (repo as InMemoryRepository<Entity>).get(id) as unknown as Record<string, unknown>;
         const next: Record<string, unknown> = { ...rec, purgedAt: this.now(), purgeRequestId: r.id };
         for (const f of c.conservation.champsEffaces) {
@@ -268,6 +270,7 @@ export class JuridiqueService {
           if (v === undefined) continue;
           next[f] = typeof v === 'string' ? EFFACE : typeof v === 'number' ? 0 : v && typeof v === 'object' ? {} : null;
         }
+        // Conversion justifiée : purge générique de conservation, indépendante du type d'entité du dépôt (champs listés par la règle).
         (repo as InMemoryRepository<Entity>).update(next as unknown as Entity);
         n++;
       }

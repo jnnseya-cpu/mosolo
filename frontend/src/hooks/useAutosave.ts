@@ -138,7 +138,7 @@ export function useAutosave<T extends object>(key: string, initial: T, opts: { d
     setValueState(next ?? initial);
     setStatus({ kind: 'idle' });
     setRestoredFrom(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
   }, [key]);
 
   return { value, setValue, status, restoredFrom, versions, versionsLoading, versionsError, loadVersions, restoreVersion, reset };

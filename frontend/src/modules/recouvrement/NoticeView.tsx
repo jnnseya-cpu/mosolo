@@ -30,7 +30,7 @@ export default function NoticeView() {
     api<Notice>(`/v1/recouvrement/avis/${encodeURIComponent(n.id)}/lecture`, { method: 'POST' })
       .then((r) => { setAck(r.readAt ?? null); proof.reload(); })
       .catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
   }, [n?.id, isRecipient]);
 
   if (!n && q.loading) return <div className="page"><Loading /></div>;

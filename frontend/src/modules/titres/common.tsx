@@ -132,6 +132,7 @@ export function TitleStatus({ status, compact }: { status: StatusView; compact?:
 export function playSignal(kind: string): void {
   if (kind !== 'COURT' && kind !== 'DISTINCT') return;
   try {
+    // Conversion justifiée : préfixe Safari historique (webkitAudioContext) absent des types DOM standard.
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctx) return;
     const ctx = new Ctx();

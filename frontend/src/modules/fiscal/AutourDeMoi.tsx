@@ -77,7 +77,7 @@ export default function AutourDeMoi() {
     if (!usable || !fix) return;
     const q = lastQuery.current;
     if (!q || q.radius !== radius || metersBetween(q, fix) >= MOVE_REFRESH_M) void load(fix, radius);
-  }, [fix?.lat, fix?.lon, fix?.accuracy, radius, usable]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fix?.lat, fix?.lon, fix?.accuracy, radius, usable]); // eslint-disable-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
 
   const items = useMemo(() => (data?.items ?? []).filter((i) => !only || i.color === only), [data, only]);
   useEffect(() => { if (sel) document.getElementById(`adm-${sel}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, [sel]);

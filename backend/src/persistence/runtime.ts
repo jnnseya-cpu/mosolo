@@ -189,6 +189,7 @@ export class PersistenceRuntime {
     const maxByPrefix = new Map<string, number>();
     for (const repo of discovery.repos.values()) {
       for (const item of repo.all()) {
+        // Conversion justifiée : lecture générique des identifiants de tout enregistrement (type d'entité inconnu ici).
         for (const [p, n] of readableIds(item as unknown as Record<string, unknown>)) maxByPrefix.set(p, Math.max(n, maxByPrefix.get(p) ?? 0));
       }
     }

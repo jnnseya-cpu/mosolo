@@ -39,6 +39,7 @@ export default function Instructions() {
   const r = useRunner(q.reload);
   const [text, setText] = useState('');
   const [form, setForm] = useState({ origin: 'COMMUNE', subject: '', body: '', entity: 'DGIPK', role: '', deadline: '' });
+  // Conversion justifiée : lecture du champ facultatif `entity` de la session (absent du type commun de l'utilisateur).
   const u = user as unknown as { id: string; roles: string[]; entity?: string } | null;
   return (
     <div className="page page-wide">

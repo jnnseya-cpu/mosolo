@@ -164,7 +164,7 @@ export interface AppOptions {
   /** `fetch`, journal masqué et temporisation injectables (tests : jamais de réseau réel). */
   connectorRuntime?: ConnectorRuntime;
   /** Modules d'extension (défaut : `DEFAULT_PLUGINS`). */
-  plugins?: MosoloPlugin<any>[];
+  plugins?: MosoloPlugin<unknown>[];
 }
 
 export function createContext(opts: AppOptions = {}) {

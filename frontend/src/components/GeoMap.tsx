@@ -117,7 +117,7 @@ export default function GeoMap(props: GeoMapProps) {
     m.on('click', (e) => latest.current.onPick?.(e.lngLat.lng, e.lngLat.lat));
     map.current = m;
     return () => { m.remove(); map.current = null; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
   }, [withTiles]);
 
   // Mise à jour des couches MOSOLO et du centre sans recréer la carte.
@@ -130,10 +130,10 @@ export default function GeoMap(props: GeoMapProps) {
     (m.getSource('m-polys') as GeoJSONSource | undefined)?.setData(d.polys as never);
     (m.getSource('m-lines') as GeoJSONSource | undefined)?.setData(d.lines as never);
     (m.getSource('m-points') as GeoJSONSource | undefined)?.setData(d.points as never);
-  }, [props.markers, props.polygons, props.lines, props.accuracy]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!props.bounds) map.current?.easeTo({ center: props.center, duration: 400 }); }, [props.center[0], props.center[1]]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [props.markers, props.polygons, props.lines, props.accuracy]); // eslint-disable-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
+  useEffect(() => { if (!props.bounds) map.current?.easeTo({ center: props.center, duration: 400 }); }, [props.center[0], props.center[1]]); // eslint-disable-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
   const b = props.bounds;
-  useEffect(() => { if (b && map.current) map.current.fitBounds(b, { padding: 30, maxZoom: 17, duration: 300 }); }, [b?.[0][0], b?.[0][1], b?.[1][0], b?.[1][1]]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (b && map.current) map.current.fitBounds(b, { padding: 30, maxZoom: 17, duration: 300 }); }, [b?.[0][0], b?.[0][1], b?.[1][0], b?.[1][1]]); // eslint-disable-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
 
   return (
     <figure className="geomap">

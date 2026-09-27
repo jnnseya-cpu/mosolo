@@ -104,7 +104,7 @@ export default function Verify() {
     }
   }, []);
 
-  useEffect(() => { if (initial) void check(initial, dupNo); }, [initial, check]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (initial) void check(initial, dupNo); }, [initial, check]); // eslint-disable-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
 
   const onScan = useCallback((raw: string) => {
     const p = parseScan(raw);

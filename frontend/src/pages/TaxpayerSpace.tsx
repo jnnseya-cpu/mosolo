@@ -72,6 +72,7 @@ function Explanation({ id }: { id: string }) {
   if (q.error) return <ErrorState error={q.error} onRetry={q.reload} />;
   const d = q.data;
   if (!d) return null;
+  // Conversion justifiée : compatibilité avec l'ancienne forme de réponse (explication à la racine).
   const ex: ObligationExplanation = d.explanation ?? (d as unknown as ObligationExplanation);
   const rule = typeof ex.rule === 'string' ? { code: ex.rule } : ex.rule ?? {};
   const version = ex.ruleVersion ?? ex.version ?? rule.version;

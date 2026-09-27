@@ -175,6 +175,7 @@ export class PartageLegalService {
       const nonRem = rates.filter((r) => !r.remainder).reduce((s, r) => s + Number(r.pct), 0);
       if (nonRem > 100) { notCalculable.push({ code: k.code, reason: 'Somme des parts supérieure à 100 %.', base: [] }); continue; }
       const remPct = (Math.round((100 - nonRem) * 10_000) / 10_000).toString();
+      // Conversion justifiée : tranches construites dynamiquement depuis l'acte ; champs complétés plus loin (calcul).
       const slices = rates.map((r) => ({ code: r.beneficiary, label: r.beneficiary, pct: r.remainder ? remPct : r.pct!, flow: 'FLUX_2', remainder: r.remainder, rateKey: r.rateKey, calcul: '' })) as unknown as SliceDef[];
       keys.push({ code: k.code, ruleId: a.rule.id, version: a.rule.version, rateTable: a.rule.rateTable });
       for (const [key, x] of cells) {

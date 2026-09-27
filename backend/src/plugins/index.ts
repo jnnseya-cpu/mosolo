@@ -36,7 +36,7 @@ import { integriteDetecteursPlugin } from './integrite/detecteurs/plugin.js';
  * `parking` avant `publicite`, `preuves` après tous les modules qui émettent des preuves, `chaine` (lecture seule de la
  * chaîne opératoire) après tous les modules qu'elle relit, `socle` (authentification, limitation de débit) en dernier.
  */
-export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
+export const DEFAULT_PLUGINS: MosoloPlugin<unknown>[] = [
   accesPlugin,
   fiscalPlugin,
   tresorPlugin,

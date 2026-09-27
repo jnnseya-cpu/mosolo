@@ -225,7 +225,7 @@ export default function Controle() {
     } catch (ex) {
       setErr(describeError(ex).message);
     } finally { setBusy(false); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
   }, [value, offline, mode, scope, place, pack, persistQueue]);
 
   async function downloadPack() {

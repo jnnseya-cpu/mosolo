@@ -102,7 +102,7 @@ export function usePreciseLocation(opts: { targetM?: number; maxWaitMs?: number;
     }, maxWaitMs);
   }, [maxWaitMs, stop, targetM]);
 
-  useEffect(() => { if (opts.auto !== false) start(); return stop; }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (opts.auto !== false) start(); return stop; }, []); // eslint-disable-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
 
   /** Correction manuelle (clic sur la carte) : conservée, mais signalée comme MANUEL. */
   const setManual = useCallback((lat: number, lon: number) => {
@@ -127,8 +127,8 @@ export function usePreciseGps(opts: { targetM?: number; maxWaitMs?: number } = {
   const loc = usePreciseLocation({ ...opts, auto: false });
   const cb = useRef<((f: PreciseFix) => void) | null>(null);
   useEffect(() => { if (loc.fix && cb.current) cb.current(loc.fix); }, [loc.fix]);
-  const locate = useCallback((onFix: (f: PreciseFix) => void) => { cb.current = onFix; loc.start(); }, [loc.start]); // eslint-disable-line react-hooks/exhaustive-deps
-  const pick = useCallback((lat: number, lon: number, onFix?: (f: PreciseFix) => void) => { if (onFix) cb.current = onFix; loc.setManual(lat, lon); }, [loc.setManual]); // eslint-disable-line react-hooks/exhaustive-deps
+  const locate = useCallback((onFix: (f: PreciseFix) => void) => { cb.current = onFix; loc.start(); }, [loc.start]); // eslint-disable-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
+  const pick = useCallback((lat: number, lon: number, onFix?: (f: PreciseFix) => void) => { if (onFix) cb.current = onFix; loc.setManual(lat, lon); }, [loc.setManual]); // eslint-disable-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
   return { ...loc, busy: loc.status === 'searching', locate, pick };
 }
 

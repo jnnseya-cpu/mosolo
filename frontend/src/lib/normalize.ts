@@ -128,6 +128,7 @@ export function normalizeGovernor(raw: unknown): GovView {
       delta: str(pick(t, 'confirmedDelta', 'comparisonDMinus1')),
     },
     communes, categories, ladder, trend, scenarioNames, scenarios, alerts,
+    // Conversion justifiée : recommandations déjà normalisées côté serveur ; tableau garanti par arr().
     actions: arr(r.actions) as unknown as AIRecommendation[],
     exchange: exchange.rate ? { rate: String(exchange.rate), date: String(exchange.date ?? ''), source: str(exchange.source) } : undefined,
   };

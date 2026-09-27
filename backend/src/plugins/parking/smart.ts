@@ -65,6 +65,7 @@ export const TARIFF_MODES = [
   { mode: 'LONGUE_DUREE_MAJOREE', label: 'Longue durée majorée', usage: 'Dissuader l’occupation prolongée', title: false },
 ] as const;
 export type TariffMode = (typeof TARIFF_MODES)[number]['mode'];
+// Conversion justifiée : z.enum exige un tuple non vide ; la liste est dérivée d'une constante `as const` non vide.
 export const TARIFF_MODE_CODES = TARIFF_MODES.map((m) => m.mode) as unknown as readonly [TariffMode, ...TariffMode[]];
 
 export const PREMIUM_CATEGORIES = ['HAUTE_DEMANDE', 'COMMERCIALE', 'ADMINISTRATIVE', 'GOUVERNEMENTALE'] as const;

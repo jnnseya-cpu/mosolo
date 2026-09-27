@@ -53,7 +53,7 @@ export function AssistedPay({ objectId, obligationIds, onClose, position, title 
     api<Payables>(`/v1/agents/assist/payables?${q}`)
       .then((d) => { setData(d); setSel(d.items[0]?.obligationId ?? null); })
       .catch((e) => setErr(describeError(e).message));
-  }, [objectId, (obligationIds ?? []).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [objectId, (obligationIds ?? []).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
 
   // Suivi de la confirmation : l'agent voit « payé » dès que le prestataire confirme (la quittance part à l'usager).
   useEffect(() => {

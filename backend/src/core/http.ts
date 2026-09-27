@@ -17,6 +17,7 @@ export function parse<S extends ZodTypeAny>(schema: S, data: unknown): z.infer<S
 }
 
 const currencyEnum = z.enum(CURRENCY_CODES as [string, ...string[]]);
+// Conversion justifiée : z.enum exige un tuple non vide ; le catalogue partagé des devises est un tableau `readonly`.
 export const currencySchema = currencyEnum as unknown as z.ZodType<(typeof CURRENCY_CODES)[number]>;
 
 /** MoneyJSON : montant décimal en chaîne (jamais de nombre flottant). */

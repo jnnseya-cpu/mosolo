@@ -16,7 +16,7 @@ import type { MosoloPlugin } from '../src/plugins/types.js';
 import { PROVIDER_SECRET, type TestEnv } from './helpers.js';
 import { DEMO } from '../src/seed.js';
 
-async function setup(plugins: MosoloPlugin<any>[]): Promise<TestEnv> {
+async function setup(plugins: MosoloPlugin<unknown>[]): Promise<TestEnv> {
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
   const app = buildApp({ clock, secrets: { auditHmacKey: 'test-audit-key', providerSecrets: { 'mm-operator-a': PROVIDER_SECRET }, commsProviderKeys: {} }, plugins });
   await app.ready();

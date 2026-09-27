@@ -15,6 +15,7 @@ import { EmptyState } from '../../components/States';
 
 /** Vue technique (attributs du registre, noms du Cahier). */
 export function RuleTechnicalView({ rule }: { rule: RuleSheet }) {
+  // Conversion justifiée : affichage générique clé → valeur de la fiche technique.
   const fiche = ficheTechnique(rule) as unknown as Record<string, unknown>;
   const show = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v) : v === null ? 'null' : JSON.stringify(v));
   return (

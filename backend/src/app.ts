@@ -89,6 +89,8 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
   const origin = corsOrigins(process.env);
   // TLS mutuel direct (§ 30.1) : certificat client demandé si MOSOLO_TLS_CERT_FILE / MOSOLO_TLS_KEY_FILE sont fournis.
   const https = httpsOptionsFromEnv(process.env);
+  // Conversion justifiée : l'instance HTTPS (TLS mutuel facultatif) a un type générique différent de l'instance HTTP ;
+  // les routes n'utilisent que l'interface commune de FastifyInstance.
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 1_048_576, trustProxy: trustProxyFromEnv(process.env), ...(https ? { https } : {}) }) as unknown as FastifyInstance;
   // Corrélation (X-Request-Id) et contexte d'audit : PREMIER crochet, avant l'authentification.
   installRequestCorrelation(app);

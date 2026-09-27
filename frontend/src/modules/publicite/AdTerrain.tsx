@@ -82,7 +82,7 @@ export function AdAround({ onConstat }: { onConstat: (p: ConstatPreset) => void 
       .then((d) => { if (inflight.current === ctl) { setData(d); setErr(null); } })
       .catch((e) => { if (inflight.current === ctl) { last.current = null; setErr(describeError(e).message); } })
       .finally(() => { if (inflight.current === ctl) inflight.current = null; });
-  }, [fix?.lat, fix?.lon, fix?.accuracy, radius, usable]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fix?.lat, fix?.lon, fix?.accuracy, radius, usable]); // eslint-disable-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
   useEffect(() => { if (sel) document.getElementById(`adp-${sel}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, [sel]);
 
   const items = useMemo(() => (data?.items ?? []).filter((i) => !only || i.color === only), [data, only]);

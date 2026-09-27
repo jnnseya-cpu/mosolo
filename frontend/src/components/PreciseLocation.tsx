@@ -21,7 +21,7 @@ export function PreciseLocation({ onChange, targetM = 10, fallback, showMap = tr
 }) {
   const loc = usePreciseLocation({ targetM });
   const [adjust, setAdjust] = useState(false);
-  useEffect(() => { onChange(loc.fix); }, [loc.fix]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onChange(loc.fix); }, [loc.fix]); // eslint-disable-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
   const f = loc.fix;
   const progress = f?.accuracy ? Math.max(5, Math.min(100, (targetM / f.accuracy) * 100)) : loc.status === 'searching' ? 5 : 0;
   const statusText = {

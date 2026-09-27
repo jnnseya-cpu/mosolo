@@ -27,6 +27,7 @@ export default function ControlesMystere() {
   const { user, users, fmtDate } = useApp();
   const allowed = hasRole(user?.roles, 'R22', 'R24');
   const list = useApi(allowed ? () => api<Check[]>('/v1/integrite/mystery-checks') : null, [user?.id]);
+  // Conversion justifiée : la synthèse publique regroupe plusieurs sections ; seule « controlesMystere » est lue ici.
   const summary = useApi(() => api<Summary>('/v1/public/integrite/summary').then((s) => (s as unknown as { controlesMystere: Summary }).controlesMystere), [user?.id]);
   const [open, setOpen] = useState<string | null>(null);
   const [planning, setPlanning] = useState(false);

@@ -219,6 +219,7 @@ function DossierPanel({ st, roles, uid, onChange }: { st: Subcontractor; roles?:
         <div><dt>RCCM · NIF</dt><dd>{st.rccm ?? '—'} · {st.nif ?? '—'}</dd></div>
         <div><dt>Sélection</dt><dd>{st.selectionReference}</dd></div>
         <div><dt>Modules visés</dt><dd>{st.requestedModules.map(moduleLabel).join(', ')}</dd></div>
+        {/* Conversion justifiée : diligence lue comme dictionnaire clé → booléen pour un affichage générique. */}
         {st.diligence && <div><dt>Diligence</dt><dd>{[['legalExistence', 'existence légale'], ['taxClearance', 'quitus fiscal'], ['noConflictOfInterest', 'pas de conflit d’intérêts'], ['publicAgentLinksDeclared', 'liens déclarés']].map(([k, l]) => `${(st.diligence as unknown as Record<string, boolean>)[k!] ? '✓' : '✗'} ${l}`).join(' · ')}</dd></div>}
         {st.proposal && st.status === 'EN_DILIGENCE' && <div><dt>Proposition</dt><dd>{st.proposal.modules.map(moduleLabel).join(', ')} · {st.proposal.communes.join(', ')} · probatoire jusqu’au {st.proposal.probationUntil} · par {st.proposal.proposedBy}</dd></div>}
         {st.accreditation && <div><dt>Accréditation</dt><dd>{st.accreditation.modules.map(moduleLabel).join(', ')} · {st.accreditation.communes.join(', ')} · jusqu’au {st.accreditation.validUntil} · probatoire jusqu’au {st.accreditation.probationUntil}<br /><span className="small muted">Proposée par {st.accreditation.proposedBy}, approuvée par {st.accreditation.approvedBy}</span></dd></div>}

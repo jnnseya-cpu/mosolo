@@ -278,6 +278,7 @@ export class PilotageService {
     const asOf = facts.asOf;
     const scopedRefs = new Set(facts.orders.filter((o) => matchesDims(o, f)).map((o) => o.paymentReference));
     const fullScope = !f.entity && !f.commune && !f.communes && !f.category;
+    // Conversion justifiée : méthode facultative du Trésor, sondée à l'exécution (absente dans certaines compositions de modules).
     const treasury = this.ctx.treasury as unknown as { rawExceptions?: () => { type: string; openedAt: string; status: unknown; paymentReference?: string; computed?: boolean }[] };
     const rawExc = treasury.rawExceptions ? treasury.rawExceptions() : this.ctx.treasury.exceptions.all();
     const exceptions = rawExc

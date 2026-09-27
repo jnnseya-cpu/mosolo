@@ -10,6 +10,8 @@ async function full() {
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
   const app = buildApp({ clock, secrets: { auditHmacKey: 'k', providerSecrets: { 'mm-operator-a': 's' }, commsProviderKeys: {} } });
   await app.ready();
+  // Test d'intégration : accès dynamique aux services de tous les modules (types hétérogènes, non exportés).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- justifié : raccourci de test, jamais dans le code livré
   const ext = app.ctx.ext as Record<string, any>;
   const get = (url: string) => app.inject({ method: 'GET', url });
   const post = (url: string, body: unknown, headers: Record<string, string> = {}) => app.inject({ method: 'POST', url, payload: body as object, headers });

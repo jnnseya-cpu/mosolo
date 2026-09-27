@@ -65,6 +65,7 @@ export class ProviderHttpClient {
   private readonly sleep: (ms: number) => Promise<void>;
 
   constructor(private readonly opts: ProviderHttpClientOptions) {
+    // Conversion justifiée : le `fetch` global (undici) a une signature plus large que FetchLike, sous-ensemble utilisé ici.
     this.fetchImpl = opts.fetch ?? (globalThis.fetch as unknown as FetchLike);
     this.timeoutMs = opts.timeoutMs ?? 10_000;
     this.maxRetries = opts.maxRetries ?? 2;

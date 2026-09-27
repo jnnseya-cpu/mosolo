@@ -417,7 +417,7 @@ function NewRuleForm({ onCreated, initial }: { onCreated: () => void; initial?: 
   const v = draft.value;
   const { setValue } = draft;
   // Pré-remplissage uniquement quand une nouvelle version est demandée (pas à chaque rendu).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
   useEffect(() => { if (initial) setValue(initial); }, [initial]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);

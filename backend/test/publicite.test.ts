@@ -9,7 +9,7 @@ import { PUB_DEMO } from '../src/plugins/publicite/seed.js';
 import { callbackBody, PROVIDER_SECRET, signedCallback, type TestEnv } from './helpers.js';
 import type { MosoloPlugin } from '../src/plugins/types.js';
 
-async function setupPub(plugins: MosoloPlugin<any>[] = [publicitePlugin]): Promise<TestEnv> {
+async function setupPub(plugins: MosoloPlugin<unknown>[] = [publicitePlugin]): Promise<TestEnv> {
   const clock = new ManualClock('2026-09-26T09:00:00.000Z');
   const app = buildApp({
     clock,
@@ -222,7 +222,7 @@ describe('KIN PUB CONTROL — inspection, constat et décision (RW1)', () => {
   });
 
   it('indicateurs agrégés : taux d’autorisation, recettes par m², qualité des inspecteurs (jamais le nombre de sanctions)', async () => {
-    const env = await setupPub([parkingPlugin, publicitePlugin] as MosoloPlugin<any>[]);
+    const env = await setupPub([parkingPlugin, publicitePlugin] as MosoloPlugin<unknown>[]);
     expect((await env.req('GET', '/v1/publicite/indicators', 'pb-annonceur')).statusCode).toBe(403);
     const ind = (await env.req('GET', '/v1/publicite/indicators', 'pb-autorite')).json();
     expect(ind.totals).toMatchObject({ devices: 8, authorized: 5, undeclared: 2, declaredPending: 1, authorizedRate: '62.5', inspections: 4, casesOpen: 3, expiringSoon: 1 });

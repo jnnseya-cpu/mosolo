@@ -157,9 +157,11 @@ export async function api<T>(path: string, opts: RequestOpts = {}): Promise<T> {
     }
     throw new ApiError(res.status, title, detail, code, body);
   }
+  // Conversion justifiée : réponse texte demandée explicitement par l'appelant (T = string par convention).
   if (opts.raw) return (await res.text()) as unknown as T;
   if (res.status === 204) return undefined as T;
   if (ct.includes('json')) return (await res.json()) as T;
+  // Conversion justifiée : réponse texte demandée explicitement par l'appelant (T = string par convention).
   return (await res.text()) as unknown as T;
 }
 

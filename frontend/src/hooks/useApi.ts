@@ -28,7 +28,7 @@ export function useApi<T>(fetcher: (() => Promise<T>) | null, deps: unknown[] = 
       (e: unknown) => { if (alive) { setError(e); setLoading(false); } },
     );
     return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
   }, [tick, ...deps]);
 
   const reload = useCallback(() => setTick((n) => n + 1), []);

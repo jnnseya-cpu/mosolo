@@ -121,7 +121,7 @@ export default function Governor() {
     const list = (d?.communes ?? []).map((c) => ({ name: c.name, value: dispNum(c.amount), money: c.amount, compliance: c.compliance }));
     list.sort((a, b) => (sort === 'value' ? b.value - a.value : a.name.localeCompare(b.name, 'fr')));
     return list;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
   }, [d, sort, disp, rateObj]);
   const shownCommunes = allCommunes ? communes : communes.slice(0, 10);
 

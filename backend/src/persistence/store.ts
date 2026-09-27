@@ -214,7 +214,9 @@ function parseDoc(v: unknown): unknown {
 /** Ouvre un pool `pg` sur DATABASE_URL (import dynamique : le pilote n'est chargé que si la persistance est active). */
 export async function openPgStore(databaseUrl: string): Promise<PgSnapshotStore> {
   const pg = await import('pg');
+  // Conversion justifiée : interopérabilité CommonJS/ESM du pilote `pg` ; PgPoolLike = sous-ensemble du pool réellement utilisé.
   const Pool = pg.default?.Pool ?? (pg as unknown as { Pool: typeof pg.default.Pool }).Pool;
   const pool = new Pool({ connectionString: databaseUrl, max: 5, application_name: 'kinshasa-mosolo' });
+  // Conversion justifiée : interopérabilité CommonJS/ESM du pilote `pg` ; PgPoolLike = sous-ensemble du pool réellement utilisé.
   return new PgSnapshotStore(pool as unknown as PgPoolLike, { dialect: 'postgres' });
 }

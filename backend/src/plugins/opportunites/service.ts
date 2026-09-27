@@ -350,6 +350,7 @@ export class OpportunitesService {
         if (fraction && (typeof input.value !== 'string' || !isFraction(input.value))) throw badRequest('INVALID_FRACTION', 'Valeur décimale entre 0 et 1 attendue (ex. "0.6").');
         if (!fraction && (typeof input.value !== 'object' || !input.value?.currency)) throw badRequest('INVALID_AMOUNT', 'Montant { amount, currency } attendu.');
       }
+      // Conversion justifiée : clé validée ci-dessus contre la liste des champs « max » ; écriture indexée sur l'objet typé.
       (o.max as unknown as Record<string, MaxInput<unknown>>)[key] = { value: input.value, date: input.value === null ? null : input.date!, source: input.value === null ? null : input.source!, updatedBy: u.id, updatedAt: this.now() };
     }
     this.opportunities.update(o);

@@ -1115,6 +1115,7 @@ export class IntegriteService {
       this.ctx.comms.publish('privacy.data_export_ready', [taxpayerRecipient(t)], { reference: r.id }, { entity: 'GOUVERNORAT' });
     }
     if (input.decision === 'ACCEPTEE' && r.type === 'RECTIFICATION' && r.field && r.requestedValue) {
+      // Conversion justifiée : champ de rectification validé à la création de la demande (liste fermée de champs).
       const before = (t as unknown as Record<string, unknown>)[r.field];
       if (r.field === 'language' && !['fr', 'ln', 'sw', 'kg', 'lu', 'en'].includes(r.requestedValue)) throw unprocessable('INVALID_VALUE', 'Langue non prise en charge.');
       const updated = this.ctx.taxpayers.taxpayers.update({ ...t, [r.field]: r.requestedValue });
