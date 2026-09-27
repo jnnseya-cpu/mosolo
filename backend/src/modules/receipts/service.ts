@@ -6,7 +6,7 @@
 import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify, type KeyObject } from 'node:crypto';
 import { type MoneyJSON, type PublicReceiptCheck, type ReceiptStatus } from '@mosolo/shared';
 import type { AuditLog } from '../../core/audit.js';
-import type { Clock } from '../../core/clock.js';
+import { kinshasaDate, type Clock } from '../../core/clock.js';
 import { canonicalJson, sha256Hex } from '../../core/crypto.js';
 import { conflict, notFound } from '../../core/errors.js';
 import { VerificationGate, type GateDecision } from './limiter.js';
@@ -525,7 +525,7 @@ export class ReceiptService {
   }
 
   private count(status: PublicReceiptStatus | 'THROTTLED' | 'INVALID_CHECK_DIGIT', clientKey?: string): void {
-    const day = this.clock.now().toISOString().slice(0, 10);
+    const day = kinshasaDate(this.clock.now());
     const s = this.stats.get(day) ?? { total: 0, byStatus: {}, clients: new Set<string>() };
     s.total += 1;
     s.byStatus[status] = (s.byStatus[status] ?? 0) + 1;

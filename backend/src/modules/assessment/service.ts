@@ -6,7 +6,7 @@
 import { isRuleExecutable, Money, type MoneyJSON, type ObligationStatus, type RevenueCategory, type TerritorialAttribution } from '@mosolo/shared';
 import type { AuditLog } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
-import { DAY_MS, isoDate, type Clock } from '../../core/clock.js';
+import { DAY_MS, kinshasaDate, type Clock } from '../../core/clock.js';
 import { badRequest, notFound, unprocessable, conflict } from '../../core/errors.js';
 import { assertDistinctPerson, assertNotRelated, authorize, definePolicy, GRANTS } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
@@ -317,7 +317,7 @@ export class AssessmentService {
     });
     if (input.simulate) return { trace };
 
-    const dueDate = isoDate(new Date(now.getTime() + 30 * DAY_MS));
+    const dueDate = kinshasaDate(new Date(now.getTime() + 30 * DAY_MS));
     const explanation: ObligationExplanation = {
       rule: { id: rule.id, code: rule.code, label: rule.label, version: rule.version },
       legalBasis: rule.legalInstrumentIds.map((id) => {

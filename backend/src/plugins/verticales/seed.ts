@@ -7,7 +7,7 @@
  */
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
-import { DAY_MS, isoDate } from '../../core/clock.js';
+import { DAY_MS, kinshasaDate } from '../../core/clock.js';
 import type { RuleInput } from '../../modules/rules/service.js';
 import { VX_DEMO_RULES, type VerticalesService } from './service.js';
 
@@ -95,7 +95,7 @@ function runCase(
   const c = svc.submitCase(actors.owner, slug, { ...input, documents: input.documents ?? [] });
   if (stopAt === 'DEPOSE') return c;
   svc.take(actors.instructor, c.id);
-  if (actors.visitor) svc.recordVisit(actors.visitor, c.id, { date: isoDate(svc.now()), result: 'CONFORME', observations: 'Constat sur place conforme au dossier (démonstration).' });
+  if (actors.visitor) svc.recordVisit(actors.visitor, c.id, { date: kinshasaDate(svc.now()), result: 'CONFORME', observations: 'Constat sur place conforme au dossier (démonstration).' });
   if (stopAt === 'EN_INSTRUCTION') return svc.getCase(c.id);
   svc.propose(actors.instructor, c.id, { outcome: 'ACCEPTER', reason: 'Dossier complet, pièces vérifiées (démonstration).' });
   return svc.decide(actors.chief, c.id, { decision: 'ACCEPTE', reason: 'Conforme à la proposition d’instruction (démonstration).' });
@@ -111,7 +111,7 @@ export function seedVerticales(ctx: AppContext, svc: VerticalesService): void {
   const chief = user(VX_DEMO.users.chief);
   const field = user(VX_DEMO.users.fieldAgent);
   const now = svc.now();
-  const day = (offset: number) => isoDate(new Date(now.getTime() + offset * DAY_MS));
+  const day = (offset: number) => kinshasaDate(new Date(now.getTime() + offset * DAY_MS));
 
   // Contribuables fictifs supplémentaires (compagnie aérienne, opérateur télécom).
   ctx.taxpayers.register({ phone: '+243810009901', fullName: 'Compagnie aérienne fictive (démo)', language: 'fr', situation: 'other' }, VX_DEMO.airlineTaxpayerId);

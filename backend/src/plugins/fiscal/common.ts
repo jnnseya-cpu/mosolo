@@ -1,5 +1,5 @@
 /** Outils partagés du module fiscal (objets, relations, déclarations, exonérations, quitus). */
-import { isoDate } from '../../core/clock.js';
+import { kinshasaDate } from '../../core/clock.js';
 import type { User } from '../../core/auth.js';
 import { badRequest } from '../../core/errors.js';
 import { checkChar, hmacSha256Hex, randomCode, safeEqualHex } from '../../core/crypto.js';
@@ -26,7 +26,7 @@ export function makeDeps(ctx: AppContext, geo: GeoRegistry): FiscalDeps {
     geo,
     sign,
     verify: (payload, signature) => safeEqualHex(sign(payload), signature.toLowerCase()),
-    today: () => isoDate(ctx.clock.now()),
+    today: () => kinshasaDate(ctx.clock.now()),
     nowIso: () => ctx.clock.now().toISOString(),
   };
 }

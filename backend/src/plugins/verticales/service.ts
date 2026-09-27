@@ -12,7 +12,7 @@ import { createHmac } from 'node:crypto';
 import { isRuleExecutable, Money, type MoneyJSON, type PaymentStatus } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
-import { DAY_MS, isoDate } from '../../core/clock.js';
+import { DAY_MS, kinshasaDate } from '../../core/clock.js';
 import { validityView, type ValidityView } from '../../core/validity.js';
 import { checkChar, randomSecret, safeEqualHex } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
@@ -654,7 +654,7 @@ export class VerticalesService {
     }
     if (e.kind === 'CERTIFICATE') return { ...c, certificateCode: this.issueCertificate(user, c, v, e.certificate, c.objectId).code };
     if (e.kind === 'CESSATION') {
-      if (c.objectId) this.cessations.append({ id: this.ids.next('CES'), objectId: c.objectId, dateEffet: c.details.dateEffet ?? isoDate(this.now()), caseId: c.id, decidedBy: user.id });
+      if (c.objectId) this.cessations.append({ id: this.ids.next('CES'), objectId: c.objectId, dateEffet: c.details.dateEffet ?? kinshasaDate(this.now()), caseId: c.id, decidedBy: user.id });
       return c;
     }
     if (e.kind === 'ASSIGN_STALL') {
@@ -668,8 +668,8 @@ export class VerticalesService {
   // ------------------------------------------------------------------ certificats (QR vérifiable)
 
   private certificateValidity(kind: CertificateKind, c: VxCase): { from: string; until?: string } {
-    const today = isoDate(this.now());
-    const addDays = (n: number) => isoDate(new Date(this.now().getTime() + n * DAY_MS));
+    const today = kinshasaDate(this.now());
+    const addDays = (n: number) => kinshasaDate(new Date(this.now().getTime() + n * DAY_MS));
     switch (kind) {
       case 'AUTORISATION_EVENEMENT': return { from: c.details.dateDebut ?? today, until: c.details.dateFin ?? addDays(1) };
       case 'AUTORISATION_OCCUPATION': return { from: c.details.debut ?? today, until: c.details.fin ?? addDays(30) };
@@ -703,7 +703,7 @@ export class VerticalesService {
 
   certificateStatus(c: Certificate): 'VALIDE' | 'EXPIRE' | 'A_VENIR' | 'REVOQUE' {
     if (c.status === 'REVOQUE') return 'REVOQUE';
-    const today = isoDate(this.now());
+    const today = kinshasaDate(this.now());
     if (c.validUntil && today > c.validUntil) return 'EXPIRE';
     if (today < c.validFrom) return 'A_VENIR';
     return 'VALIDE';
@@ -804,7 +804,7 @@ export class VerticalesService {
       for (const p of paid) if (p.confirmedAt && (!last || p.confirmedAt > last)) last = p.confirmedAt;
       if (o.status === 'SOLDEE' || paid.length) continue;
       if (o.status === 'CONTESTEE') continue;
-      if (o.dueDate < isoDate(this.now()) || o.status === 'EN_RETARD') { late = true; dueIds.push(o.id); }
+      if (o.dueDate < kinshasaDate(this.now()) || o.status === 'EN_RETARD') { late = true; dueIds.push(o.id); }
       else open = true;
     }
     if (late) return { color: 'red', label: 'Impayé à l’échéance', lastPaymentAt: last, dueIds };

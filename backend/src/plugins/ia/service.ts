@@ -17,7 +17,7 @@ import { canonicalJson, sha256Hex } from '../../core/crypto.js';
 import { ApiError, badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { assertAiMay, authorize, evaluate, type Resource } from '../../core/policy.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
-import { isoDate } from '../../core/clock.js';
+import { kinshasaDate } from '../../core/clock.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
 import { ACTION_LABELS, AGENTS, promptVersion, type AgentSheet } from './catalogue.js';
 import { DataGateway } from './gateway.js';
@@ -152,7 +152,7 @@ export class IaService {
     }
     const ai = this.aiActor(sheet);
     assertAiMay(ai, 'ai.insight');
-    const gw = new DataGateway(this.ctx, sheet, isoDate(this.ctx.clock.now()), {
+    const gw = new DataGateway(this.ctx, sheet, kinshasaDate(this.ctx.clock.now()), {
       ...(scope.taxpayerId ? { taxpayerId: scope.taxpayerId } : {}),
       decisions: () => this.recommendations.all().map((r) => ({ agentCode: r.agentCode, status: r.status, autonomy: r.autonomy })),
     });
@@ -317,7 +317,7 @@ export class IaService {
       case 'RELANCE_OBLIGATOIRE': {
         const o = this.ctx.assessment.obligations.get(p['obligationId'] ?? '');
         if (!o) throw notFound('OBLIGATION_NOT_FOUND', 'Obligation introuvable.');
-        if (!['EMISE', 'EXIGIBLE', 'PARTIELLEMENT_PAYEE', 'EN_RETARD'].includes(o.status) || o.appealId || o.dueDate >= isoDate(this.ctx.clock.now())) {
+        if (!['EMISE', 'EXIGIBLE', 'PARTIELLEMENT_PAYEE', 'EN_RETARD'].includes(o.status) || o.appealId || o.dueDate >= kinshasaDate(this.ctx.clock.now())) {
           throw conflict('RELANCE_NO_LONGER_APPLICABLE', `Relance sans objet : obligation au statut ${o.status}${o.appealId ? ', contestée' : ''}.`);
         }
         const t = this.ctx.taxpayers.get(o.taxpayerId);

@@ -14,7 +14,7 @@
 import { isRuleExecutable, Money, type CurrencyCode, type MoneyJSON, type ObligationStatus, type RuleSheet } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
-import { DAY_MS, isoDate } from '../../core/clock.js';
+import { DAY_MS, isoDate, kinshasaDate } from '../../core/clock.js';
 import { canonicalJson, sha256Hex } from '../../core/crypto.js';
 import { badRequest, conflict, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, assertNotRelated, authorize, definePolicy, GRANTS } from '../../core/policy.js';
@@ -310,7 +310,7 @@ export class RecoveryService {
   constructor(private readonly ctx: AppContext) {}
 
   private today(): string {
-    return isoDate(this.ctx.clock.now());
+    return kinshasaDate(this.ctx.clock.now());
   }
   private nowIso(): string {
     return this.ctx.clock.now().toISOString();
@@ -1459,7 +1459,7 @@ export class RecoveryService {
     }, 'OBJ-RECOUVREMENT-DEMO-01');
     const { obligation } = ctx.assessment.calculate(controller, { ruleId: rule.id, taxpayerId: tenant.id, objectId: object.id, inputs: {}, simulate: false });
     if (!obligation) return;
-    const today = isoDate(ctx.clock.now());
+    const today = kinshasaDate(ctx.clock.now());
     const dueDate = addDays(today, -73);
     const createdAt = `${addDays(dueDate, -30)}T09:00:00.000Z`;
     ctx.assessment.obligations.update({ ...obligation, createdAt, dueDate, status: 'EN_RETARD', explanation: { ...obligation.explanation, dueDate, computedAt: createdAt } });

@@ -4,7 +4,7 @@
  * constats et dossiers en cours.
  */
 import type { AppContext } from '../../context.js';
-import { DAY_MS, isoDate } from '../../core/clock.js';
+import { DAY_MS, kinshasaDate } from '../../core/clock.js';
 import { sha256Hex } from '../../core/crypto.js';
 import { demoPay, DEMO_INSTRUMENT, DGTK, DGTK_ALIAS, publishDemoRule } from '../parking/support.js';
 import { AD_TAX_RULE, type PubliciteService } from './service.js';
@@ -41,7 +41,7 @@ export function seedPublicite(ctx: AppContext, svc: PubliciteService): void {
   });
 
   const now = ctx.clock.now().getTime();
-  const day = (n: number) => isoDate(new Date(now + n * DAY_MS));
+  const day = (n: number) => kinshasaDate(new Date(now + n * DAY_MS));
   svc.grantAccreditation(autorite, { userId: inspecteur.id, communes: [...PUB_DEMO.inspectorCommunes], validFrom: day(-60), validUntil: day(270) });
 
   const piece = (kind: 'PLAN_SITUATION' | 'PHOTO_MONTAGE' | 'TITRE_OCCUPATION', name: string) => ({ kind, name, sha256: sha256Hex(`piece-demo-${name}`) });

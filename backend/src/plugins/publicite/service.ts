@@ -15,7 +15,7 @@ import { randomBytes } from 'node:crypto';
 import { type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
-import { DAY_MS, isoDate } from '../../core/clock.js';
+import { DAY_MS, kinshasaDate } from '../../core/clock.js';
 import { dec, decMul, decToString, divideDecimalStrings } from '../../core/decimal.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, assertNotRelated, authorize, evaluate } from '../../core/policy.js';
@@ -243,7 +243,7 @@ export class PubliciteService {
     return this.ctx.clock.now();
   }
   private today(): string {
-    return isoDate(this.now());
+    return kinshasaDate(this.now());
   }
 
   // ---------------------------------------------------------------- Dispositifs
@@ -327,7 +327,7 @@ export class PubliciteService {
     else if (auth && auth.periodFrom <= today && auth.periodTo >= today) status = 'AUTORISE';
     else if (auth && auth.periodTo < today) status = 'EXPIRE';
     else status = d.registration;
-    const expiringSoon = status === 'AUTORISE' && auth !== null && auth.periodTo <= isoDate(new Date(this.now().getTime() + EXPIRY_NOTICE_DAYS * DAY_MS));
+    const expiringSoon = status === 'AUTORISE' && auth !== null && auth.periodTo <= kinshasaDate(new Date(this.now().getTime() + EXPIRY_NOTICE_DAYS * DAY_MS));
     let rights: 'A_JOUR' | 'IMPAYE' | 'ACTE_REQUIS' | 'SANS_OBJET' = 'SANS_OBJET';
     if (auth?.liquidation) {
       if (auth.liquidation.status === 'ACTE_REQUIS') rights = 'ACTE_REQUIS';
@@ -928,7 +928,7 @@ export class PubliciteService {
 
   tick(): { expiring: number; expired: number } {
     const today = this.today();
-    const horizon = isoDate(new Date(this.now().getTime() + EXPIRY_NOTICE_DAYS * DAY_MS));
+    const horizon = kinshasaDate(new Date(this.now().getTime() + EXPIRY_NOTICE_DAYS * DAY_MS));
     let expiring = 0;
     let expired = 0;
     for (const r of this.requests.find((x) => x.status === 'ACCORDEE')) {

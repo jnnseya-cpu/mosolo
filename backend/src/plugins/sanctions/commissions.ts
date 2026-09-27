@@ -32,7 +32,7 @@ import type { PaymentOrder } from '../../modules/payments/service.js';
 import type { ParkingService } from '../parking/service.js';
 import { AGENT_COMMISSION_PCT, earningTotals, obligationEarningLines, type EarningLine } from '../parking/field.js';
 import { Money } from '@mosolo/shared';
-import { isoDate } from '../../core/clock.js';
+import { kinshasaDate } from '../../core/clock.js';
 import { InMemoryRepository } from '../../core/repository.js';
 import { ordersByObligation, paidOrders, PAID_STATUSES, sumByCurrency } from '../parking/support.js';
 import type { TitresService } from '../titres/service.js';
@@ -106,7 +106,7 @@ export class CommissionService {
   /** Dette échue et impayée à l'instant `at` : échéance dépassée, émise avant, non soldée par des paiements antérieurs. */
   private dueAndUnpaidAt(ob: Obligation, orders: Map<string, PaymentOrder[]>, at: string): boolean {
     if (ob.status === 'CONTESTEE' || Date.parse(ob.createdAt) > Date.parse(at)) return false;
-    if (!(ob.dueDate < isoDate(new Date(at)))) return false;
+    if (!(ob.dueDate < kinshasaDate(new Date(at)))) return false;
     const before = paidOrders(this.ctx, ob.id, orders).filter((o) => Date.parse(o.at) < Date.parse(at));
     const paid = before.reduce((m, o) => m.add(Money.fromJSON(o.amount)), Money.zero(ob.amount.currency));
     return paid.compare(Money.fromJSON(ob.amount)) < 0;

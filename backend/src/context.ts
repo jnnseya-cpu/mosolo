@@ -3,7 +3,7 @@ import type { KeyObject } from 'node:crypto';
 import type { Channel } from '@mosolo/shared';
 import { AuditLog } from './core/audit.js';
 import { ConfigurationError, isDemoMode, UserDirectory } from './core/auth.js';
-import { isoDate, systemClock, type Clock } from './core/clock.js';
+import { kinshasaDate, systemClock, type Clock } from './core/clock.js';
 import { randomSecret } from './core/crypto.js';
 import { IdempotencyStore } from './core/idempotency.js';
 import { AIService } from './modules/ai/service.js';
@@ -203,7 +203,7 @@ export function createContext(opts: AppOptions = {}) {
     const overview = comms.overview();
     const confirmed = payments.orders.find((o) => o.status === 'CONFIRME');
     return {
-      today: isoDate(now),
+      today: kinshasaDate(now),
       governor: { weakestCommunes: weakest, reconRateJ1: tiles().reconRateJ1, overdue: Money.fromMinor(LADDER_EXAMPLE.overdue * 100n, 'CDF').toDecimalString(), example: true },
       treasury: {
         openExceptions: treasury.exceptions.count(),

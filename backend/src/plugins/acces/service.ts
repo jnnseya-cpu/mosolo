@@ -12,7 +12,7 @@ import { hasIncompatibility, ROLES, type RoleCode, type VerificationLevel } from
 import type { AppContext } from '../../context.js';
 import type { AuditActor } from '../../core/audit.js';
 import { ACR, hasAcr, isDemoMode, type User } from '../../core/auth.js';
-import { isoDate } from '../../core/clock.js';
+import { isoDate, kinshasaDate } from '../../core/clock.js';
 import { hmacSha256Hex, randomSecret, sha256Hex } from '../../core/crypto.js';
 import { ApiError, conflict, forbidden, notFound, unauthorized, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, evaluate, registerPersonResolver, registerRelatedTaxpayersResolver, type AnyAction } from '../../core/policy.js';
@@ -118,7 +118,7 @@ export class AccesService {
   }
 
   private today(): string {
-    return isoDate(this.ctx.clock.now());
+    return kinshasaDate(this.ctx.clock.now());
   }
 
   private actor(user: User): AuditActor {
