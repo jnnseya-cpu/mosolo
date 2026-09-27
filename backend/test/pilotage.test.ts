@@ -249,6 +249,14 @@ describe('Pilotage — indicateurs calculés', () => {
     expect(k('COUVERTURE_LOCATIVE')).toMatchObject({ value: '100.0', numerator: 1, denominator: 1 });
     expect(k('REGLES_CERTIFIEES').detail).toMatch(/FICTIVE/);
     expect(k('OBLIGATIONS_CONTESTEES')).toMatchObject({ value: '0' });
+    // Tableau du § 40 (cibles à 18 mois) : ajouts calculés sur les mêmes données réelles.
+    expect(k('PART_ELECTRONIQUE_RECETTES')).toMatchObject({ value: '100.0', status: 'ATTEINTE' });
+    expect(k('DELAI_PAIEMENT_RAPPROCHEMENT')).toMatchObject({ value: '1.0', unit: 'h', status: 'ATTEINTE' });
+    expect(k('DELAI_PAIEMENT_QUITTANCE').unit).toBe('s');
+    expect(k('BAUX_ENREGISTRES')).toMatchObject({ value: '1', status: 'SANS_CIBLE' });
+    expect(k('BAUX_ENREGISTRES').detail).toMatch(/Fin de mois/);
+    expect(k('RECOURS_DANS_DELAI')).toMatchObject({ value: null, status: 'NON_CALCULABLE' });
+    expect(k('COUVERTURE_RECENSEMENT')).toMatchObject({ value: null, status: 'NON_MESURE' });
     // Tendance sur 7 jours : aucun rapprochement il y a 7 jours ⇒ non calculable avant, donc indisponible.
     expect(k('RAPPROCHEMENT_J1').trend.direction).toBe('INDISPONIBLE');
     expect(k('PAIEMENT_EMISES').trend).toMatchObject({ direction: 'INDISPONIBLE' });

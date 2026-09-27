@@ -3,7 +3,7 @@
  * définition, sa formule, sa source, sa valeur calculée sur les données réelles, sa cible et sa tendance.
  * Un indicateur sans mesure possible est déclaré « non mesuré » — jamais une valeur inventée.
  */
-import { DAY_MS } from '../../core/clock.js';
+import { DAY_MS, kinshasaDay } from '../../core/clock.js';
 import { COMMUNES } from '../../reference/kinshasa.js';
 import type { Facts } from './facts.js';
 import {
@@ -21,7 +21,7 @@ export interface KpiInputs {
   facts: Facts;
   filters: Filters;
   objects: { commune: string; category: string; status: string; id: string; createdAt: string }[];
-  leases: { unitObjectId: string; createdAt: string }[];
+  leases: { unitObjectId: string; createdAt: string; end?: string }[];
   rules: { status: string; sourceVerification: string; demo?: boolean }[];
   exceptions: { type: string; openedAt: string; computed?: boolean }[];
   comms: { attempted: number; delivered: number; sandboxLogged: number };
@@ -72,7 +72,7 @@ export interface KpiDefinition {
   source: string;
   unit: '%' | 'h' | 's' | 'j' | 'nombre';
   /** Cible chiffrée (comparable) ou null. */
-  target: { op: '>=' | '<=' | '<' | '='; value: string } | null;
+  target: { op: '>=' | '<=' | '<' | '>' | '='; value: string } | null;
   targetLabel: string;
   /** Sens favorable. */
   better: 'HAUSSE' | 'BAISSE' | 'NEUTRE';
@@ -493,6 +493,89 @@ export const KPI_CATALOGUE: KpiDefinition[] = [
     measurableWhen: (i) => (i.extra?.targets?.targetCdfMinor ?? 0n) > 0n,
     compute: (i) => { const t = i.extra!.targets!; return { value: pctBig(t.realisedCdfMinor, t.targetCdfMinor), detail: `Exercice ${t.year} : ${cdfOf(t.realisedCdfMinor)} CDF rapprochés pour ${cdfOf(t.targetCdfMinor)} CDF assignés.` }; },
   },
+  /* ── Tableau du § 40 (nouvelle numérotation ; ancien § 39) : « Cible à 18 mois ». Ajouts ; les indicateurs ci-dessus
+     sont conservés. Écarts de cible signalés au maître d'ouvrage : PART_NUMERIQUE (≥ 80 %, en nombre) et
+     TAUX_RECENSEMENT (≥ 90 % quartiers pilotes) restent affichés à côté des cibles du § 40. ── */
+  {
+    code: 'COUVERTURE_RECENSEMENT', domain: 'Couverture', label: 'Taux de couverture du recensement',
+    question: 'Quelle part des objets estimés est enregistrée, par commune et catégorie ?',
+    definition: 'Objets enregistrés rapportés aux objets estimés, par commune et catégorie.',
+    formula: 'Objets enregistrés / objets estimés', source: 'Registre des objets × estimation du parc (modèle) — non disponible',
+    unit: '%', target: { op: '>', value: '80' }, targetLabel: 'Communes pilotes : > 80 % (§ 40, cible à 18 mois)', better: 'HAUSSE', reference: '§ 40 Couverture', measurable: false,
+  },
+  {
+    code: 'PART_ELECTRONIQUE_RECETTES', domain: 'Numérique', label: 'Part électronique des recettes',
+    question: 'Quelle part des recettes encaissées passe par voie électronique ?',
+    definition: 'Recettes encaissées (paiements confirmés) par voie électronique rapportées au total encaissé, en montant, par devise — jamais de mélange de devises.',
+    formula: 'Montant confirmé par canal numérique / montant confirmé total (par devise)', source: 'Ordres de paiement (canal, montant)',
+    unit: '%', target: { op: '>', value: '90' }, targetLabel: '> 90 % sur le périmètre couvert (§ 40, cible à 18 mois)', better: 'HAUSSE', reference: '§ 40 Numérique', measurable: true,
+    compute: (i) => {
+      const c = scopedOrders(i).filter(isConfirmed);
+      const tot = new CurrencyTotals(); const dig = new CurrencyTotals();
+      for (const o of c) { tot.add(o.amount); if (DIGITAL_CHANNELS.includes(o.channel)) dig.add(o.amount); }
+      if (tot.empty) return { value: null, denominator: 0 };
+      const parts = tot.currencies().map((cur) => ({ cur, share: pctBig(dig.get(cur)?.minor ?? 0n, tot.get(cur)!.minor) }));
+      const main = parts.find((p) => p.cur === 'CDF') ?? parts[0]!;
+      return { value: main.share, denominator: c.length, detail: parts.map((p) => `${p.cur} : ${p.share ?? '—'} %`).join(' ; ') };
+    },
+  },
+  {
+    code: 'DELAI_PAIEMENT_QUITTANCE', domain: 'Quittance', label: 'Délai paiement → quittance (médiane)',
+    definition: 'Médiane du délai entre la confirmation signée du paiement et l’émission de la quittance.',
+    formula: 'Médiane (émission quittance − confirmation), en secondes', source: 'Quittances, ordres de paiement',
+    unit: 's', target: { op: '<', value: '60' }, targetLabel: '< 60 s (§ 40, cible à 18 mois)', better: 'BAISSE', reference: '§ 40 Quittance', measurable: true,
+    compute: (i) => {
+      const d = scopedOrders(i).filter((o) => o.confirmedAt && o.receiptIssuedAt).map((o) => Math.max(0, ms(o.confirmedAt!, o.receiptIssuedAt!)));
+      const med = median(d);
+      return { value: med === null ? null : String(Math.round(med / 1000)), denominator: d.length };
+    },
+  },
+  {
+    code: 'DELAI_PAIEMENT_RAPPROCHEMENT', domain: 'Rapprochement', label: 'Délai paiement → rapprochement bancaire (médiane)',
+    definition: 'Médiane du délai entre la confirmation du paiement et son rapprochement avec le relevé du compte public.',
+    formula: 'Médiane (rapprochement − confirmation), en heures', source: 'Ordres de paiement, rapprochements du Trésor',
+    unit: 'h', target: { op: '<', value: '24' }, targetLabel: '< 24 heures (§ 40, cible à 18 mois)', better: 'BAISSE', reference: '§ 40 Rapprochement', measurable: true,
+    compute: (i) => {
+      const d = scopedOrders(i).filter((o) => o.confirmedAt && isReconciled(o)).map((o) => Math.max(0, ms(o.confirmedAt!, o.reconciledAt!)));
+      const med = median(d);
+      return { value: med === null ? null : hoursOf(med), denominator: d.length };
+    },
+  },
+  {
+    code: 'RECOURS_DANS_DELAI', domain: 'Recours', label: 'Délai de traitement des recours',
+    question: 'Les recours sont-ils clos dans le délai légal ?',
+    definition: 'Part des recours clos dans le délai légal de décision, parmi les recours clos et ceux dont le délai est déjà dépassé sans décision.',
+    formula: 'Recours décidés au plus tard à la date limite / (recours décidés + recours ouverts hors délai)', source: 'Recours (procédure et délais du module Recours)',
+    unit: '%', target: { op: '>', value: '90' }, targetLabel: '> 90 % (§ 40, cible à 18 mois)', better: 'HAUSSE', reference: '§ 40 Recours ; § 23', measurable: true,
+    compute: (i) => {
+      const scope = new Set(scopedObligations(i).map((o) => o.id));
+      const today = kinshasaDay(i.facts.asOf);
+      const a = i.facts.appeals.filter((x) => scope.has(x.obligationId) && x.decisionDueBy);
+      const decided = a.filter((x) => x.decidedAt);
+      const inTime = decided.filter((x) => kinshasaDay(x.decidedAt!) <= x.decisionDueBy!).length;
+      const lateOpen = a.filter((x) => !x.decidedAt && today > x.decisionDueBy!).length;
+      return ratio(inTime, decided.length + lateOpen, `${decided.length} recours clos, dont ${inTime} dans le délai ; ${lateOpen} ouvert(s) hors délai.`);
+    },
+  },
+  {
+    code: 'BAUX_ENREGISTRES', domain: 'Locatif', label: 'Baux enregistrés',
+    definition: 'Nombre de baux actifs enregistrés (non échus à la date d’arrêté), avec la série de fin de mois des douze derniers mois pour la publication mensuelle.',
+    formula: 'Baux enregistrés dont la fin n’est pas atteinte', source: 'Registre des baux',
+    unit: 'nombre', target: null, targetLabel: 'Croissance continue, publiée mensuellement (§ 40)', better: 'HAUSSE', reference: '§ 40 Locatif', measurable: true,
+    compute: (i) => {
+      const activeAt = (day: string) => i.leases.filter((l) => l.createdAt.slice(0, 10) <= day && (!l.end || l.end.slice(0, 10) >= day)).length;
+      const today = kinshasaDay(i.facts.asOf);
+      const series: string[] = [];
+      const [y, m] = today.split('-').map(Number) as [number, number];
+      for (let k = 11; k >= 1; k--) {
+        const last = new Date(Date.UTC(y, m - 1 - k + 1, 0)).toISOString().slice(0, 10);
+        series.push(`${last.slice(0, 7)} : ${activeAt(last)}`);
+      }
+      const n = activeAt(today);
+      series.push(`${today.slice(0, 7)} (au ${today}) : ${n}`);
+      return { value: String(n), numerator: n, detail: `Fin de mois — ${series.join(' ; ')}.` };
+    },
+  },
 ];
 
 function meets(target: NonNullable<KpiDefinition['target']>, value: string): boolean {
@@ -501,6 +584,7 @@ function meets(target: NonNullable<KpiDefinition['target']>, value: string): boo
     case '>=': return v >= t;
     case '<=': return v <= t;
     case '<': return v < t;
+    case '>': return v > t;
     case '=': return v === t;
   }
 }

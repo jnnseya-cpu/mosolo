@@ -71,6 +71,8 @@ export interface AppealFact {
   submittedAt: string;
   decidedAt?: string;
   decision?: string;
+  /** Date limite légale de décision (procédure des recours, jour de Kinshasa) — § 40 « recours clos dans le délai légal ». */
+  decisionDueBy?: string;
 }
 
 export interface Facts {
@@ -92,6 +94,7 @@ export function collectFacts(ctx: AppContext, asOf: string): Facts {
     obligationId: a.obligationId,
     submittedAt: a.submittedAt,
     ...(a.decision && a.decision.at <= asOf ? { decidedAt: a.decision.at, decision: a.decision.decision } : {}),
+    decisionDueBy: ctx.appeals.deadlines(a).decisionDueBy,
   }));
   const openAppeal = new Set(appeals.filter((a) => !a.decidedAt).map((a) => a.obligationId));
 
