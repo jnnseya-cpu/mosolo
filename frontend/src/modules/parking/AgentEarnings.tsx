@@ -17,6 +17,7 @@ import { api, describeError } from '../../lib/api';
 import { Kpis, Money } from './shared';
 import './parking.css';
 import { AttenteBaseLegale } from '../juridique/AttenteBaseLegale';
+import { MoneyList, ReserveShareCard, type ReserveView } from '../terrain/ReserveAgents';
 
 type EarningState = 'EN_ATTENTE' | 'CONFIRMEE' | 'ACQUISE' | 'ANNULEE';
 export interface EarningTotals { acquise: MoneyJSON[]; confirmee: MoneyJSON[]; enAttente: MoneyJSON[]; annulee: MoneyJSON[]; base: MoneyJSON[]; ceMois: MoneyJSON[]; payable?: MoneyJSON[] }
@@ -34,8 +35,13 @@ interface EarningLine {
   validation?: LineValidation | null; validationKey?: string | null;
 }
 interface ModuleShare { module: string; moduleLabel: string; lines: number; commission: MoneyJSON[] }
-export interface MyEarnings { agentId: string; ratePct: number; totals: EarningTotals; counts: EarningCounts; lines: EarningLine[]; rules: string[]; modules?: ModuleShare[]; validation?: { aDemander: number; demandees: number; validees: number } }
-interface AgentsEarnings { items: { agentId: string; agentName: string; totals: EarningTotals; counts: EarningCounts; modules?: ModuleShare[] }[]; ratePct: number }
+export interface MyEarnings {
+  agentId: string; ratePct: number; totals: EarningTotals; counts: EarningCounts; lines: EarningLine[]; rules: string[]; modules?: ModuleShare[]; validation?: { aDemander: number; demandees: number; validees: number };
+  /** Réserve des agents (module 67) : la rémunération réelle, par points de résultats vérifiés × note de qualité. */
+  reserve?: ReserveView | null;
+}
+interface AgentReserveSummary { points: number; quality: { score: number; byDefault: boolean }; share: MoneyJSON[]; payable: MoneyJSON[] }
+interface AgentsEarnings { items: { agentId: string; agentName: string; totals: EarningTotals; counts: EarningCounts; modules?: ModuleShare[]; reserve?: AgentReserveSummary | null }[]; ratePct: number; reserveNotice?: string }
 
 const STATE_TONE: Record<EarningState, Tone> = { ACQUISE: 'good', CONFIRMEE: 'info', EN_ATTENTE: 'neutral', ANNULEE: 'critical' };
 const STATE_LABEL: Record<EarningState, string> = { ACQUISE: 'Acquise', CONFIRMEE: 'Payée — rapprochement en cours', EN_ATTENTE: 'En attente de paiement', ANNULEE: 'Annulée' };
@@ -48,7 +54,7 @@ export default function AgentEarnings() {
   return (
     <div className="page page-wide">
       <PageHead eyebrow="Agent · tous modules" title="Mes gains"
-        lead={`Vous percevez ${rate} % des pénalités issues de vos constats et des paiements provoqués par vos contrôles, quel que soit votre module. Calcul sur la recette publique confirmée ; versement par le Trésor. N’acceptez jamais d’argent d’un usager.`}>
+        lead={`Vous êtes rémunéré sur la réserve de ${rate} % de chaque module, au prorata de vos points de résultats vérifiés × votre note de qualité (objets confirmés, enrôlements valides, régularisations confirmées par quittance définitive) — jamais selon le montant liquidé. Versement par le Trésor. N’acceptez jamais d’argent d’un usager.`}>
         <button type="button" className="btn btn-secondary btn-sm" onClick={data.reload}><Icon name="refresh" size={16} /> Actualiser</button>
       </PageHead>
       {/* Versement des commissions : régime des incitations des agents (J10) — le calcul n'est pas modifié. */}
@@ -75,8 +81,9 @@ export function EarningsBody({ d, fmtDate, onChanged }: { d: MyEarnings; fmtDate
   }
   return (
     <>
+      {d.reserve && <ReserveShareCard reserve={d.reserve} />}
       <Kpis items={[
-        { label: 'Payable', value: <Money items={t.payable ?? []} empty="0" />, sub: 'acquise et validée par un superviseur' },
+        { label: 'Payable', value: <Money items={t.payable ?? []} empty="0" />, sub: `référence ${d.ratePct} % validée par un superviseur — la quote-part de réserve fait foi` },
         { label: 'Acquise', value: <Money items={t.acquise} empty="0" />, sub: 'à faire valider avant versement' },
         { label: 'Payée — rapprochement en cours', value: <Money items={t.confirmee} empty="0" /> },
         { label: 'En attente de paiement', value: <Money items={t.enAttente} empty="0" /> },
@@ -98,7 +105,7 @@ export function EarningsBody({ d, fmtDate, onChanged }: { d: MyEarnings; fmtDate
         </div>
       )}
       <section className="panel">
-        <header className="panel-head"><div><h2 className="panel-title"><Icon name="cash" size={18} /> Détail des commissions</h2><p className="panel-sub">Base : recette publique rattachée à votre contrôle. Commission : {d.ratePct} % de cette base, dans la même devise. Acquise, elle n’est payable qu’après validation par un superviseur distinct.</p></div>
+        <header className="panel-head"><div><h2 className="panel-title"><Icon name="cash" size={18} /> Détail des commissions</h2><p className="panel-sub">Chaque ligne acquise et confirmée par quittance définitive est un point de régularisation de la réserve. Base : recette publique rattachée à votre contrôle ; référence {d.ratePct} % de cette base (indicative, non versée : la quote-part de réserve fait foi). Une ligne n’est payable qu’après validation par un superviseur distinct.</p></div>
           {toRequest > 0 && <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void requestValidation()}>Demander la validation ({toRequest})</button>}
         </header>
         {msg && <p className={msg.ok ? 'notice notice-ok' : 'notice notice-err'} role={msg.ok ? 'status' : 'alert'}>{msg.text}</p>}
@@ -112,7 +119,7 @@ export function EarningsBody({ d, fmtDate, onChanged }: { d: MyEarnings; fmtDate
               { key: 'zone', label: 'Lieu', render: (l) => l.zone || '—' },
               { key: 'at', label: 'Date', render: (l) => fmtDate(l.at, true) },
               { key: 'base', label: 'Base', num: true, render: (l) => <Money items={l.base} /> },
-              { key: 'com', label: `Commission ${d.ratePct} %`, num: true, render: (l) => <strong><Money items={l.commission} /></strong> },
+              { key: 'com', label: `Commission ${d.ratePct} % (référence)`, num: true, render: (l) => <strong><Money items={l.commission} /></strong> },
               { key: 'state', label: 'État', render: (l) => <StatusBadge tone={STATE_TONE[l.state] ?? 'neutral'} label={l.stateLabel || STATE_LABEL[l.state]} /> },
               { key: 'val', label: 'Validation', render: (l) => l.validation ? <StatusBadge tone={VALIDATION_LABEL[l.validation].tone} label={VALIDATION_LABEL[l.validation].label} /> : '—' },
             ]} />
@@ -128,7 +135,7 @@ export function AgentCommissions() {
   const rate = data.data?.ratePct ?? 10;
   return (
     <section className="panel">
-      <header className="panel-head"><div><h2 className="panel-title"><Icon name="cash" size={18} /> Commissions des agents ({rate} %)</h2><p className="panel-sub">Tous les agents, tous les modules. Calculées sur la recette publique confirmée ou rapprochée et versées par le Trésor ; aucun encaissement par l’agent. Montants par devise, jamais additionnés entre devises.</p></div></header>
+      <header className="panel-head"><div><h2 className="panel-title"><Icon name="cash" size={18} /> Commissions des agents ({rate} %)</h2><p className="panel-sub">Tous les agents, tous les modules. {data.data?.reserveNotice ?? 'Calculées sur la recette publique confirmée ou rapprochée et versées par le Trésor.'} Aucun encaissement par l’agent. Montants par devise, jamais additionnés entre devises.</p></div></header>
       {data.loading && !data.data ? <Loading /> : data.error ? <ErrorState error={data.error} onRetry={data.reload} /> : (
         <DataTable rows={data.data?.items ?? []} rowKey={(a) => a.agentId} caption="Commissions des agents" empty={<p className="muted small">Aucune commission.</p>}
           columns={[
@@ -136,6 +143,8 @@ export function AgentCommissions() {
             { key: 'pen', label: 'Pénalités', num: true, render: (a) => a.counts.penalites },
             { key: 'pay', label: 'Paiements', num: true, render: (a) => a.counts.paiements },
             { key: 'mods', label: 'Modules', render: (a) => (a.modules ?? []).map((m) => m.moduleLabel).join(', ') || '—' },
+            { key: 'pts', label: 'Points (note)', num: true, render: (a) => (a.reserve ? `${a.reserve.points} (${Math.round(a.reserve.quality.score * 100)} %)` : '—') },
+            { key: 'res', label: 'Quote-part de réserve', render: (a) => <MoneyList items={a.reserve?.share} /> },
             { key: 'payable', label: 'Payable (validée)', render: (a) => <Money items={a.totals.payable ?? []} empty="0" /> },
             { key: 'acq', label: 'Acquise', render: (a) => <Money items={a.totals.acquise} empty="0" /> },
             { key: 'conf', label: 'Confirmée', render: (a) => <Money items={a.totals.confirmee} empty="0" /> },

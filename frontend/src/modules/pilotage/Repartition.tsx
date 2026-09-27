@@ -1,8 +1,9 @@
 /**
  * Répartition des recettes (§ 37A, Cahier des exigences v2.9) : clé 10 / 10 / 10 / 70 au statut ACTE_REQUIS, simulation
  * sur recettes RAPPROCHÉES (par part, période, devise), deux flux de décaissement seulement, consommation de la réserve
- * « agents et sous-traitants » par les commissions validées. Activation : acte enregistré + deux personnes ; même active,
- * un décaissement n'est jamais automatique : il est proposé au Trésor et validé par une seconde personne.
+ * « agents et sous-traitants » par les commissions validées. Activation : acte enregistré + deux personnes ; clé active
+ * sans convention : chaque flux est proposé au Trésor et validé par une seconde personne ; acte ET convention tripartite
+ * enregistrés : les deux flux sont exécutés automatiquement (décision du maître d'ouvrage du 27/09/2026).
  */
 import { useState } from 'react';
 import type { MoneyJSON } from '@mosolo/shared';
@@ -15,6 +16,7 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { api, describeError } from '../../lib/api';
 import { monthLabel, qs, Section, useFmt } from './shared';
+import { ActForm, AutomationPanel, ControlsPanel, ConventionForm, ReserveModulesPanel, TableauPanel, type AutomationView, type ReportComplements } from './RepartitionComplements';
 import './pilotage.css';
 
 // ————————————————————————— contrat —————————————————————————
@@ -31,7 +33,7 @@ export interface AgentsRow {
   remaining: MoneyJSON; consumptionPct: string | null; status: 'SANS_CONSOMMATION' | 'SANS_RESERVE' | 'DEPASSEMENT' | 'DANS_LA_RESERVE';
 }
 export interface DistributionRow {
-  id: string; period: string; currency: string; base: MoneyJSON; createdBy: string; createdAt: string;
+  id: string; period: string; currency: string; base: MoneyJSON; createdBy: string; createdAt: string; mode?: 'MANUEL' | 'AUTOMATIQUE';
   flows: { flow: string; label: string; amount: MoneyJSON; status: 'A_PROPOSER' | 'PROPOSEE' | 'INSTRUCTION_EMISE' | 'REJETEE'; operationId: string | null }[];
 }
 export interface RepartitionReport {
@@ -40,8 +42,13 @@ export interface RepartitionReport {
   totals: (Aggregate & { regularisations: { count: number; amount: MoneyJSON } })[];
   byPeriod: (Aggregate & { period: string })[];
   byTutelle: (Aggregate & { tutelle: string })[];
-  agents: { commissionModuleLoaded: boolean; rows: AgentsRow[]; totals: AgentsRow[]; rules: string[] };
+  agents: { commissionModuleLoaded: boolean; rows: AgentsRow[]; totals: AgentsRow[]; rules: string[]; byModule?: ReportComplements['agentsByModule']; pointsShares?: ReportComplements['pointsShares'] };
   distributions: DistributionRow[];
+  automation?: AutomationView;
+  check100?: ReportComplements['check100'];
+  regularisationsPending?: ReportComplements['regularisationsPending'];
+  tableau?: ReportComplements['tableau'];
+  indicateurs?: ReportComplements['indicateurs'];
 }
 export interface KeyView {
   key: {
@@ -59,7 +66,7 @@ export interface KeyView {
 export const KEY_STATUS: Record<KeyStatus, { label: string; tone: Tone }> = {
   ACTE_REQUIS: { label: 'Acte requis — non active', tone: 'warning' },
   ACTIVATION_PROPOSEE: { label: 'Activation proposée — seconde personne attendue', tone: 'info' },
-  ACTIVE: { label: 'Active — décaissements proposés au Trésor', tone: 'good' },
+  ACTIVE: { label: 'Active — flux proposés au Trésor ou exécutés automatiquement (convention)', tone: 'good' },
 };
 const AGENTS_STATUS: Record<AgentsRow['status'], { label: string; tone: Tone }> = {
   SANS_CONSOMMATION: { label: 'Aucune commission validée', tone: 'neutral' },
@@ -171,7 +178,13 @@ export function RepartitionView({ report, keyView, onDone }: { report: Repartiti
           </div>
         )}
         {guard.canRecordAct && <p className="small muted">Enregistrement de l’acte : juriste vérificateur ou autorité de publication, sur référence d’un instrument en vigueur du registre et empreinte du document officiel.</p>}
+        {guard.canRecordAct && <ActForm keyId={k.id} conditions={keyView.conditions} onDone={onDone} />}
+        {has(user?.roles, 'R14', 'R16') && <ConventionForm keyId={k.id} current={report.automation?.convention ?? null} onDone={onDone} />}
       </Section>
+
+      {report.automation && <AutomationPanel automation={report.automation} onDone={onDone} />}
+      {report.tableau && <TableauPanel tableau={report.tableau} />}
+      <ControlsPanel report={report} />
 
       <Section title={report.mode === 'SIMULATION' ? 'Simulation par devise' : 'Répartition par devise'} sub="Somme des parts toujours égale à l’assiette rapprochée ; devises jamais additionnées">
         <DataTable caption="Répartition par devise" rows={report.totals} rowKey={(t) => t.currency} empty={<EmptyState title="Aucune recette rapprochée sur la période" icon="chart" />} columns={[
@@ -216,10 +229,12 @@ export function RepartitionView({ report, keyView, onDone }: { report: Repartiti
         <ul className="small">{report.agents.rules.map((r) => <li key={r}>{r}</li>)}</ul>
       </Section>
 
-      <Section title="Répartitions arrêtées et flux proposés au Trésor" sub="Chaque flux est une opération du Trésor à quatre yeux ; aucun décaissement automatique">
+      <ReserveModulesPanel report={{ agentsByModule: report.agents.byModule, pointsShares: report.agents.pointsShares }} />
+
+      <Section title="Répartitions arrêtées et flux" sub="Flux proposés au Trésor (quatre yeux) ou exécutés automatiquement après l’acte et la convention ; deux flux seulement">
         <DataTable caption="Répartitions arrêtées" rows={report.distributions} rowKey={(d) => d.id} empty={<EmptyState title="Aucune répartition arrêtée" icon="lock">{report.mode === 'SIMULATION' ? 'Clé non active : simulation seulement.' : 'Proposez les deux flux d’un mois clos.'}</EmptyState>} columns={[
           { key: 'i', label: 'Répartition', primary: true, render: (d) => <span className="mono">{d.id}</span> },
-          { key: 'p', label: 'Mois', render: (d) => `${monthLabel(d.period)} · ${d.currency}` },
+          { key: 'p', label: 'Période', render: (d) => `${d.period.length === 7 ? monthLabel(d.period) : d.period} · ${d.currency}${d.mode === 'AUTOMATIQUE' ? ' · automatique' : ''}` },
           { key: 'b', label: 'Assiette', num: true, render: (d) => f.money(d.base) },
           { key: 'f', label: 'Flux', render: (d) => <>{d.flows.map((x) => <span key={x.flow} className="small" style={{ display: 'block' }}>{x.label} : {f.money(x.amount)} <StatusBadge tone={FLOW_STATUS[x.status].tone} label={FLOW_STATUS[x.status].label} /></span>)}</> },
         ]} />

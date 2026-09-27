@@ -16,6 +16,7 @@ import {
   ActionError, GRID_LABELS, GridView, hasRole, Kpi, ORIGIN_LABELS, OUTCOME_LABELS, outcomeTone, PipelineView, Tabs, TRACK_LABELS, useAction,
   type Opportunity, type OpportunitySummary, type PipelineStep,
 } from './shared';
+import { OppIndicatorsPanel, PilotResultsSection } from './Pilotes';
 import './opportunites.css';
 
 const READ = ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R09', 'R11', 'R13', 'R14', 'R15', 'R22', 'R23', 'R24', 'R25'];
@@ -158,6 +159,7 @@ export function OpportunitySheet({ opp, roles, onChange }: { opp: Opportunity; r
         <GridView opp={opp} />
         {hasRole(roles, ...GRID_WRITE) && opp.status !== 'DECIDEE' && <GridEditor opp={opp} onDone={onChange} />}
       </section>
+      <PilotResultsSection opportunityId={opp.id} pilotDefined={opp.stepsView.some((st) => st.n === 7 && st.done)} roles={roles} />
       <section className="panel" aria-labelledby="op-hyp">
         <h3 className="panel-title" id="op-hyp">Hypothèses (datées, sourcées, révisables)</h3>
         <ul className="plain-list stack-sm">
@@ -227,6 +229,7 @@ export default function Registre() {
             <Kpi label="Signaux versés" value={all.filter((o) => o.section === 'SIGNAL').length} />
             <Kpi label="Décidées" value={all.filter((o) => o.status === 'DECIDEE').length} sub="activation, report ou abandon" />
           </div>
+          <OppIndicatorsPanel />
           {pipe.data && <p className="callout callout-info"><Icon name="shieldCheck" size={18} /><span>{pipe.data.guardrail} Étapes : {pipe.data.steps.map((s) => s.label).join(' → ')}.</span></p>}
           <IaSignalsPanel onImported={(id) => { list.reload(); setSel(id); }} />
           <Tabs value={section} onChange={setSection} label="Section du cahier" items={[

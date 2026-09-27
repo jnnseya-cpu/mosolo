@@ -117,6 +117,10 @@ export class TerrainService {
     if (!u.roles.includes('R35')) return undefined;
     return this.subcontractors.findOne((s) => s.entity === u.entity) ?? null;
   }
+  /** Périmètre sous-traitant de la personne (undefined : tous ; null : aucun) — points de résultats (module 67). */
+  subcontractorScope(u: User): Subcontractor | null | undefined {
+    return this.scopedSubcontractor(u);
+  }
   private assertOwnSubcontractor(u: User, st: Subcontractor): void {
     const scoped = this.scopedSubcontractor(u);
     if (scoped === undefined) return;

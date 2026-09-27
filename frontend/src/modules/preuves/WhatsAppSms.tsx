@@ -112,7 +112,7 @@ function SmsPhone() {
         <input className="input mono" value={text} onChange={(e) => setText(e.target.value)} aria-label="Texte du SMS" maxLength={160} />
         <button className="btn btn-primary">Envoyer</button>
       </form>
-      <p className="small muted">Numéro court officiel : [À CONFIGURER]. Réponse sans accents (160 caractères par SMS), gratuite pour l’usager.</p>
+      <p className="small muted">Numéro court officiel : [À RACCORDER — convention opérateur requise]. Réponse sans accents (160 caractères par SMS), gratuite pour l’usager.</p>
       {err && <p className="notice notice-err small">{err}</p>}
     </section>
   );

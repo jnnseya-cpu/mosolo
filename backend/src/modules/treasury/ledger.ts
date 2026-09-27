@@ -17,6 +17,27 @@ export const LEDGER_ACCOUNTS = {
   COMPTE_PUBLIC_RECETTES: 'Compte public de recettes',
   /** Suspens (§ 20.1) : fonds arrivés sur un compte public mais non identifiés ; daté, justifié, apuré sous double validation. */
   COMPTE_ATTENTE: "Compte d'attente (suspens) — fonds non identifiés",
+  /** Répartition du § 37A (module 73) : instruction de virement du Flux 1 (Groupe Nseya) validée à quatre yeux. */
+  REPARTITION_FLUX_1: 'Répartition des recettes — Flux 1 (Groupe Nseya) instruit',
+  /** Répartition du § 37A (module 73) : instruction de virement du Flux 2 (Gouvernement provincial) validée à quatre yeux. */
+  REPARTITION_FLUX_2: 'Répartition des recettes — Flux 2 (Gouvernement provincial) instruit',
+  /*
+   * Comptes d'ordre (hors bilan) de la répartition du § 37A (modules 59 et 73). Chaque répartition est inscrite, en
+   * partie double et en ajout seul : assiette au crédit, quatre parts au débit. SIMULATION tant que la clé est au statut
+   * ACTE_REQUIS (aucun fonds ne bouge) ; RÉPARTITION ARRÊTÉE une fois la clé active (les flux réels sont inscrits en
+   * REPARTITION_FLUX_1 / REPARTITION_FLUX_2). Ces comptes ne touchent ni le compte public de recettes ni les créances :
+   * l'équilibre du grand livre, les rapprochements et les clôtures sont inchangés.
+   */
+  ORDRE_SIMULATION_ASSIETTE: 'Compte d’ordre — répartition SIMULÉE : assiette rapprochée (clé non active)',
+  ORDRE_SIMULATION_PART_NSEYA: 'Compte d’ordre — répartition SIMULÉE : part Groupe Nseya (Flux 1)',
+  ORDRE_SIMULATION_PART_TUTELLE: 'Compte d’ordre — répartition SIMULÉE : part ministère de tutelle (Flux 2)',
+  ORDRE_SIMULATION_PART_AGENTS: 'Compte d’ordre — répartition SIMULÉE : réserve agents et sous-traitants (Flux 2)',
+  ORDRE_SIMULATION_PART_GOUVERNEMENT: 'Compte d’ordre — répartition SIMULÉE : part Gouvernement provincial (Flux 2)',
+  ORDRE_REPARTITION_ASSIETTE: 'Compte d’ordre — répartition ARRÊTÉE : assiette rapprochée',
+  ORDRE_REPARTITION_PART_NSEYA: 'Compte d’ordre — répartition ARRÊTÉE : part Groupe Nseya (Flux 1)',
+  ORDRE_REPARTITION_PART_TUTELLE: 'Compte d’ordre — répartition ARRÊTÉE : part ministère de tutelle (Flux 2)',
+  ORDRE_REPARTITION_PART_AGENTS: 'Compte d’ordre — répartition ARRÊTÉE : réserve agents et sous-traitants (Flux 2)',
+  ORDRE_REPARTITION_PART_GOUVERNEMENT: 'Compte d’ordre — répartition ARRÊTÉE : part Gouvernement provincial (Flux 2)',
 } as const;
 export type LedgerAccount = keyof typeof LEDGER_ACCOUNTS;
 
@@ -100,6 +121,30 @@ export class LedgerService {
 
   get(id: string): LedgerEntry | undefined {
     return this.entries.get(id);
+  }
+
+  /**
+   * Vérification du scellement (module 59 : « écritures scellées et chaînées ») : recalcule l'empreinte de chaque
+   * écriture à partir de la précédente et de son contenu canonique, et contrôle la continuité des numéros de séquence
+   * et l'équilibre de chaque écriture. La première rupture est signalée ; rien n'est corrigé.
+   */
+  verifyChain(): { valid: boolean; entries: number; headHash: string | null; brokenAt?: string; reason?: string } {
+    const all = this.entries.all();
+    let prev = '0'.repeat(64);
+    for (let i = 0; i < all.length; i++) {
+      const e = all[i]!;
+      const { hash, ...base } = e;
+      if (e.seq !== i + 1) return { valid: false, entries: all.length, headHash: all.at(-1)?.hash ?? null, brokenAt: e.id, reason: 'SEQUENCE_ROMPUE' };
+      if (e.prevHash !== prev) return { valid: false, entries: all.length, headHash: all.at(-1)?.hash ?? null, brokenAt: e.id, reason: 'CHAINAGE_ROMPU' };
+      if (sha256Hex(prev + canonicalJson(base)) !== hash) return { valid: false, entries: all.length, headHash: all.at(-1)?.hash ?? null, brokenAt: e.id, reason: 'EMPREINTE_INVALIDE' };
+      try {
+        assertBalanced(e.lines);
+      } catch {
+        return { valid: false, entries: all.length, headHash: all.at(-1)?.hash ?? null, brokenAt: e.id, reason: 'ECRITURE_DESEQUILIBREE' };
+      }
+      prev = hash;
+    }
+    return { valid: true, entries: all.length, headHash: all.at(-1)?.hash ?? null };
   }
 
   list(filter: { sourceId?: string } = {}): LedgerEntry[] {

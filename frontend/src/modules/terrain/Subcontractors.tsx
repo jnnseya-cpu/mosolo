@@ -19,6 +19,7 @@ import { AGENT_STATUS, MODULE_LABEL, moduleLabel, ST_STATUS } from './labels';
 import type { FieldAgent, Lot, MysteryCheck, Remuneration, Subcontractor } from './types';
 import { AideContextuelle } from '../apprentissage/AideContextuelle';
 import { EtatCertification } from '../apprentissage/EtatCertification';
+import { SubcontractorPointsPanel } from './ReserveAgents';
 import './terrain.css';
 
 const addDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
@@ -383,8 +384,9 @@ export default function Subcontractors() {
   return (
     <div className="page page-wide">
       <PageHead eyebrow="Opérations de terrain" title="Sous-traitants et équipes" lead="Accréditation par module et pour une durée limitée, période probatoire sur lot réduit, agents inactifs jusqu’à l’habilitation par la régie, suspension sur décision motivée."><AideContextuelle cle="terrain.habilitation" libelle="Aide : habiliter un agent de terrain" /></PageHead>
-      <div className="callout callout-danger" role="note"><Icon name="cash" size={20} /><p><strong>Ni agent, ni sous-traitant, ni responsable de module ne touche l’argent public</strong>, ne crée de dette hors règle ou ne valide seul ses propres résultats. La rémunération des sous-traitants est contractuelle, sur livrables vérifiés, payée sur crédit budgétaire hors plateforme.</p></div>
+      <div className="callout callout-danger" role="note"><Icon name="cash" size={20} /><p><strong>Ni agent, ni sous-traitant, ni responsable de module ne touche l’argent public</strong>, ne crée de dette hors règle ou ne valide seul ses propres résultats. La rémunération des sous-traitants est contractuelle, sur livrables vérifiés, payée sur crédit budgétaire hors plateforme. Réserve des agents et sous-traitants (§ 37A.5, décision du 27/09/2026) : quote-part par points de résultats vérifiés × note de qualité, ci-dessous — articulation avec le prix contractuel à confirmer par le maître d’ouvrage.</p></div>
       <ExampleNotice text="Sous-traitants, agents et prix unitaires de démonstration : données fictives." />
+      <SubcontractorPointsPanel />
       {subs.loading ? <Loading /> : subs.error ? <ErrorState error={subs.error} onRetry={subs.reload} /> : (
         <>
           <section className="section" aria-labelledby="st-t">

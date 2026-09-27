@@ -122,6 +122,8 @@ interface StoredStatement {
   result: StatementResult;
   /** Comptes publics crédités par le relevé (alias du coffre). */
   accounts?: string[];
+  /** Total des lignes du relevé par devise (indicateur « écart grand livre / relevés », module 59). */
+  lineTotals?: MoneyJSON[];
 }
 
 /** Résolution d'une exception constatée par le système (ex. versement de point agréé constaté au relevé). */
@@ -266,7 +268,15 @@ export class TreasuryService {
     if (result.exceptions.length > 0) {
       this.comms.publish('reconciliation.exception.opened', this.users.withRole('R18').map(userRecipient), { reference: input.statementId }, { entity: 'TRESOR' });
     }
-    this.statements.insert({ id: input.statementId, fingerprint, result, accounts: [...new Set(input.lines.map((l) => l.accountAlias))].sort() });
+    const totals = new Map<string, Money>();
+    for (const l of input.lines) {
+      const m = Money.parseStrict(l.amount);
+      totals.set(m.currency, (totals.get(m.currency) ?? Money.zero(m.currency)).add(m));
+    }
+    this.statements.insert({
+      id: input.statementId, fingerprint, result, accounts: [...new Set(input.lines.map((l) => l.accountAlias))].sort(),
+      lineTotals: [...totals.values()].map((m) => m.toJSON()).sort((a, b) => a.currency.localeCompare(b.currency)),
+    });
     return { replayed: false, result };
   }
 

@@ -1,10 +1,10 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1006 routes** dans 40 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
-| extension acces | 68 |
+| extension acces | 69 |
 | extension apprentissage | 16 |
 | extension canaux | 46 |
 | extension chaine | 3 |
@@ -12,19 +12,19 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | extension ia | 39 |
 | extension integrite | 70 |
 | extension juridique | 11 |
-| extension opportunites | 29 |
+| extension opportunites | 32 |
 | extension parking | 64 |
-| extension pilotage | 67 |
+| extension pilotage | 70 |
 | extension preuves | 14 |
 | extension publicite | 52 |
 | extension rakapay | 41 |
 | extension recouvrement | 58 |
 | extension referentiel | 10 |
-| extension sanctions | 8 |
+| extension sanctions | 12 |
 | extension socle | 24 |
-| extension terrain | 50 |
+| extension terrain | 51 |
 | extension titres | 20 |
-| extension tresor | 39 |
+| extension tresor | 41 |
 | extension verticales | 102 |
 | module ai | 3 |
 | module alerts | 1 |
@@ -82,6 +82,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | POST | `/v1/acces/identity/:id/otp` |
 | POST | `/v1/acces/identity/:id/otp/verify` |
 | POST | `/v1/acces/identity/:id/proofs` |
+| GET | `/v1/acces/indicateurs` |
 | GET | `/v1/acces/invitations` |
 | POST | `/v1/acces/invitations` |
 | POST | `/v1/acces/invitations/:id/assisted` |
@@ -424,6 +425,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 |---|---|
 | GET | `/v1/opportunites` |
 | POST | `/v1/opportunites` |
+| GET | `/v1/opportunites-indicateurs` |
 | GET | `/v1/opportunites-leviers` |
 | GET | `/v1/opportunites-maximisation/cas-usage` |
 | GET | `/v1/opportunites-maximisation/classement` |
@@ -434,6 +436,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | PUT | `/v1/opportunites/:id/grille/:field` |
 | POST | `/v1/opportunites/:id/hypotheses` |
 | PUT | `/v1/opportunites/:id/maximisation/:key` |
+| GET | `/v1/opportunites/:id/resultats-pilote` |
+| POST | `/v1/opportunites/:id/resultats-pilote` |
 | GET | `/v1/opportunites/decouverte/champ` |
 | GET | `/v1/opportunites/decouverte/signaux-ia` |
 | GET | `/v1/opportunites/pipeline` |
@@ -572,10 +576,13 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | GET | `/v1/pilotage/reductions` |
 | POST | `/v1/pilotage/reductions/detection` |
 | GET | `/v1/pilotage/repartition` |
+| GET | `/v1/pilotage/repartition/automatisation` |
+| POST | `/v1/pilotage/repartition/automatisation/executer` |
 | GET | `/v1/pilotage/repartition/cle` |
 | POST | `/v1/pilotage/repartition/cles/:id/acte` |
 | POST | `/v1/pilotage/repartition/cles/:id/activation` |
 | POST | `/v1/pilotage/repartition/cles/:id/activation/decision` |
+| POST | `/v1/pilotage/repartition/cles/:id/convention` |
 | GET | `/v1/pilotage/repartition/distributions` |
 | POST | `/v1/pilotage/repartition/propositions` |
 | GET | `/v1/pilotage/satisfaction` |
@@ -804,7 +811,11 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | GET | `/v1/agents/earnings` |
 | POST | `/v1/agents/me/commission-validations` |
 | GET | `/v1/agents/me/earnings` |
+| GET | `/v1/agents/me/reserve` |
 | GET | `/v1/agents/monitoring` |
+| GET | `/v1/agents/reserve` |
+| POST | `/v1/agents/reserve/reprises` |
+| POST | `/v1/agents/reserve/reprises/:id/decision` |
 
 ## Extension socle
 
@@ -868,6 +879,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | GET | `/v1/terrain/mystery-checks` |
 | POST | `/v1/terrain/mystery-checks` |
 | POST | `/v1/terrain/mystery-checks/:id/result` |
+| GET | `/v1/terrain/points-resultats` |
 | GET | `/v1/terrain/qualite` |
 | GET | `/v1/terrain/quality` |
 | POST | `/v1/terrain/quality/samples` |
@@ -940,6 +952,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | POST | `/v1/tresor/exceptions/:id/resolution/reject` |
 | POST | `/v1/tresor/exceptions/:id/start` |
 | GET | `/v1/tresor/exports` |
+| GET | `/v1/tresor/grand-livre/indicateurs` |
+| GET | `/v1/tresor/grand-livre/verification` |
 | POST | `/v1/tresor/imputations/run` |
 | GET | `/v1/tresor/nomenclature` |
 | GET | `/v1/tresor/operations` |

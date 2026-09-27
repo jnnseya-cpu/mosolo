@@ -13,6 +13,7 @@ import { Icon } from '../../components/Icon';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { hasRole, ModuleSteps, splitList, Status, useAction, type EntityRow, type LevelsRef, type ModuleConfig } from './common';
+import { AccesIndicatorsPanel } from './IndicateursAcces';
 import './acces.css';
 
 const KIND_ICON: Record<string, string> = {
@@ -247,6 +248,7 @@ export default function EntitesModules() {
           {hasRole(roles, 'R26', 'R06', 'R08') && <button type="button" className="btn btn-primary" onClick={() => setDrawer('module')}><Icon name="file" size={18} /> Nouvelle fiche de module</button>}
         </div>
       </PageHead>
+      <AccesIndicatorsPanel part="72" />
       {(ents.error !== null || mods.error !== null) && <ErrorState error={ents.error ?? mods.error} onRetry={reload} />}
       {(ents.loading || mods.loading) && <Loading />}
       {ents.data && mods.data && (

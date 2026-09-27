@@ -37,7 +37,7 @@ export default function CommissionValidations() {
   return (
     <div className="page page-wide">
       <PageHead eyebrow="Agents · tous modules" title="Validation des commissions"
-        lead="Une commission acquise (recette rapprochée au compte public) n’est payable qu’après votre validation motivée. Vous ne pouvez pas valider la commission d’un constat que vous avez vérifié ou décidé.">
+        lead="Une commission acquise (recette rapprochée au compte public) n’est payable qu’après votre validation motivée. Vous ne pouvez pas valider la commission d’un constat que vous avez vérifié ou décidé. Chaque ligne validée est un point de régularisation payable de la réserve des agents (§ 37A.5 : points × note de qualité, jamais le montant).">
         <button type="button" className="btn btn-secondary btn-sm" onClick={q.reload}><Icon name="refresh" size={16} /> Actualiser</button>
       </PageHead>
       {q.loading && !q.data ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : q.data && <ValidationQueueView queue={q.data} onDone={q.reload} />}

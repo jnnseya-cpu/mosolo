@@ -7,6 +7,7 @@
  */
 import type { TresorService } from '../tresor/service.js';
 import { definePlugin } from '../types.js';
+import { ResultPointsService, registerResultPointsRoutes } from './points-resultats.js';
 import { declareTerrainPolicies } from './policy.js';
 import { TerrainQualityService } from './qualite-fraude.js';
 import { registerTerrainQualityRoutes } from './routes-qualite.js';
@@ -27,6 +28,8 @@ export const terrainPlugin = definePlugin<TerrainService>({
   routes: (app, ctx, svc) => {
     registerTerrainRoutes(app, ctx, svc);
     registerTerrainQualityRoutes(app, svc.qualite!);
+    // Module 67 : rémunération par points de résultats vérifiés (§ 37A.5), quote-part indicative de la réserve.
+    registerResultPointsRoutes(app, new ResultPointsService(ctx, svc));
   },
 });
 

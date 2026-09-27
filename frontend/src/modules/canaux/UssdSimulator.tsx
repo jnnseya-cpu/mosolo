@@ -96,7 +96,7 @@ export default function UssdSimulator() {
   return (
     <div className="page page-wide">
       <PageHead eyebrow="Canaux sans Internet — modules 6 et 64" title="Simulateur USSD et SVI" lead="Consulter, payer, vérifier sans smartphone ni Internet : menus numérotés courts, code secret, aucune donnée sensible à l’écran. Gratuit pour l’appelant (sous réserve des conventions opérateurs, J29)." />
-      <ExampleNotice text="Simulateur de la passerelle opérateur. Code court et numéro vert À CONFIGURER ; contribuables et montants fictifs (règle de démonstration)." />
+      <ExampleNotice text="Simulateur de la passerelle opérateur. Code court et numéro vert [À RACCORDER — convention opérateur requise] ; contribuables et montants fictifs (règle de démonstration)." />
       <div className="cx-sim">
         <section className="cx-phone-col" aria-label="Téléphone simulé">
           <div className="cx-phone">
