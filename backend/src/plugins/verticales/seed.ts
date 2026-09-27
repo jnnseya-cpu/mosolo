@@ -339,4 +339,17 @@ function seedSingleUseDemoTypes(ctx: AppContext): void {
   def({ code: SINGLE_USE_DEMO.types.carnet, module: '25', moduleLabel: 'Péage provincial', label: `Péage — carnet de ${SINGLE_USE_DEMO.carnetUses} passages — DÉMONSTRATION [EXEMPLE]`, prefix: 'PEA', entity: 'DGTK',
     validity: { ...once, model: 'CARNET_USAGES', periodDays: 365, uses: SINGLE_USE_DEMO.carnetUses }, transferable: false, plateBound: true, supports: ['PLAQUE', 'QR_STATIQUE', 'SMS'],
     pricing: { ruleCode: SINGLE_USE_DEMO.rules.peage, inputs: { unites: String(SINGLE_USE_DEMO.carnetUses) } }, legalAct: act('J1'), demo: true });
+ * Patrimoine provincial (Partie V, MOSOLO Assets) — gestionnaire et chef du service du patrimoine (MINFIN, démo), et un
+ * actif inventorié [EXEMPLE] sans évaluation ni appel : aucune valeur, aucune mise à prix, aucune redevance semée.
+ */
+export const ACT_DEMO = { manager: 'vx-gestionnaire-patrimoine', chief: 'vx-chef-patrimoine' } as const;
+
+export function seedActifs(ctx: AppContext, svc: VerticalesService): void {
+  if (!ctx.users.get(ACT_DEMO.manager)) ctx.users.add({ id: ACT_DEMO.manager, name: 'Gestionnaire du patrimoine provincial (démo)', roles: ['R11'], entity: 'MINFIN' });
+  if (!ctx.users.get(ACT_DEMO.chief)) ctx.users.add({ id: ACT_DEMO.chief, name: 'Chef du service du patrimoine provincial (démo)', roles: ['R07'], entity: 'MINFIN' });
+  if (!svc.actifs || svc.actifs.assets.count() > 0) return;
+  svc.actifs.inventory(ctx.users.get(ACT_DEMO.manager)!, {
+    nature: 'LOCAL_COMMERCIAL', designation: 'Local commercial provincial [EXEMPLE] — boulevard du 30 Juin', commune: 'Gombe', quartier: 'Commerce',
+    surfaceM2: '120', titleReference: 'ACTE-AFFECTATION-DEMO-0001 [EXEMPLE]',
+  }, true);
 }

@@ -135,7 +135,7 @@ const cessation = (label: string, hint: string): ProcedureDef => ({
 
 export const VERTICALS: VerticalDef[] = [
   {
-    slug: 'rakapay', name: 'Billetterie RakaPay', short: 'RakaPay', icon: 'ticket', accent: '#1E9BD7', modules: [12, 14, 20, 25, 66, 70, 71, 76, 81],
+    slug: 'rakapay', name: 'Billetterie et moto-taxis (RakaPay)', short: 'RakaPay', icon: 'ticket', accent: '#1E9BD7', modules: [12, 14, 20, 25, 66, 70, 71, 76, 81],
     legal: 'ACTE_REQUIS', prerequisites: ['J28 — tarif du pass wewa et des tickets fixé par acte'], entity: 'DGTK', entityName: ENTITY_NAMES.DGTK!,
     tutelle: 'Transports et mobilité [À VÉRIFIER]', release: 'R3',
     audience: 'Usagers des transports, conducteurs de moto-taxi (wewa), coopératives',
@@ -145,7 +145,7 @@ export const VERTICALS: VerticalDef[] = [
     rights: RIGHTS_COMMON, managedBy: 'rakapay',
   },
   {
-    slug: 'propriete', name: 'MOSOLO Property', short: 'Propriété', icon: 'building', accent: '#232C6B', modules: [7, 8, 9, 34, 79, 82],
+    slug: 'propriete', name: 'Propriété foncière (MOSOLO Property)', short: 'Propriété', icon: 'building', accent: '#232C6B', modules: [7, 8, 9, 34, 79, 82],
     legal: 'BASE_A_CERTIFIER', prerequisites: ['J3 — barèmes IF 2026', 'J4 — Édit n° 005/2021', 'J27 — acte NFIU (obligation de plaque)', 'J6 — quitus'],
     entity: 'DGIPK', entityName: ENTITY_NAMES.DGIPK!, tutelle: 'Finances', release: 'R0 à R2',
     audience: 'Propriétaires, occupants, mandataires',
@@ -160,7 +160,7 @@ export const VERTICALS: VerticalDef[] = [
     pendingLevies: [], rights: RIGHTS_COMMON,
   },
   {
-    slug: 'locatif', name: 'MOSOLO Rental', short: 'Locatif', icon: 'home', accent: '#E0A526', modules: [9, 61, 79],
+    slug: 'locatif', name: 'Loyers et baux (MOSOLO Rental)', short: 'Locatif', icon: 'home', accent: '#E0A526', modules: [9, 61, 79],
     legal: 'BASE_A_CERTIFIER', prerequisites: ['J3 — arrêté des taux IRL et agents de retenue', 'J13 — protocoles énergie, eau, employeurs'],
     entity: 'DGIPK', entityName: ENTITY_NAMES.DGIPK!, tutelle: 'Finances', release: 'R0 à R1',
     audience: 'Bailleurs, locataires, gestionnaires',
@@ -174,7 +174,7 @@ export const VERTICALS: VerticalDef[] = [
     pendingLevies: [], rights: RIGHTS_COMMON,
   },
   {
-    slug: 'entreprises', name: 'MOSOLO Business', short: 'Entreprises', icon: 'store', accent: '#4453b5', modules: [10, 17, 56],
+    slug: 'entreprises', name: 'Entreprises et établissements (MOSOLO Business)', short: 'Entreprises', icon: 'store', accent: '#4453b5', modules: [10, 17, 56],
     legal: 'BASE_A_CERTIFIER', prerequisites: ['J1 — taxes d’intérêt commun et clés', 'J13 — protocoles brasseries et opérateurs'],
     entity: 'DGTK', entityName: ENTITY_NAMES.DGTK!, tutelle: 'Économie et commerce [À VÉRIFIER]', release: 'R2',
     audience: 'Commerçants, entreprises, professions libérales',
@@ -191,7 +191,7 @@ export const VERTICALS: VerticalDef[] = [
     pendingLevies: [], rights: RIGHTS_COMMON,
   },
   {
-    slug: 'mobilite', name: 'MOSOLO Mobility', short: 'Mobilité', icon: 'car', accent: '#8a5cc2', modules: [11, 12, 25, 76, 82],
+    slug: 'mobilite', name: 'Mobilité et véhicules (MOSOLO Mobility)', short: 'Mobilité', icon: 'car', accent: '#8a5cc2', modules: [11, 12, 25, 76, 82],
     legal: 'BASE_PARTIELLE', prerequisites: ['J3 — barèmes véhicules', 'J1 — taxe spéciale de circulation', 'Protocole avec le pouvoir central (immatriculations)', 'J1 — péage (acte)'],
     entity: 'DGIPK', entityName: ENTITY_NAMES.DGIPK!, tutelle: 'Finances ; Transports et mobilité (autorisations, péage) [À VÉRIFIER]', release: 'R2 (péage : R4)',
     audience: 'Propriétaires de véhicules, transporteurs',
@@ -210,7 +210,7 @@ export const VERTICALS: VerticalDef[] = [
     rights: RIGHTS_COMMON,
   },
   {
-    slug: 'stationnement', name: 'MOSOLO Parking', short: 'Stationnement', icon: 'parking', accent: '#1E8C3A', modules: [14, 70, 71, 75, 76],
+    slug: 'stationnement', name: 'Stationnement (MOSOLO Parking)', short: 'Stationnement', icon: 'parking', accent: '#1E8C3A', modules: [14, 70, 71, 75, 76],
     legal: 'ACTE_REQUIS', prerequisites: ['J24 — acte de zonage et barème'], entity: 'DGTK', entityName: ENTITY_NAMES.DGTK!,
     tutelle: 'Transports et mobilité [À VÉRIFIER]', release: 'R2, après acte',
     audience: 'Automobilistes, gestionnaires de parkings',
@@ -220,7 +220,7 @@ export const VERTICALS: VerticalDef[] = [
     pendingLevies: [{ label: 'Stationnement payant', basis: 'ACTE REQUIS (J24)' }], rights: RIGHTS_COMMON, managedBy: 'parking',
   },
   {
-    slug: 'publicite', name: 'MOSOLO Advertising', short: 'Publicité', icon: 'megaphone', accent: '#eb6834', modules: [15, 35, 77],
+    slug: 'publicite', name: 'Publicité extérieure (MOSOLO Advertising)', short: 'Publicité', icon: 'megaphone', accent: '#eb6834', modules: [15, 35, 77],
     legal: 'BASE_A_CERTIFIER', prerequisites: ['J1 — base légale de la taxe', 'J19 — procédure de constat et accréditation des contrôleurs'],
     entity: 'DGTK', entityName: ENTITY_NAMES.DGTK!, tutelle: 'Infrastructures et urbanisme [À VÉRIFIER]', release: 'R2',
     audience: 'Annonceurs, régies publicitaires, commerçants',
@@ -229,7 +229,7 @@ export const VERTICALS: VerticalDef[] = [
     objectsTitle: 'Mes dispositifs', objectCategories: ['PANNEAU'], procedures: [], pendingLevies: [], rights: RIGHTS_COMMON, managedBy: 'publicite',
   },
   {
-    slug: 'telecom', name: 'MOSOLO Telecom', short: 'Télécom', icon: 'antenna', accent: '#e87ba4', modules: [16, 56],
+    slug: 'telecom', name: 'Antennes télécoms (MOSOLO Telecom)', short: 'Télécom', icon: 'antenna', accent: '#e87ba4', modules: [16, 56],
     legal: 'BASE_A_CERTIFIER', prerequisites: ['J1, J3 — base légale et barème', 'J13 — protocole avec les opérateurs et l’ARPTC'],
     entity: 'DGTK', entityName: ENTITY_NAMES.DGTK!, tutelle: 'Finances (cellule grands redevables) [À VÉRIFIER]', release: 'R2',
     audience: 'Opérateurs de télécommunications, propriétaires de sites',
@@ -246,7 +246,7 @@ export const VERTICALS: VerticalDef[] = [
     pendingLevies: [{ label: 'Redevance annuelle sur les sites', basis: 'Règle à certifier — assiette en dialogue avec les opérateurs' }], rights: RIGHTS_COMMON,
   },
   {
-    slug: 'marches', name: 'MOSOLO Markets & Public Domain', short: 'Marchés', icon: 'basket', accent: '#e34948', modules: [19, 20, 70, 71, 76],
+    slug: 'marches', name: 'Marchés et domaine public (MOSOLO Markets & Public Domain)', short: 'Marchés', icon: 'basket', accent: '#e34948', modules: [19, 20, 70, 71, 76],
     legal: 'BASE_A_CERTIFIER', prerequisites: ['J22 — décision de perception numérique exclusive ; compétences province, communes, gestionnaires', 'J21 — titres dématérialisés', 'J1, J3 — tarifs du domaine public'],
     entity: 'DGTK', entityName: ENTITY_NAMES.DGTK!, tutelle: 'Économie et commerce [À VÉRIFIER]', release: 'R2',
     audience: 'Vendeurs des marchés, occupants du domaine public',
@@ -288,7 +288,7 @@ export const VERTICALS: VerticalDef[] = [
     pendingLevies: [{ label: 'Redevance d’occupation du domaine public', basis: 'Règle à certifier (J1, J3) — aucun montant avant règle ACTIVE' }], rights: RIGHTS_COMMON,
   },
   {
-    slug: 'environnement', name: 'MOSOLO Environment', short: 'Environnement', icon: 'leaf', accent: '#1E8C3A', modules: [18, 19, 92],
+    slug: 'environnement', name: 'Environnement (MOSOLO Environment)', short: 'Environnement', icon: 'leaf', accent: '#1E8C3A', modules: [18, 19, 92],
     legal: 'BASE_PARTIELLE', prerequisites: ['J15, J16 — contribution plastique (acte requis) ; voie REP recommandée (§ 8.5)'],
     entity: 'DGTK', entityName: ENTITY_NAMES.DGTK!, tutelle: 'Environnement [À VÉRIFIER]', release: 'R3 (assainissement) ; R4 après acte (plastique)',
     audience: 'Ménages, entreprises, producteurs et importateurs d’emballages',
@@ -297,8 +297,13 @@ export const VERTICALS: VerticalDef[] = [
     objectsTitle: 'Mes points de collecte et déclarations', objectCategories: [],
     procedures: [
       { code: 'DECLARATION_METTEUR_EN_MARCHE', label: 'S’inscrire au registre des metteurs en marché', hint: 'Registre seulement : aucun montant sans acte', kind: 'DECLARATION', requiresObject: false, visit: 'SANS', documents: ['RCCM'],
-        fields: [{ key: 'raisonSociale', label: 'Raison sociale', type: 'text', required: true }, { key: 'categorie', label: 'Catégorie', type: 'select', required: true, options: [{ value: 'PRODUCTEUR', label: 'Producteur' }, { value: 'IMPORTATEUR', label: 'Importateur' }, { value: 'DISTRIBUTEUR', label: 'Distributeur' }] }, ...COMMUNE_FIELDS],
+        fields: [{ key: 'raisonSociale', label: 'Raison sociale', type: 'text', required: true }, { key: 'categorie', label: 'Catégorie', type: 'select', required: true, options: [{ value: 'PRODUCTEUR', label: 'Producteur' }, { value: 'IMPORTATEUR', label: 'Importateur' }, { value: 'DISTRIBUTEUR', label: 'Distributeur' }] }, ...COMMUNE_FIELDS,
+          { key: 'tonnage_annuel_t', label: 'Emballages plastiques mis en marché (tonnes par an, déclaré)', type: 'number', hint: 'Facultatif : sert au registre et à la simulation d’impact, jamais à un montant avant l’édit' }],
         effect: { kind: 'CREATE_OBJECT', category: 'AUTRE', objectType: 'METTEUR_EN_MARCHE' } },
+      // Partie V : « Déclarations et reversements » — tonnage périodique, base de la contribution une fois l'édit publié.
+      { code: 'DECLARATION_TONNAGE', label: 'Déclarer les tonnages mis en marché', hint: 'Déclaration périodique : base de la contribution après l’édit, aucun montant avant', kind: 'DECLARATION', requiresObject: true, visit: 'SANS', documents: ['Relevé des ventes ou des importations'],
+        fields: [{ key: 'periode', label: 'Période (AAAA ou AAAA-MM)', type: 'text', required: true }, { key: 'tonnage_t', label: 'Tonnage mis en marché (t)', type: 'number', required: true }],
+        effect: { kind: 'NONE' } },
       // Module 23 : concession forestière (superficie du titre) ; les produits non ligneux se déclarent aux points de contrôle.
       { code: 'DECLARATION_CONCESSION_FORESTIERE', label: 'Déclarer une concession forestière', hint: 'Référence du titre et superficie', kind: 'DECLARATION', requiresObject: false, visit: 'OPTIONNELLE', documents: ['Titre de concession'],
         fields: [{ key: 'reference', label: 'Référence du titre', type: 'text', required: true }, { key: 'superficie_ha', label: 'Superficie (ha)', type: 'number', required: true }, ...COMMUNE_FIELDS],
@@ -308,7 +313,7 @@ export const VERTICALS: VerticalDef[] = [
     pendingLevies: [{ label: 'Contribution plastique', basis: 'ACTE REQUIS (J15, J16) — module 18 désactivé' }], rights: RIGHTS_COMMON,
   },
   {
-    slug: 'ports', name: 'MOSOLO Ports', short: 'Ports', icon: 'anchor', accent: '#232C6B', modules: [13, 24, 70, 71],
+    slug: 'ports', name: 'Ports et embarcations (MOSOLO Ports)', short: 'Ports', icon: 'anchor', accent: '#232C6B', modules: [13, 24, 70, 71],
     legal: 'CADRAGE_REQUIS', prerequisites: ['J30 — cadrage sectoriel et base légale'], entity: 'DGTK', entityName: ENTITY_NAMES.DGTK!,
     tutelle: 'Transports et mobilité [À VÉRIFIER]', release: 'R3 après J30',
     audience: 'Armateurs, transporteurs fluviaux, opérateurs portuaires',
@@ -326,7 +331,7 @@ export const VERTICALS: VerticalDef[] = [
     pendingLevies: [{ label: 'Droits portuaires et d’embarquement', basis: 'CADRAGE REQUIS (J30)' }], rights: RIGHTS_COMMON,
   },
   {
-    slug: 'evenements', name: 'MOSOLO Events', short: 'Événements', icon: 'star', accent: '#8a5cc2', modules: [21, 70, 76],
+    slug: 'evenements', name: 'Événements et spectacles (MOSOLO Events)', short: 'Événements', icon: 'star', accent: '#8a5cc2', modules: [21, 70, 76],
     legal: 'BASE_A_CERTIFIER', prerequisites: ['J1, J3 — base légale et tarif'], entity: 'DGTK', entityName: ENTITY_NAMES.DGTK!,
     tutelle: 'Culture [À VÉRIFIER]', release: 'R3',
     audience: 'Organisateurs de spectacles et d’événements',
@@ -345,7 +350,7 @@ export const VERTICALS: VerticalDef[] = [
     pendingLevies: [], rights: RIGHTS_COMMON,
   },
   {
-    slug: 'construction', name: 'MOSOLO Construction', short: 'Construction', icon: 'crane', accent: '#E0A526', modules: [19, 22, 82],
+    slug: 'construction', name: 'Construction, chantiers et carrières (MOSOLO Construction)', short: 'Construction', icon: 'crane', accent: '#E0A526', modules: [19, 22, 82],
     legal: 'BASE_A_CERTIFIER', prerequisites: ['J1 — base légale des carrières', 'G17 — arrêté et barème des droits de voirie', 'J6 — quitus (conditionnalité du permis)'],
     entity: 'DGTK', entityName: ENTITY_NAMES.DGTK!, tutelle: 'Infrastructures et urbanisme ; Mines (carrières) [À VÉRIFIER]', release: 'R3 (quitus : R1)',
     audience: 'Maîtres d’ouvrage, entreprises du bâtiment, exploitants de carrières',
@@ -366,7 +371,7 @@ export const VERTICALS: VerticalDef[] = [
     pendingLevies: [{ label: 'Bons de sortie des carrières', basis: 'Base légale des carrières à certifier (J1)' }], rights: RIGHTS_COMMON,
   },
   {
-    slug: 'actifs', name: 'MOSOLO Assets', short: 'Actifs', icon: 'bank', accent: '#4453b5', modules: [48, 61, 92],
+    slug: 'actifs', name: 'Patrimoine provincial (MOSOLO Assets)', short: 'Actifs', icon: 'bank', accent: '#4453b5', modules: [48, 61, 92],
     legal: 'BASE_A_CERTIFIER', prerequisites: ['Régime du domaine ; loi PPP n° 18/016 (G21, G32)'], entity: 'MINFIN', entityName: ENTITY_NAMES.MINFIN!,
     tutelle: 'Finances', release: 'R3 à R4',
     audience: 'Candidats à la valorisation des actifs provinciaux',
@@ -379,7 +384,7 @@ export const VERTICALS: VerticalDef[] = [
     pendingLevies: [], rights: ['Offres scellées jusqu’à l’ouverture publique.', 'Résultats et motifs publiés.', 'Recours ouvert à tout candidat.'],
   },
   {
-    slug: 'recouvrement', name: 'MOSOLO Recovery', short: 'Recouvrement', icon: 'scale', accent: '#e34948', modules: [32, 33, 36, 83, 90],
+    slug: 'recouvrement', name: 'Recouvrement (MOSOLO Recovery)', short: 'Recouvrement', icon: 'scale', accent: '#e34948', modules: [32, 33, 36, 83, 90],
     legal: 'BASE_A_CERTIFIER', prerequisites: ['Procédure de recouvrement et régime des échéanciers à certifier'], entity: 'DGIPK', entityName: ENTITY_NAMES.DGIPK!,
     tutelle: 'Finances', release: 'R2',
     audience: 'Contribuables ayant un arriéré',
@@ -392,7 +397,7 @@ export const VERTICALS: VerticalDef[] = [
     pendingLevies: [], rights: RIGHTS_COMMON,
   },
   {
-    slug: 'avia', name: 'MOSOLO AVIA', short: 'AVIA', icon: 'plane', accent: '#1E9BD7', modules: [52, 62, 78],
+    slug: 'avia', name: 'Aviation (MOSOLO AVIA)', short: 'AVIA', icon: 'plane', accent: '#1E9BD7', modules: [52, 62, 78],
     legal: 'ACTE_REQUIS', prerequisites: ['J23, D21 — arrêtés sur les taxes aériennes provinciales', 'Compétences Ville / RVA / DGM / aviation civile', 'Accords d’accès aux données BSP/GDS'],
     entity: 'DGTK', entityName: ENTITY_NAMES.DGTK!, tutelle: 'Finances ; Transports [À VÉRIFIER]', release: 'R4',
     audience: 'Compagnies aériennes, agences, exploitants d’aérodromes',
@@ -417,6 +422,7 @@ export const OBJECT_TYPE_VERTICAL: Record<string, string> = {
   ETABLISSEMENT: 'entreprises', ETAL: 'marches', EMPRISE: 'marches', SITE_TELECOM: 'telecom', METTEUR_EN_MARCHE: 'environnement',
   POINT_COLLECTE: 'environnement', EMBARCATION: 'ports', EVENEMENT: 'evenements', CHANTIER: 'construction', AERONEF: 'avia',
   EMPRISE_TEMPORAIRE: 'domaine-public', EMPRISE_PERMANENTE: 'domaine-public', CARRIERE: 'construction', CONCESSION_FORESTIERE: 'environnement',
+  CONCESSION_ACTIF: 'actifs', EXPLOITATION_AERIENNE: 'avia',
 };
 
 /** Position indicative (centre approximatif) de chaque commune — à préciser sur le terrain. */

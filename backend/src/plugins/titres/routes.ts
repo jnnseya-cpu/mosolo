@@ -51,7 +51,11 @@ const issueOnReceiptSchema = z.object({
   typeCode: z.string().min(2).max(60), receiptNumber: z.string().min(4).max(64), subject: subjectSchema, place: credentialPlaceSchema,
   holderTaxpayerId: z.string().max(64).optional(),
 }).strict();
-const constatSchema = z.object({ outcome: z.enum(['CLASSE', 'TRANSMIS']), motif: z.string().trim().min(5).max(2000) }).strict();
+// RETENU (module 76) : pénalité au pourcentage réglementaire du ticket, par décision motivée (règle ACTIVE du registre).
+const constatSchema = z.object({
+  outcome: z.enum(['CLASSE', 'TRANSMIS', 'RETENU']), motif: z.string().trim().min(5).max(2000),
+  referenceTypeCode: z.string().min(2).max(60).optional(), holderTaxpayerId: z.string().min(2).max(64).optional(), commune: z.string().min(2).max(40).optional(),
+}).strict();
 
 export function registerTitresRoutes(app: FastifyInstance, ctx: AppContext, svc: TitresService): void {
   // Catalogue des types (public : transparence des titres, tarifs issus des règles publiées).
@@ -175,6 +179,18 @@ export function registerTitresRoutes(app: FastifyInstance, ctx: AppContext, svc:
 
   app.post<{ Params: { id: string } }>('/v1/titres/constats/:id/decision', async (req) =>
     svc.decideConstat(requireUser(req), req.params.id, parse(constatSchema, req.body)));
+  // Pénalités retenues du redevable connecté (lecture seule, sans identité du contrôleur).
+  app.get('/v1/titres/constats/mine', async (req) => {
+    const user = requireUser(req);
+    if (!user.taxpayerId) throw forbidden('NOT_A_TAXPAYER', 'Réservé au redevable.');
+    return svc.constats.find((k) => k.penalty?.holderTaxpayerId === user.taxpayerId).map((k) => ({
+      id: k.id, module: k.module ?? null, at: k.at, status: k.status, reason: k.reason, decision: k.decision ? { at: k.decision.at, outcome: k.decision.outcome, motif: k.decision.motif } : null,
+      penalty: k.penalty, contests: (k.contests ?? []).map((c) => ({ appealId: c.appealId, at: c.at })),
+    }));
+  });
+  // Contestation d'une pénalité retenue par son redevable (recours par le circuit commun).
+  app.post<{ Params: { id: string } }>('/v1/titres/constats/:id/contestation', async (req, reply) =>
+    reply.code(201).send(svc.contestConstat(requireUser(req), req.params.id, parse(z.object({ grounds: z.string().trim().min(10).max(2000) }).strict(), req.body).grounds)));
 
   app.get<{ Querystring: { module?: string } }>('/v1/titres/indicateurs', async (req) => {
     const user = requireUser(req);

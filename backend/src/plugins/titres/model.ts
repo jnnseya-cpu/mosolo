@@ -288,12 +288,32 @@ export interface Constat {
   controllerId: string;
   place: UsePlace;
   at: string;
-  status: 'OUVERT' | 'CLASSE' | 'TRANSMIS';
+  /** RETENU (module 76) : pénalité liquidée par décision motivée, au pourcentage réglementaire du ticket (règle ACTIVE). */
+  status: 'OUVERT' | 'CLASSE' | 'TRANSMIS' | 'RETENU';
+  /** Effet juridique AU CONSTAT : jamais un montant ; seule la décision RETENU d'une personne habilitée en produit un. */
   legalEffect: 'AUCUN_MONTANT';
   notice: string;
   duringGrace: boolean;
-  decision?: { by: string; at: string; outcome: 'CLASSE' | 'TRANSMIS'; motif: string };
+  decision?: { by: string; at: string; outcome: 'CLASSE' | 'TRANSMIS' | 'RETENU'; motif: string };
+  /** Pénalité décidée : règle du registre (pourcentage), ticket de référence et son prix issu de sa propre règle. */
+  penalty?: ConstatPenalty;
+  /** Contestations du redevable (recours par le circuit commun des réclamations). */
+  contests?: { appealId: string; by: string; at: string; grounds: string }[];
 }
+
+export interface ConstatPenalty {
+  ruleCode: string;
+  ruleVersion: number;
+  referenceTypeCode: string;
+  ticketPrice: { amount: string; currency: string };
+  percentage: string;
+  amount: { amount: string; currency: string };
+  obligationId: string;
+  holderTaxpayerId: string;
+}
+
+/** Clé du registre de la pénalité d'un module de titres : pourcentage réglementaire du ticket (formule `prix_ticket`). */
+export const penaltyRuleCode = (module: string): string => `PEN-TITRE-${module}`;
 
 export interface Revocation {
   id: string;

@@ -27,6 +27,8 @@ export interface Procedure {
 export interface VerticalRule { code: string; version: number; label: string; status: string; demo: boolean; executable: boolean; notice: string }
 export interface VerticalDetail extends VerticalSummary {
   prerequisites: string[]; objectsTitle: string; procedures: Procedure[]; pendingLevies: { label: string; basis: string }[]; rights: string[]; rules: VerticalRule[];
+  /** Parcours de bout en bout (Partie V de la spécification fonctionnelle), s'il est défini pour la verticale. */
+  parcours?: import('../modules/verticales/Parcours').ParcoursVerticale | null;
 }
 
 export interface VObject {
