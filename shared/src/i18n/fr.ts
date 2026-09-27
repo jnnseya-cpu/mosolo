@@ -6,7 +6,7 @@ export const fr = {
   'nav.home': 'Accueil',
   'nav.taxpayer': 'Mon espace',
   'nav.verify': 'Vérifier une quittance',
-  'nav.governor': 'Centre de commandement',
+  'nav.governor': 'Tableau de bord du Gouverneur (Centre de commandement)',
   'nav.communications': 'Communications',
   'nav.rules': 'Registre juridique',
   'nav.treasury': 'Trésor et rapprochement',

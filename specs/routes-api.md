@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1484 routes** dans 48 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1513 routes** dans 49 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -22,6 +22,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1484 routes** dans 4
 | extension parking | 74 |
 | extension pilotage | 103 |
 | extension plateforme | 23 |
+| extension postes | 29 |
 | extension preuves | 14 |
 | extension publicite | 52 |
 | extension rakapay | 53 |
@@ -889,6 +890,40 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1484 routes** dans 4
 | GET | `/v1/plateforme/supervision` |
 | POST | `/v1/plateforme/supervision/alertes` |
 | POST | `/v1/plateforme/supervision/phase` |
+
+## Extension postes
+
+| Méthode | Chemin |
+|---|---|
+| GET | `/v1/postes/accueil` |
+| GET | `/v1/postes/accueil/export` |
+| POST | `/v1/postes/cabinet/dossiers/:id/preparation` |
+| POST | `/v1/postes/cabinet/ordre-du-jour` |
+| GET | `/v1/postes/corbeille` |
+| GET | `/v1/postes/delegations` |
+| POST | `/v1/postes/delegations` |
+| POST | `/v1/postes/delegations/:id/revocation` |
+| GET | `/v1/postes/delegations/candidats` |
+| POST | `/v1/postes/dossiers` |
+| POST | `/v1/postes/dossiers/:id/reponse` |
+| POST | `/v1/postes/executions/:id/etat` |
+| POST | `/v1/postes/executions/:id/justification` |
+| POST | `/v1/postes/executions/:id/relance` |
+| GET | `/v1/postes/fiches/:id` |
+| POST | `/v1/postes/fiches/:id/action` |
+| POST | `/v1/postes/habilitations` |
+| POST | `/v1/postes/habilitations/:id/renouvellement` |
+| GET | `/v1/postes/indicateurs` |
+| GET | `/v1/postes/notes` |
+| GET | `/v1/postes/notes/:id` |
+| GET | `/v1/postes/notes/:id/impression` |
+| POST | `/v1/postes/notes/production` |
+| GET | `/v1/postes/notifications` |
+| POST | `/v1/postes/notifications/plafond` |
+| GET | `/v1/postes/recherche` |
+| GET | `/v1/postes/referentiel` |
+| GET | `/v1/postes/travail` |
+| GET | `/v1/postes/vues/:vue` |
 
 ## Extension preuves
 

@@ -5,6 +5,7 @@
  * consultation, refus d'accès. Application complète (tous les modules), données de démonstration semées.
  */
 import { describe, expect, it } from 'vitest';
+import { ROLE_ALIASES, ROLES } from '@mosolo/shared';
 import { buildApp } from '../src/app.js';
 import { ManualClock } from '../src/core/clock.js';
 import { CATEGORIES, chiffre, causeEnUnePhrase, estRouteFinanciere, RegleAffichageError, semaineKinshasa } from '../src/plugins/postes/model.js';
@@ -355,6 +356,33 @@ describe('Directeur de cabinet, Secrétariat exécutif, autorité habilitée', (
     expect(n.items.filter((x: { type: string }) => x.type !== 'SYNTHESE')).toHaveLength(1);
     expect(n.items.filter((x: { type: string }) => x.type === 'SYNTHESE')).toHaveLength(1);
     for (const x of n.items) expect(x.texte).not.toMatch(/Mbuyi|Kalala|\+243/);
+  });
+
+  it('alertes : jamais techniques sur un écran exécutif ; cause en une phrase ; information immédiate au-delà du seuil de déperdition ; coordination sans nom d’agent', async () => {
+    const env = await full();
+    env.ctx.alerts.raise({ type: 'ELEVATION_PRIVILEGIEE_ACTIVE', severity: 'MEDIUM', source: 'acces:elevation', detail: 'Élévation technique en cours.' });
+    env.ctx.alerts.raise({ type: 'DEPERDITION_ECART', severity: 'HIGH', source: 'tresor:rapprochement', detail: 'Écart de rapprochement persistant sur le canal mobile. Détail : voir le relevé.', context: { amount: { amount: '6000000.00', currency: 'CDF' } } });
+    const g = (await env.req('GET', '/v1/postes/accueil', 'u-gouverneur')).json();
+    expect(g.bloc3.alertes.map((a: { type: string }) => a.type)).toEqual(['DEPERDITION_ECART']);
+    expect(g.bloc3.alertes[0].cause).toBe('Écart de rapprochement persistant sur le canal mobile.');
+    expect(g.bloc3.alertes[0].enjeu).toMatchObject({ etat: 'CONSTATE', taux: { devise: 'USD' } });
+    const n = (await env.req('GET', '/v1/postes/notifications', 'u-gouverneur')).json();
+    expect(n.items.map((x: { type: string }) => x.type)).toContain('ALERTE_MONTANT');
+    const coord = (await env.req('GET', '/v1/postes/vues/coordination', 'u-dircab')).body;
+    for (const u of env.ctx.users.all().filter((x) => x.roles.some((r) => ['R10', 'R11', 'R35'].includes(r)))) expect(coord).not.toContain(u.name);
+  });
+
+  it('session courte et appareil enregistré exigés pour décider (jamais en deçà des exigences existantes) ; alias « Secrétaire général » conservé', async () => {
+    const env = await full();
+    const base = env.ctx.users.get('u-gouverneur')!;
+    const auth = (minutes: number) => ({ ...base, auth: { method: 'bearer' as const, sessionId: 's', acr: 'urn:mosolo:acr:mfa' as const, amr: ['pwd', 'otp'], authTime: new Date(Date.parse('2026-09-26T09:00:00.000Z') - minutes * 60_000).toISOString(), expiresAt: '2026-09-26T12:00:00.000Z' } });
+    expect(() => env.svc.garderDecision(auth(45), 'nav-1')).toThrow(/nouvelle authentification/);
+    expect(() => env.svc.garderDecision(auth(5))).toThrow(/appareil enregistré/);
+    expect(() => env.svc.garderDecision(auth(5), 'nav-1')).not.toThrow();
+    expect(ROLES.R03).toBe('Secrétaire exécutif du Gouvernement provincial');
+    expect(ROLE_ALIASES.R03).toEqual(['Secrétaire général']);
+    const m = await env.req('POST', '/v1/pilotage/gouvernance/reunions', 'acces-u-sg', { body: 'COMITE_PILOTAGE', date: '2026-09-26', attendees: ['Secrétaire général', 'Secrétaire exécutif du Gouvernement provincial'], agenda: ['Point unique (test)'], minutes: { reference: 'PV-TEST', sha256: 'a'.repeat(64) }, decisions: [] });
+    expect(m.statusCode).toBe(201);
   });
 
   it('les tableaux existants restent disponibles (règle n° 1) et les routes financières ne sont jamais relayées', async () => {

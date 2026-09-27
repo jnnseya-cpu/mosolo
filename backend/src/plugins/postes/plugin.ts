@@ -65,7 +65,7 @@ async function relayer(app: FastifyInstance, req: FastifyRequest, url: string, b
   if (req.correlationId) headers['x-request-id'] = req.correlationId;
   headers['content-type'] = 'application/json';
   const res = await app.inject({ method: 'POST', url, headers, payload: JSON.stringify(body), remoteAddress: req.ip });
-  let json: unknown = null;
+  let json: unknown;
   try { json = res.json(); } catch { json = res.body; }
   return { status: res.statusCode, body: json };
 }

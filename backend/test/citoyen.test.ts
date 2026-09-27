@@ -176,7 +176,8 @@ describe('Module 5 — portail public : simulateurs sur règles publiées, infor
     // Aucune donnée personnelle : seules la famille et la règle sont journalisées.
     const rec = env.app.ctx.audit.list({ action: 'portail.simulation.computed', limit: 10 }).items;
     expect(rec.length).toBe(2);
-    expect(JSON.stringify(rec)).not.toContain('1000');
+    // Contrôle sur le contenu journalisé (détails) : les empreintes hexadécimales du chaînage peuvent contenir « 1000 » par hasard.
+    expect(JSON.stringify(rec.map((r) => r.details))).not.toContain('1000');
   });
 
   it('information publique, visites anonymes, conversion et vérifications comptées', async () => {

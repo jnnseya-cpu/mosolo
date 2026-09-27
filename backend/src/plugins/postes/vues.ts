@@ -413,7 +413,7 @@ export class Vues {
     const defs = ['postes.seuil.exoneration_degrevement_cdf'];
     const seuils = defs.map((id) => ({ id, valeur: this.s.param(id), unite: 'CDF', statut: PAR_DEFAUT, modification: 'Registre des seuils : proposition motivée puis approbation par une autre personne (le ministre des Finances figure parmi les approbateurs).', lien: '/integrite/seuils' }));
     void gouv;
-    let tresorerie: unknown = null;
+    let tresorerie: unknown;
     try {
       const t = this.pil?.profile(u, 'tresor', {}) as { tiles?: unknown; suspense?: unknown; exceptions?: unknown } | undefined;
       tresorerie = t ? { tuiles: t.tiles ?? null, suspens: t.suspense ?? null, exceptions: t.exceptions ?? null, note: 'Vue consolidée de trésorerie : agrégats seulement.' } : null;
@@ -690,7 +690,7 @@ export class Vues {
     const execs = this.lignesExecution(u);
     const fiches = u.roles.some((r) => ROLES_POSTE_DECISION.includes(r)) ? this.s.corbeille(u, { accueil: true }).fiches : [];
     const al = this.alertes(u, 20).items;
-    let kpis: KpiResult[] = [];
+    let kpis: KpiResult[];
     try { const sc = this.pil?.filtersFor(u, {}); kpis = sc ? this.pil!.computeKpis(sc.filters) : []; } catch { kpis = []; }
     return {
       titre: 'La note du lundi', semaine, arreteAu: fin, autorite: this.s.userName(u.id), profil,

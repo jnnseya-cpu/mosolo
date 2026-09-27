@@ -29,7 +29,7 @@ const grpCols = (label: string) => [
 export function RegieFiscale() {
   const q = useVue<Fiscale>('/v1/decision/regie-fiscale');
   return (
-    <Ecran eyebrow="Pilotage et décision · module 42" title="Tableau de bord de la régie fiscale" lead="Assiette, liquidation, recouvrement et contentieux de la régie ; périmètre limité à la compétence de la régie." q={q}>
+    <Ecran eyebrow="Pilotage et décision · module 42" title="Poste de travail — régie fiscale (Tableau de bord de la régie fiscale)" lead="Assiette, liquidation, recouvrement et contentieux de la régie ; périmètre limité à la compétence de la régie." q={q}>
       {(d) => (<>
         <Section title={`Indicateurs — ${d.entity}`} sub={d.rule}><Indicateurs items={d.indicators} /></Section>
         <Section title="Assiette et liquidation par recette"><DataTable caption="Par recette" rows={d.assessment.byRevenue} rowKey={(g) => g.key} columns={grpCols('Recette (règle)')} /></Section>
@@ -91,7 +91,7 @@ const AUTH_LABELS: Record<string, string> = { total: 'Total', active: 'Actives',
 export function RegieTaxes() {
   const q = useVue<Taxes>('/v1/decision/regie-taxes');
   return (
-    <Ecran eyebrow="Pilotage et décision · module 43" title="Tableau de bord de la régie des taxes" lead="Droits, taxes et redevances urbaines ; périmètre limité à la compétence de la régie." q={q}>
+    <Ecran eyebrow="Pilotage et décision · module 43" title="Poste de travail — régie des taxes (Tableau de bord de la régie des taxes)" lead="Droits, taxes et redevances urbaines ; périmètre limité à la compétence de la régie." q={q}>
       {(d) => (<>
         <Section title={`Indicateurs — ${d.entity}`} sub={d.rule}><Indicateurs items={d.indicators} /></Section>
         <Section title="Recettes par taxe">

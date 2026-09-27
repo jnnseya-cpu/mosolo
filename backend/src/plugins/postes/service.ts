@@ -24,7 +24,7 @@ import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '.
 import { userRecipient } from '../../modules/identity/recipients.js';
 import { FX_SOURCE } from '../../modules/fx/service.js';
 import {
-  ACTE_LABELS, ACTION_LABELS, ajouterJours, CATEGORIES, categorieDef, chiffre, estAgentPublic, estRouteFinanciere, ETAT_EXECUTION_LABELS, ETAT_PREPARATION_LABELS,
+  ACTE_LABELS, ACTION_LABELS, ajouterJours, categorieDef, chiffre, estAgentPublic, estRouteFinanciere, ETAT_EXECUTION_LABELS, ETAT_PREPARATION_LABELS,
   EXEMPLE, GRAVITE_RANG, joursEntre, MOTIF_MIN, NATURES_REFUSEES, PARENT_REMONTEE, POSITION_MAX, rangDe, ROLES_POSTE_DECISION, trancheMontant,
   type ActeAProduire, type ActionFiche, type ActionOrdre, type ActionPreparation, type CategorieDecision, type Chiffre, type EtatChiffre, type EtatExecution,
   type EtatPreparation, type Gravite, type ProfilPoste, type Taux,
@@ -147,7 +147,7 @@ export interface Fiche {
   categorie: { code: CategorieDecision; libelle: string; niveau: string } | null;
   presence: ('DECIDEUR' | 'DELEGATION' | 'NIVEAU_HABITUEL' | 'REMONTEE')[];
   remontee?: { niveau: number; raisons: string[] };
-  delegation?: { id: string; delegantId: string; delegant: string };
+  delegation?: { id: string; delegantId: string; delegant: string; source: 'POSTE' | 'MODULE_51' };
   objet: string;
   demandeur: { id: string | null; libelle: string; serviceInstructeur: string; validationAmont: string | null };
   enjeu: { texte: string; chiffres: Chiffre[]; nombre: string | null; commune: string | null; figures: { libelle: string; valeur: string; unite: string }[] };
@@ -169,6 +169,9 @@ export interface Fiche {
 }
 
 interface Item extends SourceItem { dossier?: DossierOrientation }
+
+/** Délégation appliquée à une fiche : routage du poste (§ 27.11) ou délégation de rôle du module 51 (droits). */
+export interface DelegationRef { id: string; delegantId: string; source?: 'POSTE' | 'MODULE_51' }
 
 const PROVINCE_ROLES: RoleCode[] = ['R01', 'R02', 'R03', 'R05', 'R17', 'R18', 'R22', 'R23', 'R24', 'R16', 'R21', 'R13', 'R14', 'R15', 'R19', 'R25', 'R26', 'R27', 'R28', 'R29'];
 const GOUVERNEUR: User = { kind: 'user', id: 'poste:gouverneur', name: 'Gouverneur (corbeille)', roles: ['R01'], entity: 'GOUVERNORAT' };
@@ -271,6 +274,20 @@ export class PostesService {
     return this.delegations.find((d) => d.delegataireId === delegataireId && d.statut === 'ACTIVE');
   }
 
+  /**
+   * Délégation de RÔLE du module 51 (acces-delegations : délégation approuvée par une personne distincte, rôles ajoutés
+   * pour une période bornée) : si le droit de décider un élément ne vient que des rôles délégués, la décision est
+   * enregistrée « par délégation de » son titulaire. Le poste s'appuie sur ce mécanisme ; il n'en crée aucun autre.
+   */
+  delegationDeRole(u: User, it: SourceItem): DelegationRef | null {
+    const ad = this.ctx.ext['acces-delegations'] as { delegations?: { all(): { id: string; delegatorId: string; delegateId: string; status: string; granted: RoleCode[] }[] } } | undefined;
+    for (const d of ad?.delegations?.all() ?? []) {
+      if (d.status !== 'ACTIVE' || d.delegateId !== u.id || !d.granted.length) continue;
+      if (!it.eligible({ ...u, roles: u.roles.filter((r) => !d.granted.includes(r)) })) return { id: d.id, delegantId: d.delegatorId, source: 'MODULE_51' };
+    }
+    return null;
+  }
+
   // ————————————————————————— éléments (sources + dossiers d'orientation) —————————————————————————
 
   private dossierItem(d: DossierOrientation): Item {
@@ -334,12 +351,12 @@ export class PostesService {
    * Corbeille d'une personne : seules les dix catégories, au-delà de leurs seuils, présentables, dans son périmètre.
    * Présence : décideur (selon la source), délégation, niveau habituel de la catégorie, remontée (lecture et relance).
    */
-  corbeilleItems(u: User): { fiches: { it: Item; presence: Fiche['presence']; remontee?: { niveau: number; raisons: string[] }; delegation?: Delegation }[]; nonPresentables: Item[]; differes: { it: Item; jusquau: string }[] } {
+  corbeilleItems(u: User): { fiches: { it: Item; presence: Fiche['presence']; remontee?: { niveau: number; raisons: string[] }; delegation?: DelegationRef }[]; nonPresentables: Item[]; differes: { it: Item; jusquau: string }[] } {
     const items = this.items();
     const decisionPost = u.roles.some((r) => ROLES_POSTE_DECISION.includes(r));
     const delegs = this.delegationsActivesPour(u.id);
     const today = this.today();
-    const out: { it: Item; presence: Fiche['presence']; remontee?: { niveau: number; raisons: string[] }; delegation?: Delegation }[] = [];
+    const out: { it: Item; presence: Fiche['presence']; remontee?: { niveau: number; raisons: string[] }; delegation?: DelegationRef }[] = [];
     const nonPresentables: Item[] = [];
     const differes: { it: Item; jusquau: string }[] = [];
     for (const it of items) {
@@ -356,8 +373,9 @@ export class PostesService {
         const r = this.remontee(it);
         if (r.niveau > 0 && u.roles.some((x) => r.roles.includes(x))) { presence.push('REMONTEE'); rem = { niveau: r.niveau, raisons: r.raisons }; }
       }
-      let delegation: Delegation | undefined;
-      for (const d of delegs) {
+      let delegation: DelegationRef | undefined = presence.includes('DECIDEUR') ? this.delegationDeRole(u, it) ?? undefined : undefined;
+      if (delegation) presence.push('DELEGATION');
+      for (const d of delegation ? [] : delegs) {
         if (d.categorie !== it.categorie || (d.ficheId && d.ficheId !== it.id)) continue;
         const delegant = this.ctx.users.get(d.delegantId);
         if (!delegant) continue;
@@ -387,7 +405,7 @@ export class PostesService {
   }
 
   /** Construit la fiche (§ 27.3) ; `accueil` masque toute donnée individuelle (montant exact, identité). */
-  fiche(u: User, e: { it: Item; presence: Fiche['presence']; remontee?: { niveau: number; raisons: string[] }; delegation?: Delegation }, opts: { accueil: boolean } = { accueil: true }): Fiche {
+  fiche(u: User, e: { it: Item; presence: Fiche['presence']; remontee?: { niveau: number; raisons: string[] }; delegation?: DelegationRef }, opts: { accueil: boolean } = { accueil: true }): Fiche {
     const { it } = e;
     const def = it.categorie ? categorieDef(it.categorie)! : null;
     const today = this.today();
@@ -417,7 +435,7 @@ export class PostesService {
     return {
       id: it.id, source: it.source, module: it.module, categorie: def ? { code: def.code, libelle: def.libelle, niveau: def.niveau } : null,
       presence: e.presence, ...(e.remontee ? { remontee: e.remontee } : {}),
-      ...(e.delegation ? { delegation: { id: e.delegation.id, delegantId: e.delegation.delegantId, delegant: this.userName(e.delegation.delegantId) } } : {}),
+      ...(e.delegation ? { delegation: { id: e.delegation.id, delegantId: e.delegation.delegantId, delegant: this.userName(e.delegation.delegantId), source: e.delegation.source ?? 'POSTE' } } : {}),
       objet: it.objet,
       demandeur: { id: it.demandeurId, libelle: dossier ? dossier.demandeur.libelle : this.userName(it.demandeurId), serviceInstructeur: it.serviceInstructeur, validationAmont: it.validationAmont },
       enjeu: { texte: it.enjeu.texte, chiffres, nombre: it.enjeu.nombre, commune: it.enjeu.commune, figures: dossier?.enjeu.figures ?? [] },
@@ -508,7 +526,7 @@ export class PostesService {
    * exécute le relais puis appelle `enregistrerRelais`.
    */
   agir(u: User, ficheId: string, input: { action: ActionFiche; motif: string; delegataireId?: string; jusquau?: string; perimetre?: string }, device?: string):
-    { relais: Forward & { approve: boolean }; fiche: Fiche; item: Item; delegation?: Delegation } | { resultat: unknown } {
+    { relais: Forward & { approve: boolean }; fiche: Fiche; item: Item; delegation?: DelegationRef } | { resultat: unknown } {
     authorize(u, 'postes:decision.act');
     const motif = (input.motif ?? '').trim();
     if (motif.length < MOTIF_MIN) throw badRequest('MOTIF_OBLIGATOIRE', `Toute issue d’une fiche est motivée (${MOTIF_MIN} caractères au moins) et journalisée.`);
@@ -569,7 +587,7 @@ export class PostesService {
   }
 
   /** Journal du relais vers la route de décision de la source (auteur, motif, route, résultat). */
-  enregistrerRelais(u: User, ficheId: string, input: { action: ActionFiche; motif: string }, relais: { url: string }, item: Item, status: number, delegation?: Delegation): GesteRecord {
+  enregistrerRelais(u: User, ficheId: string, input: { action: ActionFiche; motif: string }, relais: { url: string }, item: Item, status: number, delegation?: DelegationRef): GesteRecord {
     const ok = status < 400;
     const mention = delegation ? `par délégation de ${this.userName(delegation.delegantId)} (${delegation.delegantId})` : null;
     const g = this.gestes.append({
@@ -718,14 +736,11 @@ export class PostesService {
     const motif = input.motif.trim();
     if (motif.length < MOTIF_MIN) throw badRequest('MOTIF_OBLIGATOIRE', 'Chaque geste de préparation est motivé et journalisé.');
     const at = this.now();
-    let patch: Partial<DossierOrientation> = {};
     if (input.action === 'TRANSMETTRE') {
       if (!d.fondement.some((f) => f.trim())) throw unprocessable('FONDEMENT_REQUIS', 'Une fiche sans base légale ne peut être présentée au Gouverneur : à renvoyer au service.');
       if (d.preparation !== 'INSTRUIT') throw conflict('DOSSIER_NON_INSTRUIT', `Dossier « ${ETAT_PREPARATION_LABELS[d.preparation]} » : seul un dossier instruit monte au Gouverneur.`);
-      patch = { transmis: true };
-    } else {
-      patch = { preparation: 'INCOMPLET', transmis: false };
     }
+    const patch: Partial<DossierOrientation> = input.action === 'TRANSMETTRE' ? { transmis: true } : { preparation: 'INCOMPLET', transmis: false };
     const out = this.dossiers.update({ ...d, ...patch, journal: [...d.journal, { at, by: u.id, action: input.action, motif }] });
     this.gestes.append({ id: this.ids.next('GESTE'), at, userId: u.id, ficheId: `DOSSIER:${d.id}`, objet: d.objet, categorie: d.categorie, geste: input.action, motif, resultat: 'ENREGISTRE' });
     this.audit(u, `postes.cabinet.${input.action.toLowerCase()}`, 'dossier_orientation', d.id, { motif, categorie: d.categorie, ecarte: input.action !== 'TRANSMETTRE' });
