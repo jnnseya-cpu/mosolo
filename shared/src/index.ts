@@ -10,3 +10,4 @@ export * from './validity.js';
 export * from './proofs.js';
 export * from './geo.js';
 export * from './plates.js';
+export * from './profiles.js';

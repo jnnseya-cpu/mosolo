@@ -21,7 +21,7 @@ export interface ModuleVisa { step: string; by: string; role: string; at: string
 export interface ModuleConfig {
   id: string; code: string; label: string; revenueScope: string; responsibleEntity: string; moduleManagerId?: string;
   beneficiaryAliases: string[]; objectTypes: string[]; ruleCodes: string[]; credentialTypes: string[]; validityModel: string;
-  proofMechanisms: string[]; usageRules: string; channels: string[]; fieldWorkflows: string[]; dashboards: string[]; dependencies: string[];
+  proofMechanisms: string[]; usageRules: string; channels: string[]; fieldWorkflows: string[]; dashboards: string[]; dependencies: string[]; dependencyRefs?: string[];
   sharedReadWith: string[]; actReferences: string[]; status: string; visas: ModuleVisa[];
   recette?: { passed: boolean; report: string; by: string; at: string };
   history: { at: string; from: string | null; to: string; by: string; note?: string }[];

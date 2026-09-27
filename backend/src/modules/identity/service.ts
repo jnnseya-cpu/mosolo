@@ -30,6 +30,8 @@ export interface Taxpayer {
   /** Fusion d'identités (réversible) : le compte absorbé pointe vers le compte conservé. */
   status?: 'ACTIF' | 'FUSIONNE';
   mergedInto?: string;
+  /** Compte repris d'un système existant (ex. « e-DGRK ») : lot et référence d'origine (§ 7.5). */
+  importedFrom?: { source: string; batchId: string; externalRef: string };
 }
 
 export type RegistrationInput = {
@@ -125,11 +127,36 @@ export class TaxpayerService {
     return updated;
   }
 
+  /** Provenance d'un compte repris par import (jamais d'écrasement : la première provenance est conservée). */
+  setImportedFrom(id: string, importedFrom: NonNullable<Taxpayer['importedFrom']>): Taxpayer {
+    const t = this.get(id);
+    return t.importedFrom ? t : this.taxpayers.update({ ...t, importedFrom });
+  }
+
   /** État de fusion (réversible) : `mergedInto` null ⇒ compte rétabli. */
   setMergeState(id: string, mergedInto: string | null): Taxpayer {
     const t = this.get(id);
     const { mergedInto: _prev, ...rest } = t;
     return this.taxpayers.update(mergedInto ? { ...rest, status: 'FUSIONNE', mergedInto } : { ...rest, status: 'ACTIF' });
+  }
+
+  /**
+   * Récupération contrôlée (§ 9.3) : changement du téléphone de connexion décidé en double validation par l'appelant.
+   * L'ancien numéro n'est jamais réattribué sans trace ; journalisé et notifié (ancien et nouveau contact).
+   */
+  changePhone(id: string, phoneRaw: string, actor: AuditActor, reason: string): Taxpayer {
+    const t = this.get(id);
+    const phone = phoneRaw.replace(/[\s-]/g, '');
+    if (phone && this.taxpayers.findOne((x) => x.id !== id && x.phone === phone)) {
+      throw conflict('PHONE_ALREADY_REGISTERED', 'Ce numéro est déjà rattaché à un autre compte.');
+    }
+    const previous = t.phone;
+    const { phoneVerifiedAt: _v, ...rest } = t;
+    const updated = this.taxpayers.update({ ...rest, phone });
+    this.audit.append({ actor, action: 'account.contact.changed', resourceType: 'taxpayer', resourceId: id, details: { channel: 'TELEPHONE', reason, previousMasked: previous ? maskPhone(previous) : null, newMasked: maskPhone(phone) } });
+    if (previous) this.comms.publish('account.contact.changed', [taxpayerRecipient(t)], {}, { entity: 'GOUVERNORAT' });
+    this.comms.publish('account.contact.changed', [taxpayerRecipient(updated)], {}, { entity: 'GOUVERNORAT' });
+    return updated;
   }
 
   get(id: string): Taxpayer {

@@ -140,6 +140,31 @@ export const CIRCUITS: Circuit[] = [
     code: 'REGISTRE_SEUILS', label: 'Registre des seuils anti-fraude (confirmation ou modification)',
     proposals: ['integrite.threshold.change_proposed'], approvals: ['integrite.threshold.change_approved'], refusals: ['integrite.threshold.change_rejected'],
   },
+  // Fiscalité, identité et campagnes (§ 16.4, § 10A.3, § 7.5, § 9.3, § 45, § 6.2).
+  {
+    code: 'FISCAL_PROTOCOLE_DONNEES', label: 'Activation d’un protocole d’échange de données (anomalies locatives)',
+    proposals: ['fiscal.data_protocol.proposed'], approvals: ['fiscal.data_protocol.activated'], refusals: ['fiscal.data_protocol.rejected'],
+  },
+  {
+    code: 'FISCAL_DEPENDANCE_ACTIVATION', label: 'Activation (ou retour en mode informatif) d’une dépendance entre services',
+    proposals: ['fiscal.dependency.change_proposed'], approvals: ['fiscal.dependency.activated'], refusals: ['fiscal.dependency.change_rejected'],
+  },
+  {
+    code: 'FISCAL_IMPORT_LOT', label: 'Intégration d’un lot repris (e-DGRK, données existantes)',
+    proposals: ['fiscal.import.uploaded'], approvals: ['fiscal.import.committed'], refusals: [],
+  },
+  {
+    code: 'ENROLEMENT_RECUPERATION', label: 'Récupération de compte (vérification au guichet, approbation)',
+    proposals: ['enrolement.recovery.verified'], approvals: ['enrolement.recovery.approved'], refusals: ['enrolement.recovery.rejected'],
+  },
+  {
+    code: 'CAMPAGNE_LANCEMENT', label: 'Lancement d’une campagne de déclaration',
+    proposals: ['campaign.launch.proposed'], approvals: ['campaign.launched'], refusals: ['campaign.launch.rejected'],
+  },
+  {
+    code: 'REGLE_PROROGATION', label: 'Prorogation d’échéance enregistrée sur une fiche de règle',
+    proposals: ['rule.due_extension.proposed'], approvals: ['rule.due_extension.recorded'], refusals: ['rule.due_extension.rejected'],
+  },
 ];
 
 export interface TwoPersonDecision {

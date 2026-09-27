@@ -1,12 +1,12 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **681 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
 | extension acces | 63 |
-| extension canaux | 45 |
-| extension fiscal | 44 |
+| extension canaux | 46 |
+| extension fiscal | 80 |
 | extension ia | 28 |
 | extension integrite | 58 |
 | extension parking | 36 |
@@ -14,7 +14,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | extension preuves | 14 |
 | extension publicite | 34 |
 | extension rakapay | 23 |
-| extension recouvrement | 37 |
+| extension recouvrement | 50 |
 | extension sanctions | 8 |
 | extension socle | 14 |
 | extension terrain | 47 |
@@ -119,6 +119,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | GET | `/v1/assisted-enrolments/:id` |
 | POST | `/v1/assisted-enrolments/:id/review` |
 | POST | `/v1/assisted-enrolments/batches` |
+| POST | `/v1/canaux/contestations-assistees` |
 | GET | `/v1/channel-sessions` |
 | GET | `/v1/channels/indicators` |
 | POST | `/v1/ivr/sessions` |
@@ -162,18 +163,42 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 
 | Méthode | Chemin |
 |---|---|
+| GET | `/v1/enrolement/espaces` |
+| POST | `/v1/enrolement/nif/:id` |
+| GET | `/v1/enrolement/recuperations` |
+| POST | `/v1/enrolement/recuperations/:id/decision` |
+| POST | `/v1/enrolement/recuperations/:id/verification` |
+| GET | `/v1/enrolement/roles` |
+| POST | `/v1/enrolement/roles` |
+| POST | `/v1/enrolement/roles/:id/instruction` |
+| GET | `/v1/fiscal/anomalies` |
+| POST | `/v1/fiscal/anomalies/:id/review` |
+| GET | `/v1/fiscal/anomalies/catalogue` |
+| POST | `/v1/fiscal/anomalies/detection` |
+| GET | `/v1/fiscal/assiette-2026` |
+| GET | `/v1/fiscal/assiette-2026/declarations` |
+| POST | `/v1/fiscal/assiette-2026/declarations` |
+| GET | `/v1/fiscal/census/coverage` |
+| GET | `/v1/fiscal/census/stages` |
 | GET | `/v1/fiscal/clearances` |
 | POST | `/v1/fiscal/clearances` |
 | POST | `/v1/fiscal/clearances/:id/revoke` |
 | GET | `/v1/fiscal/clearances/eligibility` |
 | GET | `/v1/fiscal/clearances/review` |
 | GET | `/v1/fiscal/clearances/verify/:code` |
+| GET | `/v1/fiscal/data-protocols` |
+| POST | `/v1/fiscal/data-protocols` |
+| POST | `/v1/fiscal/data-protocols/:id/decision` |
 | GET | `/v1/fiscal/declarations` |
 | POST | `/v1/fiscal/declarations` |
 | GET | `/v1/fiscal/declarations/:id` |
 | POST | `/v1/fiscal/declarations/:id/corrections` |
 | POST | `/v1/fiscal/declarations/:id/instruction` |
 | GET | `/v1/fiscal/declarations/prefill` |
+| GET | `/v1/fiscal/dependencies` |
+| POST | `/v1/fiscal/dependencies/:code/change` |
+| POST | `/v1/fiscal/dependencies/:code/change/decision` |
+| POST | `/v1/fiscal/dependencies/check` |
 | POST | `/v1/fiscal/disputes/:id/resolve` |
 | GET | `/v1/fiscal/exemptions` |
 | POST | `/v1/fiscal/exemptions` |
@@ -183,6 +208,12 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | POST | `/v1/fiscal/exemptions/:id/legal-visa` |
 | POST | `/v1/fiscal/exemptions/:id/revoke` |
 | GET | `/v1/fiscal/geo-units` |
+| GET | `/v1/fiscal/imports` |
+| POST | `/v1/fiscal/imports` |
+| GET | `/v1/fiscal/imports/:id` |
+| POST | `/v1/fiscal/imports/:id/commit` |
+| POST | `/v1/fiscal/imports/:id/duplicates/:line/decision` |
+| GET | `/v1/fiscal/imports/format` |
 | GET | `/v1/fiscal/leases` |
 | POST | `/v1/fiscal/leases/:id/attestations` |
 | GET | `/v1/fiscal/map` |
@@ -191,11 +222,14 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | POST | `/v1/fiscal/object-corrections/:id/decision` |
 | GET | `/v1/fiscal/objects` |
 | GET | `/v1/fiscal/objects/:id` |
+| POST | `/v1/fiscal/objects/:id/census-stage` |
 | GET | `/v1/fiscal/objects/:id/corrections` |
 | POST | `/v1/fiscal/objects/:id/corrections` |
 | POST | `/v1/fiscal/objects/:id/plate/pose` |
 | POST | `/v1/fiscal/objects/:id/plate/replace` |
+| POST | `/v1/fiscal/objects/:id/provenance` |
 | POST | `/v1/fiscal/objects/:id/validate` |
+| POST | `/v1/fiscal/partner-data/:source/lots` |
 | GET | `/v1/fiscal/plates/:code/scan` |
 | GET | `/v1/fiscal/reference` |
 | POST | `/v1/fiscal/relationships` |
@@ -203,7 +237,10 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | POST | `/v1/fiscal/relationships/:id/contest` |
 | POST | `/v1/fiscal/relationships/:id/validate` |
 | GET | `/v1/fiscal/relationships/queue` |
+| GET | `/v1/public/enrolement/profils` |
+| POST | `/v1/public/enrolement/recuperations` |
 | GET | `/v1/public/fiscal/clearances/:code` |
+| GET | `/v1/public/fiscal/dependances` |
 | GET | `/v1/public/fiscal/lease-attestations/:code` |
 | GET | `/v1/public/fiscal/plates/:code` |
 
@@ -456,6 +493,19 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 
 | Méthode | Chemin |
 |---|---|
+| GET | `/v1/campagnes` |
+| POST | `/v1/campagnes` |
+| GET | `/v1/campagnes/:id` |
+| POST | `/v1/campagnes/:id/arret` |
+| POST | `/v1/campagnes/:id/lancement` |
+| POST | `/v1/campagnes/:id/lancement/decision` |
+| POST | `/v1/campagnes/:id/pre-remplissage` |
+| POST | `/v1/campagnes/:id/relances` |
+| POST | `/v1/campagnes/:id/simulation` |
+| GET | `/v1/campagnes/calendrier` |
+| GET | `/v1/prorogations` |
+| POST | `/v1/prorogations` |
+| POST | `/v1/prorogations/:id/decision` |
 | GET | `/v1/recouvrement/arrieres` |
 | GET | `/v1/recouvrement/avis` |
 | POST | `/v1/recouvrement/avis` |

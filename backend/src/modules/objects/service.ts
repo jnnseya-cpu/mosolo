@@ -53,6 +53,33 @@ export interface FiscalObject {
   rankConfirmedBy?: string;
   /** Historique des corrections de rang et de base (jamais écrasé). */
   history?: ObjectChange[];
+  /**
+   * Provenance par donnée (§ 17.4) : source, niveau de confiance, date de vérification et responsable de validation.
+   * Absente pour un champ ⇒ provenance déduite du statut probant de l'objet (déclaré, observé, vérifié).
+   */
+  provenance?: Record<string, DataProvenance>;
+  /** Vague de recensement 0 à 5 (§ 17.4) ; absente ⇒ déduite de l'état de l'objet. Transitions journalisées. */
+  censusStage?: CensusStage;
+  censusHistory?: { at: string; from: CensusStage | null; to: CensusStage; by: string; reason: string }[];
+  /** Objet repris d'un système existant (ex. « e-DGRK ») : lot et référence d'origine. */
+  importedFrom?: { source: string; batchId: string; externalRef: string };
+}
+
+/** Vagues du recensement massif (§ 17.4) : 0 préparation … 5 entretien. */
+export const CENSUS_STAGES = [0, 1, 2, 3, 4, 5] as const;
+export type CensusStage = (typeof CENSUS_STAGES)[number];
+
+export const PROVENANCE_SOURCES = ['MISSION_TERRAIN', 'AUTO_DECLARATION', 'DONNEES_ADMINISTRATIVES', 'PARTENAIRE_AUTORISE', 'OBSERVATION_GEOSPATIALE', 'E_DGRK'] as const;
+export type ProvenanceSource = (typeof PROVENANCE_SOURCES)[number];
+
+export interface DataProvenance {
+  source: ProvenanceSource;
+  /** Libellé de la source (ex. « e-DGRK », « Mission M-12 »). */
+  sourceLabel?: string;
+  confidence: 'FAIBLE' | 'MOYENNE' | 'ELEVEE';
+  verifiedAt?: string;
+  verifiedBy?: string;
+  recordedAt: string;
 }
 
 export interface ObjectChange {
@@ -224,6 +251,12 @@ export class ObjectService {
     const o = this.get(id);
     this.taxpayers.get(taxpayerId);
     return this.objects.update({ ...o, taxpayerId });
+  }
+
+  /** Métadonnées de recensement (provenance, vague, origine d'import) : ajout seul, jamais d'effacement de l'historique. */
+  setCensusMeta(id: string, patch: Pick<FiscalObject, 'provenance' | 'censusStage' | 'censusHistory' | 'importedFrom'>): FiscalObject {
+    const o = this.get(id);
+    return this.objects.update({ ...o, ...patch });
   }
 
   /** Statut probant de l'objet (ex. CONTESTÉ pendant un conflit de revendications). */

@@ -503,7 +503,7 @@ export class RecoveryService {
     const reminders = this.notices.find((n) => n.obligationId === o.id && ['AVIS_ECHEANCE_DEPASSEE', 'RELANCE', 'AVIS_FORMEL'].includes(n.kind));
     const readReminders = reminders.filter((n) => n.readAt);
     const orders = this.ctx.payments.orders.find((p) => p.obligationId === o.id);
-    const otherOverdue = this.ctx.assessment.byTaxpayer(o.taxpayerId).filter((x) => x.id !== o.id && ARREAR_STATUSES.includes(x.status) && x.dueDate < this.today());
+    const otherOverdue = this.ctx.assessment.byTaxpayer(o.taxpayerId).filter((x) => x.id !== o.id && ARREAR_STATUSES.includes(x.status) && this.ctx.assessment.isPastDue(x, this.today()));
     let code: SegmentCode;
     if (appeal || o.status === 'CONTESTEE') {
       code = 'CONTESTATION'; reasons.push('Réclamation ouverte sur l’obligation.');
@@ -527,7 +527,7 @@ export class RecoveryService {
     const factors: string[] = [];
     let score = 0;
     if (age > 180) { score += 3; factors.push('Ancienneté > 180 jours'); } else if (age > 90) { score += 2; factors.push('Ancienneté > 90 jours'); } else if (age > 30) { score += 1; factors.push('Ancienneté > 30 jours'); }
-    const others = this.ctx.assessment.byTaxpayer(o.taxpayerId).filter((x) => x.id !== o.id && ARREAR_STATUSES.includes(x.status) && x.dueDate < this.today()).length;
+    const others = this.ctx.assessment.byTaxpayer(o.taxpayerId).filter((x) => x.id !== o.id && ARREAR_STATUSES.includes(x.status) && this.ctx.assessment.isPastDue(x, this.today())).length;
     if (others) { score += Math.min(2, others); factors.push(`${others} autre(s) créance(s) échue(s)`); }
     const read = this.notices.find((n) => n.obligationId === o.id && !!n.readAt && n.kind !== 'AVIS_IMPOSITION').length;
     if (read >= 2) { score += 1; factors.push('Avis lus sans suite'); }
@@ -659,7 +659,7 @@ export class RecoveryService {
   nextStep(c: RecoveryCase, o: Obligation): { kind: StepKind | null; label: string; eligible: boolean; blockers: Blocker[] } {
     if (c.status !== 'OUVERT') return { kind: null, label: 'Dossier clos', eligible: false, blockers: [] };
     const order: ProposalKind[] = ['AVIS_FORMEL', 'MISE_EN_DEMEURE', 'MESURE_EXECUTION'];
-    if (!this.done(c, 'AVIS_J_PLUS_1') && o.dueDate < this.today()) {
+    if (!this.done(c, 'AVIS_J_PLUS_1') && this.ctx.assessment.isPastDue(o, this.today())) {
       return { kind: 'AVIS_J_PLUS_1', label: STEP_LABELS.AVIS_J_PLUS_1, eligible: true, blockers: [] };
     }
     const kind = order.find((k) => !this.done(c, k));
@@ -695,20 +695,23 @@ export class RecoveryService {
   /** Envoie le prochain rappel amiable applicable (jamais deux étapes d'un coup). Retourne l'étape envoyée. */
   private sendNextReminder(c: RecoveryCase, o: Obligation, by: string, manual = false): StepKind | null {
     const today = this.today();
-    const toDue = daysBetween(today, o.dueDate);
+    // Échéance effective (prorogation) et fin de tolérance portées par la fiche de règle (§ 6.2).
+    const due = this.ctx.assessment.dueInfo(o);
+    const toDue = daysBetween(today, due.dueDate);
+    const toGrace = daysBetween(today, due.graceUntil);
     const last = [...c.steps].filter((s) => REMINDER_STEPS.includes(s.kind)).sort((a, b) => b.doneOn.localeCompare(a.doneOn))[0];
     const gapOk = !last || daysBetween(last.doneOn, today) >= RECOVERY_PROCEDURE.minGapDays;
     let kind: StepKind | null = null;
     let notice: NoticeKind = 'RAPPEL';
     let body: string[] = [];
     if (toDue > 3 && toDue <= RECOVERY_PROCEDURE.reminderBeforeDays[0] && !this.done(c, 'RAPPEL_J_MOINS_15')) {
-      kind = 'RAPPEL_J_MOINS_15'; body = [`Votre obligation ${o.id} arrive à échéance le ${o.dueDate}.`, 'Aucune pénalité n’est appliquée à ce stade.'];
+      kind = 'RAPPEL_J_MOINS_15'; body = [`Votre obligation ${o.id} arrive à échéance le ${due.dueDate}.`, 'Aucune pénalité n’est appliquée à ce stade.'];
     } else if (toDue > 0 && toDue <= RECOVERY_PROCEDURE.reminderBeforeDays[1] && !this.done(c, 'RAPPEL_J_MOINS_3')) {
-      kind = 'RAPPEL_J_MOINS_3'; body = [`Votre obligation ${o.id} arrive à échéance le ${o.dueDate}.`, 'Aucune pénalité n’est appliquée à ce stade.'];
-    } else if (toDue <= -RECOVERY_PROCEDURE.overdueNoticeAfterDays && !this.done(c, 'AVIS_J_PLUS_1')) {
+      kind = 'RAPPEL_J_MOINS_3'; body = [`Votre obligation ${o.id} arrive à échéance le ${due.dueDate}.`, 'Aucune pénalité n’est appliquée à ce stade.'];
+    } else if (toGrace <= -RECOVERY_PROCEDURE.overdueNoticeAfterDays && !this.done(c, 'AVIS_J_PLUS_1')) {
       kind = 'AVIS_J_PLUS_1'; notice = 'AVIS_ECHEANCE_DEPASSEE';
-      body = [`L’échéance du ${o.dueDate} de l’obligation ${o.id} est dépassée.`, 'Votre référence de paiement reste valable ; vous pouvez régulariser depuis votre espace ou un point agréé.'];
-    } else if (toDue <= -RECOVERY_PROCEDURE.followUpAfterDays && this.done(c, 'AVIS_J_PLUS_1') && gapOk && !this.done(c, 'RELANCE_J_PLUS_15')) {
+      body = [`L’échéance du ${due.dueDate}${due.toleranceDays ? ` (tolérance de ${due.toleranceDays} jour(s) écoulée)` : ''} de l’obligation ${o.id} est dépassée.`, 'Votre référence de paiement reste valable ; vous pouvez régulariser depuis votre espace ou un point agréé.'];
+    } else if (toGrace <= -RECOVERY_PROCEDURE.followUpAfterDays && this.done(c, 'AVIS_J_PLUS_1') && gapOk && !this.done(c, 'RELANCE_J_PLUS_15')) {
       kind = 'RELANCE_J_PLUS_15'; notice = 'RELANCE';
       body = [`L’obligation ${o.id} reste impayée depuis le ${o.dueDate}.`, 'Un agent peut vous assister (guichet, appel, visite d’information). Si un acte l’autorise, un échéancier peut être demandé depuis votre espace.', 'Aucune sanction n’est prise à ce stade.'];
     }
@@ -730,9 +733,11 @@ export class RecoveryService {
     for (const o0 of this.ctx.assessment.obligations.all()) {
       let o = o0;
       if (!PAYABLE.includes(o.status) || this.activePlan(o.id)) continue;
-      const toDue = daysBetween(today, o.dueDate);
+      const due = this.ctx.assessment.dueInfo(o);
+      const toDue = daysBetween(today, due.dueDate);
       if (toDue > RECOVERY_PROCEDURE.reminderBeforeDays[0]) continue;
-      if (toDue < 0 && (o.status === 'EMISE' || o.status === 'EXIGIBLE')) {
+      // Retard constaté seulement après l'échéance prorogée et la tolérance de la fiche de règle (§ 6.2).
+      if (due.graceUntil < today && (o.status === 'EMISE' || o.status === 'EXIGIBLE')) {
         o = this.ctx.assessment.setStatus(o.id, 'EN_RETARD');
         out.overdueRecorded++;
         this.ctx.audit.append({ actor: { kind: 'system', id: 'recouvrement' }, action: 'obligation.overdue.recorded', resourceType: 'obligation', resourceId: o.id, details: { dueDate: o.dueDate } });
@@ -943,7 +948,7 @@ export class RecoveryService {
   arrears(filter: { segment?: string; commune?: string; revenueCategory?: string; taxpayerId?: string } = {}) {
     const today = this.today();
     const items = this.ctx.assessment.obligations
-      .find((o) => ARREAR_STATUSES.includes(o.status) && o.dueDate < today && (!filter.taxpayerId || o.taxpayerId === filter.taxpayerId))
+      .find((o) => ARREAR_STATUSES.includes(o.status) && this.ctx.assessment.isPastDue(o, today) && (!filter.taxpayerId || o.taxpayerId === filter.taxpayerId))
       .map((o) => this.arrearView(o, true) as ReturnType<RecoveryService['arrearView']> & { segment: { code: string } })
       .filter((a) => (!filter.segment || a.segment.code === filter.segment) && (!filter.commune || a.commune === filter.commune) && (!filter.revenueCategory || a.revenueCategory === filter.revenueCategory))
       .sort((a, b) => b.ageDays - a.ageDays);
@@ -975,7 +980,7 @@ export class RecoveryService {
   mine(taxpayerIds: string[]) {
     const today = this.today();
     const obligations = this.ctx.assessment.obligations.find((o) => taxpayerIds.includes(o.taxpayerId));
-    const arrears = obligations.filter((o) => ARREAR_STATUSES.includes(o.status) && o.dueDate < today).map((o) => {
+    const arrears = obligations.filter((o) => ARREAR_STATUSES.includes(o.status) && this.ctx.assessment.isPastDue(o, today)).map((o) => {
       const c = this.caseFor(o.id);
       return {
         ...this.arrearView(o, false),

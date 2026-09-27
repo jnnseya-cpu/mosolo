@@ -598,6 +598,13 @@ export class VerticalesService {
       const stall = this.stalls.get(c.details.stallId ?? '');
       out.push({ code: 'STALL_FREE', label: 'Étal toujours libre', met: !!stall && !stall.holderTaxpayerId });
     }
+    // Dépendances entre services (§ 10A.3) : quitus, vignette — informatives tant que l'acte n'est pas publié.
+    const deps = (this.ctx.ext['fiscal'] as { dependencies?: { conditionsForProcedure(v: string, t: string, tp: string, plate?: string): { code: string; label: string; met: boolean }[] } } | undefined)?.dependencies;
+    if (deps) {
+      const obj = c.objectId ? this.ctx.objects.objects.get(c.objectId) : undefined;
+      const plate = c.details.plaque ?? (typeof obj?.attributes['plaque'] === 'string' ? obj.attributes['plaque'] : typeof obj?.attributes['immatriculation'] === 'string' ? obj.attributes['immatriculation'] : undefined);
+      out.push(...deps.conditionsForProcedure(c.vertical, c.type, c.taxpayerId, plate));
+    }
     return out;
   }
 
