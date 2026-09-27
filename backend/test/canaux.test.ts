@@ -575,14 +575,14 @@ describe('canaux — points de paiement agréés (R32)', () => {
     const view = (await c.env.req('GET', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}`, 'canaux-op-limete')).json();
     await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/close`, 'canaux-op-limete', { counted: view.expected });
     c.clock.advanceHours(1);
-    // Relevés importés AVANT la déclaration du versement : crédits orphelins, constatés ensuite par le circuit manuel.
     const line = view.expectedByAccount[0];
     const tresor = ctx.users.get('u-tresor')!;
+    // Relevé importé AVANT la déclaration, montant différent : requalifié en écart de montant à la déclaration.
     ctx.treasury.importStatement(tresor, { statementId: 'REL-PT-0', lines: [{ accountAlias: line.accountAlias, amount: { amount: '1.00', currency: line.amount.currency }, valueDate: day, paymentReference: 'BORD-777' }] });
-    ctx.treasury.importStatement(tresor, { statementId: 'REL-PT-1', lines: [{ accountAlias: line.accountAlias, amount: line.amount, valueDate: day, paymentReference: 'BORD-777' }] });
     await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/deposit`, 'canaux-op-limete', {
       bankSlipRef: 'BORD-777', depositedAt: c.clock.now().toISOString(), lines: view.expectedByAccount,
     });
+    expect(ctx.treasury.exceptions.findOne((e) => e.statementId === 'REL-PT-0')!.type).toBe('AMOUNT_MISMATCH');
     // Le même bordereau ne couvre pas une seconde caisse.
     await c.env.req('POST', `/v1/payment-points/PA-GOMBE-AB01/cash-days/${day}/close`, 'canaux-op-gombe', { counted: [] });
     const reuse = await c.env.req('POST', `/v1/payment-points/PA-GOMBE-AB01/cash-days/${day}/deposit`, 'canaux-op-gombe', {
@@ -590,7 +590,12 @@ describe('canaux — points de paiement agréés (R32)', () => {
     });
     expect(reuse.json().code).toBe('BANK_SLIP_ALREADY_USED');
     const short = await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/bank-match`, 'u-tresor', { statementId: 'REL-PT-0' });
-    expect(short.json().code).toBe('STATEMENT_AMOUNT_MISMATCH');
+    expect(short.json().code).toBe('STATEMENT_LINE_NOT_FOUND');
+    // Circuit manuel (secours) : crédit orphelin enregistré hors appariement automatique (ex. relevé repris d'une autre instance).
+    const orphan = ctx.treasury.exceptions.insert({
+      id: 'EXC-MANUEL-1', type: 'ORPHAN_CREDIT', statementId: 'REL-PT-1', paymentReference: 'BORD-777', detail: 'Crédit sans référence de paiement connue.', status: 'OUVERTE', openedAt: c.clock.now().toISOString(),
+      line: { accountAlias: line.accountAlias, amount: line.amount, valueDate: day, paymentReference: 'BORD-777' },
+    });
     expect((await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/bank-match`, 'canaux-op-limete', { statementId: 'REL-PT-1' })).statusCode).toBe(403);
     const prop = await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/bank-match`, 'u-tresor', { statementId: 'REL-PT-1' });
     expect(prop.statusCode).toBe(200);
@@ -601,6 +606,9 @@ describe('canaux — points de paiement agréés (R32)', () => {
     expect(ok.json().status).toBe('VERSEE');
     expect(ok.json().reconciledCount).toBe(ok.json().collections.length);
     expect(ok.json().collections[0].receiptStatus).toBe('DEFINITIVE');
+    // Crédit orphelin expliqué : résolu (référence de la caisse, approbateur), jamais supprimé.
+    expect(ctx.treasury.exceptions.get(orphan.id)).toMatchObject({ status: 'RESOLUE', resolution: { resolvedBy: 'canaux-tresor-2', reference: `caisse PA-LIMETE-MM01:${day}` } });
+    expect(ctx.audit.list({ action: 'reconciliation.exception.resolved', resourceId: orphan.id }).total).toBe(1);
   });
 
   it('attaque : un seul R17 rétablit un point suspendu ou écarte une proposition ⇒ quatre yeux exigés', async () => {

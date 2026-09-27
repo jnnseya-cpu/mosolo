@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { AppProvider } from '../src/context';
 import { setDemoUser } from '../src/lib/api';
-import { bankMatchGuard, CashDayDetail, FOUR_EYES_RULE, type ReviewCashDay } from '../src/modules/canaux/CashDayReview';
+import { bankMatchGuard, CashDayDetail, FOUR_EYES_RULE, type ReviewCashDay, type StatementSummary } from '../src/modules/canaux/CashDayReview';
 
 // Jour de caisse d'un point agréé vu par le Trésor : clôture, versement, constatation au relevé à quatre yeux.
 const USERS = [
@@ -19,12 +19,12 @@ const base: ReviewCashDay = {
 };
 const proposed = (by: string): ReviewCashDay => ({ ...base, deposit: { ...base.deposit!, bankMatch: { statementId: 'REL-1', valueDate: '2026-09-26', lines: base.deposit!.lines, proposedBy: by, proposedAt: '2026-09-27T08:00:00.000Z' } } });
 
-function renderAs(userId: string, cd: ReviewCashDay, handlers = { onPropose: vi.fn(), onApprove: vi.fn() }) {
+function renderAs(userId: string, cd: ReviewCashDay, handlers = { onPropose: vi.fn(), onApprove: vi.fn() }, statements?: StatementSummary[]) {
   setDemoUser(userId);
   globalThis.fetch = vi.fn(async (url: string) => (String(url).includes('/v1/demo/users')
     ? new Response(JSON.stringify(USERS), { status: 200, headers: { 'content-type': 'application/json' } })
     : Promise.reject(new TypeError('Failed to fetch')))) as unknown as typeof fetch;
-  render(<AppProvider initialLang="fr"><CashDayDetail cd={cd} {...handlers} /></AppProvider>);
+  render(<AppProvider initialLang="fr"><CashDayDetail cd={cd} {...handlers} {...(statements ? { statements } : {})} /></AppProvider>);
   return handlers;
 }
 
@@ -67,6 +67,22 @@ describe('Jour de caisse d’un point agréé (Trésor)', () => {
     fireEvent.change(input, { target: { value: ' REL-9 ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Proposer la constatation' }));
     expect(h.onPropose).toHaveBeenCalledWith('REL-9');
+  });
+
+  it('proposition en choisissant le relevé importé dans la liste', async () => {
+    const st: StatementSummary[] = [{ statementId: 'REL-LISTE-2', importedAt: '2026-09-27T07:00:00.000Z', importedBy: 'u-tresor', accounts: ['KIN-DGTK-RECETTES-01'], lines: 2, matched: 0, unmatched: 2 }];
+    const h = renderAs('u-analyste', base, undefined, st);
+    const select = await screen.findByLabelText(/Relevé importé portant le bordereau/);
+    expect(screen.getByRole('option', { name: /REL-LISTE-2 .* 2 non appariée/ })).toBeTruthy();
+    fireEvent.change(select, { target: { value: 'REL-LISTE-2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Proposer la constatation' }));
+    expect(h.onPropose).toHaveBeenCalledWith('REL-LISTE-2');
+  });
+
+  it('appariement automatique à la déclaration du versement : affiché comme tel', async () => {
+    const cd: ReviewCashDay = { ...base, status: 'VERSEE', deposit: { ...base.deposit!, bankMatch: { ...proposed('SYSTEME:RAPPROCHEMENT_AUTOMATIQUE').deposit!.bankMatch!, auto: true, approvedBy: 'SYSTEME:RAPPROCHEMENT_AUTOMATIQUE', approvedAt: '2026-09-27T08:00:00.000Z' } } };
+    renderAs('u-tresor', cd);
+    expect(await screen.findByText(/Automatique à la déclaration du versement/)).toBeTruthy();
   });
 
   it('appariement automatique à l’import : affiché comme tel, sans bouton d’approbation', async () => {

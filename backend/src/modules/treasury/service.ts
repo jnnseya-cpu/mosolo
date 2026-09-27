@@ -109,7 +109,12 @@ interface StoredStatement {
   id: string;
   fingerprint: string;
   result: StatementResult;
+  /** Comptes publics crédités par le relevé (alias du coffre). */
+  accounts?: string[];
 }
+
+/** Résolution d'une exception constatée par le système (ex. versement de point agréé constaté au relevé). */
+export interface ExceptionResolution { resolvedBy: string; resolvedAt: string; reference: string; motif: string }
 
 export class TreasuryService {
   readonly statements = new InMemoryRepository<StoredStatement>();
@@ -118,6 +123,7 @@ export class TreasuryService {
   /** Surcouche de traitement (affectation, statut, résolution) fournie par le module Trésor avancé. */
   private overlay: ((e: ReconciliationException) => ReconciliationException) | undefined;
   private readonly claimants: StatementClaimant[] = [];
+  private readonly resolutionListeners: ((id: string, r: ExceptionResolution) => void)[] = [];
 
   constructor(
     private readonly clock: Clock,
@@ -249,7 +255,7 @@ export class TreasuryService {
     if (result.exceptions.length > 0) {
       this.comms.publish('reconciliation.exception.opened', this.users.withRole('R18').map(userRecipient), { reference: input.statementId }, { entity: 'TRESOR' });
     }
-    this.statements.insert({ id: input.statementId, fingerprint, result });
+    this.statements.insert({ id: input.statementId, fingerprint, result, accounts: [...new Set(input.lines.map((l) => l.accountAlias))].sort() });
     return { replayed: false, result };
   }
 
@@ -318,6 +324,63 @@ export class TreasuryService {
   /** Branche un module réclamant des lignes de relevé à référence non-paiement (bordereaux des points agréés). */
   addStatementClaimant(fn: StatementClaimant): void {
     this.claimants.push(fn);
+  }
+
+  /** Exception vue avec sa surcouche de traitement (statut, proposition), sans contrôle d'accès : usage interne des modules. */
+  private view(e: ReconciliationException): ReconciliationException {
+    return this.overlay ? this.overlay(e) : e;
+  }
+
+  /**
+   * Crédits orphelins d'un relevé encore disponibles pour un appariement : ni résolus ni classés, sans proposition de
+   * résolution en cours (mise en suspens…), filtrés par `fn`.
+   */
+  openOrphanCredits(fn: (e: ReconciliationException) => boolean): ReconciliationException[] {
+    return this.exceptions.find((e) => e.type === 'ORPHAN_CREDIT' && !!e.line && fn(e)).map((e) => this.view(e))
+      .filter((e) => e.status !== 'RESOLUE' && e.status !== 'CLASSEE' && !e.proposal);
+  }
+
+  /** Requalifie une exception de relevé (type et motif) : elle reste dans la file, jamais supprimée ; journalisé. */
+  requalifyException(id: string, type: ExceptionType, detail: string, actor: AuditActor): void {
+    const e = this.exceptions.get(id);
+    if (!e) throw conflict('EXCEPTION_NOT_FOUND', `Exception inconnue : ${id}`);
+    this.exceptions.update({ ...e, type, detail, requalifiedFrom: e.type });
+    this.audit.append({ actor, action: 'reconciliation.exception.requalified', resourceType: 'reconciliation_exception', resourceId: id, details: { from: e.type, to: type } });
+  }
+
+  /**
+   * Résout des exceptions de relevé dont le crédit est expliqué (ex. versement constaté au relevé) : statut RESOLUE avec
+   * référence et approbateur, jamais supprimées ; journalisé. La surcouche de traitement (module Trésor) est notifiée.
+   */
+  resolveExceptions(ids: string[], r: Omit<ExceptionResolution, 'resolvedAt'>, actor: AuditActor): void {
+    const resolvedAt = this.clock.now().toISOString();
+    for (const id of ids) {
+      const e = this.exceptions.get(id);
+      if (!e || e.status === 'RESOLUE') continue;
+      const resolution: ExceptionResolution = { ...r, resolvedAt };
+      this.exceptions.update({ ...e, status: 'RESOLUE', resolution });
+      for (const fn of this.resolutionListeners) fn(id, resolution);
+      this.audit.append({ actor, action: 'reconciliation.exception.resolved', resourceType: 'reconciliation_exception', resourceId: id, details: { ...resolution, type: e.type, statementId: e.statementId ?? null } });
+    }
+  }
+
+  /** Branche un module notifié des résolutions système (le module Trésor clôt le dossier de l'exception). */
+  onExceptionResolved(fn: (id: string, r: ExceptionResolution) => void): void {
+    this.resolutionListeners.push(fn);
+  }
+
+  /** Relevés importés (plus récents d'abord) : comptes, nombre de lignes, lignes encore en exception ouverte. */
+  listStatements(user: User) {
+    authorize(user, 'reconciliation.read');
+    return this.statements.all().map((s) => {
+      const ex = this.exceptions.find((e) => e.statementId === s.id).map((e) => this.view(e));
+      return {
+        statementId: s.id, importedAt: s.result.importedAt, importedBy: s.result.importedBy,
+        accounts: s.accounts ?? [...new Set(ex.flatMap((e) => (e.line ? [e.line.accountAlias] : [])))].sort(),
+        lines: s.result.lines, matched: s.result.matched.length + (s.result.claimed?.length ?? 0),
+        unmatched: ex.filter((e) => e.status !== 'RESOLUE' && e.status !== 'CLASSEE').length,
+      };
+    }).sort((a, b) => b.importedAt.localeCompare(a.importedAt));
   }
 
   /** Branche la surcouche de traitement des exceptions (module Trésor avancé). */

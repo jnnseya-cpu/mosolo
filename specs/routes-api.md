@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **616 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **617 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -37,7 +37,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **616 routes** dans 35
 | module receipts | 2 |
 | module rules | 15 |
 | module system | 3 |
-| module treasury | 5 |
+| module treasury | 6 |
 | module vault | 4 |
 
 ## Extension acces
@@ -820,6 +820,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **616 routes** dans 35
 | GET | `/v1/ledger/entries` |
 | POST | `/v1/ledger/entries/:id/reversals` |
 | GET | `/v1/reconciliation/exceptions` |
+| GET | `/v1/settlements/statements` |
 | POST | `/v1/settlements/statements` |
 
 ## Module vault

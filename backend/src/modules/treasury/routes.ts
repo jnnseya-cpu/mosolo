@@ -29,6 +29,9 @@ export function registerTreasuryRoutes(app: FastifyInstance, ctx: AppContext): v
     return reply.code(replayed ? 200 : 201).send(result);
   });
 
+  // Relevés importés (Trésor, analyste, audit) : comptes crédités, lignes, lignes encore en exception ouverte.
+  app.get('/v1/settlements/statements', async (req) => ctx.treasury.listStatements(requireUser(req)));
+
   app.get('/v1/reconciliation/exceptions', async (req) => ctx.treasury.listExceptions(requireUser(req)));
 
   app.get<{ Querystring: { sourceId?: string } }>('/v1/ledger/entries', async (req) => {

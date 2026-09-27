@@ -26,6 +26,11 @@ export interface ReviewCashDay {
   reconciledCount: number; exceptions: { id: string; type: string; detail: string }[];
 }
 
+/** Relevé importé au Trésor (GET /v1/settlements/statements). */
+export interface StatementSummary { statementId: string; importedAt: string; importedBy: string; accounts: string[]; lines: number; matched: number; unmatched: number }
+/** Approbateur inscrit par le serveur sur une constatation automatique (aucune personne ne l'a décidée). */
+const AUTO_ACTOR = 'SYSTEME:RAPPROCHEMENT_AUTOMATIQUE';
+
 /** Règle affichée telle qu'appliquée par le serveur (canaux:point.decision.request / canaux:point.deposit.confirm). */
 export const FOUR_EYES_RULE = 'Quatre yeux : la constatation au relevé est proposée par un membre du Trésor (R17 ou R18), puis approuvée par un R17 distinct du proposant et du déclarant du versement.';
 
@@ -45,7 +50,7 @@ export function bankMatchGuard(cd: ReviewCashDay, user: { id: string; roles: str
 const money = (xs: MoneyJSON[]) => (xs.length ? xs.map((m) => <MoneyText key={m.currency} money={m} showIndicative={false} />) : '—');
 const lineList = (xs: Line[]) => <ul className="cx-lines">{xs.map((l) => <li key={`${l.accountAlias}|${l.amount.currency}`}><span className="mono">{l.accountAlias}</span> <MoneyText money={l.amount} showIndicative={false} /></li>)}</ul>;
 
-export function CashDayDetail({ cd, onPropose, onApprove, busy = false }: { cd: ReviewCashDay; onPropose: (statementId: string) => void; onApprove: () => void; busy?: boolean }) {
+export function CashDayDetail({ cd, onPropose, onApprove, busy = false, statements }: { cd: ReviewCashDay; onPropose: (statementId: string) => void; onApprove: () => void; busy?: boolean; statements?: StatementSummary[] }) {
   const { user, fmtDate } = useApp();
   const [statementId, setStatementId] = useState('');
   const g = bankMatchGuard(cd, user);
@@ -88,13 +93,19 @@ export function CashDayDetail({ cd, onPropose, onApprove, busy = false }: { cd: 
           <dl className="cx-dl">
             <dt>Relevé</dt><dd className="mono">{bm.statementId} (valeur {bm.valueDate})</dd>
             <dt>Lignes créditées</dt><dd>{lineList(bm.lines)}</dd>
-            <dt>{bm.auto ? 'Appariement' : 'Proposée par'}</dt><dd>{bm.auto ? `Automatique à l’import (relevé importé par ${bm.proposedBy})` : `${bm.proposedBy} · ${fmtDate(bm.proposedAt, true)}`}</dd>
+            <dt>{bm.auto ? 'Appariement' : 'Proposée par'}</dt><dd>{bm.auto ? (bm.proposedBy === AUTO_ACTOR ? 'Automatique à la déclaration du versement (relevé déjà importé)' : `Automatique à l’import du relevé (importé par ${bm.proposedBy})`) : `${bm.proposedBy} · ${fmtDate(bm.proposedAt, true)}`}</dd>
             <dt>Approbation</dt><dd>{bm.approvedAt ? (bm.auto ? `Sans décision humaine (identité bordereau, montants, comptes) · ${fmtDate(bm.approvedAt, true)}` : `${bm.approvedBy} · ${fmtDate(bm.approvedAt, true)}`) : <StatusBadge tone="warning" label="En attente d’une seconde personne" />}</dd>
           </dl>
         ) : cd.deposit ? <p className="small muted">Aucune constatation proposée.</p> : null}
         {g.canPropose && (
           <form className="form cx-mt" onSubmit={(e) => { e.preventDefault(); if (statementId.trim()) onPropose(statementId.trim()); }}>
-            <div className="field"><label className="label" htmlFor="cd-stmt">Identifiant du relevé importé portant le bordereau</label><input id="cd-stmt" className="mono" value={statementId} onChange={(e) => setStatementId(e.target.value)} /></div>
+            {statements ? (
+              <div className="field"><label className="label" htmlFor="cd-stmt">Relevé importé portant le bordereau</label>
+                <select id="cd-stmt" value={statementId} onChange={(e) => setStatementId(e.target.value)}>
+                  <option value="">— Choisir un relevé —</option>
+                  {statements.map((st) => <option key={st.statementId} value={st.statementId}>{st.statementId} · {fmtDate(st.importedAt, true)} · {st.accounts.join(', ')} · {st.lines} ligne(s), {st.unmatched} non appariée(s)</option>)}
+                </select></div>
+            ) : <div className="field"><label className="label" htmlFor="cd-stmt">Identifiant du relevé importé portant le bordereau</label><input id="cd-stmt" className="mono" value={statementId} onChange={(e) => setStatementId(e.target.value)} /></div>}
             <button type="submit" className="btn btn-secondary" disabled={busy || statementId.trim().length === 0}>Proposer la constatation</button>
           </form>
         )}
@@ -116,6 +127,10 @@ export default function CashDayReview() {
   const day = params.get('day') ?? kinshasaToday();
   const pts = useApi(() => api<{ points: { id: string; name: string }[] }>('/v1/payment-points'), [user?.id]);
   const cash = useApi(pointId ? () => api<ReviewCashDay>(`/v1/payment-points/${pointId}/cash-days/${day}`) : null, [user?.id, pointId, day]);
+  // Relevés importés (lecture du rapprochement : R17, R18, R22) ; relevés ayant encore des lignes non appariées d'abord.
+  const canRead = hasRole(user?.roles, 'R17', 'R18', 'R22');
+  const stmts = useApi(canRead ? () => api<StatementSummary[]>('/v1/settlements/statements') : null, [user?.id, canRead]);
+  const statements = stmts.data ? [...stmts.data].sort((a, b) => Number(b.unmatched > 0) - Number(a.unmatched > 0)) : undefined;
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -124,7 +139,7 @@ export default function CashDayReview() {
   async function act(path: string, body: unknown, ok: string) {
     if (busy) return;
     setErr(null); setMsg(null); setBusy(true);
-    try { await api(path, { method: 'POST', body }); setMsg(ok); cash.reload(); } catch (e) { setErr(describeError(e).message); } finally { setBusy(false); }
+    try { await api(path, { method: 'POST', body }); setMsg(ok); cash.reload(); stmts.reload(); } catch (e) { setErr(describeError(e).message); } finally { setBusy(false); }
   }
 
   return (
@@ -147,7 +162,7 @@ export default function CashDayReview() {
       {cash.error !== null && <ErrorState error={cash.error} onRetry={cash.reload} />}
       {cash.data && (
         <CashDayDetail
-          cd={cash.data} busy={busy}
+          cd={cash.data} busy={busy} {...(statements ? { statements } : {})}
           onPropose={(statementId) => void act(`/v1/payment-points/${pointId}/cash-days/${day}/bank-match`, { statementId }, 'Constatation proposée : approbation par une seconde personne (R17) requise.')}
           onApprove={() => void act(`/v1/payment-points/${pointId}/cash-days/${day}/bank-match/approve`, {}, 'Constatation approuvée et journalisée.')}
         />

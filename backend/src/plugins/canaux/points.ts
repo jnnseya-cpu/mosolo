@@ -616,7 +616,55 @@ export class PaymentPointService {
     const hasOpen = cd.exceptionIds.length + ids.length > 0;
     updated = this.cashDays.update({ ...updated, status: hasOpen ? 'ECART' : 'DECLAREE', exceptionIds: [...updated.exceptionIds, ...ids] });
     this.ctx.audit.append({ actor: this.actor(user), action: 'canaux.point.deposit_declared', resourceType: 'cash_day', resourceId: cd.id, details: { bankSlipRef: slip, lines: input.lines, status: updated.status, depositedAt: depositedAt.toISOString() } });
+    this.matchImportedCredits(updated, user.id);
     return this.cashDayView(user, pointId, day);
+  }
+
+  /**
+   * Versement déclaré APRÈS l'import du relevé : les crédits orphelins déjà importés portant le bordereau (non résolus,
+   * non consommés) sont appariés selon les mêmes règles qu'à l'import — un relevé dont les lignes correspondent exactement
+   * ⇒ constatation automatique ; sinon les lignes sont requalifiées (écart de montant, mauvais compte) dans la file.
+   */
+  private matchImportedCredits(cd: CashDay, declaredBy: string): void {
+    if (!cd.deposit || cd.deposit.bankMatch) return;
+    const slip = normalizeSlipRef(cd.deposit.bankSlipRef);
+    const used = new Set(this.cashDays.find((d) => d.id !== cd.id).flatMap((d) => d.deposit?.bankMatch?.exceptionIds ?? []));
+    const found = this.ctx.treasury.openOrphanCredits((e) => normalizeSlipRef(e.line!.paymentReference) === slip && !used.has(e.id));
+    if (found.length === 0) return;
+    const actor: AuditActor = { kind: 'system', id: AUTO_MATCH_ACTOR };
+    const byStatement = new Map<string, typeof found>();
+    for (const e of found) byStatement.set(e.statementId ?? '', [...(byStatement.get(e.statementId ?? '') ?? []), e]);
+    let lastError: unknown;
+    for (const [statementId, group] of [...byStatement.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      const lines = group.map((e) => ({ accountAlias: e.line!.accountAlias, amount: e.line!.amount }));
+      const valueDate = group.map((e) => e.line!.valueDate).sort().at(-1)!;
+      try {
+        this.matchDepositFromStatement(slip, lines, valueDate);
+      } catch (e) { lastError = e; continue; }
+      const now = this.clock().toISOString();
+      const bm = { statementId, exceptionIds: group.map((e) => e.id), valueDate, lines, proposedBy: AUTO_MATCH_ACTOR, proposedAt: now, approvedBy: AUTO_MATCH_ACTOR, approvedAt: now, auto: true as const };
+      const r = this.confirmDeposit(this.get(cd.pointId), this.cashDays.get(cd.id)!, bm, actor);
+      this.ctx.audit.append({ actor, action: 'canaux.point.deposit_auto_matched', resourceType: 'cash_day', resourceId: cd.id, details: { trigger: 'DECLARATION', declaredBy, statementId, bankSlipRef: cd.deposit.bankSlipRef, valueDate, lines, reconciled: r.reconciled, status: r.status } });
+      return;
+    }
+    // Aucun relevé ne correspond exactement : chaque ligne reste en file, requalifiée (jamais ignorée).
+    const lines = found.map((e) => ({ accountAlias: e.line!.accountAlias, amount: e.line!.amount }));
+    const q = this.mismatchOf(cd, lines, lastError);
+    for (const e of found) this.ctx.treasury.requalifyException(e.id, q.type, q.detail, actor);
+  }
+
+  /** Qualification d'un écart relevé ↔ versement déclaré (commune à l'import et à la déclaration). */
+  private mismatchOf(cd: CashDay, got: { accountAlias: string; amount: MoneyJSON }[], err: unknown): { type: ExceptionType; detail: string } {
+    const dep = cd.deposit!;
+    const where = `bordereau ${dep.bankSlipRef}, point ${cd.pointId}, caisse du ${cd.day}`;
+    if (err instanceof ApiError && err.code === 'STATEMENT_AMOUNT_MISMATCH') {
+      const wrongAccount = sameTotals(dep.lines.map((l) => l.amount), got.map((l) => l.amount));
+      return {
+        type: wrongAccount ? 'WRONG_ACCOUNT' : 'AMOUNT_MISMATCH',
+        detail: `Versement ${where} : ${wrongAccount ? 'comptes crédités' : 'montants crédités'} au relevé différents du versement déclaré (${dep.lines.map((l) => `${l.accountAlias} ${l.amount.amount} ${l.amount.currency}`).join(', ')}) : aucune constatation.`,
+      };
+    }
+    return { type: 'ORPHAN_CREDIT', detail: `Versement ${where} non apparié automatiquement : ${(err as Error | undefined)?.message ?? 'motif inconnu'}` };
   }
 
   /**
@@ -641,8 +689,7 @@ export class PaymentPointService {
   /** Lignes du relevé importé portant la référence du bordereau (crédit orphelin du Trésor), non encore consommées. */
   private statementLinesFor(statementId: string, slip: string, excludeCashDayId: string) {
     const used = new Set(this.cashDays.find((d) => d.id !== excludeCashDayId).flatMap((d) => d.deposit?.bankMatch?.exceptionIds ?? []));
-    return this.ctx.treasury.exceptions
-      .find((e) => e.statementId === statementId && e.type === 'ORPHAN_CREDIT' && !!e.line && normalizeSlipRef(e.line.paymentReference) === slip && !used.has(e.id))
+    return this.ctx.treasury.openOrphanCredits((e) => e.statementId === statementId && normalizeSlipRef(e.line!.paymentReference) === slip && !used.has(e.id))
       .map((e) => ({ exceptionId: e.id, line: e.line! }));
   }
 
@@ -706,6 +753,13 @@ export class PaymentPointService {
         reconciled.push(c.paymentReference);
       }
     }
+    // Crédits orphelins du relevé expliqués par ce versement : résolus (référence de la caisse, approbateur), jamais supprimés.
+    if (bm.exceptionIds.length > 0) {
+      this.ctx.treasury.resolveExceptions(bm.exceptionIds, {
+        resolvedBy: bm.approvedBy ?? AUTO_MATCH_ACTOR, reference: `caisse ${cd.id}`,
+        motif: `Versement ${dep.bankSlipRef} du point ${p.id} (${cd.day}) constaté au relevé ${bm.statementId}${bm.auto ? ' (appariement automatique)' : ' (quatre yeux)'}.`,
+      }, actor);
+    }
     return { status: updated.status, reconciled };
   }
 
@@ -733,11 +787,8 @@ export class PaymentPointService {
       try {
         this.matchDepositFromStatement(slip, got, valueDate);
       } catch (e) {
-        const code = e instanceof ApiError ? e.code : 'ERREUR';
-        if (code === 'STATEMENT_AMOUNT_MISMATCH') {
-          const wrongAccount = sameTotals(cd.deposit.lines.map((l) => l.amount), got.map((l) => l.amount));
-          flag(wrongAccount ? 'WRONG_ACCOUNT' : 'AMOUNT_MISMATCH', `Versement ${where} : ${wrongAccount ? 'comptes crédités' : 'montants crédités'} au relevé différents du versement déclaré (${cd.deposit.lines.map((l) => `${l.accountAlias} ${l.amount.amount} ${l.amount.currency}`).join(', ')}) : aucune constatation.`);
-        } else flag('ORPHAN_CREDIT', `Versement ${where} non apparié automatiquement : ${(e as Error).message}`);
+        const q = this.mismatchOf(cd, got, e);
+        flag(q.type, q.detail);
         continue;
       }
       matched.push(...group);

@@ -107,7 +107,7 @@ export interface ExceptionCase {
   startedAt?: string;
   evidence: Evidence[];
   proposal?: { outcome: 'RESOLUE' | 'CLASSEE'; motif: string; action: ResolutionAction; operationId?: string; proposedBy: string; proposedAt: string };
-  decision?: { approvedBy: string; approvedAt: string; suspenseId?: string; unappliedId?: string; ledgerEntryId?: string; operationId?: string };
+  decision?: { approvedBy: string; approvedAt: string; suspenseId?: string; unappliedId?: string; ledgerEntryId?: string; operationId?: string; reference?: string };
   history: CaseEvent[];
 }
 
@@ -329,6 +329,11 @@ export class TresorService {
       this.publicKey = pair.publicKey;
     }
     ctx.treasury.setExceptionOverlay((e) => this.decorate(e));
+    // Crédit expliqué par le système (versement de point agréé constaté au relevé) : dossier clos, jamais supprimé.
+    ctx.treasury.onExceptionResolved((id, r) => {
+      const c = this.caseOf(id);
+      this.cases.update({ ...c, status: 'RESOLUE', decision: { approvedBy: r.resolvedBy, approvedAt: r.resolvedAt, reference: r.reference }, history: [...c.history, { at: r.resolvedAt, by: r.resolvedBy, action: 'RESOLUTION_VALIDEE', note: r.motif }] });
+    });
     // Paiement non affecté : porté au compte d'attente (écriture déjà passée par le module paiements), daté, justifié.
     ctx.payments.onUnapplied((u) => this.onUnapplied(u));
   }
@@ -381,7 +386,7 @@ export class TresorService {
     const opened = new Date(e.openedAt).getTime();
     const now = this.ctx.clock.now().getTime();
     const dueAt = new Date(opened + EXCEPTION_SLA_HOURS * HOUR_MS).toISOString();
-    const status: ExceptionStatus = c?.status ?? 'OUVERTE';
+    const status: ExceptionStatus = c?.status ?? e.status;
     const done = status === 'RESOLUE' || status === 'CLASSEE';
     const assignee = c?.assignee ? this.ctx.users.get(c.assignee) : undefined;
     return {
