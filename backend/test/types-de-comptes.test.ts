@@ -180,10 +180,13 @@ describe('Types de comptes — un test par rôle : création par la voie réelle
       expect(refused.json().code).toBe('PARTNER_CONTRACT_REQUIRED');
       const c = await env.req('POST', '/v1/acces/contrats-partenaires', 'u-superadmin', { entity, reference: `CONV-FICTIVE-${role}`, roles: [role], object: 'Convention de partenariat fictive (test)' });
       expect(c.statusCode).toBe(201);
-      // L'auteur de l'enregistrement ne l'approuve pas (et n'en a pas le droit) ; le ministre des Finances approuve.
+      // L'auteur de l'enregistrement ne l'approuve pas (et n'en a pas le droit). Décision du maître d'ouvrage (27/09/2026) :
+      // seul le Directeur de cabinet approuve — le ministre des Finances est refusé.
       expect((await env.req('POST', `/v1/acces/contrats-partenaires/${c.json().id}/decision`, 'u-superadmin', { approve: true, note: 'Auto-approbation' })).statusCode).toBe(403);
       await mfa('u-ministre-finances');
-      const d = await env.req('POST', `/v1/acces/contrats-partenaires/${c.json().id}/decision`, 'u-ministre-finances', { approve: true, note: 'Convention signée (test)' });
+      expect((await env.req('POST', `/v1/acces/contrats-partenaires/${c.json().id}/decision`, 'u-ministre-finances', { approve: true, note: 'Convention signée (test)' })).statusCode).toBe(403);
+      await mfa('u-dircab');
+      const d = await env.req('POST', `/v1/acces/contrats-partenaires/${c.json().id}/decision`, 'u-dircab', { approve: true, note: 'Convention signée (test)' });
       expect(d.json().status).toBe('ACTIF');
       const id = await inviteAndActivate(role, entity, 'OPERATEUR');
       await canRead(id, url);

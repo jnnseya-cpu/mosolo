@@ -159,7 +159,7 @@ personne distincte, MFA, un compte par personne).*
 | R22 à R25 | Invitation au niveau « Audit » par l'administrateur de la plateforme | Autorité d'audit |
 | R30 | Inscription publique, téléphone vérifié par code, connexion par code | — |
 | R31 | Inscription publique du mandataire (téléphone vérifié) ; agit seulement sous mandat daté du contribuable | — (mandat professionnel : certification N3) |
-| R32 à R34 | Contrat de partenariat enregistré par R26, approuvé par une personne distincte (Cabinet ou ministre des Finances — par défaut, à confirmer), puis invitation dans l'entité partenaire | Contrat à deux personnes |
+| R32 à R34 | Contrat de partenariat enregistré par R26, approuvé par une personne distincte : le Directeur de cabinet (R02) seul — décision du maître d'ouvrage du 27/09/2026, puis invitation dans l'entité partenaire | Contrat à deux personnes |
 | R35 | Invitation du sous-traitant par la régie → dossier → diligences → accréditation à deux personnes | Accréditation |
 | R36 | Invitation au niveau « Consultation » (observateur désigné) | Aucune |
 | R37 | Invitation au niveau « Consultation » d'un agent du service vérificateur du quitus | Aucune |
@@ -179,7 +179,9 @@ motif, date d'effet, date de fin facultative et historique complet :
   R26 et décidée par le Gouverneur ou le Cabinet ; retrait proposé puis décidé par une personne distincte).
 
 Effet : les personnes de l'entité (et de sa lignée) voient le module dans leur menu, filtré par rôle comme aujourd'hui ;
-les autres ne le voient plus. Présentation seulement : le serveur continue d'appliquer les droits sur chaque route
+les autres ne le voient plus — sauf le Gouverneur, le Directeur de cabinet, le Secrétaire exécutif et les ministres
+(R01 à R05), qui voient toujours tous les modules quel que soit leur rattachement (décision du maître d'ouvrage du
+27/09/2026). Présentation seulement : le serveur continue d'appliquer les droits sur chaque route
 (ABAC) et chaque donnée d'entité reste cloisonnée à son entité.
 
 **Variables par département.** Les paramètres du registre des seuils déclarés « modulables par entité » (liste par

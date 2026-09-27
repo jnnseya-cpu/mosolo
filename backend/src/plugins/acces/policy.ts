@@ -118,7 +118,8 @@ export function registerAccesPolicies(): void {
   // le ministre des Finances (personne distincte) — valideurs PAR DÉFAUT, à confirmer par le maître d'ouvrage.
   definePolicy(ACCES.partnerContractRead, { R26: always, R28: always, R22: always, R23: always, R02: always, R05: always, R08: always });
   definePolicy(ACCES.partnerContractPropose, { R26: always });
-  definePolicy(ACCES.partnerContractApprove, { R02: always, R05: always });
+  // Décision du maître d'ouvrage (27/09/2026) : les contrats partenaires sont approuvés par le Directeur de cabinet (R02).
+  definePolicy(ACCES.partnerContractApprove, { R02: always });
   // Départements : lecture par l'administration (R26 tout, R08 son sous-arbre — contrôlé dans le service), la sécurité et
   // l'audit ; rattachement par R26 et R08 (sous-arbre). Les modules porteurs de recettes suivent le circuit des fiches.
   definePolicy(ACCES.departementsRead, { R26: always, R08: always, R28: always, R22: always, R23: always });

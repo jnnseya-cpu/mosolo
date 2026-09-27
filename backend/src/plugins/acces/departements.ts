@@ -35,7 +35,9 @@ const ALL_ROLES = Object.keys(ROLES) as RoleCode[];
 const PUBLIC_ROLES: RoleCode[] = ['R30', 'R31'];
 const SPECIAL_LEVELS: AccessLevel[] = ['AUDIT', 'ADMIN_TECHNIQUE'];
 /** Rôles transverses (audit, exploitation, sécurité) : menu jamais restreint par les rattachements d'entités. */
-const MENU_EXEMPT: RoleCode[] = ['R22', 'R23', 'R26', 'R27', 'R28'];
+// Décision du maître d'ouvrage (27/09/2026) : Gouverneur, Directeur de cabinet, Secrétaire exécutif et ministres (R01–R05)
+// voient toujours tous les modules, quel que soit leur rattachement (présentation ; les droits restent vérifiés par le serveur).
+const MENU_EXEMPT: RoleCode[] = ['R01', 'R02', 'R03', 'R04', 'R05', 'R22', 'R23', 'R26', 'R27', 'R28'];
 const REQUIREMENT_LABELS: Record<string, string> = {
   HORS_BANDE_CABINET: 'Confirmation hors bande par le Cabinet ou le Secrétariat général',
   AUTORITE_AUDIT: 'Validation par l’autorité d’audit',
