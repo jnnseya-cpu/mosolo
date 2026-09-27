@@ -64,15 +64,24 @@ export function AdAround({ onConstat }: { onConstat: (p: ConstatPreset) => void 
   const [sel, setSel] = useState<string | null>(null);
   const [paying, setPaying] = useState<string | null>(null);
   const last = useRef<{ lat: number; lon: number; r: number } | null>(null);
+  const inflight = useRef<AbortController | null>(null);
   const usable = !!fix && fix.source === 'GPS' && fix.accuracy !== null && fix.accuracy <= 100;
+  useEffect(() => () => inflight.current?.abort(), []);
 
+  // Une requête par position ou rayon : la précédente est annulée, une réponse périmée est ignorée, et une erreur
+  // oublie la dernière requête pour que la position suivante relance la recherche.
   useEffect(() => {
     if (!usable || !fix) return;
     const q = last.current;
     if (q && q.r === radius && metersBetween(q, fix) < 40) return;
     last.current = { lat: fix.lat, lon: fix.lon, r: radius };
-    api<Nearby>(`/v1/publicite/nearby?lat=${fix.lat.toFixed(6)}&lon=${fix.lon.toFixed(6)}&accuracyM=${Math.max(1, Math.round(fix.accuracy ?? 100))}&radiusM=${radius}`)
-      .then((d) => { setData(d); setErr(null); }).catch((e) => setErr(describeError(e).message));
+    inflight.current?.abort();
+    const ctl = new AbortController();
+    inflight.current = ctl;
+    api<Nearby>(`/v1/publicite/nearby?lat=${fix.lat.toFixed(6)}&lon=${fix.lon.toFixed(6)}&accuracyM=${Math.max(1, Math.round(fix.accuracy ?? 100))}&radiusM=${radius}`, { signal: ctl.signal })
+      .then((d) => { if (inflight.current === ctl) { setData(d); setErr(null); } })
+      .catch((e) => { if (inflight.current === ctl) { last.current = null; setErr(describeError(e).message); } })
+      .finally(() => { if (inflight.current === ctl) inflight.current = null; });
   }, [fix?.lat, fix?.lon, fix?.accuracy, radius, usable]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (sel) document.getElementById(`adp-${sel}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, [sel]);
 

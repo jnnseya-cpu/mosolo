@@ -70,13 +70,19 @@ export function EvidenceCamera({ checkId, plate, zone, agent, onDone, onCancel }
   const file = useRef<HTMLInputElement>(null);
   const [live, setLive] = useState(false);
   const [camMsg, setCamMsg] = useState('Ouverture de la caméra…');
-  const [fix, setFix] = useState<Fix | null>(null);
+  const [liveFix, setFix] = useState<Fix | null>(null);
   const [place, setPlace] = useState('');
   const [slot, setSlot] = useState<SlotId>('ABORDS_AVANT');
   const [taken, setTaken] = useState<Partial<Record<SlotId, Taken>>>({});
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [now, setNow] = useState(serverNow());
+  // Position figée à la première photo : toutes les images et le constat portent la même position que celle incrustée.
+  const [stampFix, setStampFix] = useState<Fix | null>(null);
+  const takenRef = useRef(taken);
+  takenRef.current = taken;
+  // Aperçus libérés à la fermeture de la caméra (sinon les images restent en mémoire).
+  useEffect(() => () => { Object.values(takenRef.current).forEach((t) => t && URL.revokeObjectURL(t.preview)); }, []);
 
   useEffect(() => { const t = window.setInterval(() => setNow(serverNow()), 1000); return () => window.clearInterval(t); }, []);
   useEffect(() => {
@@ -91,6 +97,7 @@ export function EvidenceCamera({ checkId, plate, zone, agent, onDone, onCancel }
   const srcText = (f: Fix) => f.source === 'GPS' ? `GPS ${f.lat.toFixed(6)}, ${f.lon.toFixed(6)}${f.accuracy !== null ? ` ± ${Math.round(f.accuracy)} m` : ''}`
     : f.source === 'MANUEL' ? `Position ajustée à la main ${f.lat.toFixed(6)}, ${f.lon.toFixed(6)}` : 'Position de la zone (GPS indisponible)';
 
+  const fix = stampFix ?? liveFix;
   const count = Object.keys(taken).length;
   const canShoot = !!fix && place.trim().length >= 3 && !busy;
 
@@ -112,6 +119,7 @@ export function EvidenceCamera({ checkId, plate, zone, agent, onDone, onCancel }
         method: 'POST',
         body: { checkId, slot, imageBase64: toBase64(buf), sha256: sha, lat: fix.lat, lon: fix.lon, ...(fix.accuracy !== null ? { accuracyM: fix.accuracy } : {}), gpsSource: fix.source, place: place.trim(), stampedAt: new Date(at).toISOString() },
       });
+      setStampFix((f) => f ?? fix);
       const preview = URL.createObjectURL(new Blob([buf], { type: 'image/jpeg' }));
       setTaken((t) => { if (t[slot]) URL.revokeObjectURL(t[slot]!.preview); return { ...t, [slot]: { id: meta.id, preview, sha256: sha } }; });
       const next = SLOTS.find((x) => x.id !== slot && !taken[x.id]);
@@ -125,8 +133,9 @@ export function EvidenceCamera({ checkId, plate, zone, agent, onDone, onCancel }
   const onPhoto = async (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; e.target.value = '';
     if (!f) return;
-    const bmp = await createImageBitmap(f);
-    await capture(bmp, bmp.width, bmp.height);
+    let bmp: ImageBitmap;
+    try { bmp = await createImageBitmap(f); } catch { setErr('Photo illisible : reprenez la photo ou choisissez une autre image.'); return; }
+    try { await capture(bmp, bmp.width, bmp.height); } finally { bmp.close?.(); }
   };
 
   return (
@@ -143,6 +152,7 @@ export function EvidenceCamera({ checkId, plate, zone, agent, onDone, onCancel }
 
       <PreciseLocation label="Position du véhicule" targetM={10} compact onChange={onFix}
         fallback={{ lat: zone.center.lat, lon: zone.center.lon, label: 'Utiliser la position de la zone' }} />
+      {stampFix && <p className="small muted">Position retenue pour ce constat (incrustée dans les photos) : {srcText(stampFix)}.</p>}
 
       <label className="field"><span className="label">Lieu précis (saisi par l’agent)</span>
         <input value={place} onChange={(e) => setPlace(e.target.value)} placeholder="ex. Bd du 30 Juin, face à la poste, côté fleuve" maxLength={200} required />

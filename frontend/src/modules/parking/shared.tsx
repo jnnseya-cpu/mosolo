@@ -3,7 +3,7 @@
  * feu de titre, montants par devise, preuve photographique (empreinte SHA-256 calculée sur l'appareil),
  * position GPS, mini-carte vectorielle et décision motivée.
  */
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { formatMoney, type MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { Icon } from '../../components/Icon';
@@ -12,7 +12,7 @@ import { GeoMapLazy } from '../../components/GeoMapLazy';
 import { usePreciseGps, type PreciseFix } from '../../lib/geo';
 import { StatusBadge, type Tone } from '../../components/StatusBadge';
 import { ValidityCountdown } from '../../components/ValidityCountdown';
-import { api, describeError, newIdempotencyKey, serverNow } from '../../lib/api';
+import { api, describeError, isDefinitiveRejection, newIdempotencyKey, serverNow } from '../../lib/api';
 import { sha256Hex } from '../../lib/crypto';
 import type { EvidencePhotoMeta } from './EvidencePhotos';
 
@@ -167,7 +167,7 @@ export function ErrorLine({ error }: { error: string | null }) {
 
 /** Obtenir une référence de paiement pour une obligation (circuit commun, clé d'idempotence). */
 export function PayButton({ obligationId, onDone, label = 'Obtenir la référence de paiement' }: { obligationId: string; onDone?: () => void; label?: string }) {
-  const [key] = useState(newIdempotencyKey);
+  const key = useRef(newIdempotencyKey());
   const [ref, setRef] = useState<{ paymentReference: string; amount: MoneyJSON; expiresAt?: string; receivedAt?: string } | null>(null);
   const act = useAction();
   const { fmtDate } = useApp();
@@ -185,7 +185,15 @@ export function PayButton({ obligationId, onDone, label = 'Obtenir la référenc
   return (
     <div className="stack-sm">
       <button type="button" className="btn btn-primary btn-sm" disabled={act.busy}
-        onClick={() => void act.run(() => api<{ paymentReference: string; amount: MoneyJSON; expiresAt?: string }>(`/v1/obligations/${encodeURIComponent(obligationId)}/payment-orders`, { method: 'POST', idempotencyKey: key, body: { channel: 'MOBILE_MONEY' } }), (r) => { setRef({ ...r, receivedAt: new Date(serverNow()).toISOString() }); onDone?.(); })}>
+        onClick={() => void act.run(async () => {
+          try {
+            return await api<{ paymentReference: string; amount: MoneyJSON; expiresAt?: string }>(`/v1/obligations/${encodeURIComponent(obligationId)}/payment-orders`, { method: 'POST', idempotencyKey: key.current, body: { channel: 'MOBILE_MONEY' } });
+          } catch (e) {
+            // Refus définitif (4xx) : nouvelle clé pour la prochaine tentative ; réseau ou 5xx : même clé, même opération.
+            if (isDefinitiveRejection(e)) key.current = newIdempotencyKey();
+            throw e;
+          }
+        }, (r) => { setRef({ ...r, receivedAt: new Date(serverNow()).toISOString() }); onDone?.(); })}>
         <Icon name="phone" size={16} /> {act.busy ? 'Envoi…' : label}
       </button>
       <ErrorLine error={act.error} />
@@ -227,21 +235,31 @@ export function PhotoHashes({ value, onChange, max = 4, label = 'Photographies (
   );
 }
 
+/** Coordonnées saisies exploitables (nombres dans les bornes) ; `null` si la position manque. */
+export function parsePosition(lat: string, lon: string): { lat: number; lon: number } | null {
+  if (!lat.trim() || !lon.trim()) return null;
+  const y = Number(lat); const x = Number(lon);
+  return Number.isFinite(y) && Number.isFinite(x) && Math.abs(y) <= 90 && Math.abs(x) <= 180 ? { lat: y, lon: x } : null;
+}
+
 /** Position GPS PRÉCISE de l'appareil (moyenne des meilleurs relevés, qualité affichée, carte OSM pour vérifier ;
- * saisie ou ajustement manuel possibles, signalés). */
-export function GpsField({ lat, lon, onChange }: { lat: string; lon: string; onChange: (lat: string, lon: string, accuracy?: number) => void }) {
+ * saisie ou ajustement manuel possibles, signalés). Une position saisie ou ajustée à la main n'a pas de précision
+ * (`accuracy` indéfinie) et porte la source MANUEL : l'appelant ne doit pas garder la précision d'un relevé antérieur. */
+export function GpsField({ lat, lon, onChange }: { lat: string; lon: string; onChange: (lat: string, lon: string, accuracy?: number, source?: PreciseFix['source']) => void }) {
   const gps = usePreciseGps({ targetM: 10 });
-  const apply = (f: PreciseFix) => onChange(f.lat.toFixed(6), f.lon.toFixed(6), f.accuracy !== null ? Math.round(f.accuracy) : undefined);
+  const apply = (f: PreciseFix) => onChange(f.lat.toFixed(6), f.lon.toFixed(6), f.source === 'GPS' && f.accuracy !== null ? Math.round(f.accuracy) : undefined, f.source);
+  // La précision affichée n'est celle du relevé que si les coordonnées sont toujours celles du relevé GPS.
+  const measured = gps.fix?.source === 'GPS' && gps.fix.lat.toFixed(6) === lat && gps.fix.lon.toFixed(6) === lon;
   return (
     <div className="field">
       <span className="label">Position GPS</span>
       <div className="pk-gps">
-        <input aria-label="Latitude" inputMode="decimal" value={lat} onChange={(e) => onChange(e.target.value, lon)} placeholder="Latitude" />
-        <input aria-label="Longitude" inputMode="decimal" value={lon} onChange={(e) => onChange(lat, e.target.value)} placeholder="Longitude" />
+        <input aria-label="Latitude" inputMode="decimal" value={lat} onChange={(e) => onChange(e.target.value, lon, undefined, 'MANUEL')} placeholder="Latitude" />
+        <input aria-label="Longitude" inputMode="decimal" value={lon} onChange={(e) => onChange(lat, e.target.value, undefined, 'MANUEL')} placeholder="Longitude" />
         <button type="button" className="btn btn-secondary btn-sm" onClick={() => gps.locate(apply)} disabled={gps.busy}><Icon name="gps" size={16} /> {gps.busy ? 'Localisation…' : 'Localiser'}</button>
       </div>
       <GpsQualityLine fix={gps.fix} status={gps.status} targetM={gps.targetM} />
-      <MapCheck lat={lat ? Number(lat) : null} lon={lon ? Number(lon) : null} accuracy={gps.fix?.accuracy ?? null} onPick={(y, x) => gps.pick(y, x, apply)} />
+      <MapCheck lat={lat ? Number(lat) : null} lon={lon ? Number(lon) : null} accuracy={measured ? gps.fix?.accuracy ?? null : null} onPick={(y, x) => gps.pick(y, x, apply)} />
     </div>
   );
 }

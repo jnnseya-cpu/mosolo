@@ -47,15 +47,30 @@ export default function AutourDeMoi() {
   const [sel, setSel] = useState<string | null>(null);
   const [paying, setPaying] = useState<string | null>(null);
   const lastQuery = useRef<{ lat: number; lon: number; radius: number } | null>(null);
+  const inflight = useRef<AbortController | null>(null);
+  useEffect(() => () => inflight.current?.abort(), []);
 
   const usable = !!fix && fix.source === 'GPS' && fix.accuracy !== null && fix.accuracy <= MAX_ACC;
 
+  // Une seule requête à la fois : la requête est notée AVANT l'envoi (pas de rafale pendant l'attente), la
+  // précédente est annulée et une réponse périmée n'écrase jamais la plus récente ; en cas d'erreur, la
+  // prochaine position (ou « Réessayer ») relance la recherche.
   async function load(f: PreciseFix, r: number) {
+    inflight.current?.abort();
+    const ctl = new AbortController();
+    inflight.current = ctl;
+    lastQuery.current = { lat: f.lat, lon: f.lon, radius: r };
     setBusy(true); setErr(null);
     try {
-      const d = await api<Nearby>(`/v1/fiscal/nearby?lat=${f.lat.toFixed(6)}&lon=${f.lon.toFixed(6)}&accuracyM=${Math.max(1, Math.round(f.accuracy ?? MAX_ACC))}&radiusM=${r}`);
-      setData(d); lastQuery.current = { lat: f.lat, lon: f.lon, radius: r };
-    } catch (e) { setErr(e); } finally { setBusy(false); }
+      const d = await api<Nearby>(`/v1/fiscal/nearby?lat=${f.lat.toFixed(6)}&lon=${f.lon.toFixed(6)}&accuracyM=${Math.max(1, Math.round(f.accuracy ?? MAX_ACC))}&radiusM=${r}`, { signal: ctl.signal });
+      if (inflight.current === ctl) setData(d);
+    } catch (e) {
+      if (inflight.current !== ctl) return;
+      lastQuery.current = null;
+      setErr(e);
+    } finally {
+      if (inflight.current === ctl) { inflight.current = null; setBusy(false); }
+    }
   }
 
   useEffect(() => {

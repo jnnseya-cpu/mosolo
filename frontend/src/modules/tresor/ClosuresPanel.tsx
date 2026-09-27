@@ -7,7 +7,7 @@ import { MoneyText } from '../../components/MoneyText';
 import { StatusBadge } from '../../components/StatusBadge';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
-import { API_URL, api, describeError, getDemoUser } from '../../lib/api';
+import { API_URL, api, authHeaders, describeError } from '../../lib/api';
 import { hasRole, Message, shortHash, useAction, type Closures } from './shared';
 
 interface Accounting {
@@ -89,8 +89,8 @@ function AccountingBlock({ onChanged }: { onChanged?: () => void }) {
     setMsg(null);
     const qs = new URLSearchParams({ format, ...(from ? { from } : {}), ...(to ? { to } : {}) });
     try {
-      const u = getDemoUser();
-      const res = await fetch(`${API_URL}/v1/tresor/exports?${qs.toString()}`, { headers: u ? { 'x-demo-user': u } : {} });
+      // Mêmes en-têtes que `api` : le jeton porteur d'une session réelle est transmis, pas seulement l'utilisateur de démonstration.
+      const res = await fetch(`${API_URL}/v1/tresor/exports?${qs.toString()}`, { headers: authHeaders() });
       if (!res.ok) throw new Error(`Export refusé (${res.status}).`);
       const text = await res.text();
       const sha = res.headers.get('x-mosolo-sha256') ?? (format === 'json' ? (JSON.parse(text) as { sha256?: string }).sha256 : undefined);
@@ -99,7 +99,9 @@ function AccountingBlock({ onChanged }: { onChanged?: () => void }) {
       a.href = URL.createObjectURL(blob);
       a.download = `mosolo-export-comptable.${format}`;
       a.click();
-      URL.revokeObjectURL(a.href);
+      // Révocation différée : certains navigateurs lisent l'URL après le clic (téléchargement sinon annulé).
+      const href = a.href;
+      window.setTimeout(() => URL.revokeObjectURL(href), 1000);
       setMsg({ ok: true, text: `Export ${format.toUpperCase()} signé${sha ? ` — SHA-256 ${sha}` : ''}.` });
     } catch (e) { setMsg({ ok: false, text: describeError(e).message }); }
   }

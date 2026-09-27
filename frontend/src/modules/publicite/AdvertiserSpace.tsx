@@ -13,7 +13,7 @@ import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { sha256Hex } from '../../lib/crypto';
-import { DemoTag, ErrorLine, GpsField, Money, PAYMENT_STATE, PayButton, PhotoHashes, useAction } from '../parking/shared';
+import { DemoTag, ErrorLine, GpsField, Money, parsePosition, PAYMENT_STATE, PayButton, PhotoHashes, useAction } from '../parking/shared';
 import { AD_TYPE, CASE_STATUS, DEVICE_STATUS, FINDING, LIGHTING, PIECE, PLACEMENT, REQUEST_STATUS, RIGHTS, VEHICLE_KIND, type AuthRequest, type Case, type Device, type Notice } from './types';
 import '../parking/parking.css';
 
@@ -84,8 +84,9 @@ function DeviceList({ items }: { items: Device[] }) {
 
 function DeclareForm({ onDone }: { onDone: () => void }) {
   const [f, setF] = useState({ type: 'PANNEAU', widthM: '4.00', heightM: '3.00', faces: 1, lighting: 'NON_ECLAIRE', commune: 'Gombe', quartier: '', address: '', localityRank: 1 });
-  const [lat, setLat] = useState('-4.3050');
-  const [lon, setLon] = useState('15.3100');
+  // Aucune position par défaut : le support est déclaré à l'endroit relevé, jamais à un point fictif.
+  const [lat, setLat] = useState('');
+  const [lon, setLon] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [placement, setPlacement] = useState('SUPPORT_DEDIE');
   const [vehiclePlate, setVehiclePlate] = useState('');
@@ -97,8 +98,10 @@ function DeclareForm({ onDone }: { onDone: () => void }) {
   function submit(e: FormEvent) {
     e.preventDefault();
     if (photos.length === 0) { act.setError('Au moins une photographie du support est requise.'); return; }
+    const pos = parsePosition(lat, lon);
+    if (!pos) { act.setError('Position du support obligatoire : localisez-vous ou placez le point sur la carte.'); return; }
     const extra = { placement, ...(mobile ? { vehiclePlate, vehicleKind } : {}), ...(shop && businessName.trim() ? { businessName: businessName.trim() } : {}) };
-    void act.run(() => api('/v1/publicite/devices', { method: 'POST', body: { ...f, ...extra, lat: Number(lat), lon: Number(lon), photos } }), onDone);
+    void act.run(() => api('/v1/publicite/devices', { method: 'POST', body: { ...f, ...extra, lat: pos.lat, lon: pos.lon, photos } }), onDone);
   }
   return (
     <section className="panel">

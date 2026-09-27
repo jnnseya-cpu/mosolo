@@ -87,15 +87,11 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: { cacheName: 'mosolo-meta', networkTimeoutSeconds: 4, cacheableResponse: { statuses: [0, 200] } },
           },
+          // Vérification des quittances : jamais de cache — une quittance annulée ou remboursée ne doit jamais
+          // réapparaître « VALIDE » depuis une réponse mémorisée. Hors ligne, la vérification échoue explicitement.
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/v1/public/receipts/'),
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'mosolo-receipt-checks',
-              networkTimeoutSeconds: 4,
-              cacheableResponse: { statuses: [0, 200] },
-              expiration: { maxEntries: 100, maxAgeSeconds: 7 * 24 * 3600 },
-            },
+            handler: 'NetworkOnly',
           },
         ],
       },

@@ -170,18 +170,27 @@ export default function PointConsole() {
   );
 }
 
+/** Valeur « AAAA-MM-JJTHH:MM » d'un champ datetime-local, à l'heure locale de l'appareil. */
+export function localDateTimeInput(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 function CashDayPanel({ point, day, setDay, cash }: { point: MyPoint; day: string; setDay: (d: string) => void; cash: ApiState<CashDay> }) {
   const { fmtDate } = useApp();
   const [counted, setCounted] = useState<Record<string, string>>({});
   const [slip, setSlip] = useState('');
-  const [depositAt, setDepositAt] = useState(() => new Date().toISOString().slice(0, 16));
+  // Heure LOCALE de l'appareil (le champ datetime-local ne connaît pas de fuseau ; toISOString donnerait l'heure UTC).
+  const [depositAt, setDepositAt] = useState(() => localDateTimeInput(new Date()));
   const [lines, setLines] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null);
+  const [posting, setPosting] = useState(false);
   const c = cash.data;
 
   async function post(path: string, body: unknown) {
-    setErr(null);
-    try { cash.setData(await api<CashDay>(path, { method: 'POST', body })); } catch (e) { setErr(describeError(e).message); }
+    if (posting) return; // pas de double clôture ni de double déclaration de versement
+    setErr(null); setPosting(true);
+    try { cash.setData(await api<CashDay>(path, { method: 'POST', body })); } catch (e) { setErr(describeError(e).message); } finally { setPosting(false); }
   }
 
   return (
@@ -216,7 +225,7 @@ function CashDayPanel({ point, day, setDay, cash }: { point: MyPoint; day: strin
               {c.expected.map((m) => (
                 <div className="field" key={m.currency}><label className="label" htmlFor={`cx-count-${m.currency}`}>Espèces comptées ({m.currency})</label><input id={`cx-count-${m.currency}`} inputMode="decimal" className="mono" value={counted[m.currency] ?? ''} onChange={(e) => setCounted({ ...counted, [m.currency]: e.target.value })} placeholder={m.amount} disabled={c.status !== 'OUVERTE'} /></div>
               ))}
-              <button type="submit" className="btn btn-secondary" disabled={c.status !== 'OUVERTE'}>Clôturer le {day}</button>
+              <button type="submit" className="btn btn-secondary" disabled={posting || c.status !== 'OUVERTE'}>Clôturer le {day}</button>
             </form>
             <form className="form" onSubmit={(e) => { e.preventDefault(); void post(`/v1/payment-points/${point.id}/cash-days/${day}/deposit`, { bankSlipRef: slip, depositedAt: new Date(depositAt).toISOString(), lines: c.expectedByAccount.map((l) => ({ accountAlias: l.accountAlias, amount: { currency: l.amount.currency, amount: lines[`${l.accountAlias}|${l.amount.currency}`] || '0.00' } })) }); }}>
               <h3 className="panel-title">2. Déclarer le versement bancaire</h3>
@@ -226,7 +235,7 @@ function CashDayPanel({ point, day, setDay, cash }: { point: MyPoint; day: strin
                 <div className="field" key={`${l.accountAlias}|${l.amount.currency}`}><label className="label" htmlFor={`cx-dep-${l.accountAlias}`}>Versé sur {l.accountAlias} ({l.amount.currency}) — compte public du coffre</label>
                   <input id={`cx-dep-${l.accountAlias}`} inputMode="decimal" className="mono" placeholder={l.amount.amount} value={lines[`${l.accountAlias}|${l.amount.currency}`] ?? ''} onChange={(e) => setLines({ ...lines, [`${l.accountAlias}|${l.amount.currency}`]: e.target.value })} /></div>
               ))}
-              <button type="submit" className="btn btn-secondary" disabled={!!c.deposit || c.status === 'OUVERTE' || slip.length < 3}>Déclarer le versement</button>
+              <button type="submit" className="btn btn-secondary" disabled={posting || !!c.deposit || c.status === 'OUVERTE' || slip.length < 3}>Déclarer le versement</button>
               {c.deposit && <p className="small">Versement {c.deposit.bankSlipRef} déclaré le {fmtDate(c.deposit.depositedAt, true)}.</p>}
             </form>
           </div>

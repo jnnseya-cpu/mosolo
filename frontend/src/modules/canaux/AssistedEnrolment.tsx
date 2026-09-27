@@ -6,7 +6,8 @@ import { PageHead } from '../../components/Shell';
 import { Icon } from '../../components/Icon';
 import { StatusBadge } from '../../components/StatusBadge';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
-import { api, describeError, safeGet, safeSet } from '../../lib/api';
+import { api, describeError } from '../../lib/api';
+import { queueKey, readQueue, updateQueue } from '../../lib/offlineQueue';
 import { hmacSha256Hex, sha256Hex, uid } from '../../lib/crypto';
 import { hasRole, Pictogram } from './shared';
 import { GpsQualityLine, MapCheck } from '../../components/GpsQuality';
@@ -27,6 +28,8 @@ const DEVICES: Record<string, { id: string; key: string }> = {
   'u-agent-terrain': { id: 'dev-terrain-001', key: 'demo-device-key-001' },
 };
 const QUEUE_KEY = 'mosolo.canaux.enrolQueue';
+/** Dossier en file locale : `ownerId` (agent qui l'a saisi) reste sur le terminal, il n'est pas transmis. */
+type QueuedRecord = { localId: string; ownerId: string; person: { fullName: string; [k: string]: unknown }; commune: string } & Record<string, unknown>;
 
 interface Draft {
   fullName: string; sex: '' | 'F' | 'M'; birthYear: string; language: string; phone: string; proxyPhone: string; photoSha256: string;
@@ -48,10 +51,6 @@ const blank = (commune: string): Draft => ({
   witnessName: '', witnessRelation: '', witnessId: '', noPayment: false,
 });
 
-function loadQueue(): unknown[] {
-  try { return JSON.parse(safeGet(QUEUE_KEY) ?? '[]') as unknown[]; } catch { return []; }
-}
-
 function summaryText(d: Draft): string {
   const objs = Object.keys(d.objects).map((t) => OBJECTS.find((o) => o.type === t)?.label.toLowerCase()).filter(Boolean);
   return `Vous êtes ${d.fullName || '…'}, à ${d.commune}, quartier ${d.quartier || '…'}. Nous enregistrons votre compte MOSOLO gratuit${objs.length ? ` et vous déclarez : ${objs.join(', ')}` : ''}. `
@@ -63,7 +62,10 @@ export default function AssistedEnrolment() {
   const { user, fmtDate } = useApp();
   const territory = user?.territory?.length ? user.territory : ALL_COMMUNES;
   const [d, setD] = useState<Draft>(() => blank(territory[0] ?? 'Limete'));
-  const [queue, setQueue] = useState<unknown[]>(loadQueue);
+  // File propre à l'agent connecté : un autre utilisateur du terminal ne la voit ni ne la synchronise.
+  const qKey = queueKey(QUEUE_KEY, user?.id);
+  const [queue, setQueue] = useState<QueuedRecord[]>(() => readQueue<QueuedRecord>(qKey));
+  useEffect(() => { setQueue(readQueue<QueuedRecord>(qKey)); }, [qKey]);
   const [device, setDevice] = useState(() => DEVICES[user?.id ?? ''] ?? DEVICES['canaux-agent-enrol']!);
   const [results, setResults] = useState<RecordResult[] | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -75,7 +77,8 @@ export default function AssistedEnrolment() {
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
   const summary = useMemo(() => summaryText(d), [d]);
 
-  const persist = (q: unknown[]) => { setQueue(q); safeSet(QUEUE_KEY, JSON.stringify(q)); };
+  // Toujours relire la file stockée avant d'écrire : un dossier saisi pendant une synchronisation n'est jamais perdu.
+  const persist = (fn: (q: QueuedRecord[]) => QueuedRecord[]) => setQueue(updateQueue(qKey, fn));
 
   function readSummary() {
     try {
@@ -108,9 +111,10 @@ export default function AssistedEnrolment() {
   function enqueue(e: FormEvent) {
     e.preventDefault();
     setErr(null);
+    if (!user || !qKey) { setErr('Aucun agent identifié : le dossier ne peut pas être enregistré.'); return; }
     const givenAt = d.method === 'TEMOIN' ? new Date().toISOString() : d.givenAt;
-    const rec = {
-      localId: uid('ENR'), channel: d.channel, missionId: d.missionId, capturedAt: new Date().toISOString(),
+    const rec: QueuedRecord = {
+      ownerId: user.id, localId: uid('ENR'), channel: d.channel, missionId: d.missionId, capturedAt: new Date().toISOString(),
       gps: { lat: Number(d.lat), lon: Number(d.lon), accuracyM: Number(d.accuracyM || '25') },
       commune: d.commune, quartier: d.quartier, landmark: d.landmark,
       person: {
@@ -124,19 +128,25 @@ export default function AssistedEnrolment() {
       },
       noPaymentAttested: d.noPayment,
     };
-    persist([...queue, rec]);
+    persist((q) => [...q, rec]);
     setMsg(`Dossier de ${d.fullName} enregistré sur le terminal (hors ligne). Synchronisez dès que le réseau est disponible.`);
     setD(blank(d.commune));
   }
 
   async function sync() {
+    if (busy || !user) return;
+    // Seuls les dossiers saisis par l'agent connecté partent ; ceux d'un autre utilisateur ne sont jamais synchronisés.
+    const mine = readQueue<QueuedRecord>(qKey).filter((q) => q.ownerId === user.id);
+    if (!mine.length) return;
     setBusy(true); setErr(null); setMsg(null);
     try {
-      const raw = JSON.stringify({ batchId: uid('LOT'), deviceId: device.id, createdAt: new Date().toISOString(), records: queue });
+      const raw = JSON.stringify({ batchId: uid('LOT'), deviceId: device.id, createdAt: new Date().toISOString(), records: mine.map(({ ownerId: _o, ...r }) => r) });
       const signature = await hmacSha256Hex(device.key, raw);
       const r = await api<{ results: RecordResult[] }>('/v1/assisted-enrolments/batches', { method: 'POST', body: JSON.parse(raw), headers: { 'x-device-signature': signature } });
       setResults(r.results);
-      persist([]);
+      // Ne retirer que les dossiers dont le serveur a accusé réception.
+      const done = new Set(r.results.map((x) => x.localId));
+      persist((q) => q.filter((x) => !done.has(x.localId)));
     } catch (e) {
       setErr(describeError(e).message);
     } finally { setBusy(false); }
@@ -251,10 +261,10 @@ export default function AssistedEnrolment() {
                 </div>
               </details>
               {queue.length === 0 ? <p className="muted small">Aucun dossier en attente.</p> : (
-                <ul className="list-rows compact-rows">{queue.map((q, i) => { const r = q as { localId: string; person: { fullName: string }; commune: string }; return <li key={r.localId ?? i} className="list-row"><span>{r.person.fullName}</span><span className="muted small">{r.commune}</span></li>; })}</ul>
+                <ul className="list-rows compact-rows">{queue.map((r, i) => <li key={r.localId ?? i} className="list-row"><span>{r.person.fullName}</span><span className="muted small">{r.commune}</span></li>)}</ul>
               )}
               <div className="btn-row"><button type="button" className="btn btn-primary" disabled={!queue.length || busy} onClick={() => void sync()}><Icon name="upload" size={16} /> Synchroniser (lot signé)</button>
-                {queue.length > 0 && <button type="button" className="btn btn-ghost btn-sm" onClick={() => persist([])}>Vider</button>}</div>
+                {queue.length > 0 && <button type="button" className="btn btn-ghost btn-sm" onClick={() => persist(() => [])}>Vider</button>}</div>
               {msg && <p className="notice notice-ok">{msg}</p>}
               {err && <p className="notice notice-err" role="alert">{err}</p>}
               {results && (

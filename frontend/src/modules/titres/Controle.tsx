@@ -20,6 +20,7 @@ import { QrScanner } from '../../components/QrScanner';
 import { OverduePenalties } from '../../components/OverduePenalties';
 import { GpsQualityLine } from '../../components/GpsQuality';
 import { usePreciseGps } from '../../lib/geo';
+import { queueKey, readQueue, updateQueue } from '../../lib/offlineQueue';
 
 type Mode = 'qr' | 'plate' | 'vest';
 type Scope = '81' | 'tous';
@@ -31,7 +32,7 @@ interface Pack {
   revocations: { entries: { id: string; number: string; state: string }[]; generatedAt: string };
   plates: { plates: { plate: string; number: string; validFrom: string; validUntil: string; toleranceMinutes: number; amberMinutes: number }[] };
 }
-interface QueuedControl { opId: string; token?: string; plate?: string; controlledAt: string; place: { label?: string; lat?: number; lon?: number }; offlineResult: 'VALIDE' | 'INVALIDE' | 'EXPIRE'; note: string }
+interface QueuedControl { opId: string; ownerId: string; token?: string; plate?: string; controlledAt: string; place: { label?: string; lat?: number; lon?: number }; offlineResult: 'VALIDE' | 'INVALIDE' | 'EXPIRE'; note: string }
 interface Constat { id: string; reason: string; at: string; status: string; place: { label?: string }; presented: string; duringGrace: boolean }
 interface SyncResult { batchId: string; results: { opId: string; offlineResult: string; reconfirmed?: string; divergent?: boolean; rejected?: string; constatId?: string; alreadyUsed?: { at: string } }[]; divergences: number; replayed?: boolean }
 
@@ -53,32 +54,44 @@ function decodeStatic(token: string): Record<string, unknown> | null {
   } catch { return null; }
 }
 
-async function verifyStaticOffline(token: string, pem: string): Promise<boolean | null> {
+/**
+ * Vérifie la signature Ed25519 d'un QR statique avec la clé publique du paquet.
+ * `true` : authentique ; `false` : signature fausse ou QR malformé ; `null` : vérification impossible sur ce terminal
+ * (Ed25519 non pris en charge, clé du paquet illisible). Seul `true` permet de conclure VALIDE hors ligne.
+ */
+export async function verifyStaticOffline(token: string, pem: string): Promise<boolean | null> {
+  const parts = token.trim().split('.');
+  if (parts.length !== 3 || !parts[1] || !parts[2]) return false;
+  let sigBytes: Uint8Array<ArrayBuffer>;
   try {
-    const parts = token.trim().split('.');
+    const sig = parts[2].replace(/-/g, '+').replace(/_/g, '/');
+    sigBytes = Uint8Array.from(atob(sig + '='.repeat((4 - (sig.length % 4)) % 4)), (c) => c.charCodeAt(0));
+  } catch { return false; } // signature illisible : QR malformé
+  let key: CryptoKey;
+  try {
     const der = Uint8Array.from(atob(pem.replace(/-----[^-]+-----|\s/g, '')), (c) => c.charCodeAt(0));
-    const key = await crypto.subtle.importKey('spki', der, { name: 'Ed25519' }, false, ['verify']);
-    const sig = parts[2]!.replace(/-/g, '+').replace(/_/g, '/');
-    const sigBytes = Uint8Array.from(atob(sig + '='.repeat((4 - (sig.length % 4)) % 4)), (c) => c.charCodeAt(0));
-    return await crypto.subtle.verify({ name: 'Ed25519' }, key, sigBytes, new TextEncoder().encode(parts[1]!));
+    key = await crypto.subtle.importKey('spki', der, { name: 'Ed25519' }, false, ['verify']);
   } catch {
-    return null; // Ed25519 non pris en charge par ce navigateur : reconfirmation au retour du réseau.
+    return null; // Ed25519 non pris en charge par ce navigateur ou clé illisible : contrôle en ligne requis.
   }
+  try {
+    return await crypto.subtle.verify({ name: 'Ed25519' }, key, sigBytes, new TextEncoder().encode(parts[1]));
+  } catch { return null; }
 }
 
 function ResultCard({ r }: { r: ControlView }) {
   const { fmtDate } = useApp();
-  const word = r.result === 'VALIDE' ? 'VALIDE' : r.result === 'EXPIRE' ? 'EXPIRÉ' : 'INVALIDE';
+  const word = r.status === 'NON_VERIFIABLE' ? 'NON VÉRIFIABLE' : r.result === 'VALIDE' ? 'VALIDE' : r.result === 'EXPIRE' ? 'EXPIRÉ' : 'INVALIDE';
   return (
     <section className={`tt-result tt-${r.color}`} role="status" aria-live="assertive" aria-label={`Résultat du contrôle : ${word}`}>
       <div className="tt-result-head">
         <span className="tt-result-icon"><Icon name={r.icon} size={34} /></span>
         <div className="min0">
           <p className="tt-result-word">{word}</p>
-          <p className="tt-result-text">{r.text.replace(/^(VALIDE|INVALIDE|EXPIRÉ)\s*—\s*/, '')}</p>
+          <p className="tt-result-text">{r.text.replace(/^(VALIDE|INVALIDE|EXPIRÉ|NON VÉRIFIABLE HORS LIGNE)\s*—\s*/, '')}</p>
         </div>
       </div>
-      {r.offline && <span className="tt-offline-flag"><Icon name="offline" size={13} /> Vérifié hors ligne — sera reconfirmé à la synchronisation</span>}
+      {r.offline && r.status !== 'NON_VERIFIABLE' && <span className="tt-offline-flag"><Icon name="offline" size={13} /> Vérifié hors ligne — sera reconfirmé à la synchronisation</span>}
       {r.nothingToPay && (
         <p className="tt-pay"><Icon name="shieldCheck" size={20} /> Rien à payer. Aucune demande d’argent, aucune sanction : le contrôle est terminé.</p>
       )}
@@ -121,13 +134,17 @@ export default function Controle() {
   const [err, setErr] = useState<string | null>(null);
   const [offline, setOffline] = useState(() => typeof navigator !== 'undefined' && !navigator.onLine);
   const [pack, setPack] = useState<Pack | null>(() => readJson<Pack | null>(PACK_KEY, null));
-  const [queue, setQueue] = useState<QueuedControl[]>(() => readJson<QueuedControl[]>(QUEUE_KEY, []));
+  // File propre au contrôleur connecté (jamais synchronisée sous l'identité d'un autre utilisateur du terminal).
+  const qKey = queueKey(QUEUE_KEY, user?.id);
+  const [queue, setQueue] = useState<QueuedControl[]>(() => readQueue<QueuedControl>(qKey));
+  const persistQueue = useCallback((fn: (q: QueuedControl[]) => QueuedControl[]) => setQueue(updateQueue(qKey, fn)), [qKey]);
+  const [syncing, setSyncing] = useState(false);
   const [device, setDevice] = useState(() => ({ id: safeGet('mosolo.titres.deviceId') ?? 'dev-rakapay-01', key: safeGet('mosolo.titres.deviceKey') ?? 'demo-device-key-rakapay-01' }));
   const [sync, setSync] = useState<SyncResult | null>(null);
   const constats = useApi(() => api<Constat[]>(`/v1/titres/constats${scope === '81' ? '?module=81' : ''}`), [user?.id, scope, result?.controlId]);
 
   useEffect(() => { if (user?.territory?.length && !user.territory.includes(commune)) setCommune(user.territory[0]!); }, [user, commune]);
-  useEffect(() => { safeSet(QUEUE_KEY, JSON.stringify(queue)); }, [queue]);
+  useEffect(() => { setQueue(readQueue<QueuedControl>(qKey)); }, [qKey]);
   useEffect(() => {
     const on = () => setOffline(false); const off = () => setOffline(true);
     window.addEventListener('online', on); window.addEventListener('offline', off);
@@ -162,18 +179,22 @@ export default function Controle() {
     const payload = v.trim();
     const decoded = payload.startsWith('MT1.') ? decodeStatic(payload) : null;
     let plate: string | undefined; let token: string | undefined; let found: Pack['plates']['plates'][number] | undefined; let invalid: string | undefined;
+    let unverifiable = false;
     if (mode === 'plate') plate = norm(payload);
     else if (decoded?.k === 'AUTOCOLLANT' && typeof decoded.p === 'string') plate = decoded.p;
     else if (decoded && typeof decoded.id === 'string') {
       token = payload;
       const sig = await verifyStaticOffline(payload, pack.publicKeyPem);
-      if (sig === false) invalid = 'QR non authentique (signature invalide)';
+      if (sig === false) invalid = 'QR non authentique (signature invalide ou QR malformé)';
+      else if (sig !== true) unverifiable = true; // jamais VALIDE sans signature vérifiée
       else if (pack.revocations.entries.some((e) => e.id === decoded.id)) invalid = 'Titre révoqué, suspendu, remplacé ou déjà utilisé';
       else found = { plate: String(decoded.p ?? ''), number: String(decoded.n), validFrom: String(decoded.f), validUntil: String(decoded.u), toleranceMinutes: 0, amberMinutes: 120 };
     } else invalid = mode === 'vest' || decoded?.k === 'GILET' ? 'Gilet : lisez la plaque ou l’autocollant hors ligne' : 'QR dynamique : contrôle en ligne uniquement';
     if (plate) found = pack.plates.plates.filter((p) => p.plate === plate).sort((a, b) => b.validUntil.localeCompare(a.validUntil))[0];
     let res: ControlView;
-    if (invalid || !found) {
+    if (unverifiable) {
+      res = { ...base, result: 'INVALIDE', status: 'NON_VERIFIABLE', color: 'gris', icon: 'alert', text: 'NON VÉRIFIABLE HORS LIGNE — signature impossible à vérifier sur ce terminal : contrôle en ligne requis' };
+    } else if (invalid || !found) {
       res = { ...base, result: 'INVALIDE', status: 'INVALIDE', color: 'noir', icon: 'ban', text: `INVALIDE — ${invalid ?? 'aucun titre actif connu hors ligne'}`, ...(plate ? { plate } : {}) };
     } else {
       const from = new Date(found.validFrom).getTime(); const until = new Date(found.validUntil).getTime();
@@ -186,8 +207,8 @@ export default function Controle() {
       else res = { ...base, result: 'VALIDE', status: st, color, icon, text: `VALIDE jusqu’au ${fmtDate(found.validUntil, true)}`, nothingToPay: true, signal: 'COURT', remainingSeconds: left };
       res = { ...res, ...(found.plate ? { plate: found.plate } : {}), typeLabel: found.number, validFrom: found.validFrom, validUntil: found.validUntil };
     }
-    if (plate || token) {
-      setQueue((q) => [...q, { opId: uid('op'), ...(token ? { token } : { plate: plate! }), controlledAt: new Date(now).toISOString(), place: { ...(place.label ? { label: place.label } : {}), ...(gps ?? {}) }, offlineResult: res.result, note: res.text }]);
+    if ((plate || token) && user) {
+      persistQueue((q) => [...q, { opId: uid('op'), ownerId: user.id, ...(token ? { token } : { plate: plate! }), controlledAt: new Date(now).toISOString(), place: { ...(place.label ? { label: place.label } : {}), ...(gps ?? {}) }, offlineResult: res.result, note: res.text }]);
     }
     return res;
   }
@@ -205,7 +226,7 @@ export default function Controle() {
       setErr(describeError(ex).message);
     } finally { setBusy(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, offline, mode, scope, place, pack]);
+  }, [value, offline, mode, scope, place, pack, persistQueue]);
 
   async function downloadPack() {
     setErr(null);
@@ -217,13 +238,19 @@ export default function Controle() {
   }
 
   async function syncQueue() {
-    setErr(null);
+    if (syncing || !user) return;
+    // Seuls les contrôles de l'utilisateur connecté partent, relus depuis le stockage au moment de l'envoi.
+    const mine = readQueue<QueuedControl>(qKey).filter((c) => c.ownerId === user.id);
+    if (!mine.length) return;
+    setErr(null); setSyncing(true);
     try {
-      const batch = { batchId: uid('LOT-CTL'), deviceId: device.id, createdAt: new Date().toISOString(), controls: queue.map(({ note: _n, ...c }) => c) };
+      const batch = { batchId: uid('LOT-CTL'), deviceId: device.id, createdAt: new Date().toISOString(), controls: mine.map(({ note: _n, ownerId: _o, ...c }) => c) };
       const signature = await hmacSha256Hex(device.key, JSON.stringify(batch));
       const r = await api<SyncResult>('/v1/titres/controles/lots', { method: 'POST', body: batch, headers: { 'x-device-signature': signature } });
-      setSync(r); setQueue([]); constats.reload();
-    } catch (ex) { setErr(describeError(ex).message); }
+      // Ne retirer que les contrôles dont le serveur a rendu le résultat : ceux saisis pendant l'envoi restent en file.
+      const done = new Set(r.results.map((x) => x.opId));
+      setSync(r); persistQueue((q) => q.filter((c) => !done.has(c.opId))); constats.reload();
+    } catch (ex) { setErr(describeError(ex).message); } finally { setSyncing(false); }
   }
 
   const onCode = useCallback((c: string) => { setScan(false); setValue(c); void submit(undefined, c); }, [submit]);
@@ -303,7 +330,7 @@ export default function Controle() {
             </details>
             <div className="btn-row" style={{ marginTop: 12 }}>
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => void downloadPack()} disabled={offline}><Icon name="download" size={16} /> Télécharger le paquet</button>
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => void syncQueue()} disabled={offline || queue.length === 0}><Icon name="sync" size={16} /> Synchroniser ({queue.length})</button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => void syncQueue()} disabled={offline || syncing || queue.length === 0}><Icon name="sync" size={16} /> {syncing ? 'Synchronisation…' : `Synchroniser (${queue.length})`}</button>
             </div>
             {queue.length > 0 && (
               <ul className="tt-queue" style={{ marginTop: 12 }}>

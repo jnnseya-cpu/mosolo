@@ -40,13 +40,16 @@ export function QrScanner({ onResult, onClose }: { onResult: (raw: string) => vo
   const [message, setMessage] = useState<string | null>(null);
   const [engine, setEngine] = useState<'natif' | 'jsqr' | null>(null);
   const done = useRef(false);
+  // Rappel conservé dans une référence : un nouveau rendu du parent (rappel recréé) ne redémarre pas la caméra.
+  const onResultRef = useRef(onResult);
+  useEffect(() => { onResultRef.current = onResult; }, [onResult]);
 
   const finish = useCallback((raw: string) => {
     if (done.current) return;
     done.current = true;
     try { navigator.vibrate?.(80); } catch { /* sans vibreur */ }
-    onResult(raw.trim());
-  }, [onResult]);
+    onResultRef.current(raw.trim());
+  }, []);
 
   useEffect(() => {
     let stream: MediaStream | null = null; let stop = false; let timer = 0;

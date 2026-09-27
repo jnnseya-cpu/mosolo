@@ -14,7 +14,7 @@ import { DataTable } from '../../components/DataTable';
 import { useApi } from '../../hooks/useApi';
 import { OverduePenalties, type OverduePenaltiesData } from '../../components/OverduePenalties';
 import { api } from '../../lib/api';
-import { ErrorLine, GpsField, hasRole, MiniMap, PhotoHashes, ReasonForm, useAction } from '../parking/shared';
+import { ErrorLine, GpsField, hasRole, MiniMap, parsePosition, PhotoHashes, ReasonForm, useAction } from '../parking/shared';
 import { AD_TYPE, CASE_STATUS, DEVICE_STATUS, FINDING, LIGHTING, PLACEMENT, RIGHTS, VEHICLE_KIND, type Case, type Device, type DeviceStatus } from './types';
 import { AdAround, AdVehicle, type ConstatPreset } from './AdTerrain';
 import '../parking/parking.css';
@@ -79,9 +79,11 @@ function Control({ onDone, preset }: { onDone: () => void; preset?: ConstatPrese
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [finding, setFinding] = useState(preset ? 'NON_DECLARE' : 'CONFORME');
   const [photos, setPhotos] = useState<string[]>([]);
-  const [lat, setLat] = useState('-4.3050');
-  const [lon, setLon] = useState('15.3100');
+  // Aucune position par défaut : un constat ne doit jamais partir avec un point fictif.
+  const [lat, setLat] = useState('');
+  const [lon, setLon] = useState('');
   const [acc, setAcc] = useState<number | undefined>();
+  const [gpsSource, setGpsSource] = useState<'GPS' | 'MANUEL' | 'ZONE' | undefined>();
   const [obs, setObs] = useState('');
   const [operator, setOperator] = useState('');
   const [nd, setNd] = useState<Record<string, string | number>>({
@@ -110,9 +112,11 @@ function Control({ onDone, preset }: { onDone: () => void; preset?: ConstatPrese
   function submit(e: FormEvent) {
     e.preventDefault();
     if (photos.length === 0) { act.setError('Au moins une photographie est obligatoire.'); return; }
+    const pos = parsePosition(lat, lon);
+    if (!pos) { act.setError('Position obligatoire : localisez-vous ou placez le point sur la carte.'); return; }
     const body = {
-      finding, photos, lat: Number(lat), lon: Number(lon), observations: obs || 'Constat sur place.',
-      ...(acc !== undefined ? { gpsAccuracyM: acc } : {}), ...(q.trim() ? { ocrText: q.trim() } : {}), ...(operator.trim() ? { presumedOperator: operator.trim() } : {}),
+      finding, photos, lat: pos.lat, lon: pos.lon, observations: obs || 'Constat sur place.',
+      ...(acc !== undefined ? { gpsAccuracyM: acc } : {}), gpsSource: gpsSource ?? 'MANUEL', ...(q.trim() ? { ocrText: q.trim() } : {}), ...(operator.trim() ? { presumedOperator: operator.trim() } : {}),
       ...(deviceId ? { deviceId } : { newDevice: ndBody() }),
     };
     void act.run(() => api<InspectionDone>('/v1/publicite/inspections', { method: 'POST', body }), (r) => { setDone(r); setPhotos([]); setObs(''); onDone(); });
@@ -186,7 +190,7 @@ function Control({ onDone, preset }: { onDone: () => void; preset?: ConstatPrese
               </div>
             )}
             <PhotoHashes value={photos} onChange={setPhotos} />
-            <GpsField lat={lat} lon={lon} onChange={(a, b, c) => { setLat(a); setLon(b); if (c !== undefined) setAcc(c); }} />
+            <GpsField lat={lat} lon={lon} onChange={(a, b, c, s) => { setLat(a); setLon(b); setAcc(c); setGpsSource(s); }} />
             <label className="field"><span className="label">Observations</span><textarea rows={3} value={obs} onChange={(e) => setObs(e.target.value)} /></label>
             <ErrorLine error={act.error} />
             <button type="submit" className="btn btn-primary" disabled={act.busy}>{act.busy ? 'Envoi…' : 'Enregistrer le constat'}</button>
