@@ -408,3 +408,117 @@ describe('Décisions humaines motivées', () => {
     expect((await s.env.req('GET', '/v1/titres/indicateurs', 'u-gouverneur')).json().renewals.total).toBe(1);
   });
 });
+
+async function sendBatch(s: Awaited<ReturnType<typeof setup>>, batchId: string, controls: Record<string, unknown>[]) {
+  const raw = JSON.stringify({ batchId, deviceId: DEVICE, createdAt: s.clock.now().toISOString(), controls });
+  const res = await s.env.req('POST', '/v1/titres/controles/lots', CTRL, raw, { 'x-device-signature': hmacSha256Hex(DEVICE_KEY, raw) });
+  expect(res.statusCode).toBe(200);
+  return Object.fromEntries(res.json().results.map((r: { opId: string }) => [r.opId, r])) as Record<string, { reconfirmed?: string; divergent?: boolean; rejected?: string }>;
+}
+
+describe('Contrôle hors ligne — historique des paquets et même verdict qu’en ligne', () => {
+  it('un contrôle fait sous un paquet antérieur est accepté après un nouveau téléchargement ; l’usage unique passe CONSOMME', async () => {
+    const s = await setup();
+    defineType(s.svc, 'TST-EMB', { model: 'USAGE_UNIQUE', periodDays: 1 });
+    const c = await buyAndPay(s, 'TST-EMB');
+    expect((await s.env.req('GET', `/v1/titres/hors-ligne/paquet?deviceId=${DEVICE}`, CTRL)).statusCode).toBe(200);
+    s.clock.set('2026-09-26T11:00:00.000Z'); // second paquet, sans synchronisation entre les deux
+    await s.env.req('GET', `/v1/titres/hors-ligne/paquet?deviceId=${DEVICE}`, CTRL);
+    s.clock.set('2026-09-26T11:10:00.000Z');
+    const r = await sendBatch(s, 'LOT-HIST-1', [{ opId: 'o1', token: c.staticToken, controlledAt: '2026-09-26T09:30:00.000Z', place: { label: 'Quai 1' }, offlineResult: 'VALIDE' }]);
+    expect(r.o1).toMatchObject({ reconfirmed: 'VALIDE', divergent: false });
+    expect(s.svc.credential(c.id).state).toBe('CONSOMME');
+    expect((await s.env.req('POST', '/v1/titres/controles', CTRL, { qr: c.staticToken, place: PLACE })).json().text).toBe('DÉJÀ UTILISÉ');
+  });
+
+  it('âge maximal : aucun contrôle de plus de 72 h avant la création du lot', async () => {
+    const s = await setup();
+    await s.env.req('GET', `/v1/titres/hors-ligne/paquet?deviceId=${DEVICE}`, CTRL);
+    s.clock.set('2026-09-29T17:00:00.000Z'); // 80 h plus tard
+    const r = await sendBatch(s, 'LOT-AGE-1', [
+      { opId: 'vieux', plate: 'KN 1 A', controlledAt: '2026-09-26T10:00:00.000Z', place: {}, offlineResult: 'VALIDE' },
+      { opId: 'recent', plate: 'KN 1 A', controlledAt: '2026-09-27T19:00:00.000Z', place: {}, offlineResult: 'INVALIDE' },
+    ]);
+    expect(r.vieux!.rejected).toBe('HORODATAGE_INCOHERENT');
+    expect(r.recent).toMatchObject({ reconfirmed: 'INVALIDE', divergent: false });
+  });
+
+  it('QR dynamique vérifié à l’instant du contrôle, code court, lien /preuve/, et titre d’un autre service refusé', async () => {
+    const s = await setup();
+    defineType(s.svc, 'TST-JOUR', { model: 'JOURNALIER' });
+    const c = await buyAndPay(s, 'TST-JOUR', { plate: 'KN 42 ZZ' });
+    await s.env.req('GET', `/v1/titres/hors-ligne/paquet?deviceId=${DEVICE}`, CTRL);
+    s.clock.set('2026-09-26T09:20:00.000Z');
+    const qr = (await s.env.req('GET', `/v1/titres/${c.id}/qr`, 'u-contribuable')).json();
+    s.clock.set('2026-09-26T10:00:00.000Z');
+    const r = await sendBatch(s, 'LOT-RES-1', [
+      { opId: 'dyn', token: qr.token, controlledAt: '2026-09-26T09:20:05.000Z', place: {}, offlineResult: 'VALIDE' },
+      { opId: 'capture', token: qr.token, controlledAt: '2026-09-26T09:25:00.000Z', place: {}, offlineResult: 'VALIDE' },
+      { opId: 'code', token: c.shortCode, controlledAt: '2026-09-26T09:30:00.000Z', place: {}, offlineResult: 'VALIDE' },
+      { opId: 'url', token: `https://mosolo.example/preuve/${c.shortCode}`, controlledAt: '2026-09-26T09:31:00.000Z', place: {}, offlineResult: 'VALIDE' },
+      { opId: 'autre', token: c.staticToken, module: '81', controlledAt: '2026-09-26T09:32:00.000Z', place: {}, offlineResult: 'VALIDE' },
+      { opId: 'plaque-autre', plate: 'KN 42 ZZ', module: '81', controlledAt: '2026-09-26T09:33:00.000Z', place: {}, offlineResult: 'VALIDE' },
+      { opId: 'plaque', plate: 'KN 42 ZZ', module: '99', controlledAt: '2026-09-26T09:34:00.000Z', place: {}, offlineResult: 'VALIDE' },
+    ]);
+    expect(r.dyn).toMatchObject({ reconfirmed: 'VALIDE', divergent: false });
+    expect(r.capture).toMatchObject({ reconfirmed: 'INVALIDE', divergent: true });
+    expect(r.code!.reconfirmed).toBe('VALIDE');
+    expect(r.url!.reconfirmed).toBe('VALIDE');
+    expect(r.autre).toMatchObject({ reconfirmed: 'INVALIDE', divergent: true });
+    expect(r['plaque-autre']!.reconfirmed).toBe('INVALIDE');
+    expect(r.plaque!.reconfirmed).toBe('VALIDE');
+    // Même verdict en ligne pour la présentation dans un autre service.
+    expect((await s.env.req('POST', '/v1/titres/controles', CTRL, { plate: 'KN 42 ZZ', module: '81', place: PLACE })).json().result).toBe('INVALIDE');
+  });
+});
+
+describe('Émission — fenêtre vérifiée avant l’obligation, émission robuste article par article', () => {
+  it('durée hors plafond, dates d’événement manquantes, début invalide : 400 sans aucune obligation créée', async () => {
+    const s = await setup();
+    defineType(s.svc, 'TST-HEURE', { model: 'DUREE_COURTE', durationMinutes: 60, maxDurationMinutes: 240, startMode: 'HEURE_CHOISIE' });
+    defineType(s.svc, 'TST-EVT', { model: 'PAR_EVENEMENT' });
+    const user = s.ctx.users.get('u-contribuable')!;
+    const obligations = s.ctx.assessment.obligations.count();
+    const buy = (item: Record<string, unknown>) => () => s.svc.purchase(user, { payerTaxpayerId: DEMO.taxpayerId, channel: 'MOBILE_MONEY', items: [{ subject: {}, place: SERVICE_PLACE, ...item } as never] });
+    expect(buy({ typeCode: 'TST-HEURE', durationMinutes: 500 })).toThrow(expect.objectContaining({ status: 400, code: 'DURATION_ABOVE_CAP' }));
+    expect(buy({ typeCode: 'TST-EVT' })).toThrow(expect.objectContaining({ status: 400, code: 'EVENT_DATES_REQUIRED' }));
+    expect(buy({ typeCode: 'TST-HEURE', requestedStart: 'demain matin' })).toThrow(expect.objectContaining({ status: 400, code: 'INVALID_REQUESTED_START' }));
+    expect(s.ctx.assessment.obligations.count()).toBe(obligations);
+    // Prolongation : même contrôle avant toute obligation.
+    const c = await buyAndPay(s, 'TST-HEURE', { plate: 'KN 9 P' });
+    const before = s.ctx.assessment.obligations.count();
+    const ext = await s.env.req('POST', `/v1/titres/${c.id}/prolongations`, 'u-contribuable', { channel: 'USSD', durationMinutes: 600 }, { 'idempotency-key': 'prolongation-plafond' });
+    expect(ext.statusCode).toBe(400);
+    expect(ext.json().code).toBe('DURATION_ABOVE_CAP');
+    expect(s.ctx.assessment.obligations.count()).toBe(before);
+  });
+
+  it('une erreur d’émission n’interrompt pas la synchronisation et ne ré-émet jamais un titre déjà inséré', async () => {
+    const s = await setup();
+    defineType(s.svc, 'TST-HEURE', { model: 'DUREE_COURTE', durationMinutes: 60, maxDurationMinutes: 240 });
+    const user = s.ctx.users.get('u-contribuable')!;
+    const iss = s.svc.purchase(user, {
+      payerTaxpayerId: DEMO.taxpayerId, channel: 'MOBILE_MONEY',
+      items: [1, 2, 3].map((i) => ({ typeCode: 'TST-HEURE', subject: { label: `Article ${i}` }, place: SERVICE_PLACE })),
+    });
+    // Article 3 devenu non émissible (donnée stockée hors plafond) ; l'écouteur d'un module échoue une fois.
+    s.svc.issuances.update({ ...iss, items: iss.items.map((it, i) => (i === 2 ? { ...it, durationMinutes: 999 } : it)) });
+    let fail = true;
+    s.svc.onIssued(() => {
+      if (fail) {
+        fail = false;
+        throw new Error('écouteur en panne');
+      }
+    });
+    expect((await pay(s.env, iss.payments[0]!.paymentReference)).statusCode).toBe(200);
+    expect(() => s.svc.sync()).not.toThrow();
+    const after = s.svc.issuance(iss.id);
+    expect(after.items.map((it) => !!it.credentialId)).toEqual([true, true, false]);
+    expect(after.items[2]!.issueError).toMatch(/plafond/);
+    expect(after.status).toBe('PARTIELLEMENT_EMISE');
+    expect(s.ctx.alerts.alerts.find((a) => a.type === 'CREDENTIAL_ISSUANCE_FAILED')).toHaveLength(1);
+    s.svc.sync();
+    s.svc.sync();
+    expect(s.svc.credentials.count()).toBe(2);
+  });
+});

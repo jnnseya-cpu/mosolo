@@ -12,7 +12,7 @@ import {
 import type { AuditLog } from '../../core/audit.js';
 import type { User, UserDirectory } from '../../core/auth.js';
 import type { Clock } from '../../core/clock.js';
-import { isoDate } from '../../core/clock.js';
+import { kinshasaDate } from '../../core/clock.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, authorize, definePolicy, GRANTS } from '../../core/policy.js';
 import { InMemoryRepository } from '../../core/repository.js';
@@ -159,7 +159,7 @@ export class RuleService {
    */
   refresh(): void {
     const now = this.clock.now();
-    const today = isoDate(now);
+    const today = kinshasaDate(now);
     const system = { kind: 'system' as const, id: 'moteur-regles' };
     for (const snap of this.rules.all()) {
       const r = this.rules.get(snap.id)!;
@@ -255,7 +255,7 @@ export class RuleService {
     }
     // Blocage de la rétroactivité non autorisée : une nouvelle version dont la date d'effet précède la publication
     // doit citer l'acte (instrument en vigueur + article) qui autorise expressément cette rétroactivité.
-    const today = isoDate(this.clock.now());
+    const today = kinshasaDate(this.clock.now());
     if (rule.supersedesVersionId && rule.effectiveFrom < today) {
       const ra = rule.retroactivity;
       if (!ra) {
@@ -390,7 +390,7 @@ export class RuleService {
       throw unprocessable('ABROGATION_BEFORE_EFFECT', `La date d'abrogation (${input.date}) précède la date d'effet de la règle (${rule.effectiveFrom}).`);
     }
     const now = this.clock.now().toISOString();
-    const today = isoDate(this.clock.now());
+    const today = kinshasaDate(this.clock.now());
     const immediate = input.date <= today;
     const abrogation: RuleAbrogation = { date: input.date, instrumentId: input.instrumentId, reason: input.reason, by: user.id, at: now };
     const status: RuleStatus = immediate ? 'ABROGEE' : rule.status;
@@ -435,19 +435,25 @@ export class RuleService {
   }
 
   /**
-   * Évalue la formule d'une règle. Résolution des identifiants :
-   * entrée fournie → table de taux → table de taux suffixée par le rang de localité (`forfait:<rang>`).
+   * Évalue la formule d'une règle. Résolution des identifiants : la table de taux CERTIFIÉE prime toujours —
+   * taux exact, puis taux suffixé par le rang de localité (`forfait:<rang>`) ; seuls les identifiants qui ne sont
+   * pas des taux (voir `requiredInputs`) sont lus dans les entrées. Toute entrée étrangère à la formule est refusée
+   * (INPUT_NOT_ALLOWED) : une requête ne peut jamais substituer un taux ni glisser une valeur non prévue.
    */
   evaluate(rule: RuleSheet, inputs: Record<string, string>, localityRank: number): FormulaEvaluation {
     try {
+      this.assertInputsAllowed(rule, inputs);
       const ast = parseFormula(rule.formula);
       const usedInputs: Record<string, string> = {};
       const usedRates: Record<string, string> = {};
       const value = evaluateFormula(ast, (name) => {
-        if (Object.hasOwn(inputs, name)) return (usedInputs[name] = inputs[name]!);
         if (Object.hasOwn(rule.rateTable, name)) return (usedRates[name] = rule.rateTable[name]!);
         const ranked = `${name}:${localityRank}`;
         if (Object.hasOwn(rule.rateTable, ranked)) return (usedRates[ranked] = rule.rateTable[ranked]!);
+        if (isRateName(rule, name)) {
+          throw new FormulaError('FORMULA_UNKNOWN_IDENTIFIER', `Taux « ${name} » non défini pour le rang ${localityRank} dans la table certifiée.`);
+        }
+        if (Object.hasOwn(inputs, name)) return (usedInputs[name] = inputs[name]!);
         throw new FormulaError('FORMULA_UNKNOWN_IDENTIFIER', `Valeur manquante pour « ${name} » (entrée ou taux, rang ${localityRank}).`);
       });
       return { value, inputs: usedInputs, rates: usedRates };
@@ -457,9 +463,28 @@ export class RuleService {
     }
   }
 
+  /** Entrées de la formule que la requête doit fournir (tout identifiant qui n'est pas un taux de la table). */
   requiredInputs(rule: RuleSheet): string[] {
-    return [...formulaIdentifiers(parseFormula(rule.formula))].filter(
-      (n) => !Object.hasOwn(rule.rateTable, n) && !Object.keys(rule.rateTable).some((k) => k.startsWith(`${n}:`)),
-    );
+    return [...formulaIdentifiers(parseFormula(rule.formula))].filter((n) => !isRateName(rule, n));
   }
+
+  /** Refuse (400 INPUT_NOT_ALLOWED) toute entrée qui n'est pas une entrée requise de la formule (taux compris). */
+  assertInputsAllowed(rule: RuleSheet, inputs: Record<string, string>): void {
+    const allowed = new Set(this.requiredInputs(rule));
+    const refused = Object.keys(inputs).filter((k) => !allowed.has(k));
+    if (refused.length) {
+      throw badRequest('INPUT_NOT_ALLOWED', `Entrée(s) non prévue(s) par la règle ${rule.code} v${rule.version} : ${refused.join(', ')}. Les taux viennent de la table certifiée, jamais de la requête.`, { refused, allowed: [...allowed] });
+    }
+  }
+
+  /** Ne garde que les entrées requises par `rule` (recalcul d'une ancienne trace par une nouvelle version). */
+  pickRequiredInputs(rule: RuleSheet, inputs: Record<string, string>): Record<string, string> {
+    const allowed = new Set(this.requiredInputs(rule));
+    return Object.fromEntries(Object.entries(inputs).filter(([k]) => allowed.has(k)));
+  }
+}
+
+/** Identifiant fourni par la table de taux (exact ou décliné par rang `nom:<rang>`). */
+function isRateName(rule: RuleSheet, name: string): boolean {
+  return Object.hasOwn(rule.rateTable, name) || Object.keys(rule.rateTable).some((k) => k.startsWith(`${name}:`));
 }

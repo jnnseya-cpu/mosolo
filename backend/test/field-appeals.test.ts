@@ -53,6 +53,26 @@ describe('Synchronisation terrain', () => {
     expect(out.json()).toMatchObject({ accepted: [], rejected: [{ opId: 'c1', reason: 'OUT_OF_TERRITORY' }] });
     expect((await env.req('POST', '/v1/field-sync/batches', 'u-contribuable', '{}')).statusCode).toBe(403);
   });
+
+  it('lot de 500 opérations : un seul parcours du journal par lot (index objet/champ), conflits intra-lot détectés', async () => {
+    const env = await setup();
+    const ops = Array.from({ length: 500 }, (_, i) => ({ opId: `p${i}`, objectId: DEMO.unitId, field: `champ_${i % 50}`, value: i }));
+    expect((await send(env, 'u-agent-terrain', batch(env, 'dev-terrain-001', ops, 'LOT-A'), 'demo-device-key-001')).json().accepted).toHaveLength(500);
+    const obs = env.app.ctx.field.observations;
+    const find = obs.find.bind(obs);
+    let scans = 0;
+    obs.find = (pred) => {
+      scans += 1;
+      return find(pred);
+    };
+    const other = ops.map((o) => ({ ...o, opId: `q${o.opId}`, value: -1 }));
+    const b = await send(env, 'u-agent-terrain-2', batch(env, 'dev-terrain-002', other, 'LOT-B'), 'demo-device-key-002');
+    expect(b.json().accepted).toHaveLength(500);
+    expect(scans).toBe(1);
+    // Chaque champ divergent ouvre un seul conflit, enrichi par les observations suivantes du même lot.
+    expect(env.app.ctx.field.conflicts.find((c) => c.objectId === DEMO.unitId)).toHaveLength(50);
+    expect(env.app.ctx.field.conflicts.findOne((c) => c.field === 'champ_0')!.versions).toHaveLength(10 + 10);
+  });
 });
 
 describe('Réclamations', () => {

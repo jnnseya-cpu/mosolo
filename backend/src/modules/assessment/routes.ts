@@ -11,7 +11,10 @@ const calculateSchema = z.object({
   ruleId: z.string(),
   taxpayerId: z.string(),
   objectId: z.string(),
-  inputs: z.record(decimalString).default({}),
+  // Entrées de la formule uniquement (identifiants du langage de règles) ; les taux viennent de la table certifiée :
+  // toute entrée non requise par la règle est refusée par le moteur (400 INPUT_NOT_ALLOWED).
+  inputs: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/, 'Identifiant d’entrée invalide'), decimalString)
+    .refine((o) => Object.keys(o).length <= 50, 'Au plus 50 entrées').default({}),
   simulate: z.boolean(),
 }).strict();
 

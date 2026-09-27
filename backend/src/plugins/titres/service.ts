@@ -14,7 +14,7 @@ import { Money, type MoneyJSON } from '@mosolo/shared';
 import { z } from 'zod';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
-import { HOUR_MS } from '../../core/clock.js';
+import { HOUR_MS, kinshasaDate } from '../../core/clock.js';
 import { canonicalJson, checkChar, hmacSha256Hex, randomCode, safeEqualHex, sha256Hex } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unauthorized, unprocessable } from '../../core/errors.js';
 import { authorize, definePolicy, evaluate, GRANTS, type Resource } from '../../core/policy.js';
@@ -47,6 +47,9 @@ definePolicy('titres:indicators', {
 
 const PAID_STATUSES = ['CONFIRME', 'REGLE', 'RAPPROCHE'];
 const MIN = 60_000;
+/** Âge maximal d'un contrôle hors ligne accepté, avant la création du lot. */
+const OFFLINE_MAX_AGE_MS = 72 * HOUR_MS;
+const MAX_PACKS_PER_DEVICE = 50;
 
 export const placeSchema = z.object({
   lat: z.number().min(-90).max(90).optional(),
@@ -66,6 +69,8 @@ export const offlineBatchSchema = z.object({
     controlledAt: z.string().datetime({ offset: true }),
     place: placeSchema,
     offlineResult: z.enum(['VALIDE', 'INVALIDE', 'EXPIRE']),
+    /** Module contrôlé (même règle qu'en ligne : un titre d'un autre service est refusé). */
+    module: z.string().max(10).optional(),
   }).strict()).max(500),
 }).strict();
 
@@ -144,7 +149,13 @@ export class TitresService {
   readonly signer = new TokenSigner();
   private readonly ids = new IdGenerator();
   private readonly offlineBatches = new Map<string, { fingerprint: string; result: unknown }>();
-  private readonly devicePackAt = new Map<string, string>();
+  /**
+   * Historique des téléchargements de paquet hors ligne par terminal (instants croissants) : un lot peut contenir des
+   * contrôles faits sous un paquet antérieur au dernier téléchargé (le terminal a pu se recharger sans synchroniser).
+   */
+  private readonly devicePacks = new Map<string, number[]>();
+  /** Instant de création du dernier lot synchronisé par terminal. */
+  private readonly deviceSyncedAt = new Map<string, number>();
   /** Période de grâce (J28) par module : les constats y sont marqués « pédagogiques ». */
   readonly gracePeriods = new Map<string, string>();
   /** Écouteurs des modules clients (ex. RakaPay) appelés à chaque émission de titre. */
@@ -282,7 +293,7 @@ export class TitresService {
         const k = `${t.module}|${normalizePlate(item.subject.plate)}`;
         if (seen.has(k)) throw conflict('DUPLICATE_SUBJECT', `La plaque ${item.subject.plate} figure deux fois dans la commande.`);
         seen.add(k);
-        const dup = pending.find((i) => i.items.some((it, j) => !it.credentialId && it.subject.plate && normalizePlate(it.subject.plate) === normalizePlate(item.subject.plate!) && this.type(i.items[j]!.typeCode).module === t.module));
+        const dup = pending.find((i) => i.items.some((it, j) => !it.credentialId && !it.issueError && it.subject.plate && normalizePlate(it.subject.plate) === normalizePlate(item.subject.plate!) && this.type(i.items[j]!.typeCode).module === t.module));
         if (dup) throw conflict('PENDING_PURCHASE_EXISTS', `Une commande en attente de paiement existe déjà pour la plaque ${item.subject.plate}.`, { issuanceId: dup.id });
       }
       if (item.renewsId) {
@@ -293,6 +304,14 @@ export class TitresService {
         }
       }
       if (t.validity.startMode === 'PAIEMENT' && item.requestedStart) throw badRequest('START_NOT_CHOOSABLE', `Le type ${t.code} commence au paiement.`);
+      // Fenêtre de validité vérifiée AVANT toute obligation (essai à blanc) : une durée hors plafond, des dates
+      // d'événement manquantes ou un début invalide sont refusés ici (400), jamais découverts après le paiement.
+      const requested = item.requestedStart !== undefined ? Date.parse(item.requestedStart) : undefined;
+      if (requested !== undefined && Number.isNaN(requested)) throw badRequest('INVALID_REQUESTED_START', `Heure de début invalide : ${item.requestedStart}`);
+      computeWindow(t.validity, {
+        start: Math.max(this.ctx.clock.now().getTime(), requested ?? 0), ...(item.durationMinutes ? { durationMinutes: item.durationMinutes } : {}),
+        ...(item.eventStart ? { eventStart: item.eventStart } : {}), ...(item.eventEnd ? { eventEnd: item.eventEnd } : {}),
+      });
     });
 
     const now = this.ctx.clock.now();
@@ -400,9 +419,26 @@ export class TitresService {
           p.status = 'PAYE';
           changed = true;
           for (const it of items) {
-            if (it.paymentOrderId !== order.id || it.credentialId) continue;
-            const c = this.issueCredential(iss, it, order, receipt);
-            it.credentialId = c.id;
+            if (it.paymentOrderId !== order.id || it.credentialId || it.issueError) continue;
+            try {
+              // L'identifiant du titre est enregistré dès l'insertion, article par article : une erreur ultérieure
+              // (autre article, écouteur d'un module) ne provoque jamais une seconde émission au passage suivant.
+              this.issueCredential(iss, it, order, receipt, (c) => {
+                it.credentialId = c.id;
+                this.issuances.update({ ...this.issuances.get(iss.id)!, payments, items });
+              });
+            } catch (e) {
+              if (it.credentialId) continue;
+              // Paiement reçu mais titre non émissible : l'article est marqué, l'anomalie remonte à une personne habilitée.
+              it.issueError = e instanceof Error ? e.message : String(e);
+              this.issuances.update({ ...this.issuances.get(iss.id)!, payments, items });
+              this.ctx.alerts.raise({
+                type: 'CREDENTIAL_ISSUANCE_FAILED', severity: 'HIGH', source: 'titres',
+                detail: `Paiement ${order.paymentReference} reçu mais titre ${it.typeCode} non émis : ${it.issueError}`,
+                context: { issuanceId: iss.id, paymentOrderId: order.id, typeCode: it.typeCode },
+              });
+              this.ctx.audit.append({ actor: { kind: 'system', id: 'systeme-titres' }, action: 'titres.credential.issuance_failed', resourceType: 'credential_issuance', resourceId: iss.id, outcome: 'FAILURE', details: { typeCode: it.typeCode, error: it.issueError } });
+            }
           }
         } else if (order.status === 'ECHOUE') {
           p.status = 'ECHOUE';
@@ -417,7 +453,8 @@ export class TitresService {
       if (changed) {
         const paid = payments.filter((p) => p.status === 'PAYE').length;
         const open = payments.filter((p) => p.status === 'EN_ATTENTE').length;
-        const status: Issuance['status'] = open > 0 ? (paid > 0 ? 'PARTIELLEMENT_EMISE' : 'EN_ATTENTE_PAIEMENT') : paid === payments.length ? 'EMISE' : paid > 0 ? 'PARTIELLEMENT_EMISE' : 'EXPIREE';
+        const failed = items.some((it) => it.issueError);
+        const status: Issuance['status'] = open > 0 ? (paid > 0 ? 'PARTIELLEMENT_EMISE' : 'EN_ATTENTE_PAIEMENT') : paid === payments.length && !failed ? 'EMISE' : paid > 0 ? 'PARTIELLEMENT_EMISE' : 'EXPIREE';
         this.issuances.update({ ...iss, payments, items, status });
       }
     }
@@ -449,6 +486,8 @@ export class TitresService {
     iss: Issuance, item: IssuanceItem,
     order: { id: string; paymentReference: string; obligationId: string; amount: MoneyJSON },
     receipt: { id: string; number: string },
+    /** Appelé juste après l'insertion du titre, avant journal, notifications et écouteurs des modules. */
+    onInserted?: (c: Credential) => void,
   ): Credential {
     const t = this.type(item.typeCode);
     const now = this.ctx.clock.now().getTime();
@@ -461,7 +500,7 @@ export class TitresService {
       start, ...(item.durationMinutes ? { durationMinutes: item.durationMinutes } : {}),
       ...(item.eventStart ? { eventStart: item.eventStart } : {}), ...(item.eventEnd ? { eventEnd: item.eventEnd } : {}),
     });
-    const year = new Date(now).getUTCFullYear();
+    const year = kinshasaDate(new Date(now)).slice(0, 4);
     const id = this.ids.next('TIT');
     const number = `${t.prefix}-${year}-${id.slice(4)}`;
     const validFrom = new Date(w.from).toISOString();
@@ -485,6 +524,7 @@ export class TitresService {
       obligationId: order.obligationId, issuanceId: iss.id, ...(prev ? { renewsId: prev.id } : {}), ...(unit ? { amount: unit } : {}),
       staticToken, issuedAt: nowIso, demo: t.demo,
     });
+    onInserted?.(c);
     this.ctx.audit.append({
       actor: { kind: 'system', id: 'systeme-titres' }, action: 'titres.credential.issued', resourceType: 'credential', resourceId: c.id,
       details: { number, typeCode: t.code, receipt: receipt.number, paymentReference: order.paymentReference, validFrom, validUntil, commune: c.attribution.commune, basis: c.attribution.basis, renewsId: prev?.id ?? null },
@@ -611,11 +651,32 @@ export class TitresService {
     return c ? { credential: c, method: fromUrl ? 'QR_STATIQUE' : 'CODE_COURT' } : { method: 'CODE_COURT', failure: 'Aucun titre ne correspond' };
   }
 
-  /** Titres d'une plaque (tous états), les plus favorables d'abord. */
-  byPlate(plate: string, module?: string): Credential[] {
+  /**
+   * Résolution commune au contrôle en ligne et à la réconciliation hors ligne : même verdict pour une même
+   * présentation au même instant `at` (plaque filtrée par module, QR dynamique vérifié sur sa fenêtre, QR statique,
+   * lien « /preuve/<code> », code court ; titre d'un autre service refusé).
+   */
+  private resolveControl(input: { presented?: string; plate?: string; module?: string }, at: number): {
+    credential?: Credential; method: ControlMethod; presented: string; failure?: string; module?: string;
+  } {
+    if (input.plate) {
+      const best = this.byPlate(input.plate, input.module, new Date(at)).filter((c) => c.state !== 'REMPLACE')[0];
+      return { ...(best ? { credential: best } : { failure: 'Aucun titre pour cette plaque' }), method: 'PLAQUE', presented: input.plate, ...(input.module ? { module: input.module } : {}) };
+    }
+    const presented = input.presented ?? '';
+    const res = this.resolvePresented(presented, at);
+    if (res.credential && input.module && res.credential.module !== input.module) {
+      // Visuels par module : un titre ne peut pas être présenté pour un autre service.
+      return { method: res.method, presented, failure: `Titre d’un autre service (${res.credential.number.split('-')[0]})` };
+    }
+    return { ...(res.credential ? { credential: res.credential } : {}), method: res.method, presented, ...(res.failure ? { failure: res.failure } : {}) };
+  }
+
+  /** Titres d'une plaque (tous états), les plus favorables d'abord (à l'instant `at`, par défaut l'heure serveur). */
+  byPlate(plate: string, module?: string, at?: Date): Credential[] {
     const n = normalizePlate(plate);
     const rank: Record<DisplayStatus, number> = { VALIDE: 0, BIENTOT_EXPIRE: 1, CRITIQUE: 1, PAS_ENCORE_ACTIF: 2, SUSPENDU: 3, EXPIRE: 4, INVALIDE: 5 };
-    const now = this.ctx.clock.now();
+    const now = at ?? this.ctx.clock.now();
     return this.credentials
       .find((c) => !!c.subject.plate && normalizePlate(c.subject.plate) === n && (!module || c.module === module))
       .sort((a, b) => rank[statusAt(a, now).status] - rank[statusAt(b, now).status] || b.validUntil.localeCompare(a.validUntil));
@@ -699,7 +760,7 @@ export class TitresService {
       constat = this.constats.insert({
         id: this.ids.next('CST'), controlId: event.id, ...(c ? { credentialId: c.id } : {}), ...(module !== 'inconnu' ? { module } : {}), entity: c?.entity ?? user.entity,
         presented: event.presented, reason: reason ?? 'Aucun titre valide présenté', controllerId: user.id, place: input.place, at,
-        status: 'OUVERT', legalEffect: 'AUCUN_MONTANT', duringGrace: !!graceUntil && at.slice(0, 10) <= graceUntil,
+        status: 'OUVERT', legalEffect: 'AUCUN_MONTANT', duringGrace: !!graceUntil && kinshasaDate(atDate) <= graceUntil,
         notice: 'Constat à instruire par une personne habilitée : aucune amende, aucun montant, aucune immobilisation automatique. Pénalité éventuelle uniquement selon le barème de l’acte, par décision motivée et contestable (RW1).',
       });
     }
@@ -733,23 +794,12 @@ export class TitresService {
     authorize(user, 'titres:control', this.controlResource(user, input.place));
     this.sync();
     const now = this.ctx.clock.now().getTime();
-    if (input.plate) {
-      const list = this.byPlate(input.plate, input.module).filter((c) => c.state !== 'REMPLACE');
-      const best = list[0];
-      const r = this.recordControl(user, { ...(best ? { credential: best } : { failure: 'Aucun titre pour cette plaque' }), ...(input.module ? { module: input.module } : {}), method: 'PLAQUE', presented: input.plate, place: input.place, ...(input.deviceId ? { deviceId: input.deviceId } : {}) });
-      const view = this.minimalView(r.event, r.status, best ? this.credentials.get(best.id) : undefined, r.constat);
-      return { ...view, plate: normalizePlate(input.plate) };
-    }
     const presented = input.qr ?? input.code;
-    if (!presented) throw badRequest('NOTHING_PRESENTED', 'QR, code court ou plaque requis.');
-    const res = this.resolvePresented(presented, now);
-    if (res.credential && input.module && res.credential.module !== input.module) {
-      // Visuels par module : un titre ne peut pas être présenté pour un autre service.
-      const r = this.recordControl(user, { method: res.method, presented, place: input.place, failure: `Titre d’un autre service (${res.credential.number.split('-')[0]})`, ...(input.deviceId ? { deviceId: input.deviceId } : {}) });
-      return this.minimalView(r.event, undefined, undefined, r.constat);
-    }
-    const r = this.recordControl(user, { ...(res.credential ? { credential: res.credential } : {}), method: res.method, presented, place: input.place, ...(res.failure ? { failure: res.failure } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}) });
-    return this.minimalView(r.event, r.status, res.credential ? this.credentials.get(res.credential.id) : undefined, r.constat);
+    if (!input.plate && !presented) throw badRequest('NOTHING_PRESENTED', 'QR, code court ou plaque requis.');
+    const res = this.resolveControl({ ...(input.plate ? { plate: input.plate } : { presented }), ...(input.module ? { module: input.module } : {}) }, now);
+    const r = this.recordControl(user, { ...res, place: input.place, ...(input.deviceId ? { deviceId: input.deviceId } : {}) });
+    const view = this.minimalView(r.event, r.status, res.credential ? this.credentials.get(res.credential.id) : undefined, r.constat);
+    return input.plate ? { ...view, plate: normalizePlate(input.plate) } : view;
   }
 
   // ------------------------------------------------------------------ Contrôle hors ligne
@@ -771,7 +821,7 @@ export class TitresService {
     const device = deviceId ? this.ctx.field.devices.get(deviceId) : undefined;
     if (deviceId && (!device || device.status !== 'ACTIF' || device.agentUserId !== user.id)) throw forbidden('DEVICE_NOT_ALLOWED', 'Terminal non enrôlé, révoqué ou non affecté à ce contrôleur.');
     const now = this.ctx.clock.now();
-    if (deviceId) this.devicePackAt.set(deviceId, now.toISOString());
+    if (deviceId) this.devicePacks.set(deviceId, [...(this.devicePacks.get(deviceId) ?? []), now.getTime()].slice(-MAX_PACKS_PER_DEVICE));
     const plates = this.credentials
       .find((c) => c.state === 'EMIS' && !!c.subject.plate && (!module || c.module === module) && new Date(c.validUntil).getTime() + c.toleranceMinutes * MIN > now.getTime())
       .map((c) => ({ plate: normalizePlate(c.subject.plate!), number: c.number, typeCode: c.typeCode, validFrom: c.validFrom, validUntil: c.validUntil, toleranceMinutes: c.toleranceMinutes, amberMinutes: c.amberMinutes }));
@@ -816,7 +866,15 @@ export class TitresService {
     }
     this.sync();
     const now = this.ctx.clock.now();
-    const lowerBound = new Date(this.devicePackAt.get(device.id) ?? new Date(now.getTime() - 72 * HOUR_MS).toISOString()).getTime() - 5 * MIN;
+    // Borne basse : le plus ancien paquet dont les contrôles peuvent ne pas encore être synchronisés (celui en vigueur
+    // au dernier lot synchronisé, ou le premier paquet), jamais plus de 72 h avant la création du lot.
+    const createdAt = Math.min(new Date(batch.createdAt).getTime(), now.getTime());
+    const packs = this.devicePacks.get(device.id) ?? [];
+    const syncedAt = this.deviceSyncedAt.get(device.id);
+    const inForceAtSync = syncedAt === undefined ? undefined : packs.filter((p) => p <= syncedAt).at(-1);
+    const oldestOpenPack = inForceAtSync ?? packs[0];
+    const floor = createdAt - OFFLINE_MAX_AGE_MS;
+    const lowerBound = Math.max(oldestOpenPack ?? floor, floor) - 5 * MIN;
     const results: { opId: string; controlId?: string; offlineResult: ControlResult; reconfirmed?: ControlResult; divergent?: boolean; alreadyUsed?: unknown; constatId?: string; rejected?: string }[] = [];
     const ops = [...batch.controls].sort((a, b) => a.controlledAt.localeCompare(b.controlledAt));
     for (const op of ops) {
@@ -825,25 +883,15 @@ export class TitresService {
         results.push({ opId: op.opId, offlineResult: op.offlineResult, rejected: 'HORODATAGE_INCOHERENT' });
         continue;
       }
-      let credential: Credential | undefined;
-      let method: ControlMethod = 'QR_STATIQUE';
-      let failure: string | undefined;
-      if (op.plate) {
-        method = 'PLAQUE';
-        credential = this.byPlate(op.plate).filter((c) => c.state !== 'REMPLACE')[0];
-        if (!credential) failure = 'Aucun titre pour cette plaque';
-      } else if (op.token) {
-        const payload = this.signer.verifyStatic(op.token);
-        if (!payload || typeof payload.id !== 'string') failure = 'QR non authentique (signature invalide)';
-        else credential = this.credentials.get(payload.id);
-        if (!credential && !failure) failure = 'Titre inconnu';
-      } else {
+      if (!op.plate && !op.token) {
         results.push({ opId: op.opId, offlineResult: op.offlineResult, rejected: 'RIEN_PRESENTE' });
         continue;
       }
+      // Même résolveur qu'en ligne, à l'instant du contrôle (QR dynamique vérifié sur sa fenêtre de 30 s).
+      const res = this.resolveControl({ ...(op.plate ? { plate: op.plate } : { presented: op.token }), ...(op.module ? { module: op.module } : {}) }, at);
       const r = this.recordControl(user, {
-        ...(credential ? { credential } : {}), method, presented: op.plate ?? op.token ?? '', place: op.place, deviceId: device.id,
-        ...(failure ? { failure } : {}), offline: { at: new Date(at).toISOString(), batchId: batch.batchId, offlineResult: op.offlineResult },
+        ...res, place: op.place, deviceId: device.id,
+        offline: { at: new Date(at).toISOString(), batchId: batch.batchId, offlineResult: op.offlineResult },
       });
       results.push({
         opId: op.opId, controlId: r.event.id, offlineResult: op.offlineResult, reconfirmed: r.event.result, divergent: r.event.result !== op.offlineResult,
@@ -855,6 +903,7 @@ export class TitresService {
       divergences: results.filter((r) => r.divergent).length, revocations: this.revocationList(),
     };
     this.offlineBatches.set(batch.batchId, { fingerprint, result });
+    this.deviceSyncedAt.set(device.id, Math.max(syncedAt ?? 0, createdAt));
     this.ctx.audit.append({ actor: { kind: 'device', id: device.id }, action: 'titres.offline_batch.synced', resourceType: 'control_batch', resourceId: batch.batchId, details: { controls: results.length, divergences: result.divergences, agentId: user.id } });
     return result;
   }
@@ -899,7 +948,7 @@ export class TitresService {
         }
         const t = this.types.findOne((x) => x.code === c.typeCode && x.version === c.typeVersion) ?? this.type(c.typeCode);
         const newId = this.ids.next('TIT');
-        const number = `${t.prefix}-${new Date(c.issuedAt).getUTCFullYear()}-${newId.slice(4)}`;
+        const number = `${t.prefix}-${kinshasaDate(new Date(c.issuedAt)).slice(0, 4)}-${newId.slice(4)}`;
         const subject = { ...c.subject, ...(input.subject ?? {}) };
         const staticToken = this.signer.signStatic({ v: 1, id: newId, n: number, ty: c.typeCode, px: t.prefix, f: c.validFrom, u: c.validUntil, p: subject.plate ? normalizePlate(subject.plate) : null });
         const replacement = this.credentials.insert({
@@ -952,6 +1001,10 @@ export class TitresService {
     const t = this.type(c.typeCode);
     if (!t.validity.extendable) throw unprocessable('NOT_EXTENDABLE', 'Ce type de titre ne se prolonge pas.');
     if (c.state !== 'EMIS') throw conflict('INVALID_CREDENTIAL_STATE', `Titre au statut ${c.state} : prolongation impossible.`);
+    if (input.durationMinutes !== undefined && t.validity.model !== 'DUREE_COURTE') {
+      throw badRequest('DURATION_NOT_APPLICABLE', `Le modèle ${t.validity.model} ne se prolonge pas d'une durée choisie.`);
+    }
+    // La fenêtre (plafond de durée, dates d'événement) est vérifiée par `purchase` avant toute obligation.
     return this.purchase(user, {
       payerTaxpayerId: c.holderTaxpayerId ?? c.payerTaxpayerId, channel: input.channel, context: 'PROLONGATION',
       items: [{
