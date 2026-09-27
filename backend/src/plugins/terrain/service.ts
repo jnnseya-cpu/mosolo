@@ -11,7 +11,7 @@ import { Money, type RoleCode } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { AuditActor } from '../../core/audit.js';
 import { isDemoMode, type User } from '../../core/auth.js';
-import { isoDate } from '../../core/clock.js';
+import { kinshasaDate } from '../../core/clock.js';
 import { canonicalJson, checkChar, hmacSha256Hex, randomCode, randomSecret, safeEqualHex, sha256Hex } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, authorize } from '../../core/policy.js';
@@ -94,7 +94,7 @@ export class TerrainService {
     return this.ctx.clock.now().toISOString();
   }
   private today(): string {
-    return isoDate(this.ctx.clock.now());
+    return kinshasaDate(this.ctx.clock.now());
   }
   private actor(u: User): AuditActor {
     return { kind: 'user', id: u.id, roles: u.roles };
@@ -1151,7 +1151,7 @@ export class TerrainService {
 
   seedDemo(): void {
     const ctx = this.ctx;
-    const d = (days: number) => isoDate(new Date(ctx.clock.now().getTime() + days * 86_400_000));
+    const d = (days: number) => kinshasaDate(new Date(ctx.clock.now().getTime() + days * 86_400_000));
     const regie = ctx.users.add({ id: 'terrain-resp-module', name: 'Responsable de module foncier DGIPK (démo)', roles: ['R07'], entity: 'DGIPK' });
     const dg = ctx.users.get('u-dg-dgipk')!;
     ctx.users.add({ id: 'terrain-agent-regie-qc', name: 'Agent qualité de la régie (démo)', roles: ['R10'], entity: 'DGIPK', territory: ['Limete', 'Lemba', 'Matete', 'Ngaba'] });

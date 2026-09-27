@@ -21,6 +21,7 @@ import { assertDistinctPerson, authorize, PUBLIC_AGENT_ROLES } from '../../core/
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import { PAYABLE_STATUSES } from '../../modules/assessment/service.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
+import { signedCallbackHeaders } from '../../modules/payments/callback-signing.js';
 import type { PaymentOrder, UnappliedPayment } from '../../modules/payments/service.js';
 import { refSuffix } from '../../modules/receipts/service.js';
 import type { ExceptionType, StatementLine } from '../../modules/treasury/service.js';
@@ -435,7 +436,7 @@ export class PaymentPointService {
     // Confirmation serveur à serveur signée (HMAC du corps brut, nonce unique, horodatage) — circuit commun.
     const providerTxnId = `${p.id}-${this.ids.next('TX', 8)}`;
     const raw = JSON.stringify({ providerTxnId, paymentReference: order.paymentReference, amount: order.amount, status: 'SUCCESS', completedAt: now.toISOString() });
-    const res = this.ctx.payments.handleCallback(p.providerId, { signature: hmacSha256Hex(secret, raw), nonce: randomUUID(), timestamp: now.toISOString() }, raw);
+    const res = this.ctx.payments.handleCallback(p.providerId, signedCallbackHeaders(secret, raw, now), raw);
     if (res.status !== 'CONFIRME' || !res.receiptNumber || !res.receiptCode) {
       throw conflict('COLLECTION_NOT_CONFIRMED', `Encaissement non confirmé par le circuit commun (${res.status}) : aucune quittance, ne remettez aucun reçu.`);
     }

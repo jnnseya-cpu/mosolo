@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { ManualClock } from '../src/core/clock.js';
-import { hmacSha256Hex } from '../src/core/crypto.js';
 import type { Secrets } from '../src/context.js';
+import { signedCallbackHeaders } from '../src/modules/payments/callback-signing.js';
 import { DEMO } from '../src/seed.js';
 
 export const PROVIDER_SECRET = 'test-secret-mm-operator-a';
@@ -47,16 +47,20 @@ export async function createOrder(env: TestEnv, key = randomUUID(), body: unknow
   return env.req('POST', `/v1/obligations/${demoObligationId(env)}/payment-orders`, 'u-contribuable', body, { 'idempotency-key': key });
 }
 
-export function signedCallback(env: TestEnv, body: Record<string, unknown>, opts: { secret?: string; nonce?: string; timestamp?: string; provider?: string } = {}) {
+/** En-têtes HTTP d'un rappel générique signé v2 (horodatage et nonce couverts par la signature). */
+export function callbackHeaders(secret: string, raw: string, at: Date, opts: { nonce?: string; kid?: string } = {}): Record<string, string> {
+  const h = signedCallbackHeaders(secret, raw, at, opts);
+  return { 'x-signature': h.signature, 'x-nonce': h.nonce, 'x-timestamp': h.timestamp, ...(h.keyId ? { 'x-key-id': h.keyId } : {}) };
+}
+
+export function signedCallback(env: TestEnv, body: Record<string, unknown>, opts: { secret?: string; nonce?: string; timestamp?: string; provider?: string; kid?: string } = {}) {
   const raw = JSON.stringify(body);
   return env.app.inject({
     method: 'POST',
     url: `/v1/providers/${opts.provider ?? 'mm-operator-a'}/callbacks`,
     headers: {
       'content-type': 'application/json',
-      'x-signature': hmacSha256Hex(opts.secret ?? PROVIDER_SECRET, raw),
-      'x-nonce': opts.nonce ?? randomUUID(),
-      'x-timestamp': opts.timestamp ?? env.clock.now().toISOString(),
+      ...callbackHeaders(opts.secret ?? PROVIDER_SECRET, raw, new Date(opts.timestamp ?? env.clock.now().toISOString()), { nonce: opts.nonce ?? randomUUID(), ...(opts.kid ? { kid: opts.kid } : {}) }),
     },
     payload: raw,
   });

@@ -9,7 +9,7 @@ function clientKey(req: FastifyRequest): string {
 
 export function registerReceiptRoutes(app: FastifyInstance, ctx: AppContext): void {
   // Liste de révocation signée pour la vérification hors ligne (§ 19.3) : codes et statuts seulement.
-  app.get('/v1/public/receipts/revocations', async () => ({ ...ctx.receipts.revocationList(), publicKeyPem: ctx.receipts.publicKeyPem() }));
+  app.get('/v1/public/receipts/revocations', async () => ({ ...ctx.receipts.revocationList(), publicKeyPem: ctx.receipts.publicKeyPem(), verificationKeys: ctx.receipts.verificationKeys() }));
 
   // Vérification publique : aucune authentification, résultat minimal, débit limité par client (anti-énumération).
   app.get<{ Params: { code: string }; Querystring: { duplicata?: string } }>('/v1/public/receipts/:code', async (req, reply) => {

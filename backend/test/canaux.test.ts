@@ -8,6 +8,7 @@ import type { CanauxService } from '../src/plugins/canaux/service.js';
 import { integerToFrenchWords, moneyToFrenchWords } from '../src/plugins/canaux/words.js';
 import { holderPrincipal, normalizeReference } from '../src/plugins/canaux/points.js';
 import type { TestEnv } from './helpers.js';
+import { signedCallbackHeaders } from '../src/modules/payments/callback-signing.js';
 
 const DEMO_CARD = '48217730159'; // préfixe de la carte de démonstration (chiffre de contrôle calculé par le service)
 
@@ -314,7 +315,14 @@ describe('canaux — carte MOSOLO', () => {
     const v = await c.env.req('GET', `/v1/public/mosolo-cards/verify?t=${encodeURIComponent(card.qrToken)}`);
     expect(v.json().status).toBe('CARTE_VALIDE');
     expect(JSON.stringify(v.json())).not.toMatch(/Nsimba|Kiese|TP-|KIN-/);
-    const forged = await c.env.req('GET', `/v1/public/mosolo-cards/verify?t=${encodeURIComponent(card.qrToken.slice(0, -3) + 'AAA')}`);
+    // Falsification déterministe : un octet de la signature décodée inversé puis réencodé (remplacer les derniers
+    // caractères base64url pouvait redonner les mêmes octets — bits de bourrage ignorés — donc une signature valide).
+    const cut = card.qrToken.lastIndexOf('.');
+    const sig = Buffer.from(card.qrToken.slice(cut + 1), 'base64url');
+    sig[0]! ^= 0xff;
+    const forgedToken = `${card.qrToken.slice(0, cut + 1)}${sig.toString('base64url')}`;
+    expect(forgedToken).not.toBe(card.qrToken);
+    const forged = await c.env.req('GET', `/v1/public/mosolo-cards/verify?t=${encodeURIComponent(forgedToken)}`);
     expect(forged.json().status).toBe('INVALIDE');
     const req = await c.env.req('POST', `/v1/mosolo-cards/${card.number}/reissue-requests`, 'canaux-guichetier', { motif: 'Carte perdue, déclarée au guichet' });
     expect(req.statusCode).toBe(201);
@@ -635,14 +643,16 @@ describe('canaux — points de paiement agréés (R32)', () => {
     const order = ctx.payments.byReference(ref.paymentReference)!;
     const before = (await c.env.req('GET', '/v1/payment-points/PA-LIMETE-MM01/cash-days/2026-09-26', 'canaux-op-limete')).json();
     ctx.assessment.setStatus(order.obligationId, 'ANNULEE');
+    // L'annulation ferme la référence active (closeOrdersForObligation) : refus dès la consultation.
+    expect(ctx.payments.byReference(ref.paymentReference)).toMatchObject({ status: 'ECHOUE', closedReason: 'OBLIGATION_NON_PAYABLE' });
     const look = await c.env.req('GET', `/v1/payment-points/PA-LIMETE-MM01/references/${ref.paymentReference}`, 'canaux-op-limete');
-    expect(look.json().code).toBe('OBLIGATION_NOT_PAYABLE');
+    expect(look.json().code).toBe('REFERENCE_NOT_PAYABLE');
     const cash = await collect(c, ref.paymentReference);
-    expect(cash.json().code).toBe('OBLIGATION_NOT_PAYABLE');
+    expect(cash.json().code).toBe('REFERENCE_NOT_PAYABLE');
     // Course : confirmation signée du point arrivée malgré tout ⇒ non affecté ; les espèces restent dues par le point.
     const secret = ctx.secrets.providerSecrets['point-agree-pa-limete-mm01']!;
     const raw = JSON.stringify({ providerTxnId: 'PA-LIMETE-MM01-TX-COURSE', paymentReference: order.paymentReference, amount: order.amount, status: 'SUCCESS', completedAt: ctx.clock.now().toISOString() });
-    const res = ctx.payments.handleCallback('point-agree-pa-limete-mm01', { signature: hmacSha256Hex(secret, raw), nonce: randomUUID(), timestamp: ctx.clock.now().toISOString() }, raw);
+    const res = ctx.payments.handleCallback('point-agree-pa-limete-mm01', signedCallbackHeaders(secret, raw, ctx.clock.now()), raw);
     expect(res.status).toBe('NON_AFFECTE');
     const after = (await c.env.req('GET', '/v1/payment-points/PA-LIMETE-MM01/cash-days/2026-09-26', 'canaux-op-limete')).json();
     expect(after.unapplied).toHaveLength(1);

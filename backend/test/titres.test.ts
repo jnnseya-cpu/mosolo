@@ -8,7 +8,7 @@ import { titresPlugin, type TitresService } from '../src/plugins/titres/plugin.j
 import type { CredentialType, ValidityPolicy } from '../src/plugins/titres/model.js';
 import { computeWindow, controlResultOf, endOfKinshasaDay, statusAt } from '../src/plugins/titres/validity.js';
 import { DEMO } from '../src/seed.js';
-import type { TestEnv } from './helpers.js';
+import { callbackHeaders, type TestEnv } from './helpers.js';
 
 const PROVIDER_SECRET = 'test-secret-mm-operator-a';
 const CTRL = 'tt-controleur';
@@ -71,7 +71,7 @@ async function pay(env: TestEnv, reference: string, status: 'SUCCESS' | 'FAILED'
   const raw = JSON.stringify({ providerTxnId: `TXN-${randomUUID()}`, paymentReference: reference, amount: order.amount, status, completedAt: env.clock.now().toISOString() });
   return env.app.inject({
     method: 'POST', url: '/v1/providers/mm-operator-a/callbacks', payload: raw,
-    headers: { 'content-type': 'application/json', 'x-signature': hmacSha256Hex(PROVIDER_SECRET, raw), 'x-nonce': randomUUID(), 'x-timestamp': env.clock.now().toISOString() },
+    headers: { 'content-type': 'application/json', ...callbackHeaders(PROVIDER_SECRET, raw, env.clock.now()) },
   });
 }
 

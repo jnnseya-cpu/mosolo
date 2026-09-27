@@ -4,7 +4,7 @@
  */
 import { CURRENCIES, CURRENCY_CODES, Money, PRIMARY_CURRENCY, type CurrencyCode, type MoneyJSON } from '@mosolo/shared';
 import type { Clock } from '../../core/clock.js';
-import { isoDate } from '../../core/clock.js';
+import { kinshasaDate } from '../../core/clock.js';
 import { divideDecimalStrings } from '../../core/decimal.js';
 import { badRequest, notFound } from '../../core/errors.js';
 
@@ -42,7 +42,7 @@ export class FxService {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(date).getTime())) {
       throw badRequest('INVALID_DATE', `Date invalide : ${date} (format AAAA-MM-JJ attendu).`);
     }
-    if (date < FX_FIRST_DATE || date > isoDate(this.clock.now())) {
+    if (date < FX_FIRST_DATE || date > kinshasaDate(this.clock.now())) {
       throw notFound('FX_RATE_MISSING', `Aucun taux officiel publié pour le ${date}.`);
     }
   }
@@ -71,7 +71,7 @@ export class FxService {
   }
 
   /** Contre-valeur indicative (n'altère jamais la devise légale d'une obligation). */
-  convert(money: MoneyJSON, to: CurrencyCode, date: string = isoDate(this.clock.now())): FxConversion {
+  convert(money: MoneyJSON, to: CurrencyCode, date: string = kinshasaDate(this.clock.now())): FxConversion {
     const rate = this.rate(money.currency, to, date);
     return {
       amount: Money.fromJSON(money).convert(to, rate).toJSON(),

@@ -5,7 +5,7 @@
  */
 import { createPrivateKey } from 'node:crypto';
 import { ConfigurationError, isDemoMode } from '../core/auth.js';
-import { loadReceiptSigningKey } from '../modules/receipts/service.js';
+import { loadReceiptSigningKey, loadReceiptVerificationKeys } from '../modules/receipts/service.js';
 import { FileAuditAnchor } from './anchor.js';
 import { openPgStore } from './store.js';
 import { PersistenceRuntime, setActivePersistence } from './runtime.js';
@@ -27,7 +27,8 @@ const MIN_KEY_LENGTH = 32;
 /**
  * Contrôle de démarrage HORS DÉMONSTRATION (les deux points d'entrée) : sans clés de signature stables, les
  * quittances et les clôtures signées au démarrage précédent deviendraient invérifiables (clé éphémère) — refus.
- *   - MOSOLO_RECEIPT_SIGNING_KEY : clé privée Ed25519 PKCS#8 (PEM ou base64 DER), lue par modules/receipts ;
+ *   - MOSOLO_RECEIPT_SIGNING_KEY : clé privée Ed25519 PKCS#8 (PEM ou base64 DER), lue par modules/receipts ; anciennes
+ *     clés publiques encore acceptées en vérification (rotation) : MOSOLO_RECEIPT_VERIFY_KEYS (facultative, contrôlée ici) ;
  *   - MOSOLO_CLOSURE_SIGNING_KEY : clé de signature des clôtures (lue par le module trésor), distincte de la précédente ;
  *   - avec DATABASE_URL : MOSOLO_AUDIT_HMAC_KEY et MOSOLO_AUDIT_ANCHOR_PATH (ancre externe de la chaîne d'audit).
  */
@@ -47,6 +48,7 @@ export function assertBootSecrets(env: NodeJS.ProcessEnv = process.env): void {
   }
   try {
     loadReceiptSigningKey(receipt);
+    loadReceiptVerificationKeys(env.MOSOLO_RECEIPT_VERIFY_KEYS);
   } catch (e) {
     throw new ConfigurationError(e instanceof Error ? e.message : String(e));
   }

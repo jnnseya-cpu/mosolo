@@ -148,8 +148,10 @@ REF=$(curl -s -X POST -H 'x-demo-user: u-contribuable' -H 'content-type: applica
 
 # Rappel du prestataire « mm-operator-a » (secret PUBLIC de démo : demo-secret-mm-operator-a — refusé hors démonstration)
 BODY="{\"providerTxnId\":\"TXN-$RANDOM\",\"paymentReference\":\"$REF\",\"amount\":{\"amount\":\"150.00\",\"currency\":\"USD\"},\"status\":\"SUCCESS\",\"completedAt\":\"$(date -u +%FT%TZ)\"}"
-SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac demo-secret-mm-operator-a -hex | awk '{print $2}')
-curl -s -X POST -H 'content-type: application/json' -H "x-signature: $SIG" -H "x-nonce: $(uuidgen)" -H "x-timestamp: $(date -u +%FT%TZ)" \
+# Signature v2 : HMAC-SHA256 de "mosolo-callback-v2\n<x-timestamp>\n<x-nonce>\n<corps brut>" (x-key-id facultatif).
+TS=$(date -u +%FT%TZ); NONCE=$(uuidgen)
+SIG=$(printf 'mosolo-callback-v2\n%s\n%s\n%s' "$TS" "$NONCE" "$BODY" | openssl dgst -sha256 -hmac demo-secret-mm-operator-a -hex | awk '{print $2}')
+curl -s -X POST -H 'content-type: application/json' -H "x-signature: v2=$SIG" -H "x-nonce: $NONCE" -H "x-timestamp: $TS" \
   -d "$BODY" localhost:8080/v1/providers/mm-operator-a/callbacks
 # → {"status":"CONFIRME","receiptCode":"Q26KIN…","receiptStatus":"PROVISOIRE"}
 
@@ -246,11 +248,12 @@ Rejouer exactement la même requête renvoie 200 avec `"replayed": true`, sans s
 | `MOSOLO_AUDIT_HMAC_KEY` | clé de signature du journal d'audit (aléatoire au démarrage si absente ; **obligatoire** avec `DATABASE_URL` hors démonstration, 32 caractères minimum) |
 | `MOSOLO_AUDIT_ANCHOR_PATH` | fichier de l'**ancre externe** de la tête du journal d'audit (rang, empreinte, heure, signés HMAC), hors de la base — idéalement volume distinct / répliqué WORM ; réécrit après chaque lot d'audit persisté. **Obligatoire** avec `DATABASE_URL` hors démonstration : chaîne plus courte que l'ancre ou d'empreinte différente ⇒ démarrage refusé. Même chemin pour `db:restore` |
 | `MOSOLO_AUDIT_ACCEPT_UNVERIFIED` | `true` : démarrer malgré une chaîne d'audit restaurée non vérifiée ou non conforme à l'ancre externe (après enquête ; `audit.chain.restored_unverified` / `audit.anchor.mismatch` ajoutés à la chaîne). Sinon, démarrage refusé hors démonstration |
-| `MOSOLO_RECEIPT_SIGNING_KEY` | clé privée Ed25519 PKCS#8 (PEM ou base64 DER) de signature des quittances : **obligatoire hors démonstration** (démarrage refusé si absente ou illisible) |
+| `MOSOLO_RECEIPT_SIGNING_KEY` | clé privée Ed25519 PKCS#8 (PEM ou base64 DER) de signature des quittances : **obligatoire hors démonstration** (démarrage refusé si absente ou illisible). Chaque quittance porte le `keyId` de sa clé (16 hex du SHA-256 de la clé publique SPKI) |
+| `MOSOLO_RECEIPT_VERIFY_KEYS` | rotation de la clé des quittances : anciennes clés publiques Ed25519 (SPKI PEM ou base64 DER, séparées par `;`) encore acceptées en **vérification** ; la nouvelle clé signe. Trousseau publié dans `/v1/public/receipts/revocations` (`verificationKeys`) |
 | `MOSOLO_CLOSURE_SIGNING_KEY` | clé de signature des clôtures du Trésor : **obligatoire hors démonstration** (32 caractères minimum ; PEM lisible si PEM ; distincte de la clé des quittances) |
 | `MOSOLO_BOOTSTRAP_FILE` | fichier JSON d'amorçage hors démonstration (`mosolo-amorcage/1`) : comptes de travail et comptes du coffre ; ignoré si des données de démonstration sont semées, refusé en démonstration |
 | `MOSOLO_BOOTSTRAP_CREDENTIALS_OUT` | fichier (créé en exclusivité, droits 0600) où sont écrits les identifiants initiaux des comptes `enrol: true` sans identifiant ; à remettre puis **détruire** |
-| `MOSOLO_PROVIDER_SECRET_MM_OPERATOR_A`, `…_BANK_A`, `…_CARD_GATEWAY` | secrets HMAC des prestataires : **obligatoires hors démonstration** (16 caractères minimum, jamais une valeur `demo-…`) ; défauts publics `demo-secret-…` en démonstration seulement |
+| `MOSOLO_PROVIDER_SECRET_MM_OPERATOR_A`, `…_BANK_A`, `…_CARD_GATEWAY` | secrets HMAC des prestataires : **obligatoires hors démonstration** (16 caractères minimum par clé, jamais une valeur `demo-…`) ; défauts publics `demo-secret-…` en démonstration seulement. Secret seul (kid `default`) ou trousseau de rotation `kid:secret,kid:secret` (kid `[a-z0-9_-]`, 32 caractères max) : la première clé est la courante, les suivantes restent acceptées ; le prestataire peut désigner sa clé par l'en-tête `x-key-id`. Rappel signé v2 : `x-signature: v2=<hex HMAC-SHA256("mosolo-callback-v2\n<x-timestamp>\n<x-nonce>\n<corps brut>")>`, horodatage ±5 min, nonce unique |
 | `MOSOLO_DEVICE_KEYS` | clés HMAC des terminaux terrain, `id=clé,id=clé` ; hors démonstration, un terminal semé sans clé reçoit une clé aléatoire |
 | `MOSOLO_CORS_ORIGINS` | origines autorisées, séparées par des virgules ; sans liste : toutes en démonstration, **aucune** hors démonstration (`*` refusé hors démonstration) |
 | `MOSOLO_TRUST_PROXY` | mandataire(s) inverse(s) de confiance (`true`, nombre de sauts, ou adresses/CIDR) ; défaut : aucun, `X-Forwarded-For` ignoré (limitation de débit par adresse réelle) |

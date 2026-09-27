@@ -9,7 +9,7 @@ import { Money, type CurrencyCode, type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { AuditActor } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
-import { hmacSha256Hex } from '../../core/crypto.js';
+import { signedCallbackHeaders } from '../../modules/payments/callback-signing.js';
 import { dec, decDiv, decToString } from '../../core/decimal.js';
 import type { PaymentOrder } from '../../modules/payments/service.js';
 import type { RuleInput, RuleRecord } from '../../modules/rules/service.js';
@@ -171,7 +171,7 @@ export function demoPay(ctx: AppContext, payer: User, obligationId: string, prov
     providerTxnId: `DEMO-${randomUUID()}`, paymentReference: order.paymentReference, amount: order.amount, status: 'SUCCESS',
     completedAt: ctx.clock.now().toISOString(),
   });
-  const res = ctx.payments.handleCallback(provider, { signature: hmacSha256Hex(secret, raw), nonce: randomUUID(), timestamp: ctx.clock.now().toISOString() }, raw);
+  const res = ctx.payments.handleCallback(provider, signedCallbackHeaders(secret, raw, ctx.clock.now()), raw);
   return res.status === 'CONFIRME';
 }
 

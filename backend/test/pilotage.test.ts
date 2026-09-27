@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { ManualClock } from '../src/core/clock.js';
-import { hmacSha256Hex, sha256Hex } from '../src/core/crypto.js';
+import { sha256Hex } from '../src/core/crypto.js';
+import { callbackHeaders } from './helpers.js';
 import { runDemoFlow } from '../src/plugins/pilotage/demo-flow.js';
 import { pilotagePlugin } from '../src/plugins/pilotage/plugin.js';
 import type { PilotageService } from '../src/plugins/pilotage/service.js';
@@ -50,7 +51,7 @@ async function pay(env: Env, obligationId: string, channel = 'MOBILE_MONEY') {
   const raw = JSON.stringify({ providerTxnId: `TXN-${randomUUID()}`, paymentReference: order.paymentReference, amount: order.amount, status: 'SUCCESS', completedAt: env.clock.now().toISOString() });
   const cb = await env.app.inject({
     method: 'POST', url: '/v1/providers/mm-operator-a/callbacks', payload: raw,
-    headers: { 'content-type': 'application/json', 'x-signature': hmacSha256Hex(SECRET, raw), 'x-nonce': randomUUID(), 'x-timestamp': env.clock.now().toISOString() },
+    headers: { 'content-type': 'application/json', ...callbackHeaders(SECRET, raw, env.clock.now()) },
   });
   expect(cb.json().status).toBe('CONFIRME');
   return order as { paymentReference: string; amount: { amount: string; currency: string }; id: string; beneficiaryAlias: string };

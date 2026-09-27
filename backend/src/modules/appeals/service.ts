@@ -9,7 +9,7 @@
 import { Money, type MoneyJSON, type ObligationStatus } from '@mosolo/shared';
 import type { AuditLog } from '../../core/audit.js';
 import type { User, UserDirectory } from '../../core/auth.js';
-import { DAY_MS, isoDate, type Clock } from '../../core/clock.js';
+import { DAY_MS, isoDate, kinshasaDate, type Clock } from '../../core/clock.js';
 import { canonicalJson, sha256Hex } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, assertNotRelated, authorize } from '../../core/policy.js';
@@ -94,7 +94,10 @@ export type AppealView = Appeal & { deadlines: AppealDeadlines };
 
 export interface DocumentInput { sha256: string; name: string; mediaType: string; sizeBytes?: number }
 
-const addDays = (iso: string, days: number) => isoDate(new Date(new Date(`${iso.slice(0, 10)}T00:00:00Z`).getTime() + days * DAY_MS));
+/** Arithmétique de dates calendaires (AAAA-MM-JJ → AAAA-MM-JJ) : minuit UTC n'est qu'un support de calcul. */
+const addDays = (day: string, days: number) => isoDate(new Date(new Date(`${day.slice(0, 10)}T00:00:00Z`).getTime() + days * DAY_MS));
+/** Jour calendaire à Kinshasa d'un horodatage ISO (notification, dépôt, décision). */
+const kinDay = (iso: string) => kinshasaDate(new Date(iso));
 
 export class AppealService {
   readonly appeals = new InMemoryRepository<Appeal>();
@@ -118,24 +121,24 @@ export class AppealService {
     return [...(a.history ?? []), { at: this.clock.now().toISOString(), action, by, ...(detail ? { detail } : {}) }];
   }
 
-  /** Délais calculés à l'heure serveur (valeurs de conception À VÉRIFIER, voir procedure.ts). */
+  /** Délais calculés à l'heure serveur, en jours calendaires de Kinshasa (valeurs de conception À VÉRIFIER, voir procedure.ts). */
   deadlines(a: Appeal): AppealDeadlines {
     const obligation = this.assessment.obligations.get(a.obligationId);
-    const notifiedOn = (obligation?.createdAt ?? a.submittedAt).slice(0, 10);
+    const notifiedOn = kinDay(obligation?.createdAt ?? a.submittedAt);
     const filingDeadline = addDays(notifiedOn, APPEAL_PROCEDURE.filingDelayDays);
-    const decisionDueBy = addDays(a.submittedAt, APPEAL_PROCEDURE.decisionDelayDays);
-    const today = isoDate(this.clock.now());
+    const decisionDueBy = addDays(kinDay(a.submittedAt), APPEAL_PROCEDURE.decisionDelayDays);
+    const today = kinshasaDate(this.clock.now());
     const dayMs = (d: string) => new Date(`${d}T00:00:00Z`).getTime();
     let state: AppealDeadlines['state'];
     let daysRemaining: number | null = null;
     if (a.decision) {
-      state = a.decision.at.slice(0, 10) <= decisionDueBy ? 'DECIDE_DANS_LE_DELAI' : 'DECIDE_HORS_DELAI';
+      state = kinDay(a.decision.at) <= decisionDueBy ? 'DECIDE_DANS_LE_DELAI' : 'DECIDE_HORS_DELAI';
     } else {
       daysRemaining = Math.round((dayMs(decisionDueBy) - dayMs(today)) / DAY_MS);
       state = daysRemaining < 0 ? 'DELAI_DEPASSE' : daysRemaining <= APPEAL_PROCEDURE.approachingDays ? 'ECHEANCE_PROCHE' : 'DANS_LE_DELAI';
     }
     return {
-      notifiedOn, filingDeadline, filedLate: a.submittedAt.slice(0, 10) > filingDeadline, decisionDueBy, daysRemaining, state,
+      notifiedOn, filingDeadline, filedLate: kinDay(a.submittedAt) > filingDeadline, decisionDueBy, daysRemaining, state,
       basis: APPEAL_PROCEDURE.source, status: APPEAL_PROCEDURE.status,
     };
   }

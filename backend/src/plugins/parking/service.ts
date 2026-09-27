@@ -16,7 +16,7 @@
 import { Money, readValidity, type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
-import { HOUR_MS, isoDate } from '../../core/clock.js';
+import { HOUR_MS, kinshasaDate } from '../../core/clock.js';
 import { checkChar, randomCode } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, assertNotRelated, authorize, evaluate, hasAnyGrant } from '../../core/policy.js';
@@ -1053,13 +1053,13 @@ export class ParkingService {
     authorize(user, 'parking:indicators', { entity: DGTK });
     this.tick();
     const now = this.now();
-    const today = isoDate(now);
+    const today = kinshasaDate(now);
     const zoneRows = this.zones.all().sort((a, b) => a.code.localeCompare(b.code)).map((z) => {
       const view = this.zoneView(z);
       const sessions = this.sessions.find((s) => s.zoneId === z.id);
       const paidToday = sessions.filter((s) => {
         const d = this.sessionDerived(s, now);
-        return d.startAt !== null && isoDate(d.startAt) === today;
+        return d.startAt !== null && kinshasaDate(d.startAt) === today;
       }).length;
       const obligations = this.zoneObligations(z.id);
       const paid: MoneyJSON[] = [];

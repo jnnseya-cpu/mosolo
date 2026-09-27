@@ -9,7 +9,7 @@
 import { isRuleExecutable } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
-import { DAY_MS, isoDate } from '../../core/clock.js';
+import { DAY_MS, kinshasaDate } from '../../core/clock.js';
 import { assertDistinctPerson, authorize, evaluate } from '../../core/policy.js';
 import { badRequest, conflict, notFound, unprocessable } from '../../core/errors.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
@@ -89,7 +89,7 @@ export class AviaService {
     if (!taxpayerId) throw badRequest('TAXPAYER_REQUIRED', 'Compagnie concernée requise.');
     this.ctx.taxpayers.get(taxpayerId);
     authorize(user, P.aviaDeclare, { taxpayerId });
-    if (input.period >= isoDate(this.ctx.clock.now()).slice(0, 7)) throw unprocessable('PERIOD_NOT_CLOSED', 'Seul un mois échu peut être déclaré.');
+    if (input.period >= kinshasaDate(this.ctx.clock.now()).slice(0, 7)) throw unprocessable('PERIOD_NOT_CLOSED', 'Seul un mois échu peut être déclaré.');
     for (const id of input.aircraftObjectIds) {
       const o = this.ctx.objects.get(id);
       if (o.taxpayerId !== taxpayerId || o.attributes.objectType !== 'AERONEF') throw unprocessable('AIRCRAFT_NOT_OWNED', `Aéronef non rattaché à la compagnie : ${id}`);
@@ -148,7 +148,7 @@ export class AviaService {
       ...d,
       status: hasGap ? 'ECART_CONSTATE' : 'RAPPROCHEE',
       reconciliation: { at: now.toISOString(), by: user.id, operatorDataIds: data.map((x) => x.id), observed, gaps, passengerGapRate },
-      ...(hasGap ? { contradictory: { openedAt: now.toISOString(), deadline: isoDate(new Date(now.getTime() + CONTRADICTORY_DAYS * DAY_MS)), observations: [] } } : {}),
+      ...(hasGap ? { contradictory: { openedAt: now.toISOString(), deadline: kinshasaDate(new Date(now.getTime() + CONTRADICTORY_DAYS * DAY_MS)), observations: [] } } : {}),
     };
     const saved = this.declarations.update(next);
     this.ctx.audit.append({ actor: actorOf(user), action: 'avia.declaration.reconciled', resourceType: 'avia_declaration', resourceId: id, details: { gaps, passengerGapRate, contradictory: hasGap } });
@@ -176,7 +176,7 @@ export class AviaService {
     const d = this.get(id);
     authorize(user, P.aviaValidate, this.resource(d));
     if (!['RAPPROCHEE', 'ECART_CONSTATE', 'OBSERVATIONS_RECUES'].includes(d.status)) throw conflict('INVALID_AVIA_STATE', `Validation impossible au statut ${AVIA_STATUS_LABEL[d.status]}.`);
-    if (d.status === 'ECART_CONSTATE' && d.contradictory && isoDate(this.ctx.clock.now()) <= d.contradictory.deadline) {
+    if (d.status === 'ECART_CONSTATE' && d.contradictory && kinshasaDate(this.ctx.clock.now()) <= d.contradictory.deadline) {
       throw conflict('CONTRADICTORY_PROCEDURE_OPEN', `Procédure contradictoire en cours jusqu’au ${d.contradictory.deadline} : la compagnie doit pouvoir répondre.`);
     }
     assertDistinctPerson(user.id, [d.reconciliation?.by ?? ''], 'La validation doit être faite par une personne distincte de l’analyste qui a rapproché.');

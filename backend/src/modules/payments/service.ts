@@ -7,7 +7,7 @@ import { z } from 'zod';
 import type { AuditActor, AuditLog } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { HOUR_MS, type Clock } from '../../core/clock.js';
-import { checkChar, hmacSha256Hex, randomCode, safeEqualHex, sha256Hex } from '../../core/crypto.js';
+import { checkChar, randomCode, sha256Hex } from '../../core/crypto.js';
 import { ApiError, badRequest, conflict, notFound, unprocessable } from '../../core/errors.js';
 import { authorize } from '../../core/policy.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
@@ -20,6 +20,7 @@ import type { TaxpayerService } from '../identity/service.js';
 import type { ReceiptService } from '../receipts/service.js';
 import type { LedgerService } from '../treasury/ledger.js';
 import type { VaultService } from '../vault/service.js';
+import { DEFAULT_KEY_ID, NonceStore, isValidNonce, signCallback, verifyCallbackSignature, type ProviderKey } from './callback-signing.js';
 import { ProviderHttpError } from './connectors/http-client.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
 import {
@@ -290,7 +291,8 @@ export class PaymentService {
   readonly unappliedPayments = new InMemoryAppendOnlyRepository<UnappliedPayment>();
   readonly unappliedStates = new InMemoryRepository<UnappliedState>();
   private readonly unappliedListeners: ((u: UnappliedPayment) => void)[] = [];
-  private readonly nonces = new Set<string>();
+  /** Nonces des rappels génériques (mémoire bornée, purgée à l'expiration de la fenêtre de l'horodatage signé). */
+  private readonly nonces = new NonceStore();
   /** Obligations dont une intention prestataire est en cours de création (verrou anti-concurrence). */
   private readonly pendingIntents = new Set<string>();
   private readonly ids = new IdGenerator();
@@ -308,9 +310,14 @@ export class PaymentService {
     private readonly ledger: LedgerService,
     private readonly providerSecrets: Record<string, string>,
     readonly connectors: ConnectorRegistry,
+    /** Trousseaux (rotation) : clés acceptées en vérification en plus de la clé courante `providerSecrets[p]`. */
+    private readonly providerKeyRings: Record<string, ProviderKey[]> = {},
   ) {
     // La liquidation connaît le cumul payé (rectification, décision sur réclamation) sans dépendre de ce module.
-    assessment.setPaymentHooks({ paidOn: (id) => this.paidOn(id), onSuperseded: (from, to) => this.onSuperseded(from, to) });
+    assessment.setPaymentHooks({
+      paidOn: (id) => this.paidOn(id), onSuperseded: (from, to) => this.onSuperseded(from, to),
+      onClosed: (id, status) => { this.closeOrdersForObligation(id, `Obligation ${status}`); },
+    });
   }
 
   private newReference(): string {
@@ -508,12 +515,25 @@ export class PaymentService {
     return this.orders.update({ ...o, ...extra, status: to });
   }
 
+  /**
+   * Fermeture des références actives (INITIE) d'une obligation soldée, admise en non-valeur, annulée ou réduite à
+   * zéro : INITIE → ECHOUE, motif OBLIGATION_NON_PAYABLE (REFERENCE_EXPIREE si déjà échue), intention prestataire
+   * annulée, une entrée d'audit par référence avec la cause. Un paiement reçu ensuite sur l'une d'elles n'est jamais
+   * crédité : il part en compte d'attente (non affecté) pour remboursement. Appelé par la liquidation à chaque
+   * changement de statut non payable ; idempotent.
+   */
+  closeOrdersForObligation(obligationId: string, reason: string, actor: AuditActor = { kind: 'system', id: 'paiements' }): PaymentOrder[] {
+    const now = this.clock.now();
+    return this.orders.find((x) => x.obligationId === obligationId && x.status === 'INITIE').map((o) =>
+      this.closeOrder(o, new Date(o.expiresAt) <= now ? 'REFERENCE_EXPIREE' : 'OBLIGATION_NON_PAYABLE', actor, reason));
+  }
+
   /** Ferme une référence non payée (INITIE → ECHOUE, motif daté) et annule l'intention prestataire liée. */
-  private closeOrder(o: PaymentOrder, reason: OrderClosedReason, actor: AuditActor): PaymentOrder {
+  private closeOrder(o: PaymentOrder, reason: OrderClosedReason, actor: AuditActor, cause?: string): PaymentOrder {
     const closed = this.transition(o, 'ECHOUE', { closedReason: reason, closedAt: this.clock.now().toISOString() });
     this.audit.append({
       actor, action: 'payment.reference.closed', resourceType: 'payment_order', resourceId: o.id,
-      details: { paymentReference: o.paymentReference, reason, expiresAt: o.expiresAt, providerIntentId: o.providerIntentId ?? null },
+      details: { paymentReference: o.paymentReference, reason, expiresAt: o.expiresAt, providerIntentId: o.providerIntentId ?? null, ...(cause ? { cause, obligationId: o.obligationId } : {}) },
     });
     // Une intention déclarée échouée par le prestataire lui-même n'a pas à être annulée.
     if (o.provider && o.providerIntentId && reason !== 'ECHEC_PRESTATAIRE') this.cancelProviderIntent(o.provider, o.providerIntentId, o.id, reason);
@@ -595,31 +615,55 @@ export class PaymentService {
   }
 
   /**
-   * Rappel prestataire (§ 30.3) : signature HMAC-SHA256 du corps brut, fenêtre ±5 min, nonce unique,
-   * unicité de providerTxnId (rejeu ⇒ 200 sans double effet), contrôle montant/référence,
+   * Clés de vérification d'un prestataire : la clé courante (habilitation ; absente ⇒ prestataire non habilité, même
+   * si un trousseau subsiste) puis les autres clés actives du trousseau (rotation).
+   */
+  private providerKeys(provider: string): ProviderKey[] | undefined {
+    const current = this.providerSecrets[provider];
+    if (!current) return undefined;
+    const ring = this.providerKeyRings[provider] ?? [];
+    const head = ring.find((k) => k.secret === current) ?? { kid: DEFAULT_KEY_ID, secret: current };
+    return [head, ...ring.filter((k) => k.secret !== current && k.kid !== head.kid)];
+  }
+
+  /**
+   * Rappel prestataire (§ 30.3) : signature HMAC-SHA256 v2 couvrant horodatage, nonce et corps brut (voir
+   * callback-signing.ts), clé désignée par kid ou essayée parmi les clés actives, fenêtre ±5 min, nonce unique (mémoire
+   * bornée), unicité de providerTxnId (rejeu ⇒ 200 sans double effet), contrôle montant/référence,
    * puis CONFIRME + quittance provisoire.
    */
-  handleCallback(provider: string, headers: { signature?: string; nonce?: string; timestamp?: string }, rawBody: string): CallbackResponse {
-    const secret = this.providerSecrets[provider];
-    if (!secret) throw notFound('UNKNOWN_PROVIDER', `Prestataire non habilité : ${provider}`);
-    const { signature, nonce, timestamp } = headers;
+  handleCallback(provider: string, headers: { signature?: string; nonce?: string; timestamp?: string; keyId?: string }, rawBody: string): CallbackResponse {
+    const keys = this.providerKeys(provider);
+    if (!keys) throw notFound('UNKNOWN_PROVIDER', `Prestataire non habilité : ${provider}`);
+    const { signature, nonce, timestamp, keyId } = headers;
     if (!signature || !nonce || !timestamp) {
       this.reject(provider, 401, 'CALLBACK_HEADERS_MISSING', 'En-têtes x-signature, x-nonce et x-timestamp obligatoires.', {});
     }
-    const expected = hmacSha256Hex(secret, rawBody);
-    const provided = signature.replace(/^sha256=/, '').toLowerCase();
-    if (!safeEqualHex(expected, provided)) {
-      this.reject(provider, 401, 'INVALID_SIGNATURE', 'Signature du rappel invalide.', { nonce });
+    if (!isValidNonce(nonce)) this.reject(provider, 401, 'INVALID_NONCE', 'Nonce invalide (8 à 128 caractères [A-Za-z0-9._:-]).', {});
+    const candidates = keyId === undefined ? keys : keys.filter((k) => k.kid === keyId);
+    const kid = candidates.length ? verifyCallbackSignature(candidates, signature, timestamp, nonce, rawBody) : undefined;
+    if (!kid) {
+      this.reject(provider, 401, 'INVALID_SIGNATURE', 'Signature du rappel invalide.', { nonce, ...(keyId !== undefined ? { keyId } : {}) });
     }
     const ts = new Date(timestamp).getTime();
-    if (Number.isNaN(ts) || Math.abs(this.clock.now().getTime() - ts) > CALLBACK_WINDOW_MS) {
+    const now = this.clock.now().getTime();
+    if (Number.isNaN(ts) || Math.abs(now - ts) > CALLBACK_WINDOW_MS) {
       this.reject(provider, 401, 'TIMESTAMP_OUT_OF_WINDOW', 'Horodatage hors de la fenêtre de ±5 minutes.', { timestamp });
     }
-    const nonceKey = `${provider}:${nonce}`;
-    if (this.nonces.has(nonceKey)) {
+    const remembered = this.nonces.remember(`${provider}:${nonce}`, ts + CALLBACK_WINDOW_MS + 1000, now);
+    if (!remembered.fresh) {
       this.reject(provider, 409, 'NONCE_REPLAYED', 'Nonce déjà utilisé : rejeu refusé.', { nonce });
     }
-    this.nonces.add(nonceKey);
+    if (remembered.evicted) {
+      this.alerts.raise({
+        type: 'NONCE_STORE_SATURATED', severity: 'HIGH', source: `prestataire:${provider}`,
+        detail: `Mémoire anti-rejeu saturée : ${remembered.evicted} nonce(s) encore valable(s) évincé(s).`, context: { evicted: remembered.evicted }, actor: { kind: 'provider', id: provider },
+      });
+    }
+    // Clé ancienne du trousseau encore employée : trace de rotation (la bascule du prestataire se constate ici).
+    if (kid !== keys[0]!.kid) {
+      this.audit.append({ actor: { kind: 'provider', id: provider }, action: 'payment.callback.previous_key_used', resourceType: 'provider', resourceId: provider, details: { keyId: kid, currentKeyId: keys[0]!.kid } });
+    }
 
     let json: unknown;
     try {
@@ -1090,8 +1134,8 @@ export class PaymentService {
     return this.transition(settled, 'RAPPROCHE', { reconciledAt: now, ledgerEntryIds: [...settled.ledgerEntryIds, ledgerEntryId] });
   }
 
-  /** Signature attendue d'un rappel (utilitaire pour la démo et les tests). */
-  static sign(secret: string, rawBody: string): string {
-    return hmacSha256Hex(secret, rawBody);
+  /** Signature v2 attendue d'un rappel (utilitaire pour la démo et les tests ; voir signedCallbackHeaders). */
+  static sign(secret: string, timestamp: string, nonce: string, rawBody: string): string {
+    return signCallback(secret, timestamp, nonce, rawBody);
   }
 }

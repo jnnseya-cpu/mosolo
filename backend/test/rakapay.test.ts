@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { ManualClock } from '../src/core/clock.js';
-import { hmacSha256Hex } from '../src/core/crypto.js';
+import { callbackHeaders } from './helpers.js';
 import { rakapayPlugin, type RakaPayService } from '../src/plugins/rakapay/plugin.js';
 import { RK_DEMO } from '../src/plugins/rakapay/seed.js';
 import { titresPlugin, type TitresService } from '../src/plugins/titres/plugin.js';
@@ -35,7 +35,7 @@ async function pay(env: TestEnv, reference: string) {
   const raw = JSON.stringify({ providerTxnId: `TXN-${randomUUID()}`, paymentReference: reference, amount: order.amount, status: 'SUCCESS', completedAt: env.clock.now().toISOString() });
   return env.app.inject({
     method: 'POST', url: '/v1/providers/mm-operator-a/callbacks', payload: raw,
-    headers: { 'content-type': 'application/json', 'x-signature': hmacSha256Hex(PROVIDER_SECRET, raw), 'x-nonce': randomUUID(), 'x-timestamp': env.clock.now().toISOString() },
+    headers: { 'content-type': 'application/json', ...callbackHeaders(PROVIDER_SECRET, raw, env.clock.now()) },
   });
 }
 

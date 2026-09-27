@@ -3,7 +3,7 @@ import type { KeyObject } from 'node:crypto';
 import type { Channel } from '@mosolo/shared';
 import { AuditLog } from './core/audit.js';
 import { ConfigurationError, isDemoMode, UserDirectory } from './core/auth.js';
-import { isoDate, systemClock, type Clock } from './core/clock.js';
+import { kinshasaDate, systemClock, type Clock } from './core/clock.js';
 import { randomSecret } from './core/crypto.js';
 import { IdempotencyStore } from './core/idempotency.js';
 import { AIService } from './modules/ai/service.js';
@@ -21,8 +21,9 @@ import { TaxpayerService } from './modules/identity/service.js';
 import { ObjectService } from './modules/objects/service.js';
 import type { ConnectorRuntime } from './modules/payments/connectors/koda.js';
 import { buildConnectorRegistry } from './modules/payments/connectors/registry.js';
+import { DEFAULT_KEY_ID, parseProviderKeyRing, type ProviderKey } from './modules/payments/callback-signing.js';
 import { PaymentService } from './modules/payments/service.js';
-import { loadReceiptSigningKey, ReceiptService } from './modules/receipts/service.js';
+import { loadReceiptSigningKey, loadReceiptVerificationKeys, ReceiptService } from './modules/receipts/service.js';
 import { RuleService } from './modules/rules/service.js';
 import { LedgerService } from './modules/treasury/ledger.js';
 import { TreasuryService } from './modules/treasury/service.js';
@@ -33,14 +34,18 @@ import type { MosoloPlugin } from './plugins/types.js';
 export interface Secrets {
   /** Clé HMAC de signature du journal d'audit (production : HSM). */
   auditHmacKey: string;
-  /** Secrets HMAC par prestataire de paiement habilité. */
+  /** Secret HMAC COURANT par prestataire de paiement habilité (habilitation : absent ⇒ rappels refusés). */
   providerSecrets: Record<string, string>;
+  /** Trousseaux de rotation (kid → secret) : clés encore acceptées en vérification, la première étant la courante. */
+  providerKeyRings?: Record<string, ProviderKey[]>;
   /** Clés des fournisseurs de communication ; canal absent ⇒ bac à sable (« journalise »). */
   commsProviderKeys: Partial<Record<Channel, string>>;
   /** Clés HMAC des terminaux terrain enrôlés (démo). */
   deviceKeys: Record<string, string>;
   /** Clé privée Ed25519 de signature des quittances ; générée au démarrage si absente. */
   receiptSigningKey?: KeyObject;
+  /** Clés publiques Ed25519 retirées, encore acceptées pour vérifier les quittances déjà émises (rotation). */
+  receiptVerificationKeys?: KeyObject[];
 }
 
 /** Prestataires habilités : variable d'environnement du secret HMAC et valeur PUBLIQUE de démonstration. */
@@ -63,22 +68,35 @@ const MIN_SECRET_LENGTH = 16;
 const isDemoValue = (v: string): boolean => /^demo-/i.test(v.trim()) || Object.values(PROVIDER_SECRET_VARS).some((p) => p.demo === v) || Object.values(DEMO_DEVICE_KEYS).includes(v);
 
 /**
- * Secrets HMAC des prestataires. Démonstration : valeurs publiques par défaut. Hors démonstration : chaque secret DOIT
- * venir de l'environnement, sans valeur de démonstration — sinon le démarrage est refusé (un rappel signé avec un
- * secret public vaudrait quittance).
+ * Trousseaux HMAC des prestataires. MOSOLO_PROVIDER_SECRET_<PRESTATAIRE> = secret seul (kid « default ») ou trousseau
+ * « kid:secret[,kid:secret…] » (première clé = courante, suivantes acceptées en vérification pendant la rotation ; voir
+ * modules/payments/callback-signing.ts). Démonstration : valeurs publiques par défaut. Hors démonstration : chaque clé
+ * DOIT venir de l'environnement, sans valeur de démonstration et d'au moins 16 caractères — sinon le démarrage est
+ * refusé (un rappel signé avec un secret public vaudrait quittance).
  */
-export function providerSecretsFromEnv(env: NodeJS.ProcessEnv = process.env, demo = isDemoMode(env)): Record<string, string> {
-  const out: Record<string, string> = {};
+export function providerKeyRingsFromEnv(env: NodeJS.ProcessEnv = process.env, demo = isDemoMode(env)): Record<string, ProviderKey[]> {
+  const out: Record<string, ProviderKey[]> = {};
   const problems: string[] = [];
   for (const [provider, { env: name, demo: demoValue }] of Object.entries(PROVIDER_SECRET_VARS)) {
-    const v = env[name]?.trim();
-    if (demo) out[provider] = v || demoValue;
-    else if (!v) problems.push(`${name} absente`);
-    else if (isDemoValue(v) || v.length < MIN_SECRET_LENGTH) problems.push(`${name} invalide (valeur de démonstration ou moins de ${MIN_SECRET_LENGTH} caractères)`);
-    else out[provider] = v;
+    let ring: ProviderKey[];
+    try {
+      ring = parseProviderKeyRing(env[name]);
+    } catch (e) {
+      problems.push(`${name} ${e instanceof Error ? e.message : String(e)}`);
+      continue;
+    }
+    if (demo) out[provider] = ring.length ? ring : [{ kid: DEFAULT_KEY_ID, secret: demoValue }];
+    else if (!ring.length) problems.push(`${name} absente`);
+    else if (ring.some((k) => isDemoValue(k.secret) || k.secret.length < MIN_SECRET_LENGTH)) problems.push(`${name} invalide (valeur de démonstration ou moins de ${MIN_SECRET_LENGTH} caractères)`);
+    else out[provider] = ring;
   }
   if (problems.length) throw new ConfigurationError(`Secrets des prestataires de paiement : ${problems.join(' ; ')}. Hors mode démonstration, chaque secret doit être fourni par l’environnement.`);
   return out;
+}
+
+/** Secret COURANT de chaque prestataire (première clé de son trousseau). */
+export function providerSecretsFromEnv(env: NodeJS.ProcessEnv = process.env, demo = isDemoMode(env)): Record<string, string> {
+  return Object.fromEntries(Object.entries(providerKeyRingsFromEnv(env, demo)).map(([p, ring]) => [p, ring[0]!.secret]));
 }
 
 /**
@@ -109,6 +127,7 @@ function assertNoDemoSecrets(secrets: Secrets): void {
   if (isDemoMode()) return;
   const bad = [
     ...Object.entries(secrets.providerSecrets).filter(([, v]) => isDemoValue(v)).map(([k]) => `prestataire ${k}`),
+    ...Object.entries(secrets.providerKeyRings ?? {}).filter(([, ring]) => ring.some((k) => isDemoValue(k.secret))).map(([k]) => `trousseau ${k}`),
     ...Object.entries(secrets.deviceKeys).filter(([, v]) => isDemoValue(v)).map(([k]) => `terminal ${k}`),
   ];
   if (bad.length) throw new ConfigurationError(`Secrets de démonstration refusés hors mode démonstration : ${bad.join(', ')}.`);
@@ -117,14 +136,20 @@ function assertNoDemoSecrets(secrets: Secrets): void {
 /** Secrets (surchargeables par variables d'environnement ; valeurs publiques de DÉMONSTRATION en mode démo seulement). */
 export function defaultSecrets(env: NodeJS.ProcessEnv = process.env, injected: Partial<Secrets> = {}): Secrets {
   const receiptKey = loadReceiptSigningKey(env.MOSOLO_RECEIPT_SIGNING_KEY);
+  const receiptVerificationKeys = loadReceiptVerificationKeys(env.MOSOLO_RECEIPT_VERIFY_KEYS);
+  // Trousseaux lus une seule fois ; des secrets injectés (tests, intégration) dispensent de l'environnement.
+  const rings = injected.providerKeyRings ?? (injected.providerSecrets ? {} : providerKeyRingsFromEnv(env));
   return {
     auditHmacKey: env.MOSOLO_AUDIT_HMAC_KEY ?? randomSecret(),
     // Secrets injectés (tests, intégration) : l'environnement n'est pas exigé pour ce qui est déjà fourni.
-    providerSecrets: injected.providerSecrets ?? providerSecretsFromEnv(env),
+    providerSecrets: injected.providerSecrets ?? Object.fromEntries(Object.entries(rings).map(([p, ring]) => [p, ring[0]!.secret])),
+    providerKeyRings: rings,
     commsProviderKeys: CommunicationService.providerKeysFromEnv(env),
     deviceKeys: injected.deviceKeys ?? deviceKeysFromEnv(env),
     // Clé de signature des quittances stable entre redémarrages (MOSOLO_RECEIPT_SIGNING_KEY, PEM ou base64 PKCS#8).
     ...(receiptKey ? { receiptSigningKey: receiptKey } : {}),
+    // Rotation : anciennes clés publiques (MOSOLO_RECEIPT_VERIFY_KEYS, SPKI PEM ou base64 DER, séparées par « ; »).
+    ...(receiptVerificationKeys.length ? { receiptVerificationKeys } : {}),
   };
 }
 
@@ -158,9 +183,9 @@ export function createContext(opts: AppOptions = {}) {
   const rules = new RuleService(clock, audit, comms, users, (alias) => vault.aliasExists(alias));
   const ledger = new LedgerService(clock, audit);
   const assessment = new AssessmentService(clock, audit, comms, rules, taxpayers, objects, ledger);
-  const receipts = new ReceiptService(clock, audit, alerts, secrets.receiptSigningKey);
+  const receipts = new ReceiptService(clock, audit, alerts, secrets.receiptSigningKey, secrets.receiptVerificationKeys);
   const connectors = buildConnectorRegistry(opts.connectorEnv ?? process.env, opts.connectorRuntime ?? {});
-  const payments = new PaymentService(clock, audit, comms, alerts, assessment, taxpayers, vault, fx, receipts, ledger, secrets.providerSecrets, connectors);
+  const payments = new PaymentService(clock, audit, comms, alerts, assessment, taxpayers, vault, fx, receipts, ledger, secrets.providerSecrets, connectors, secrets.providerKeyRings ?? {});
   const treasury = new TreasuryService(clock, audit, comms, users, payments, assessment, receipts, vault, ledger, taxpayers);
   const drafts = new DraftService(clock, audit);
   const field = new FieldService(clock, audit, comms, alerts, users, objects);
@@ -178,7 +203,7 @@ export function createContext(opts: AppOptions = {}) {
     const overview = comms.overview();
     const confirmed = payments.orders.find((o) => o.status === 'CONFIRME');
     return {
-      today: isoDate(now),
+      today: kinshasaDate(now),
       governor: { weakestCommunes: weakest, reconRateJ1: tiles().reconRateJ1, overdue: Money.fromMinor(LADDER_EXAMPLE.overdue * 100n, 'CDF').toDecimalString(), example: true },
       treasury: {
         openExceptions: treasury.exceptions.count(),

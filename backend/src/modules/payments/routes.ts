@@ -52,7 +52,7 @@ export function registerPaymentRoutes(app: FastifyInstance, ctx: AppContext): vo
   app.post<{ Params: { provider: string } }>('/v1/providers/:provider/callbacks', async (req, reply) => {
     const res = ctx.payments.handleCallback(
       req.params.provider,
-      { signature: header(req, 'x-signature'), nonce: header(req, 'x-nonce'), timestamp: header(req, 'x-timestamp') },
+      { signature: header(req, 'x-signature'), nonce: header(req, 'x-nonce'), timestamp: header(req, 'x-timestamp'), keyId: header(req, 'x-key-id') },
       req.rawBody ?? '',
     );
     return reply.code(200).send(res);
