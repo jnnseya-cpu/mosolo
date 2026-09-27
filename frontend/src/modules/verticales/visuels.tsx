@@ -147,10 +147,10 @@ export function VerticalsIndicatorsViz({ d, verticalName }: { d: { byVertical: {
 export function AviaRrhViz({ kpis, reconciliations }: { kpis: { period: string; known: number; counted: number; verified: number; compensated: number }[]; reconciliations: { id: string; period: string; withGap: number; airlines: number }[] }) {
   const k = kpis[0];
   const steps: LadderStep[] = k ? [
-    { code: 'CONNUS', label: 'Départs connus (billets avec IFA)', value: k.known, display: fmtNombre(k.known, 0) },
-    { code: 'COMPTES', label: 'Départs comptés (embarquements RVA)', value: k.counted, display: fmtNombre(k.counted, 0) },
-    { code: 'VERIFIES', label: 'Départs vérifiés (sortie DGM du même IFA)', value: k.verified, display: fmtNombre(k.verified, 0) },
-    { code: 'COMPENSES', label: 'Départs compensés (taxe créditée ou décision humaine)', value: k.compensated, display: fmtNombre(k.compensated, 0) },
+    { code: 'CONNUS', label: 'Connus — billets avec IFA', value: k.known, display: fmtNombre(k.known, 0) },
+    { code: 'COMPTES', label: 'Comptés — embarquements RVA', value: k.counted, display: fmtNombre(k.counted, 0) },
+    { code: 'VERIFIES', label: 'Vérifiés — sortie DGM du même IFA', value: k.verified, display: fmtNombre(k.verified, 0) },
+    { code: 'COMPENSES', label: 'Compensés — taxe créditée ou décision humaine', value: k.compensated, display: fmtNombre(k.compensated, 0) },
   ] : [];
   return (
     <ChartGrid min={300}>
@@ -166,7 +166,7 @@ export function AviaAutoViz({ executions, billed }: { executions: { kind: string
   return (
     <ChartGrid min={300}>
       <StatusDistribution title="Exécutions des écarts mensuels" unitLabel="exécutions"
-        items={statusItems(executions, (e) => e.kind, { FACTURATION: { label: 'Avis émis', tone: 'warning' }, COMPENSATION: { label: 'Compensation (crédit)', tone: 'good' }, AUCUN_MONTANT: { label: 'Aucun montant exécutable', tone: 'neutral' } })} />
+        items={statusItems(executions, (e) => e.kind, { FACTURATION: { label: 'Facturation (avis émis)', tone: 'warning' }, COMPENSATION: { label: 'Compensation (crédit)', tone: 'good' }, AUCUN_MONTANT: { label: 'Aucun montant exécutable', tone: 'neutral' } })} />
       <MoneyBars title="Montants facturés automatiquement" measure="Facturé" rows={[{ label: 'Facturé', money: billed as MoneyJSON[] }]} emptyText="Aucune facturation (proposition seulement avant l’arrêté)." />
     </ChartGrid>
   );
@@ -214,7 +214,7 @@ export function OrganeVisuels({ d }: { d: OrganeLite }) {
     <VisualSummary label="Organe de contrôle — graphiques">
       <ChartGrid min={280}>
         <MoneyBars title="Montants contrôlés et récupérés" measure="Montant" example rows={[{ label: 'Contrôlés', money: d.controlled.amounts }, { label: 'Récupérés', money: d.recovered.amounts }]} emptyText="Aucun montant contrôlé." />
-        <GaugeMeter title="Exécution des recommandations échues" value={d.recommendations.due ? (d.recommendations.executed / d.recommendations.due) * 100 : null} unit="%" format={(v) => fmtNombre(v, 0)} example
+        <GaugeMeter title="Exécution des recommandations échues" value={d.recommendations.due ? (d.recommendations.executed / d.recommendations.due) * 100 : null} unit="%" format={(v) => v.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} example
           tone="info" toneLabel="Suivi (sans cible)" reason="Aucune recommandation échue : taux non mesuré." note={`${d.recommendations.executed} exécutée(s) sur ${d.recommendations.due} échue(s) · ${d.recommendations.issued} émise(s)`} />
         {d.institutionsAtRisk && (
           <StackedBarViz className="viz-span-2" title="Institutions à risque — opérations par score" subtitle="Parts disjointes" mode="absolute" example
@@ -293,7 +293,7 @@ export function GrandsRedevablesVisuels({ portfolio }: { portfolio: { taxpayerId
     <VisualSummary label="Grands redevables en un coup d’œil">
       <ChartGrid min={280}>
         <StatusDistribution title="Gestionnaire dédié" unitLabel="redevables"
-          items={countItems([['OK', 'Gestionnaire en place', 'good', portfolio.length - sans - rot], ['ROT', 'Rotation due', 'warning', rot], ['SANS', 'À désigner', 'critical', sans]])} />
+          items={countItems([['OK', 'Gestionnaire en place', 'good', portfolio.length - sans - rot], ['ROT', 'Rotation du gestionnaire due', 'warning', rot], ['SANS', 'À désigner', 'critical', sans]])} />
         <DonutViz title="Portefeuille par secteur" centerLabel="rattachements" slices={countBy(portfolio.flatMap((p) => p.sectors), (s) => s.label).map((r) => ({ key: r.key, label: r.key, value: r.count }))} />
         <MoneyBars title="Recettes confirmées par redevable" measure="Recettes" rows={portfolio.map((p) => ({ label: p.name, money: p.revenue }))} emptyText="Aucune recette confirmée." />
         <BarChartViz title="Obligations échues impayées par redevable" orientation="horizontal" format={(v) => fmtNombre(v, 0)}

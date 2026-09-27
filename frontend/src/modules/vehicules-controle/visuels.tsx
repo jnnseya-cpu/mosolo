@@ -134,7 +134,7 @@ export function RfckVisuels({ flows, steps, reqs, loading }: { flows: FlowLite[]
         <KpiTile label="Exigences du domaine conformes" value={reqs ? reqs.filter((r) => r.status === 'CONFORME').length : null} loading={loading && !reqs} sub={reqs ? `sur ${reqs.length}` : undefined} />
       </KpiGrid>
       <ChartGrid min={300}>
-        <StatusDistribution title="Interfaces RFCK ↔ MOSOLO par état" unitLabel="flux" items={statusItems(flows ?? [], (f) => f.status, Object.fromEntries((flows ?? []).map((f) => [f.status, { label: f.statusLabel, tone: tone(f.status) }])))} loading={!flows && loading} />
+        <StatusDistribution title="Interfaces RFCK ↔ MOSOLO par état" unitLabel="flux" items={statusItems(flows ?? [], (f) => f.status, Object.fromEntries((flows ?? []).map((f) => [f.status, { label: `Flux : ${f.statusLabel}`, tone: tone(f.status) }])))} loading={!flows && loading} />
         <GaugeMeter title="Séquence d’intégration — étapes franchies" value={total ? (done / total) * 100 : null} unit="%" format={(v) => fmtNombre(v, 0)}
           reason="Séquence non servie." tone="info" toneLabel="Suivi (sans cible)" note={`${done} / ${total} étapes franchies (validation humaine à chaque passage)`} loading={!steps && loading} />
         <StatusDistribution title="Domaine officiel — six exigences" unitLabel="exigences" items={statusItems(reqs ?? [], (r) => r.status, vue(['CONFORME', 'A_FAIRE', 'A_VERIFIER']))} loading={!reqs && loading} />
