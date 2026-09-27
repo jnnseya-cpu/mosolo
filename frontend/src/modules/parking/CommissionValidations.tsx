@@ -15,6 +15,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { Money } from './shared';
 import './parking.css';
+import { ValidationsVisuels } from './visuels';
 
 export interface ValidationRequest {
   id: string; agentId: string; agentName: string; status: 'DEMANDEE' | 'VALIDEE' | 'REFUSEE'; requestedAt: string; motif?: string;
@@ -40,6 +41,7 @@ export default function CommissionValidations() {
         lead="Une commission acquise (recette rapprochée au compte public) n’est payable qu’après votre validation motivée. Vous ne pouvez pas valider la commission d’un constat que vous avez vérifié ou décidé. Chaque ligne validée est un point de régularisation payable de la réserve des agents (§ 37A.5 : points × note de qualité, jamais le montant).">
         <button type="button" className="btn btn-secondary btn-sm" onClick={q.reload}><Icon name="refresh" size={16} /> Actualiser</button>
       </PageHead>
+      {q.data && <ValidationsVisuels items={q.data.items} />}
       {q.loading && !q.data ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : q.data && <ValidationQueueView queue={q.data} onDone={q.reload} />}
     </div>
   );

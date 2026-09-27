@@ -16,6 +16,7 @@ import { sha256Hex } from '../../lib/crypto';
 import { DemoTag, ErrorLine, GpsField, Money, parsePosition, PAYMENT_STATE, PayButton, PhotoHashes, useAction } from '../parking/shared';
 import { AD_TYPE, CASE_STATUS, DEVICE_STATUS, FINDING, LIGHTING, PIECE, PLACEMENT, REQUEST_STATUS, RIGHTS, VEHICLE_KIND, type AuthRequest, type Case, type Device, type Notice } from './types';
 import '../parking/parking.css';
+import { AdvertiserVisuels } from './visuels';
 
 type Tab = 'devices' | 'declare' | 'requests' | 'notices' | 'cases';
 
@@ -37,6 +38,7 @@ export default function AdvertiserSpace() {
       ) : (
         <>
           <ExampleNotice text="Le barème de liquidation utilisé est une règle FICTIVE de démonstration publiée par le circuit à quatre visas ; il n’a aucune valeur juridique." />
+          <AdvertiserVisuels devices={devices.data ?? undefined} loading={devices.loading} error={devices.error} onRetry={devices.reload} />
           <div className="seg seg-wrap pk-tabs" role="tablist" aria-label="Rubriques">
             {([['devices', 'Mes dispositifs'], ['declare', 'Déclarer un support'], ['requests', 'Autorisations'], ['notices', 'Avis et paiements'], ['cases', 'Contrôles']] as [Tab, string][]).map(([k, l]) => (
               <button key={k} type="button" role="tab" aria-pressed={tab === k} aria-selected={tab === k} onClick={() => setTab(k)}>{l}</button>

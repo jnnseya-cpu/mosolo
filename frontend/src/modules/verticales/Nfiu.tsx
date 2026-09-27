@@ -15,6 +15,7 @@ import { DataTable } from '../../components/DataTable';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { api, describeError } from '../../lib/api';
 import { useApp } from '../../context';
+import { NfiuReportViz } from './visuels';
 
 export interface NfiuFullSituation {
   owner: { taxpayerId: string; name: string; kind: string } | null;
@@ -120,6 +121,7 @@ export function NfiuRapports() {
       {q.data && (
         <>
           <p className="small muted">{q.data.scope === 'AGENT' ? 'Votre activité du jour.' : 'Tous les agents.'} Production {q.data.trigger === 'PLANIFIEE' ? 'automatique' : 'à la demande'}.</p>
+          {q.data.agents.length > 0 && <NfiuReportViz agents={q.data.agents} />}
           <DataTable caption="Rapport journalier des agents NFIU" rows={q.data.agents} rowKey={(r) => r.agentId} empty={<EmptyState title="Aucune activité ce jour" />} columns={[
             { key: 'a', label: 'Agent', render: (r) => r.agentName },
             { key: 'p', label: 'Poses', num: true, render: (r) => r.platesIssued },

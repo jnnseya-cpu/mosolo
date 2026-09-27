@@ -17,6 +17,7 @@ import { api, apiBlob, describeError } from '../../lib/api';
 import { useApp } from '../../context';
 import { hasRole, Message, useAction } from '../tresor/shared';
 import './verticales.css';
+import { OrganeVisuels } from './visuels';
 
 interface Named { id: string; status: string }
 interface Supplier extends Named { name: string; nif: string; declaredBy: string }
@@ -91,6 +92,7 @@ export function CalcuOrganeView({ d, reports, roles, onChanged }: { d: OrganeDas
         <div className="kpi"><p className="kpi-label caps-sm">Exécution des recommandations</p><p className="kpi-value">{d.recommendations.executionRate ?? '—'}</p><div className="kpi-foot"><span className="kpi-sub">{d.recommendations.executed} / {d.recommendations.due} échues</span></div></div>
       </div>
       <p className="callout callout-info">{d.notice}</p>
+      <OrganeVisuels d={d} />
       <Message msg={msg} />
       {d.institutionsAtRisk && (
         <section className="panel" aria-labelledby="co-inst"><h2 className="panel-title" id="co-inst">Institutions à risque</h2>

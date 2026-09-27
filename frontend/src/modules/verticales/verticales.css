@@ -57,3 +57,8 @@
 /* Fiches sectorielles (modules 13 à 25) : listes compactes et résultat de scan valide. */
 .list-plain { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
 .callout-ok { border-left-color: var(--flag-blue); }
+
+/* Parcours de bout en bout : libellés et routes longs repliés au téléphone (360 px, 27/09/2026). */
+.vx-parcours .list-row { flex-wrap: wrap; }
+.vx-parcours .min0 { flex: 1 1 220px; }
+.vx-parcours .row-title, .vx-parcours .mono, .vx-parcours .small { white-space: normal; overflow-wrap: anywhere; }

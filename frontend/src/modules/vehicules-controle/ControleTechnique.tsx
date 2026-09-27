@@ -14,6 +14,7 @@ import { api } from '../../lib/api';
 import { Section } from '../pilotage/shared';
 import { Callout, Notice, useRunner } from '../pilotage/planif';
 import { hasRole, NOTE_NUMEROTATION, pct, StateBadge, Tile, Tiles, type Indicators } from './common';
+import { CtVisuels } from './visuels';
 
 interface Pv { id: string; number: string; plate: string; category: string; centreId: string; result: string; echeance: string; endedAt: string; supersededBy?: string; incoherence?: string; demo?: boolean }
 interface Ref { points: { code: string; label: string }[]; categories: { code: string; label: string }[]; phases2026: { code: string; label: string; date: string; statut: string }[] }
@@ -45,6 +46,7 @@ export default function ControleTechnique() {
     <div className="page page-wide">
       <PageHead eyebrow={`Chaîne véhicule · module 82 (${NOTE_NUMEROTATION})`} title="Contrôle technique et vignette sécurisée" lead="Procès-verbaux structurés transmis par les centres agréés, échéances, vignettes techniques numérotées. La vignette fiscale reste un titre distinct, jamais agrégé." />
       <Notice msg={r.msg} />
+      <CtVisuels i={i} pvs={pvs.data?.items} stickers={stickers.data?.items} loading={ind.loading} error={ind.error} onRetry={reload} />
       {ind.loading && !ind.data ? <Loading /> : ind.error ? <ErrorState error={ind.error} onRetry={reload} /> : i && (
         <Tiles>
           <Tile label="CT à jour" value={pct(i.ctAJourPct)} hint={`${i.ctAJour} / ${i.vehiculesConnus} véhicules connus`} />

@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { api } from '../../lib/api';
 import { Notice, useRunner } from '../pilotage/planif';
 import { StateBadge } from './common';
+import { MesVehiculesVisuels } from './visuels';
 
 interface Line { state: string; label: string }
 interface Vehicle {
@@ -32,6 +33,7 @@ export default function MesVehicules() {
     <div className="page">
       <PageHead eyebrow="Mon espace" title="Mes véhicules" lead={data.data?.notice ?? 'Vignette fiscale, contrôle technique, fourrière, rendez-vous et quittances.'} />
       <Notice msg={r.msg} />
+      {!!data.data?.vehicles.length && <MesVehiculesVisuels vehicles={data.data.vehicles} />}
       {data.loading && !data.data ? <Loading /> : data.error ? <ErrorState error={data.error} onRetry={data.reload} /> : !data.data?.vehicles.length ? <EmptyState title="Aucun véhicule rattaché" icon="car" /> : data.data.vehicles.map((v) => (
         <section key={v.plate} className="panel" style={{ marginBottom: '1rem' }}>
           <h2 className="panel-title">{v.plate} <span className="small muted">{v.identification.categoryLabel}</span></h2>

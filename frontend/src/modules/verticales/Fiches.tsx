@@ -20,6 +20,7 @@ import type { MoneyJSON } from '@mosolo/shared';
 import { COMMUNES } from '../../verticals/catalogue';
 import Plastique from './Plastique';
 import './verticales.css';
+import { FichesVisuels, LiquidationsFicheViz, RegistreFicheViz } from './visuels';
 
 type Tone = 'good' | 'warning' | 'info' | 'neutral' | 'critical';
 type IndValue = string | number | MoneyJSON[] | { label: string; amounts: MoneyJSON[] }[] | null;
@@ -105,6 +106,7 @@ function IndicatorsTab() {
     <Guard state={q}>{(d) => (
       <div className="stack">
         <div className="callout callout-info"><Icon name="info" size={18} /><p>Indicateurs calculés sur les données (heure du serveur) ; « non mesuré » indique la donnée source absente. Stationnement (14) : <Link to="/stationnement/tableau-de-bord">tableau de bord</Link> ; publicité (15) : <Link to="/publicite/tableau-de-bord">tableau de bord</Link>.</p></div>
+        <FichesVisuels modules={d.modules} />
         <div className="g3-cards">
           {d.modules.map((m) => (
             <article key={m.module} className="g3-card" aria-label={`Module ${m.module}`}>
@@ -213,6 +215,8 @@ function Objects({ module, title, canRegister }: { module: string; title: string
     <Panel title={title} icon="grid" count={q.data?.items.length}>
       {q.error ? <p className="small muted">Registre réservé aux services compétents.</p> : (
         <Guard state={q}>{(d) => (
+          <>
+          <RegistreFicheViz items={d.items} />
           <DataTable rows={d.items} rowKey={(o) => o.objectId} empty={<EmptyState title="Aucun objet" />}
             columns={[
               { key: 'id', label: 'Objet', primary: true, render: (o) => <span className="mono">{o.objectId}</span> },
@@ -221,6 +225,7 @@ function Objects({ module, title, canRegister }: { module: string; title: string
               { key: 'st', label: 'Statut', render: (o) => o.probativeStatus },
               { key: 'lq', label: 'Liquidations', render: (o) => o.liquidations.map((l) => `${l.period} : ${LIQ_STATUS[l.status]?.label ?? l.status}`).join(' ; ') || '—' },
             ]} />
+          </>
         )}</Guard>
       )}
       {canRegister && <ObjectForm module={module} onDone={q.reload} />}
@@ -750,6 +755,8 @@ function LiquidationsTab({ roles }: { roles: string[] }) {
       <Panel title="Liquidations" icon="ledger" count={q.data?.items.length}>
         <select value={module} onChange={(e) => setModule(e.target.value)} aria-label="Filtrer par module"><option value="">Tous les modules</option>{['16', '17', '19', '22', '23', '24'].map((m) => <option key={m}>{m}</option>)}</select>
         <Guard state={q}>{(d) => (
+          <>
+          {d.items.length > 0 && <LiquidationsFicheViz items={d.items} vue={LIQ_STATUS} />}
           <DataTable rows={d.items} rowKey={(l) => l.id} empty={<EmptyState title="Aucune liquidation" />}
             columns={[
               { key: 'id', label: 'Liquidation', primary: true, render: (l) => <><span className="mono">{l.id}</span> · module {l.module} · {l.period}{l.movementId ? ` · ${l.movementId}` : ''}</> },
@@ -765,6 +772,7 @@ function LiquidationsTab({ roles }: { roles: string[] }) {
                 </span>
               ) : l.noticeId ? `Avis ${l.noticeId}` : '—' },
             ]} />
+          </>
         )}</Guard>
       </Panel>
     </div>

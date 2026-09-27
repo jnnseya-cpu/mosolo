@@ -21,6 +21,7 @@ import { AviaCadreSection, AviaIfaControlSection, AviaRrhSection } from './AviaR
 import { AviaAutoSection } from './AviaAuto';
 import { NfiuHabilitations, NfiuRapports, NfiuSituation, type NfiuFullSituation } from './Nfiu';
 import './verticales.css';
+import { AviaDeclVisuels, CasesVisuels, PlatesReportViz, TelecomViz, VerticalsIndicatorsViz } from './visuels';
 
 type Tab = 'demarches' | 'plaques' | 'avia' | 'telecom' | 'indicateurs';
 const TABS: { id: Tab; label: string; icon: string }[] = [
@@ -179,6 +180,7 @@ function CasesTab() {
       </div>
       {q.loading && <Loading />}
       {!!q.error && <ErrorState error={q.error} onRetry={q.reload} />}
+      {q.data && q.data.length > 0 && <CasesVisuels cases={q.data} verticalName={(s) => cat.data?.items.find((v) => v.slug === s)?.short ?? s} />}
       {q.data && (
         <DataTable rows={q.data} rowKey={(c) => c.id} caption="Démarches de l’entité"
           empty={<EmptyState title="Aucune démarche dans votre périmètre" />}
@@ -278,6 +280,7 @@ function PlatesTab() {
         <div className="panel-head"><h2 className="panel-title"><Icon name="history" size={18} /> Rapport journalier des agents</h2><input type="date" className="input-sm" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Date du rapport" /></div>
         {report.loading && <Loading />}
         {!!report.error && <ErrorState error={report.error} onRetry={report.reload} />}
+        {report.data && report.data.agents.length > 0 && <PlatesReportViz agents={report.data.agents} />}
         {report.data && (
           <DataTable rows={report.data.agents} rowKey={(r) => r.agentId} empty={<EmptyState title="Aucune activité ce jour" />}
             columns={[
@@ -290,7 +293,8 @@ function PlatesTab() {
         <p className="hint">Rapport automatique, sans montant : aucun agent ne peut modifier, négocier ni estimer un montant.</p>
       </section>
       <NfiuRapports />
-      {user?.roles.some((r) => r === 'R06' || r === 'R07') && <NfiuHabilitations />}
+      {/* Habilitations NFIU : gérées par la direction de l'entité NFIU (DGIPK) — même périmètre que le serveur (27/09/2026). */}
+      {user?.roles.some((r) => r === 'R06' || r === 'R07') && user.entity === 'DGIPK' && <NfiuHabilitations />}
     </div>
   );
 }
@@ -337,6 +341,7 @@ function AviaDeclarationsTab() {
       <Feedback a={a} />
       {list.loading && <Loading />}
       {!!list.error && <ErrorState error={list.error} onRetry={list.reload} />}
+      {list.data && list.data.length > 0 && <AviaDeclVisuels list={list.data} periods={ov.data?.periods} />}
       {list.data && (
         <section className="panel">
           <h2 className="panel-title">Déclarations mensuelles</h2>
@@ -403,6 +408,7 @@ function TelecomTab() {
         <div className="vxc-kpi"><strong>{d.matched}</strong><span>Concordants</span></div>
         <div className="vxc-kpi"><strong>{d.observedNotDeclared.length}</strong><span>Observés non déclarés</span></div>
       </div>
+      <TelecomViz matched={d.matched} observedNotDeclared={d.observedNotDeclared.length} declaredNotObserved={d.declaredNotObserved.length} />
       <section className="panel">
         <h2 className="panel-title">Sites observés absents des listes</h2>
         {d.observedNotDeclared.length === 0 ? <EmptyState title="Aucun écart" /> : <ul className="list-rows">{d.observedNotDeclared.map((s) => <li key={s.objectId} className="list-row"><div className="min0"><p className="row-title mono">{s.objectId}</p><p className="small muted">{s.commune} · {s.quartier}</p></div><span className="small">{s.proposal}</span></li>)}</ul>}
@@ -416,6 +422,7 @@ function TelecomTab() {
 }
 
 function IndicatorsTab() {
+  const cat = useApi(fetchCatalogue, []);
   const q = useApi(() => api<{ byVertical: { slug: string; objects: number; cases: number; open: number; accepted: number; refused: number }[]; markets: { stalls: number; occupied: number; paidOccupied: number; paidOccupancyRate: string }; events: { authorized: number; ticketingDeclared: number }; plates: { platesInService: number; nfiuInService: number; buildingsRegistered: number } }>('/v1/verticales/indicators'), []);
   if (q.loading) return <Loading />;
   if (q.error || !q.data) return <ErrorState error={q.error} onRetry={q.reload} />;
@@ -428,6 +435,7 @@ function IndicatorsTab() {
         <div className="vxc-kpi"><strong>{d.events.authorized}</strong><span>Événements autorisés</span></div>
         <div className="vxc-kpi"><strong>{d.plates.platesInService}</strong><span>Plaques en service (tous types)</span></div>
       </div>
+      <VerticalsIndicatorsViz d={d} verticalName={(s) => cat.data?.items.find((v) => v.slug === s)?.short ?? s} />
       <section className="panel">
         <h2 className="panel-title">Activité par verticale (agrégats, sans données nominatives)</h2>
         <DataTable rows={d.byVertical} rowKey={(r) => r.slug}

@@ -24,6 +24,7 @@ import { AviaAutoAirline } from '../modules/verticales/AviaAuto';
 import { ParcoursPanel } from '../modules/verticales/Parcours';
 import { EtablissementObligations } from '../modules/verticales/Determination';
 import { VerticaleVisuel } from './visuels';
+import { EspaceVerticaleVisuels, VerticaleAgentVisuels } from '../modules/verticales/visuels';
 
 export { OBLIGATION_TONE as DUE_TONE };
 
@@ -412,6 +413,8 @@ function VerticalSpaceInner({ slug }: { slug: string }) {
       <Hero v={v} />
       <ExampleNotice text="Démonstration : objets et références fictifs. Les montants proviennent de règles fictives de démonstration, non opposables." />
       {v.parcours && <ParcoursPanel parcours={v.parcours} />}
+      {s && <EspaceVerticaleVisuels s={s} example={s.obligations.some((o) => o.demo)} />}
+      {!isTaxpayer && <VerticaleAgentVisuels slug={slug} allowed={!!user?.roles.some((r) => /^R(0[1-9]|1\d|2[0-9])$/.test(r))} />}
       {v.managedBy && (
         <div className="callout callout-info"><Icon name="info" size={18} /><p>Les démarches et titres de ce service sont servis par son module dédié. Vos objets et obligations rattachés apparaissent ci-dessous depuis votre compte unique.</p></div>
       )}

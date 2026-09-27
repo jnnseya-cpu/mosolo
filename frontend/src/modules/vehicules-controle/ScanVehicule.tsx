@@ -9,7 +9,9 @@ import { useApp } from '../../context';
 import { PageHead } from '../../components/Shell';
 import { QrScanner } from '../../components/QrScanner';
 import { api, describeError } from '../../lib/api';
-import { ageText, StateBadge } from './common';
+import { useApi } from '../../hooks/useApi';
+import { ageText, hasRole, StateBadge, type Indicators } from './common';
+import { ScanVisuels } from './visuels';
 
 interface Line { state: string; label: string; number?: string | null; receipt?: string | null }
 export interface ScanView {
@@ -80,6 +82,8 @@ export default function ScanVehicule() {
   const [decision, setDecision] = useState('AUCUNE_SUITE');
   const [motif, setMotif] = useState('');
   const [pack, setPack] = useState<Pack | null>(null);
+  // Activité du scan (visuel) : lue seulement par les rôles habilités aux indicateurs (vc:read : superviseur, contrôleur).
+  const ind = useApi(hasRole(user?.roles, 'R09', 'R11') ? () => api<Indicators>('/v1/vehicules/indicateurs') : null, [user?.id]);
 
   async function run(value = saisie) {
     setMsg(null);
@@ -103,6 +107,7 @@ export default function ScanVehicule() {
       <PageHead eyebrow="Chaîne véhicule · module 82" title="Scan unique du véhicule" lead="Plaque, QR de la vignette fiscale ou QR de la vignette technique : une seule vue. Affichage seulement — aucune sanction n’est prise par la plateforme." />
       {!user ? <p className="notice">Connectez-vous avec un compte de contrôleur.</p> : (
         <>
+          {ind.data?.scan && <ScanVisuels scan={ind.data.scan} />}
           {/* Formulaire : Entrée dans le champ lance la vérification (clavier seul, lecteur de code qui termine par Entrée). */}
           <form className="vc-row" onSubmit={(e) => { e.preventDefault(); if (saisie.trim()) void run(); }}>
             <label className="vc-form" style={{ flex: 1 }}><span>Plaque ou contenu du QR</span><input value={saisie} onChange={(e) => setSaisie(e.target.value)} placeholder="KN-0000-AB ou QR" /></label>

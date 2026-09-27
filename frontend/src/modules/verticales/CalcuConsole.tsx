@@ -10,6 +10,7 @@ import { DataTable } from '../../components/DataTable';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { api, describeError } from '../../lib/api';
 import './verticales.css';
+import { CalcuVisuels } from './visuels';
 
 interface Account { id: string; entityName: string; bank: string; accountNumberMasked: string; currency: string; type: string; status: string; validations: { finances?: { by: string }; controle?: { by: string } } }
 interface Tx { id: string; bank: string; amount: MoneyJSON; at: string; beneficiary: string; reference: string; score: 'VERT' | 'AMBRE' | 'ROUGE'; findings: string[]; reportId: string | null; accountId: string | null }
@@ -72,6 +73,7 @@ export default function CalcuConsole() {
       {!!q.error && <ErrorState error={q.error} onRetry={q.reload} />}
       {q.data && (
         <div className="stack">
+          <CalcuVisuels o={q.data} />
           <div className="vxc-kpis">
             <div className="vxc-kpi"><strong>{q.data.complianceRate} %</strong><span>Opérations conformes (vert)</span></div>
             <div className="vxc-kpi"><strong>{q.data.totals.ambre}</strong><span>Correspondances partielles</span></div>

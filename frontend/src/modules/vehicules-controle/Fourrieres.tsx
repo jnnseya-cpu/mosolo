@@ -14,6 +14,7 @@ import { api } from '../../lib/api';
 import { Section } from '../pilotage/shared';
 import { Callout, Notice, useRunner } from '../pilotage/planif';
 import { amounts, hasRole, NOTE_NUMEROTATION, StateBadge, Tile, Tiles, type Indicators } from './common';
+import { FourriereVisuels } from './visuels';
 
 interface Dossier {
   id: string; plate: string; status: string; daysInCustody: number; site: { name: string } | null; taxpayerRef: string | null; demo?: boolean;
@@ -45,6 +46,7 @@ export default function Fourrieres() {
     <div className="page page-wide">
       <PageHead eyebrow={`Chaîne véhicule · module 83 (${NOTE_NUMEROTATION})`} title="Fourrières, enlèvement et gardiennage" lead="Aucun enlèvement sans décision de l’autorité compétente ; aucun paiement en espèces ; sortie uniquement sur quittance appariée ou décision motivée." />
       <Notice msg={r.msg} />
+      <FourriereVisuels f={f} dossiers={dossiers.data?.items} sites={sites.data?.items} recon={recon.data?.sites} loading={ind.loading} error={ind.error} onRetry={reload} />
       {ind.loading && !ind.data ? <Loading /> : ind.error ? <ErrorState error={ind.error} onRetry={reload} /> : f && (
         <Tiles>
           <Tile label="Véhicules en fourrière" value={f.enFourriere} />

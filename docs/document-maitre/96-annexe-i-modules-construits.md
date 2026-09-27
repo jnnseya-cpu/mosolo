@@ -1104,3 +1104,22 @@ incomplète) ; `GET /v1/drafts/:key?siAbsent=vide` (200 `{ draft: null }`, 404 i
 l'erreur réseau des formulaires neufs ; `TimelineStrip` sans événement affiche l'état vide. Tests :
 `frontend/test/visuels-ecrans.test.tsx`, `backend/test/brouillons-absents.test.ts`. Détail écran par écran :
 `couverture-visuelle-pages.md`. Captures : `docs/captures/visualisation/pages/`.
+
+## I.26 Verticales, stationnement, publicité et chaîne véhicule rendus visuels (27/09/2026)
+
+Suite de I.25 : chaque écran des verticales de la Partie V (`/services/:slug`, 17 verticales), de la console des
+verticales, de CALCU, du patrimoine, de l'environnement, des modules sectoriels, des fiches 13 à 25, des grands
+redevables, du stationnement (usager, contrôle, régie, tableau de bord, ParkSmart, gains, validation et surveillance des
+agents), de la publicité (exploitant, inspection, régie, supervision, carte, contrats) et de la chaîne véhicule
+(contrôle technique, scan, fourrières, centres agréés, RFCK, mes véhicules) porte un bloc visuel en tête (tuiles et
+graphiques de la trousse), dérivé des données déjà servies, sans droit élargi ; rien n'est retiré.
+
+| Ajout | Emplacement | Règle |
+|---|---|---|
+| Adaptateurs communs | `frontend/src/verticals/visuels.tsx` | Répartition par état, montants par devise (un graphique par devise), courbes mensuelles de Kinshasa |
+| Visuels par module | `modules/{verticales,parking,publicite,vehicules-controle}/visuels.tsx` | Données réelles des mêmes routes ; « EXEMPLE » ; « Suivi (sans cible) » |
+| Fiche de verticale sans collision | `GET /v1/verticales/catalogue/:slug` (ancien chemin conservé) | `/services/actifs` n'est plus masqué par la liste réservée du patrimoine (403) |
+| Corrections | Parcours de bout en bout (360 px) ; habilitations NFIU au seul périmètre DGIPK | Aucune fonction retirée |
+
+Détail écran par écran : `couverture-visuelle-verticales.md`. Tests : `visuels-verticales` (frontend),
+`verticales-fiche-catalogue` (backend). Captures : `docs/captures/visualisation/verticales/`.

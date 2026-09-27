@@ -42,7 +42,7 @@ export function Tiles({ children }: { children: ReactNode }) {
   return <div className="vc-tiles">{children}</div>;
 }
 
-const STATE: Record<string, { tone: Tone; label: string }> = {
+export const STATE: Record<string, { tone: Tone; label: string }> = {
   A_JOUR: { tone: 'good', label: 'À jour' }, BIENTOT_ECHU: { tone: 'warning', label: 'Échéance proche' }, ECHU: { tone: 'critical', label: 'Échu' },
   DEFAVORABLE: { tone: 'serious', label: 'Défavorable — contre-visite' }, AUCUN_CONTROLE: { tone: 'neutral', label: 'Aucun contrôle' },
   PAYEE: { tone: 'good', label: 'Payée' }, ECHUE: { tone: 'critical', label: 'Échue' }, CONTESTEE: { tone: 'info', label: 'Contestée' }, AUCUNE: { tone: 'neutral', label: 'Aucune' },

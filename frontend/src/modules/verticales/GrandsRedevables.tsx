@@ -11,6 +11,7 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { Section } from '../pilotage/shared';
 import { Area, Choice, Field, hasRole } from '../pilotage/planif';
 import { date, Ecran, Indicateurs, montant, montants, useRunner, useVue, type Indicator } from '../decision/commun';
+import { GrandsRedevablesVisuels } from './visuels';
 
 interface Item {
   taxpayerId: string; name: string; sectors: { code: string; label: string }[];
@@ -45,6 +46,7 @@ export default function GrandsRedevables() {
       {(d) => {
         const it = d.portfolio.find((p) => p.taxpayerId === (sel || d.portfolio[0]?.taxpayerId));
         return (<>
+          {d.portfolio.length > 0 && <GrandsRedevablesVisuels portfolio={d.portfolio} />}
           <Section title="Indicateurs" sub={`${d.rule} Durée maximale d’affectation : ${d.params.managerMaxTenureMonths} mois (${d.params.status}).`}><Indicateurs items={d.indicators} /></Section>
           <Section title={`Portefeuille dédié (${d.withoutManager} sans gestionnaire, ${d.rotationsDue} rotation(s) due(s))`}>
             <DataTable caption="Portefeuille" rows={d.portfolio} rowKey={(p) => p.taxpayerId} empty={<p className="muted">Aucun grand redevable désigné (voir « Modules sectoriels »).</p>} columns={[

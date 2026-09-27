@@ -17,7 +17,7 @@ export function ParcoursPanel({ parcours }: { parcours: ParcoursVerticale }) {
         <span className="small muted">({parcours.nomPartieV}) · modules {parcours.modules.join(', ')}</span>
       </div>
       <p className="small">{parcours.finalite}</p>
-      <ol className="list-rows">
+      <ol className="list-rows vx-parcours">
         {parcours.etapes.map((e) => (
           <li key={e.rang} className="list-row">
             <div className="min0">

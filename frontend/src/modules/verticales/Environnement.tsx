@@ -14,6 +14,7 @@ import { ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
+import { EnvironnementVisuels } from './visuels';
 
 interface Registry { rule: { code: string; status: string; demo?: boolean }; activated: boolean; notice: string; items: { objectId: string; raisonSociale: string; categorie: string | null; commune: string; tonnage: { tonnes: string; periode: string | null } | null; obligations: number }[] }
 interface Simulation { id: string; estimate: MoneyJSON; declaredTonnes: string; registrants: number; effect: 'AUCUN' }
@@ -31,6 +32,7 @@ export default function Environnement() {
       <ExampleNotice text="Hypothèses et montants de simulation : non opposables, aucune valeur par défaut." />
       {q.loading && <Loading />}
       {!!q.error && <ErrorState error={q.error} onRetry={q.reload} />}
+      {q.data && <EnvironnementVisuels items={q.data.items} activated={q.data.activated} />}
       {q.data && (
         <div className="stack">
           <section className="panel">

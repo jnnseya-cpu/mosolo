@@ -14,6 +14,7 @@ import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { hasRole, Kpis, pctText, ReasonForm } from './shared';
 import './parking.css';
+import { MonitoringVisuels } from './visuels';
 
 interface Stats { controls: number; defects: number; constats: number; rejected: number; retained: number; dismissed: number; contested: number; annulled: number; weakEvidence: number }
 interface ModuleStats extends Stats { module: string; moduleLabel: string }
@@ -59,6 +60,7 @@ export default function AgentMonitoringPage() {
             { label: 'Constats', value: d.rows.reduce((a, r) => a + r.totals.constats, 0) },
             { label: 'Calculé le', value: fmtDate(d.generatedAt, true) },
           ]} />
+          <MonitoringVisuels rows={d.rows} />
           <div className="callout callout-info"><Icon name="shieldCheck" size={18} /><p className="small" style={{ margin: 0 }}>{d.notice}</p></div>
           <section className="panel">
             <header className="panel-head">

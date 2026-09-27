@@ -15,6 +15,7 @@ import { QrScanner } from '../../components/QrScanner';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { api, describeError } from '../../lib/api';
 import { useApp } from '../../context';
+import { AviaRrhViz } from './visuels';
 
 function useAction() {
   const [busy, setBusy] = useState(false);
@@ -168,6 +169,7 @@ export function AviaRrhSection() {
   return (
     <div className="stack">
       <div className="callout callout-info"><Icon name="scale" size={18} /><p>{ov.data.notice}</p></div>
+      <AviaRrhViz kpis={ov.data.kpis} reconciliations={ov.data.reconciliations} />
       {k && (
         <div className="vxc-kpis" aria-label="Indicateurs des départs">
           <div className="vxc-kpi"><strong>{n(k.known)}</strong><span>Départs connus (billets avec IFA) — {k.period}</span></div>

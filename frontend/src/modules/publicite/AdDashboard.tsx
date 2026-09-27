@@ -17,6 +17,7 @@ import { api } from '../../lib/api';
 import { DemoTag, Kpis, Money, pctText } from '../parking/shared';
 import { FINDING } from './types';
 import '../parking/parking.css';
+import { AdDashboardVisuels } from './visuels';
 
 interface Indicators {
   generatedAt: string; notice: string; taxRule: { code: string; version: number | null; status: string; demo: boolean };
@@ -52,6 +53,7 @@ export default function AdDashboard() {
         { label: 'Contrôles', value: t.inspections, sub: `${t.casesOpen} dossier(s) en cours` },
         { label: 'Recettes confirmées', value: <Money items={t.revenue} empty="0" />, sub: <>par m² : <Money items={t.revenuePerM2} /></> },
       ]} />
+      <AdDashboardVisuels d={d} />
       <div className="dash-grid">
         <ChartCard className="span-6" title="Constats par nature" subtitle="Toutes inspections confondues, y compris les contrôles conformes." height={220}
           table={{ columns: ['Nature', 'Nombre'], rows: d.byFinding.map((f) => [FINDING[f.finding] ?? f.finding, f.count]) }}>

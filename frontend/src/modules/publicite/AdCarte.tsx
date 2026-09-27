@@ -15,6 +15,7 @@ import { api, describeError } from '../../lib/api';
 import { circleRing } from '../../lib/geo';
 import { COMMUNES } from '../../verticals/catalogue';
 import '../referentiel/referentiel.css';
+import { CarteVisuels } from './visuels';
 
 interface Zone { id: string; kind: string; label: string; commune: string; lat: number; lon: number; radiusM: number; motif: string }
 interface Layers {
@@ -73,6 +74,7 @@ export default function AdCarte() {
       {err && <p className="notice notice-err" role="alert">{err}</p>}
       {layers.loading && <Loading />}
       {!!layers.error && <ErrorState error={layers.error} onRetry={layers.reload} />}
+      {L && <CarteVisuels L={L} steps={pilot.data?.steps} />}
       {L && (
         <div className="stack">
           <div className="row-wrap" role="group" aria-label="Couches de la carte">

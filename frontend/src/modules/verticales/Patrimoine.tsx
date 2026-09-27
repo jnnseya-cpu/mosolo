@@ -14,6 +14,7 @@ import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
+import { PatrimoineVisuels } from './visuels';
 
 interface Asset { id: string; reference: string; nature: string; designation: string; commune: string; status: string; demo: boolean; evaluation: { annualRevenueEstimate: MoneyJSON; marketValue: MoneyJSON } | null }
 interface Call { id: string; reference: string; assetId: string; procedure: string; deadline: string; status: string; reservePrice: MoneyJSON; candidatures: number; opening?: { offers: { caseId: string; amount: MoneyJSON | null }[] }; award?: { caseId: string; motif: string } }
@@ -39,6 +40,7 @@ export default function Patrimoine() {
       {err && <p className="notice notice-err" role="alert">{err}</p>}
       {ov.loading && <Loading />}
       {!!ov.error && <ErrorState error={ov.error} onRetry={ov.reload} />}
+      {ov.data && <PatrimoineVisuels assets={ov.data.assets} calls={ov.data.calls} revenues={rev.data?.items} />}
       {ov.data && (
         <div className="stack">
           <section className="panel">

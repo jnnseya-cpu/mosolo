@@ -16,6 +16,7 @@ import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components
 import { api, describeError } from '../../lib/api';
 import { useApp } from '../../context';
 import type { MoneyJSON } from '@mosolo/shared';
+import { AviaAutoViz } from './visuels';
 
 type Money = MoneyJSON;
 export interface AviaAutoExecution {
@@ -104,6 +105,7 @@ export function AviaAutoSection() {
   return (
     <div className="stack">
       <div className="callout callout-info"><Icon name="scale" size={18} /><p>{o.notice}</p></div>
+      <AviaAutoViz executions={o.executions} billed={o.totals.billed} />
       <section className="panel">
         <h2 className="panel-title"><Icon name="clock" size={18} /> Mois échu {o.currentMode.period}</h2>
         <StatusBadge tone={o.currentMode.mode === 'EXECUTION' ? 'warning' : 'neutral'} label={o.currentMode.mode === 'EXECUTION' ? 'Exécution automatique (après arrêté)' : 'Proposition seulement (avant arrêté)'} />

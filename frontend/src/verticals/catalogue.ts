@@ -111,7 +111,8 @@ export const COMMUNES = [
 ];
 
 export const fetchCatalogue = () => api<{ items: VerticalSummary[]; notice: string }>('/v1/verticales');
-export const fetchVertical = (slug: string) => api<VerticalDetail>(`/v1/verticales/${encodeURIComponent(slug)}`);
+/** Fiche d’une verticale : chemin sans collision (« /v1/verticales/actifs » est aussi la liste du patrimoine). */
+export const fetchVertical = (slug: string) => api<VerticalDetail>(`/v1/verticales/catalogue/${encodeURIComponent(slug)}`);
 export const fetchSpace = (slug: string, taxpayerId?: string) =>
   api<VerticalSpaceData>(`/v1/verticales/${encodeURIComponent(slug)}/space${taxpayerId ? `?taxpayerId=${encodeURIComponent(taxpayerId)}` : ''}`);
 export const fetchSummary = () => api<{ taxpayerId: string; items: { slug: string; objects: number; obligations: number; toPay: number; openCases: number }[] }>('/v1/verticales/me/summary');
