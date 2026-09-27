@@ -44,7 +44,7 @@ const PROTEGES: { method: string; path: string }[] = [
 export const ACTIONS_VERIFICATION = ['receipt.verified', 'titres.status.checked', 'object.plate.public_check', 'proof.verified', 'clearance.checked'];
 
 interface Defi { id: string; sel: string; difficulte: number; expiresAt: string; usedAt?: string }
-interface Visite { id: string; jour: string; page: string; nombre: number }
+interface Visite { id: string; jour: string; page: string; nombre: number; /** Instant et rang dans le journal d'audit de la première visite comptée (début de mesure). */ premiereA?: string; premiereSeq?: number }
 
 export const PAGES_PUBLIQUES = ['accueil', 'informations', 'simulateurs', 'verifier', 'transparence', 'points-de-paiement', 'inscription'] as const;
 
@@ -99,7 +99,7 @@ export class PortailPublicService {
     const id = `${jour}:${page}`;
     const v = this.visites.get(id);
     if (v) this.visites.update({ ...v, nombre: v.nombre + 1 });
-    else this.visites.insert({ id, jour, page, nombre: 1 });
+    else this.visites.insert({ id, jour, page, nombre: 1, premiereA: this.ctx.clock.now().toISOString(), premiereSeq: this.ctx.audit.list({ limit: 1 }).total });
     return { enregistre: true };
   }
 
@@ -209,13 +209,18 @@ export class PortailPublicService {
     const parPage = Object.fromEntries(PAGES_PUBLIQUES.map((p) => [p, visites.filter((v) => v.page === p).reduce((s, v) => s + v.nombre, 0)]));
     const simulations = this.ctx.audit.list({ action: 'portail.simulation.computed', limit: 1 }).total;
     const verifications = ACTIONS_VERIFICATION.reduce((s, a) => s + this.ctx.audit.list({ action: a, limit: 1 }).total, 0);
-    const inscriptions = this.ctx.audit.list({ action: 'account.registration.requested', limit: 1 }).total;
+    // Conversion : seules les inscriptions faites depuis le premier jour de mesure des visites sont rapportées aux
+    // visites (même période) — sinon le taux dépasserait 100 % en mélangeant l'historique et la mesure récente.
+    const premiere = [...visites].sort((a, b) => (a.premiereSeq ?? 0) - (b.premiereSeq ?? 0))[0];
+    const debutMesure = premiere ? premiere.premiereA ?? `${premiere.jour}T00:00:00.000+01:00` : null;
+    const toutes = this.ctx.audit.list({ action: 'account.registration.requested', limit: 100_000 }).items;
+    const inscriptions = premiere ? toutes.filter((r) => r.seq > (premiere.premiereSeq ?? 0)).length : 0;
     return {
       visites: { valeur: total, parPage },
       simulations: { valeur: simulations },
       verifications: { valeur: verifications, actions: ACTIONS_VERIFICATION },
       conversionInscription: total > 0
-        ? { valeur: pct(inscriptions, total), numerateur: inscriptions, denominateur: total }
+        ? { valeur: pct(inscriptions, total), numerateur: inscriptions, denominateur: total, depuis: debutMesure, inscriptionsAvantMesure: toutes.length - inscriptions }
         : { valeur: null, numerateur: inscriptions, denominateur: 0, raison: 'Aucune visite mesurée sur la période : conversion non mesurée.' },
     };
   }

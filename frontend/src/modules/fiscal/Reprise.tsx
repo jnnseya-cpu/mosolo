@@ -12,6 +12,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { FiscalTabs, ReasonAction, useViewer } from './common';
 import './fiscal.css';
+import { RepriseVisuels } from './visuels';
 
 interface Line { line: number; type: string; ref: string; ok: boolean; errors: string[]; outcome?: string; createdId?: string }
 interface Dedup { line: number; ref: string; kind: string; candidateId: string; status: string; mergeId?: string }
@@ -90,6 +91,7 @@ export default function Reprise() {
       <PageHead eyebrow="Reprise de l’existant" title="Reprise e-DGRK et import par lots"
         lead="Comptes, objets et historique de la télédéclaration et d’e-DGRK sont repris sans système parallèle : validation à blanc, rapport par ligne, intégration par une seconde personne, provenance « e-DGRK » sur chaque donnée. Les doublons deviennent des propositions ; l’historique ne crée aucune dette." />
       <FiscalTabs />
+      {q.data && <RepriseVisuels lots={q.data} />}
       {has('R06', 'R07', 'R11', 'R12') && (
         <form className="panel stack-sm" onSubmit={(e) => void upload(e)}>
           <div className="field-row">

@@ -14,6 +14,7 @@ import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import './referentiel.css';
+import { RecettesVisuels } from './visuels';
 
 interface InventoryAttr { key: string; label: string; expected: string; value: string; renseigne: boolean; source: string | null }
 export interface RevenueLineView {
@@ -114,6 +115,7 @@ export default function Recettes() {
   const full = useApi(agent ? () => api<{ items: RevenueLineView[] }>('/v1/referentiel/recettes') : null, [user?.id, agent]);
   const canEdit = !!user?.roles.some((r) => ['R05', 'R06', 'R07', 'R13', 'R14'].includes(r));
   const lines = full.data?.items ?? pub.data?.items ?? [];
+  const codes = useApi(agent ? () => api<{ items: CodeEntry[] }>('/v1/referentiel/codes') : null, [user?.id, agent]);
   return (
     <div className="page page-wide">
       <PageHead eyebrow="Paysage des recettes (Cahier ch. 7)" title="Référentiel des recettes"
@@ -123,6 +125,7 @@ export default function Recettes() {
       {pub.data && (
         <div className="stack">
           <div className="callout callout-info"><Icon name="info" size={18} /><p>{pub.data.notice} Aucun taux n’est porté par le référentiel.</p></div>
+          <RecettesVisuels lines={lines} sections={SECTIONS} codes={agent ? codes.data?.items ?? null : null} />
           {SECTIONS.map((s) => {
             const rows = lines.filter((l) => l.section === s.id);
             return (

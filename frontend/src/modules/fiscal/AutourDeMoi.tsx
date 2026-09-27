@@ -17,6 +17,7 @@ import { api } from '../../lib/api';
 import { circleRing, metersBetween, type PreciseFix } from '../../lib/geo';
 import { MAP_STATUS } from '../../lib/status';
 import './autour.css';
+import { AutourVisuels } from './visuels';
 
 interface Item {
   id: string; reference: string; label: string; categoryLabel: string; vertical: string | null; commune: string; quartier: string; avenue: string | null;
@@ -118,6 +119,8 @@ export default function AutourDeMoi() {
             ))}
             <span className="small muted adm-where"><Icon name="pin" size={14} /> {data.commune} · {data.items.length} bien(s) à moins de {data.radiusM} m{busy ? ' · mise à jour…' : ''}</span>
           </div>
+
+          <AutourVisuels counts={data.counts} items={data.items} />
 
           {fix && (
             <GeoMapLazy center={[fix.lon, fix.lat]} height={340} ariaLabel="Carte des biens autour de moi"

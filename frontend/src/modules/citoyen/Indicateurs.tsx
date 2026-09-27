@@ -9,6 +9,7 @@ import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { BlocIndicateurs } from './common';
 import './citoyen.css';
+import { SyntheseIndicateurs } from './visuels';
 
 interface Reponse { calculeLe: string; modules: { module: number; titre: string; indicateurs: Record<string, unknown> }[]; notice: string }
 
@@ -21,6 +22,7 @@ export default function Indicateurs() {
       {q.loading ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : q.data && (
         <>
           <p className="small muted">{q.data.notice} Calculé le {fmtDate(q.data.calculeLe, true)}.</p>
+          <SyntheseIndicateurs modules={q.data.modules} />
           <div className="cit-kpis">{q.data.modules.map((m) => <BlocIndicateurs key={m.module} titre={`Module ${m.module} — ${m.titre}`} indicateurs={m.indicateurs} />)}</div>
         </>
       )}

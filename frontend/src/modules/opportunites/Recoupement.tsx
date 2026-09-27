@@ -14,6 +14,7 @@ import { api } from '../../lib/api';
 import { useApp } from '../../context';
 import { ActionError, hasRole, RULE_LABELS, Tabs, useAction, WL_STATUS, WorklistView, type WorklistItem } from './shared';
 import './opportunites.css';
+import { BlocagesVisuel, ListeTravailVisuels, SourcesVisuel } from './visuels';
 
 interface CrossRule { kind: string; ruleCode: string; signal: string; rule: string; result: string }
 interface Source {
@@ -81,6 +82,7 @@ function SourcesTab({ roles }: { roles: string[] }) {
   return (
     <div className="stack">
       <p className="callout callout-info"><Icon name="lock" size={18} /><span>Chaque source exige un protocole signé et une vérification au regard du Code du numérique (Ordonnance-loi n° 23/010 du 13 mars 2023) avant tout échange : sinon, aucune donnée n’est reçue.</span></p>
+      <SourcesVisuel items={q.data?.items ?? []} labels={SOURCE_STATUS} />
       <DataTable rows={q.data?.items ?? []} rowKey={(x) => x.id} caption="Sources partenaires"
         empty={<EmptyState title="Aucune source" icon="file" />}
         columns={[
@@ -157,6 +159,7 @@ function BlocksTab({ roles }: { roles: string[] }) {
   return (
     <>
       <ActionError error={a.error} />
+      <BlocagesVisuel items={q.data?.items ?? []} />
       <DataTable rows={q.data?.items ?? []} rowKey={(b) => b.id} caption="Services bloqués faute de quitus valide"
         empty={<EmptyState title="Aucun blocage" icon="check" />}
         columns={[
@@ -196,6 +199,7 @@ export default function Recoupement() {
           <label className="field op-filter"><span>Règle</span>
             <select value={rule} onChange={(e) => setRule(e.target.value)}><option value="">Toutes</option>{Object.entries(RULE_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
           </label>
+          <ListeTravailVisuels items={wl.data?.items ?? []} />
           <WorklistView items={wl.data?.items ?? []} onPick={wl.data?.access === 'full' ? setSel : undefined} />
           {sel && <ItemPanel item={sel} roles={roles} onDone={() => { setSel(null); wl.reload(); }} />}
         </div>

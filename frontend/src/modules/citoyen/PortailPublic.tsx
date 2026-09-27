@@ -12,6 +12,7 @@ import { ErrorState, Loading } from '../../components/States';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import './citoyen.css';
+import { PortailVisuels } from './visuels';
 
 interface RegleSim { code: string; version: number; libelle: string; statut: string; base: string; entrees: string[]; rangs: number[]; nature: string }
 interface Famille { famille: string; libelle: string; regles: RegleSim[]; disponible: boolean; motifIndisponible: string | null }
@@ -82,6 +83,7 @@ export default function PortailPublic() {
       {cat.loading ? <Loading /> : cat.error ? <ErrorState error={cat.error} onRetry={cat.reload} /> : cat.data && (
         <section className="stack-sm" aria-label="Simulateurs">
           <p className="notice small">{cat.data.avertissement}</p>
+          <PortailVisuels familles={cat.data.familles} echeances={info.data?.calendrier.echeances ?? null} />
           <div className="cit-grid">{cat.data.familles.map((f) => <Simulateur key={f.famille} f={f} />)}</div>
         </section>
       )}

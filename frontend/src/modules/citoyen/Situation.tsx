@@ -12,6 +12,7 @@ import { QrCode } from '../../components/QrCode';
 import { api, describeError } from '../../lib/api';
 import { Tableau } from './common';
 import './citoyen.css';
+import { SituationVisuels } from './visuels';
 
 interface Attestation { numero: string; emiseLe: string; aJour: boolean; objets: { id: string; igf: string | null; categorie: string; commune: string; libelle: string }[]; obligations: { total: number; parStatut: Record<string, number>; resteAPayer: { amount: string; currency: string }[]; contestees: number }; quitus: { eligible: boolean; bloquants: number; mention: string } | null; verification: string; notice: string }
 
@@ -39,6 +40,7 @@ export default function Situation() {
           <p className="panel-title">Attestation <span className="mono">{a.numero}</span> — {fmtDate(a.emiseLe, true)}</p>
           <StatusBadge tone={a.aJour ? 'good' : 'warning'} label={a.aJour ? 'Compte à jour' : 'Obligations ouvertes'} />
           <p className="small">Obligations : {a.obligations.total} ; contestées : {a.obligations.contestees} ; reste à payer : {a.obligations.resteAPayer.map((m) => `${m.amount} ${m.currency}`).join(' + ') || '0'}</p>
+          <SituationVisuels parStatut={a.obligations.parStatut} objets={a.objets} />
           {a.quitus && <p className="small">Quitus : {a.quitus.eligible ? 'conditions réunies' : `${a.quitus.bloquants} obligation(s) bloquante(s)`} — {a.quitus.mention}</p>}
           <Tableau entetes={['Objet', 'Catégorie', 'Commune', 'Situation']} vide="Aucun objet rattaché." lignes={a.objets.map((o) => [o.igf ?? o.id, o.categorie, o.commune, o.libelle])} />
           <QrCode value={a.verification} size={120} alt={`QR de vérification de l’attestation ${a.numero}`} />

@@ -14,6 +14,7 @@ import { sha256Hex } from '../../lib/crypto';
 import { analyserTexteDocument, lireImage, type LectureDocument } from '../../lib/documentOcr';
 import { ActionMotivee, Tableau } from './common';
 import './citoyen.css';
+import { PiecesVisuels } from './visuels';
 
 interface Facteur { code: string; libelle: string; points: number; max: number; detail: string }
 interface Resultat { id: string; score: number; statut: string; revueHumaine: boolean; facteurs: Facteur[]; rapprochements: { iuc: string; nomMasque: string; motifs: string[] }[]; notice: string; seuil: { valeur: number; mention: string } }
@@ -79,6 +80,7 @@ export default function Pieces() {
       {res && (
         <section className="panel stack-sm" role="status" aria-label="Résultat du contrôle">
           <StatusBadge tone={res.revueHumaine ? 'warning' : 'good'} label={`Score de confiance ${res.score}/100 — ${res.revueHumaine ? 'cas à risque, revue humaine' : 'cohérent'}`} />
+          <PiecesVisuels facteurs={res.facteurs} revues={null} />
           <ul className="plain-list small">{res.facteurs.map((x) => <li key={x.code}>{x.libelle} : {x.points}/{x.max} — {x.detail}</li>)}</ul>
           {res.rapprochements.length > 0 && <p className="small">Rapprochements possibles (sans fusion) : {res.rapprochements.map((r) => `${r.iuc} ${r.nomMasque} (${r.motifs.join(', ')})`).join(' ; ')}</p>}
           <p className="small muted">{res.notice} Seuil : {res.seuil.valeur} ({res.seuil.mention}).</p>
@@ -87,6 +89,7 @@ export default function Pieces() {
       {reviewer && (
         <section className="panel stack-sm" aria-label="Cas à risque">
           <p className="panel-title">Cas à risque en attente de revue humaine</p>
+          <PiecesVisuels facteurs={null} revues={revues.data ?? null} />
           <Tableau entetes={['Pièce', 'Nom déclaré', 'Compte', 'Score', 'Rapprochements', 'Décision']} vide="Aucun cas à risque."
             lignes={(revues.data ?? []).map((r) => [`${r.type} ${r.numeroMasque}`, r.nomDeclare, r.taxpayer ? `${r.taxpayer.iuc}` : '—', `${r.score}/100`, r.rapprochements.map((x) => `${x.iuc} (${x.motifs.join(', ')})`).join(' ; ') || '—',
               <span key="d" className="cit-inline">

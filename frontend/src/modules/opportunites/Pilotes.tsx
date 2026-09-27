@@ -11,6 +11,7 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { ActionError, hasRole, Kpi, money, useAction } from './shared';
+import { ParEtapeVisuel } from './visuels';
 
 export interface PilotResult {
   id: string; opportunityId: string; periodStart: string; periodEnd: string; perimeter: string;
@@ -39,6 +40,7 @@ export function OppIndicatorsPanel() {
         <Kpi label="Résultats de pilote" value={d.pilotes.resultats} sub={`${d.pilotes.opportunitesPilotees} opportunité(s) pilotée(s)`} />
         <Kpi label="Gain net des pilotes" value={d.pilotes.gainNet.length ? d.pilotes.gainNet.map((g) => money(g.netGain)).join(' · ') : '—'} sub={d.pilotes.note ?? 'dont avec groupe témoin : ' + d.pilotes.gainNet.map((g) => money(g.netGainWithComparison)).join(' · ')} />
       </div>
+      <ParEtapeVisuel parEtape={d.opportunites.parEtape} />
       <p className="small muted">{d.methode}</p>
     </section>
   );

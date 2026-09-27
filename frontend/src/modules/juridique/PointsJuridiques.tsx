@@ -17,6 +17,7 @@ import { useApp } from '../../context';
 import { ActionError, hasRole, Kpi, Tabs, useAction } from '../integrite/shared';
 import type { EtatFonction } from './AttenteBaseLegale';
 import '../integrite/integrite.css';
+import { PointsVisuels } from './visuels';
 
 interface Acte { reference: string; titre: string; sha256: string }
 export interface PointView {
@@ -97,6 +98,7 @@ export default function PointsJuridiques() {
             <Kpi label="Tranchés sur acte" value={reg.data.summary.tranches} />
             <Kpi label="Propositions à décider" value={pending.length} />
           </div>
+          <PointsVisuels points={reg.data.points} fonctions={reg.data.fonctions} />
           <p className="callout callout-info ig-note"><Icon name="info" size={18} /><span>{reg.data.note}</span></p>
 
           {pending.length > 0 && (

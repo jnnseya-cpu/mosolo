@@ -12,6 +12,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { ActionMotivee, BlocIndicateurs, Tableau } from './common';
 import './citoyen.css';
+import { CadastreVisuels } from './visuels';
 
 interface Couche { code: string; libelle: string; sensible: boolean; restreinte: boolean; total: number | null; parCommune: { commune: string; total: number | null }[] | null }
 interface Revue { id: string; nature: string; distanceM: number | null; statut: string; objetsDetail: { id: string; igf?: string | null; categorie?: string; commune?: string; quartier?: string }[] }
@@ -103,6 +104,7 @@ export default function Cadastre() {
       )}
       {user && (
         <>
+          {couches.data && <CadastreVisuels couches={couches.data.couches} chaleur={chaleur.data?.lignes ?? null} indicateur={ind} cas={cas.data ?? null} />}
           <BlocIndicateurs titre="Indicateurs du module 8" indicateurs={kpi.data} />
           <section className="panel stack-sm" aria-label="Carte de chaleur">
             <p className="panel-title">Carte de chaleur par commune</p>

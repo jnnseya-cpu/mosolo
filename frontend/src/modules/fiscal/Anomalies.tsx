@@ -13,6 +13,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { DemoNote, FiscalTabs, ReasonAction, useViewer } from './common';
 import './fiscal.css';
+import { AnomaliesVisuels } from './visuels';
 
 interface Protocol { active: boolean; reference: string | null; origin: string; notice: string }
 interface SignalRow { code: string; label: string; rule: string; output: string; sourceLabel: string; protocol: Protocol; open: number }
@@ -101,6 +102,7 @@ export default function Anomalies() {
         lead="Rapprochements sur données de partenaires (compteurs, paie, agences, baux d’entreprise, permis et imagerie, réceptions d’immeubles) et unités sans bail. Chaque signal produit une liste de travail pour vérification humaine — jamais un avis ni une dette. Sans protocole actif, aucune donnée n’est reçue." />
       <FiscalTabs />
       <DemoNote>Le protocole « compteurs » et ses données sont FICTIFS (démonstration) ; les autres sources restent « protocole requis ».</DemoNote>
+      {cat.data && <AnomaliesVisuels signals={cat.data.signals} cases={list.data ?? null} />}
       {cat.loading && <Loading />}
       {cat.error !== null && <ErrorState error={cat.error} onRetry={cat.reload} />}
       {cat.data && (

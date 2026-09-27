@@ -97,3 +97,5 @@
 /* Corrections d’objets : file des approbations au-dessus du détail par objet ; pièces justificatives. */
 .fs-corr-queue { margin-bottom: 16px; display: grid; gap: 12px; }
 .fs-page fieldset.field { border: 1px solid var(--line-soft); border-radius: var(--r); padding: 12px; margin: 0; min-width: 0; }
+/* Téléphone (360 px) : les libellés longs des boutons (signaux, protocoles) passent à la ligne au lieu de déborder. */
+.fs-page .btn { white-space: normal; max-width: 100%; text-align: left; }

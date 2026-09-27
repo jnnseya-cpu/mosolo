@@ -192,6 +192,10 @@ describe('Module 5 — portail public : simulateurs sur règles publiées, infor
     const ind = (await env.req('GET', '/v1/citoyen/indicateurs', 'u-auditeur')).json().modules[4].indicateurs;
     expect(ind.visites).toMatchObject({ valeur: 3, parPage: { accueil: 2, simulateurs: 1 } });
     expect(ind.conversionInscription.denominateur).toBe(3);
+    // Conversion sur la même période que les visites : jamais plus de 100 % à cause de l'historique antérieur à la mesure.
+    expect(ind.conversionInscription.numerateur).toBe(1);
+    expect(Number(ind.conversionInscription.valeur)).toBeLessThanOrEqual(100);
+    expect(ind.conversionInscription.depuis).toBeTruthy();
   });
 
   it('anti-robots : défi SHA-256 à usage unique exigé du public anonyme (activé), jamais d’un agent authentifié', async () => {

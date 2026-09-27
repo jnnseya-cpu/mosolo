@@ -13,6 +13,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { FiscalTabs, ReasonAction, useViewer } from './common';
 import './fiscal.css';
+import { DependancesVisuels } from './visuels';
 
 interface Condition { code: string; version: number; condition: string; label: string; citizenText: string; mode: 'INFORMATIF' | 'BLOQUANT'; legal: { jPoint: string; instrumentId?: string; article?: string }; effectiveFrom: string }
 interface ServiceRow { service: string; label: string; conditions: Condition[]; history: { code: string; version: number; mode: string; status: string; effectiveFrom: string }[] }
@@ -110,6 +111,7 @@ export default function Dependances() {
       {q.data && (
         <>
           <p className="small muted">{q.data.notice}</p>
+          <DependancesVisuels services={q.data.services} />
           <div className="fs-grid">{q.data.services.map((s) => (
             <article key={s.service} className="panel stack-sm">
               <p className="panel-title">{s.label}</p>

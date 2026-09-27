@@ -12,6 +12,7 @@ import { DataTable } from '../../components/DataTable';
 import { ErrorState, Loading } from '../../components/States';
 import { api } from '../../lib/api';
 import './referentiel.css';
+import { ModeleVisuels } from './visuels';
 
 export interface EntityView {
   code: string; entity: string; purpose: string; relations: string; confidentiality: string;
@@ -68,6 +69,7 @@ export default function ModeleDonnees() {
     <div className="page page-wide">
       <PageHead eyebrow="Référentiel" title="Modèle de données et habilitations"
         lead="Correspondance vérifiée en direct entre le Document maître (ch. 30 et ch. 12) et le code : cycles de vie, confidentialité, effectifs sans donnée personnelle ; interdits de chaque rôle refusés par le point de décision central." />
+      <ModeleVisuels entities={dm.data?.entities ?? null} roles={mx.data?.rows ?? null} />
       <div className="seg seg-wrap" role="group" aria-label="Vue">
         <button type="button" aria-pressed={tab === 'donnees'} onClick={() => setTab('donnees')}>Modèle de données</button>
         <button type="button" aria-pressed={tab === 'roles'} onClick={() => setTab('roles')}>Matrice d’habilitations</button>
