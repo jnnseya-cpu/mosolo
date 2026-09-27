@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1513 routes** dans 49 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1514 routes** dans 49 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -16,7 +16,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1513 routes** dans 4
 | extension equipements | 11 |
 | extension fiscal | 91 |
 | extension ia | 40 |
-| extension integrite | 82 |
+| extension integrite | 83 |
 | extension juridique | 11 |
 | extension opportunites | 32 |
 | extension parking | 74 |
@@ -594,6 +594,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1513 routes** dans 4
 | GET | `/v1/integrite/privacy/requests/:id/export` |
 | POST | `/v1/integrite/privacy/requests/:id/respond` |
 | POST | `/v1/integrite/privacy/requests/:id/take` |
+| POST | `/v1/integrite/privacy/requests/:id/validation` |
 | GET | `/v1/integrite/renseignement/indicateurs` |
 | GET | `/v1/integrite/reports` |
 | GET | `/v1/integrite/reports/:id` |

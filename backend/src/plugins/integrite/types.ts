@@ -257,8 +257,15 @@ export interface Incident {
 /* Protection des données                                              */
 /* ------------------------------------------------------------------ */
 
-export type PrivacyRequestType = 'ACCES' | 'RECTIFICATION';
-export type PrivacyRequestStatus = 'RECUE' | 'EN_TRAITEMENT' | 'REPONDUE' | 'REJETEE';
+/**
+ * ACCES et RECTIFICATION (existants) ; LIMITATION (limitation du traitement / retrait du consentement) et EFFACEMENT
+ * (anonymisation des données non exigées par la loi fiscale) ajoutés le 27/09/2026 (deuxième passe adverse) : décidés
+ * par DEUX personnes distinctes ; jamais d'effacement du journal d'audit, des écritures, des quittances ni des preuves.
+ */
+export type PrivacyRequestType = 'ACCES' | 'RECTIFICATION' | 'LIMITATION' | 'EFFACEMENT';
+export type PrivacyRequestStatus = 'RECUE' | 'EN_TRAITEMENT' | 'EN_ATTENTE_SECONDE_VALIDATION' | 'REPONDUE' | 'REJETEE';
+/** Types exigeant une seconde validation par une autre personne habilitée. */
+export const PRIVACY_TWO_PERSON_TYPES: readonly PrivacyRequestType[] = ['LIMITATION', 'EFFACEMENT'];
 export const RECTIFIABLE_FIELDS = ['fullName', 'email', 'language'] as const;
 export type RectifiableField = (typeof RECTIFIABLE_FIELDS)[number];
 
@@ -276,6 +283,10 @@ export interface PrivacyRequest {
   handledBy?: string;
   response?: { decision: 'ACCEPTEE' | 'REJETEE'; note: string; by: string; at: string };
   exportReady?: boolean;
+  /** Première décision (LIMITATION, EFFACEMENT) : en attente de la seconde validation par une autre personne. */
+  firstDecision?: { by: string; at: string; note: string };
+  /** Exécution d'une limitation ou d'une anonymisation : champs traités (empreintes avant), données conservées et motif légal. */
+  execution?: { at: string; by: string; treated: { field: string; beforeHash: string | null }[]; retained: { data: string; reason: string }[] };
 }
 
 export interface ProcessingRecord {

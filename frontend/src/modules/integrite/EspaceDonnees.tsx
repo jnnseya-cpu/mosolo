@@ -17,7 +17,15 @@ import './integrite.css';
 interface PReq {
   id: string; taxpayerId: string; type: string; details: string; field?: string; requestedValue?: string; submittedBy: string; submittedAt: string;
   dueAt: string; status: string; response?: { decision: string; note: string; at: string }; exportReady?: boolean; overdue: boolean; delayNote: string;
+  firstDecision?: { by: string; at: string; note: string };
+  execution?: { at: string; by: string; treated: { field: string }[]; retained: { data: string; reason: string }[] };
 }
+type PType = 'ACCES' | 'RECTIFICATION' | 'LIMITATION' | 'EFFACEMENT';
+/** Libellés des types de demande (limitation et effacement ajoutés le 27/09/2026 : décision à deux personnes). */
+const TYPE_LABELS: Record<PType, string> = {
+  ACCES: 'Droit d’accès (et portabilité)', RECTIFICATION: 'Rectification', LIMITATION: 'Limitation — retrait du consentement', EFFACEMENT: 'Effacement (anonymisation)',
+};
+const typeLabel = (r: { type: string; field?: string }) => (r.type === 'RECTIFICATION' ? `Rectification — ${FIELD_LABELS[r.field ?? ''] ?? ''}` : TYPE_LABELS[r.type as PType] ?? r.type);
 interface Proc {
   id: string; version: number; name: string; purpose: string; legalBasis: string; dataCategories: string[]; dataSubjects: string[]; recipients: string[];
   retention: string; security: string[]; module: string; sensitive: boolean; updatedAt: string; updatedBy: string;
@@ -60,7 +68,7 @@ export default function EspaceDonnees() {
 function MyRequests() {
   const { user, fmtDate } = useApp();
   const list = useApi(() => api<PReq[]>('/v1/integrite/privacy/requests'), [user?.id]);
-  const [type, setType] = useState<'ACCES' | 'RECTIFICATION'>('ACCES');
+  const [type, setType] = useState<PType>('ACCES');
   const [details, setDetails] = useState('');
   const [field, setField] = useState('fullName');
   const [value, setValue] = useState('');
@@ -76,7 +84,14 @@ function MyRequests() {
             <div className="seg" role="group" aria-label="Type de demande">
               <button type="button" aria-pressed={type === 'ACCES'} onClick={() => setType('ACCES')}>Accès</button>
               <button type="button" aria-pressed={type === 'RECTIFICATION'} onClick={() => setType('RECTIFICATION')}>Rectification</button>
+              <button type="button" aria-pressed={type === 'LIMITATION'} onClick={() => setType('LIMITATION')}>Limitation</button>
+              <button type="button" aria-pressed={type === 'EFFACEMENT'} onClick={() => setType('EFFACEMENT')}>Effacement</button>
             </div>
+            {(type === 'LIMITATION' || type === 'EFFACEMENT') && (
+              <p className="hint">{type === 'LIMITATION'
+                ? 'Les messages facultatifs et vos consentements (WhatsApp, canal préféré) sont retirés ; les avis obligatoires qui protègent vos droits restent envoyés.'
+                : 'Les données non exigées par la loi fiscale (adresse électronique, préférences, mémoire de l’assistant) sont anonymisées. Votre identité fiscale, vos obligations, paiements et quittances sont conservés au titre de la loi.'} Décision prise par deux personnes.</p>
+            )}
             {type === 'RECTIFICATION' && (
               <div className="field-row">
                 <div className="field"><label className="label" htmlFor="my-f">Donnée</label><select id="my-f" value={field} onChange={(e) => setField(e.target.value)}>{Object.entries(FIELD_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
@@ -101,7 +116,7 @@ function MyRequests() {
           <ul className="list-rows">
             {list.data.map((r) => (
               <li key={r.id} className="list-row">
-                <span><span className="row-title">{r.type === 'ACCES' ? 'Accès à mes données' : `Rectification — ${FIELD_LABELS[r.field ?? ''] ?? ''}`}</span><span className="account-code">{r.id} · déposée le {fmtDate(r.submittedAt)}</span></span>
+                <span><span className="row-title">{r.type === 'ACCES' ? 'Accès à mes données' : typeLabel(r)}</span><span className="account-code">{r.id} · déposée le {fmtDate(r.submittedAt)}</span></span>
                 <span className="row-side"><StateBadge value={r.status} />
                   {r.exportReady && <button type="button" className="btn btn-secondary btn-sm" onClick={async () => setExp(await api(`/v1/integrite/privacy/requests/${r.id}/export`))}><Icon name="download" size={16} /> Voir l’export</button>}
                 </span>
@@ -135,7 +150,7 @@ function DpoRequests() {
         <>
           <DataTable rows={list.data} rowKey={(r) => r.id} caption="Demandes des personnes" empty={<EmptyState title="Aucune demande" />}
             columns={[
-              { key: 'id', label: 'Demande', primary: true, render: (r) => <><button type="button" className="btn-link ig-rowlink" onClick={() => setOpen(r.id)}>{r.type === 'ACCES' ? 'Droit d’accès' : 'Rectification'}</button><span className="account-code">{r.id}</span></> },
+              { key: 'id', label: 'Demande', primary: true, render: (r) => <><button type="button" className="btn-link ig-rowlink" onClick={() => setOpen(r.id)}>{typeLabel({ type: r.type })}</button><span className="account-code">{r.id}</span></> },
               { key: 'tp', label: 'Personne', render: (r) => <span className="mono small">{r.taxpayerId}</span> },
               { key: 'at', label: 'Reçue', render: (r) => <span className="small">{fmtDate(r.submittedAt)}</span> },
               { key: 'due', label: 'Échéance', render: (r) => <span className={`small ${r.overdue ? 'ig-late' : ''}`}>{fmtDate(r.dueAt)}{r.overdue ? ' · dépassée' : ''}</span> },
@@ -147,13 +162,15 @@ function DpoRequests() {
       <Drawer open={!!cur} title="Demande de la personne" onClose={() => setOpen(null)}>
         {cur && (
           <div className="ig-stack">
-            <div className="panel-head"><div><p className="row-title">{cur.type === 'ACCES' ? 'Droit d’accès' : 'Rectification'}</p><p className="panel-sub">{cur.id} · {cur.taxpayerId}</p></div><StateBadge value={cur.status} /></div>
+            <div className="panel-head"><div><p className="row-title">{typeLabel({ type: cur.type })}</p><p className="panel-sub">{cur.id} · {cur.taxpayerId}</p></div><StateBadge value={cur.status} /></div>
             <dl className="kv kv-dense">
               <div><dt>Précisions</dt><dd>{cur.details}</dd></div>
               {cur.field && <div><dt>Donnée</dt><dd>{FIELD_LABELS[cur.field]}</dd></div>}
               {cur.requestedValue && <div><dt>Valeur demandée</dt><dd>{cur.requestedValue}</dd></div>}
               <div><dt>Déposée par</dt><dd className="mono">{cur.submittedBy}</dd></div>
+              {cur.firstDecision && <div><dt>Première décision</dt><dd>{cur.firstDecision.by} — {cur.firstDecision.note}</dd></div>}
               {cur.response && <div><dt>Réponse</dt><dd>{cur.response.decision} — {cur.response.note}</dd></div>}
+              {cur.execution && <div><dt>Conservé au titre de la loi</dt><dd>{cur.execution.retained.map((x) => x.data).join(' ; ')}</dd></div>}
             </dl>
             <ActionError error={a.error} />
             {cur.status === 'RECUE' && <button type="button" className="btn btn-secondary btn-sm" disabled={a.busy} onClick={() => void act('take')}>Prendre en charge</button>}
@@ -161,8 +178,17 @@ function DpoRequests() {
               <fieldset className="line-box"><legend className="label">Répondre</legend>
                 <textarea aria-label="Motif de la réponse" rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder={cur.type === 'RECTIFICATION' ? 'Pièce justificative vérifiée…' : 'Périmètre de l’export…'} />
                 <div className="btn-row">
-                  <button type="button" className="btn btn-primary btn-sm" disabled={a.busy || note.trim().length < 5} onClick={() => void act('respond', { decision: 'ACCEPTEE', note })}>{cur.type === 'ACCES' ? 'Établir l’export' : 'Rectifier'}</button>
+                  <button type="button" className="btn btn-primary btn-sm" disabled={a.busy || note.trim().length < 5} onClick={() => void act('respond', { decision: 'ACCEPTEE', note })}>{cur.type === 'ACCES' ? 'Établir l’export' : cur.type === 'RECTIFICATION' ? 'Rectifier' : 'Proposer (seconde validation requise)'}</button>
                   <button type="button" className="btn btn-secondary btn-sm" disabled={a.busy || note.trim().length < 5} onClick={() => void act('respond', { decision: 'REJETEE', note })}>Rejeter (motivé)</button>
+                </div>
+              </fieldset>
+            )}
+            {cur.status === 'EN_ATTENTE_SECONDE_VALIDATION' && (
+              <fieldset className="line-box"><legend className="label">Seconde validation (autre personne que {cur.firstDecision?.by})</legend>
+                <textarea aria-label="Motif de la seconde validation" rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
+                <div className="btn-row">
+                  <button type="button" className="btn btn-primary btn-sm" disabled={a.busy || note.trim().length < 5} onClick={() => void act('validation', { approve: true, note })}>Valider et exécuter</button>
+                  <button type="button" className="btn btn-secondary btn-sm" disabled={a.busy || note.trim().length < 5} onClick={() => void act('validation', { approve: false, note })}>Refuser (motivé)</button>
                 </div>
               </fieldset>
             )}

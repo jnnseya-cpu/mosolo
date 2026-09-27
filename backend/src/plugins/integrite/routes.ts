@@ -251,7 +251,7 @@ export function registerIntegriteRoutes(app: FastifyInstance, ctx: AppContext, s
   app.post('/v1/integrite/privacy/requests', async (req, reply) => {
     const user = pre(req, 'integrite:privacy.submit');
     const b = parse(z.object({
-      taxpayerId: z.string().min(1), type: z.enum(['ACCES', 'RECTIFICATION']), details: text(5),
+      taxpayerId: z.string().min(1), type: z.enum(['ACCES', 'RECTIFICATION', 'LIMITATION', 'EFFACEMENT']), details: text(5),
       field: z.enum(RECTIFIABLE_FIELDS).optional(), requestedValue: z.string().trim().min(1).max(200).optional(),
     }).strict(), req.body);
     return reply.code(201).send(svc.submitPrivacy(user, b));
@@ -260,6 +260,11 @@ export function registerIntegriteRoutes(app: FastifyInstance, ctx: AppContext, s
   app.post<{ Params: { id: string } }>('/v1/integrite/privacy/requests/:id/respond', async (req) => {
     const user = pre(req, 'integrite:privacy.process');
     return svc.respondPrivacy(user, req.params.id, parse(z.object({ decision: z.enum(['ACCEPTEE', 'REJETEE']), note: text(5) }).strict(), req.body));
+  });
+  // Seconde validation (deux personnes) d'une limitation ou d'un effacement (anonymisation) — 27/09/2026.
+  app.post<{ Params: { id: string } }>('/v1/integrite/privacy/requests/:id/validation', async (req) => {
+    const user = pre(req, 'integrite:privacy.process');
+    return svc.validatePrivacy(user, req.params.id, parse(z.object({ approve: z.boolean(), note: text(5) }).strict(), req.body));
   });
   app.get<{ Params: { id: string } }>('/v1/integrite/privacy/requests/:id/export', async (req) => svc.getExport(requireUser(req), req.params.id));
   app.get('/v1/integrite/privacy/registry', async (req) => svc.registry(requireUser(req)));

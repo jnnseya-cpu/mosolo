@@ -17,8 +17,7 @@ import {
   type AccessReviewCampaign, type CaseDecision, type CaseEvent, type CaseFinding, type EvidenceRef, type FraudAlert,
   type FraudCase, type Incident, type IncidentCategory, type IncidentStatus, type MysteryCheck, type MysteryFollowUp, type MysteryResult,
   type MysteryTarget, type NotificationTarget, type Observation, type PrivacyRequest, type PrivacyRequestType, type ProcessingRecord,
-  type RectifiableField, type Report, type ReportCategory, type ReportChannel, type ReportOutcome, type Severity, type TargetKind,
-} from './types.js';
+  type RectifiableField, type Report, type ReportCategory, type ReportChannel, type ReportOutcome, type Severity, type TargetKind, PRIVACY_TWO_PERSON_TYPES } from './types.js';
 
 /* ------------------------------------------------------------------ */
 /* Entrées                                                             */
@@ -1115,6 +1114,16 @@ export class IntegriteService {
     if (r.status === 'REPONDUE' || r.status === 'REJETEE') throw conflict('PRIVACY_STATE', 'Demande déjà traitée.');
     const t = this.ctx.taxpayers.get(r.taxpayerId);
     const now = this.now;
+    // Limitation et effacement : la première décision favorable n'exécute rien ; une AUTRE personne habilitée valide.
+    if (input.decision === 'ACCEPTEE' && PRIVACY_TWO_PERSON_TYPES.includes(r.type)) {
+      if (r.status === 'EN_ATTENTE_SECONDE_VALIDATION') throw conflict('PRIVACY_STATE', 'Seconde validation attendue : utilisez la validation.');
+      r.status = 'EN_ATTENTE_SECONDE_VALIDATION';
+      r.firstDecision = { by: p.id, at: now, note: input.note };
+      r.handledBy = p.id;
+      this.privacyRequests.update(r);
+      this.kit.audit(p, 'integrite.privacy.two_person_proposed', 'privacy-request', id, { type: r.type, taxpayerId: r.taxpayerId });
+      return this.privacyView(r);
+    }
     if (input.decision === 'ACCEPTEE' && r.type === 'ACCES') {
       this.exports.set(r.id, this.buildExport(t.id));
       r.exportReady = true;
@@ -1136,6 +1145,67 @@ export class IntegriteService {
     return this.privacyView(r);
   }
 
+  /**
+   * Seconde validation d'une limitation ou d'un effacement (deux personnes distinctes, ni le demandeur ni l'auteur de
+   * la première décision). Exécution :
+   *  - LIMITATION : refus des communications facultatives et retrait des consentements (WhatsApp, canal préféré) ;
+   *    les avis obligatoires (droits de la personne) restent envoyés ;
+   *  - EFFACEMENT : anonymisation des données NON exigées par la loi fiscale (adresse électronique, préférences,
+   *    consentements, mémoire personnelle de l'assistant) + limitation ; l'identité fiscale (nom, IUC, téléphone de
+   *    connexion), les obligations, paiements, quittances, écritures, documents probants et le journal d'audit sont
+   *    CONSERVÉS au titre de l'obligation légale de conservation — durée à fixer par acte (point juridique, à confirmer
+   *    par le maître d'ouvrage).
+   */
+  validatePrivacy(p: Principal, id: string, input: { approve: boolean; note: string }) {
+    authorize(p, 'integrite:privacy.process');
+    const r = this.getPrivacy(id);
+    if (r.status !== 'EN_ATTENTE_SECONDE_VALIDATION' || !r.firstDecision) throw conflict('PRIVACY_STATE', `Aucune seconde validation attendue (demande ${r.status}).`);
+    assertDistinctPerson(p.id, [r.firstDecision.by, r.submittedBy], 'Deux personnes : la seconde validation revient à une autre personne que l’auteur de la première décision et que le demandeur.');
+    const now = this.now;
+    if (!input.approve) {
+      r.status = 'REJETEE';
+      r.response = { decision: 'REJETEE', note: input.note, by: p.id, at: now };
+      this.privacyRequests.update(r);
+      this.kit.audit(p, 'integrite.privacy.two_person_rejected', 'privacy-request', id, { type: r.type, firstBy: r.firstDecision.by });
+      return this.privacyView(r);
+    }
+    const t = this.ctx.taxpayers.get(r.taxpayerId);
+    const hash = (v: unknown) => (v === undefined || v === null || v === '' ? null : sha256Hex(typeof v === 'string' ? v : JSON.stringify(v)));
+    const treated: { field: string; beforeHash: string | null }[] = [
+      { field: 'prefs.optedOut', beforeHash: hash(t.prefs.optedOut) },
+      { field: 'prefs.whatsappConsent', beforeHash: hash(t.prefs.whatsappConsent) },
+      { field: 'prefs.preferredChannel', beforeHash: hash(t.prefs.preferredChannel) },
+    ];
+    const { preferredChannel: _pc, ...keptPrefs } = t.prefs;
+    let next = { ...t, prefs: { ...keptPrefs, optedOut: true, whatsappConsent: false } };
+    if (r.type === 'EFFACEMENT') {
+      treated.push({ field: 'email', beforeHash: hash(t.email) }, { field: 'prefs.disabledChannels', beforeHash: hash(t.prefs.disabledChannels) });
+      const { email: _e, ...rest } = next;
+      next = { ...rest, prefs: { optedOut: true, whatsappConsent: false } };
+      // Mémoire personnelle de l'assistant (comptes liés à la personne).
+      const memory = (this.ctx.ext.ia as { memory?: { eraseUser?: (u: never) => unknown } } | undefined)?.memory;
+      for (const u of this.ctx.users.all().filter((x) => x.taxpayerId === t.id)) {
+        try { memory?.eraseUser?.(u as never); treated.push({ field: `ia.memoire:${u.id}`, beforeHash: null }); } catch { /* module IA absent */ }
+      }
+    }
+    this.ctx.taxpayers.taxpayers.update(next);
+    const retained = [
+      { data: 'Identité fiscale (nom, IUC, téléphone de connexion)', reason: 'Obligation légale : rattachement des obligations et quittances ; durée de conservation fixée par acte (à confirmer).' },
+      { data: 'Obligations, paiements, quittances, écritures du grand livre', reason: 'Pièces comptables et fiscales : conservation légale, jamais effacées.' },
+      { data: 'Journal d’audit chaîné et preuves (documents probants, procès-verbaux)', reason: 'Intégrité de la chaîne d’audit et preuves : jamais modifiés.' },
+    ];
+    r.execution = { at: now, by: p.id, treated, retained };
+    r.status = 'REPONDUE';
+    r.response = { decision: 'ACCEPTEE', note: input.note, by: p.id, at: now };
+    this.privacyRequests.update(r);
+    this.kit.audit(p, r.type === 'EFFACEMENT' ? 'integrite.privacy.anonymised' : 'integrite.privacy.restricted', 'taxpayer', t.id, {
+      requestId: id, firstBy: r.firstDecision.by, fields: treated.map((x) => x.field), retained: retained.map((x) => x.data),
+    });
+    // Avis obligatoire à la personne (catégorie « protection des données ») : toujours envoyé malgré la limitation.
+    this.ctx.comms.publish('privacy.consent_updated', [taxpayerRecipient(this.ctx.taxpayers.get(t.id))], { reference: id }, { entity: 'GOUVERNORAT' });
+    return this.privacyView(r);
+  }
+
   private buildExport(taxpayerId: string) {
     const t = this.ctx.taxpayers.get(taxpayerId);
     const objects = this.ctx.objects.byTaxpayer(taxpayerId).map((o) => ({ id: o.id, category: o.category, commune: o.commune }));
@@ -1144,10 +1214,17 @@ export class IntegriteService {
     const activity = this.ctx.audit.list({ resourceId: taxpayerId, limit: 1000 }).items.map((e) => ({
       at: e.at, action: e.action, actor: e.actor.kind === 'user' ? `agent ${sha256Hex(e.actor.id).slice(0, 8)}` : e.actor.kind,
     }));
+    // Portabilité (deuxième passe adverse, 27/09/2026) : paiements, quittances et préférences de la personne ajoutés.
+    const payments = this.ctx.payments.orders.find((o) => o.taxpayerId === taxpayerId).map((o) => ({
+      paymentReference: o.paymentReference, obligationId: o.obligationId, channel: o.channel, amount: o.amount, status: o.status, createdAt: o.createdAt, confirmedAt: o.confirmedAt ?? null,
+    }));
+    const receipts = this.ctx.receipts.receipts.find((x) => x.taxpayerId === taxpayerId).map((x) => ({ number: x.number, status: x.status, amount: x.amount, paymentReference: x.paymentReference, issuedAt: x.issuedAt }));
     return {
+      format: 'application/json (UTF-8) — lisible par machine, réutilisable (portabilité)',
       generatedAt: this.now,
       profile: { id: t.id, iuc: t.iuc, fullName: t.fullName, phone: t.phone, email: t.email ?? null, language: t.language, situation: t.situation, verificationLevel: t.verificationLevel, createdAt: t.createdAt },
-      objects, obligations, activity,
+      preferences: { optedOut: !!t.prefs.optedOut, whatsappConsent: !!t.prefs.whatsappConsent, preferredChannel: t.prefs.preferredChannel ?? null, disabledChannels: t.prefs.disabledChannels ?? [] },
+      objects, obligations, payments, receipts, activity,
       note: 'Extrait établi au titre du droit d’accès. Les données de tiers et les dossiers d’enquête éventuels en sont exclus.',
     };
   }

@@ -42,7 +42,7 @@ const STATUS: Record<string, [string, Tone]> = {
   // incidents
   DECLARE: ['Déclaré', 'serious'], EN_COURS: ['En cours', 'warning'], CONTENU: ['Contenu', 'info'], RESOLU: ['Résolu', 'good'],
   // données
-  RECUE: ['Reçue', 'info'], EN_TRAITEMENT: ['En traitement', 'warning'], REPONDUE: ['Répondue', 'good'], REJETEE: ['Rejetée', 'neutral'],
+  RECUE: ['Reçue', 'info'], EN_TRAITEMENT: ['En traitement', 'warning'], EN_ATTENTE_SECONDE_VALIDATION: ['Seconde validation attendue', 'warning'], REPONDUE: ['Répondue', 'good'], REJETEE: ['Rejetée', 'neutral'],
   // revue
   A_CONFIRMER: ['À confirmer', 'warning'], MAINTENU: ['Maintenu', 'good'], RETRAIT_A_EXECUTER: ['Retrait à exécuter', 'critical'],
   OUVERTE: ['Ouverte', 'warning'], CLOTUREE: ['Clôturée', 'good'],
