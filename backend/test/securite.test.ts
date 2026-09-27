@@ -150,7 +150,8 @@ describe('Secrets des prestataires et des terminaux', () => {
     expect(() => deviceKeysFromEnv({ MOSOLO_DEVICE_KEYS: 'sans-egal' }, false)).toThrow(/format/);
 
     nonDemo();
-    const app = buildApp({ clock: clock(), secrets: SECRETS, connectorEnv: {} });
+    // Données semées explicitement (hors démonstration, elles ne le sont jamais par défaut) : clés substituées.
+    const app = buildApp({ clock: clock(), secrets: SECRETS, connectorEnv: {}, seed: true });
     await app.ready();
     const keys = app.ctx.field.devices.all().map((d) => d.key);
     expect(keys.length).toBeGreaterThan(3);

@@ -88,6 +88,8 @@ jobs:
       DATABASE_URL: postgres://mosolo:mosolo-ci@localhost:5432/mosolo
       MOSOLO_AUDIT_HMAC_KEY: cle-audit-ci-non-secrete-0123456789
       MOSOLO_BACKUP_KEY: cle-sauvegarde-ci-non-secrete-0123456789
+      # Ancre externe de la tête du journal d'audit (hors base) : contrôlée au redémarrage et à la restauration.
+      MOSOLO_AUDIT_ANCHOR_PATH: /tmp/mosolo-ancre-audit.json
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -113,6 +115,17 @@ jobs:
           if psql "$DATABASE_URL" -c "UPDATE append_only_journal SET doc = '{}'::jsonb WHERE seq = 1"; then
             echo "UPDATE accepté : le déclencheur d'ajout seul est absent" && exit 1
           fi
+      - name: Journal en ajout seul — contournement par set_config refusé à un rôle applicatif (migration 003)
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE ROLE mosolo_app_ci LOGIN PASSWORD 'app-ci'" -c "GRANT SELECT, INSERT, UPDATE, DELETE ON append_only_journal, repository_snapshot TO mosolo_app_ci"
+          APP_URL=postgres://mosolo_app_ci:app-ci@localhost:5432/mosolo
+          if psql "$APP_URL" -v ON_ERROR_STOP=1 -c "BEGIN; SELECT set_config('mosolo.restore_in_progress', 'on', true); DELETE FROM append_only_journal; COMMIT;"; then
+            echo "DELETE accepté via set_config : contournement encore possible" && exit 1
+          fi
+          if psql "$APP_URL" -v ON_ERROR_STOP=1 -c "SELECT mosolo_restore_purge()"; then
+            echo "Purge de restauration accessible au rôle applicatif" && exit 1
+          fi
+          test "$(psql "$DATABASE_URL" -tAc "SELECT count(*) > 0 FROM append_only_journal")" = "t"
       - name: Restauration puis redémarrage sur la base restaurée
         working-directory: backend
         run: |
@@ -122,3 +135,12 @@ jobs:
           kill -TERM %1 || true; wait || true
           grep -q "restaurés" /tmp/mosolo-2.log
           ! grep -q "NON VÉRIFIÉE" /tmp/mosolo-2.log
+          ! grep -q "NON CONFORME" /tmp/mosolo-2.log
+          grep -q "conforme à l'ancre externe" /tmp/mosolo-2.log
+          test "$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM append_only_journal WHERE doc->>'action' = 'audit.restored'")" = "1"
+      - name: Retour à une sauvegarde plus ancienne refusé sans --confirm-rollback
+        working-directory: backend
+        run: |
+          if npx tsx src/persistence/backup-cli.ts restore /tmp/sauvegarde.json --confirm; then
+            echo "Retour arrière accepté sans confirmation" && exit 1
+          fi

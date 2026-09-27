@@ -16,11 +16,33 @@ uniquement lorsque `DATABASE_URL` est définie et que le serveur est lancé par 
 | Table | Contenu | Écriture | Protection |
 |---|---|---|---|
 | `repository_snapshot` | Documents modifiables (JSONB), rang d'insertion | `UPSERT` | — |
-| `append_only_journal` | Audit, grand livre, délivrances, observations, alertes, preuves… | `INSERT … ON CONFLICT DO NOTHING` | Déclencheur : `UPDATE`, `DELETE`, `TRUNCATE` refusés (migration `002_*.pg.sql`) ; `REVOKE UPDATE, DELETE` recommandé pour le rôle applicatif |
+| `append_only_journal` | Audit, grand livre, délivrances, observations, alertes, preuves… | `INSERT … ON CONFLICT DO NOTHING` | Déclencheur : `UPDATE`, `DELETE`, `TRUNCATE` refusés (migration `002_*.pg.sql`), levé **uniquement** pour un opérateur de restauration (migration `003_*.pg.sql`) ; `UPDATE, DELETE, TRUNCATE` retirés à `PUBLIC` |
 
-- Au démarrage : migrations → chargement de l'instantané → données de démonstration semées → **fusion** (l'instantané
-  prévaut, les nouveautés semées sont conservées) → rechargement de la chaîne d'audit **et vérification** → avance des
-  générateurs d'identifiants au-delà des numéros restaurés.
+- Au démarrage : migrations → chargement de l'instantané → données de démonstration semées (**en démonstration
+  seulement** ; hors démonstration rien n'est semé) → **fusion** (l'instantané prévaut, les nouveautés semées sont
+  conservées) → rechargement de la chaîne d'audit **et vérification** → **comparaison à l'ancre externe** → avance
+  des générateurs d'identifiants au-delà des numéros restaurés → amorçage `MOSOLO_BOOTSTRAP_FILE` (hors démonstration).
+
+## Ancre externe de la chaîne d'audit (`MOSOLO_AUDIT_ANCHOR_PATH`)
+
+Rechargée depuis la base, la chaîne d'audit est cohérente par construction : une troncature, ou la réinjection d'une
+ancienne sauvegarde signée, passerait la vérification. La tête de la chaîne **persistée** (rang, empreinte, heure,
+signature HMAC dérivée de `MOSOLO_AUDIT_HMAC_KEY`) est donc écrite **hors de la base** après chaque lot d'audit, dans
+le fichier `MOSOLO_AUDIT_ANCHOR_PATH` (écriture atomique, 0600 ; à placer sur un volume distinct, répliqué ou WORM), et
+recopiée dans les traces à l'arrêt. Au démarrage, la chaîne persistée doit **prolonger** l'ancre (longueur ≥ rang
+ancré, même empreinte à ce rang) ; sinon — ou si l'ancre est mal signée — démarrage **refusé** hors démonstration,
+sauf `MOSOLO_AUDIT_ACCEPT_UNVERIFIED=true` après enquête (événement `audit.anchor.mismatch` ajouté à la chaîne).
+Obligatoire avec `DATABASE_URL` hors démonstration.
+
+## Rôles PostgreSQL (migration 003)
+
+- Rôle de **migration** (propriétaire des tables) ; rôle **applicatif** : `SELECT, INSERT` sur `append_only_journal`,
+  `SELECT, INSERT, UPDATE` sur `repository_snapshot` — `REVOKE UPDATE, DELETE, TRUNCATE ON append_only_journal FROM <role_applicatif>`.
+- Rôle **`mosolo_restore`** (NOLOGIN, créé par la migration si le rôle de migration a `CREATEROLE`, sinon par
+  l'administrateur) : `GRANT mosolo_restore TO <role_exploitation>`, **jamais** au rôle applicatif.
+- Le drapeau `mosolo.restore_in_progress` ne suffit plus à lever le déclencheur : l'utilisateur de connexion
+  (`session_user`, inchangé par `SET ROLE`) doit être membre de `mosolo_restore` (ou superutilisateur). La purge de
+  restauration passe par la fonction `SECURITY DEFINER` `mosolo_restore_purge()`, dont l'exécution est retirée à `PUBLIC`.
 - Sérialisation sans perte (`src/persistence/codec.ts`) : BigInt (montants), dates, Map, Set, octets.
 
 Le schéma relationnel cible (`db/schema.sql`, PostgreSQL + PostGIS) reste la référence ; il remplacera l'instantané
@@ -32,7 +54,8 @@ JSONB dépôt par dépôt, derrière les mêmes interfaces `Repository<T>`.
 |---|---|
 | `DATABASE_URL` | Active la persistance (`postgres://utilisateur:motdepasse@hôte:5432/base`). |
 | `MOSOLO_AUDIT_HMAC_KEY` | **Obligatoire en persistance** : clé stable du journal d'audit ; sans elle, démarrage refusé hors démonstration (avertissement en démonstration). Obligatoire aussi pour `db:restore` (la chaîne est vérifiée avant toute restauration). |
-| `MOSOLO_AUDIT_ACCEPT_UNVERIFIED` | `true` : démarrer malgré une chaîne d'audit restaurée non vérifiée (événement `audit.chain.restored_unverified` ajouté à la chaîne). Sinon, démarrage refusé hors démonstration. |
+| `MOSOLO_AUDIT_ANCHOR_PATH` | **Obligatoire en persistance hors démonstration** : fichier de l'ancre externe de la tête du journal d'audit (voir ci-dessus) ; même chemin pour `db:restore`. |
+| `MOSOLO_AUDIT_ACCEPT_UNVERIFIED` | `true` : démarrer malgré une chaîne d'audit restaurée non vérifiée ou non conforme à l'ancre (événements `audit.chain.restored_unverified` / `audit.anchor.mismatch` ajoutés à la chaîne). Sinon, démarrage refusé hors démonstration. |
 | `MOSOLO_BACKUP_KEY` | Clé HMAC de signature des sauvegardes (16 caractères minimum), distincte de la clé d'audit. |
 | `MOSOLO_JWT_PRIVATE_KEY` | Clé Ed25519 PKCS#8 (PEM) des jetons de session ; générée au démarrage si absente (les sessions ne survivent alors pas au redémarrage). |
 | `MOSOLO_DEMO_MODE` | `true` : en-tête `x-demo-user`, codes affichés et comptes de démonstration activés (défaut : **désactivés** ; interdit avec `NODE_ENV=production`). |
@@ -43,14 +66,20 @@ JSONB dépôt par dépôt, derrière les mêmes interfaces `Repository<T>`.
 cd backend
 DATABASE_URL=… MOSOLO_BACKUP_KEY=… npm run db:backup -- /chemin/sauvegarde.json
 MOSOLO_BACKUP_KEY=… MOSOLO_AUDIT_HMAC_KEY=… npm run db:verify -- /chemin/sauvegarde.json
-# Serveur arrêté, rôle d'exploitation distinct, double validation :
-DATABASE_URL=… MOSOLO_BACKUP_KEY=… MOSOLO_AUDIT_HMAC_KEY=… npm run db:restore -- /chemin/sauvegarde.json --confirm
+# Serveur arrêté, rôle d'exploitation (membre de mosolo_restore), double validation :
+DATABASE_URL=… MOSOLO_BACKUP_KEY=… MOSOLO_AUDIT_HMAC_KEY=… MOSOLO_AUDIT_ANCHOR_PATH=… \
+  npm run db:restore -- /chemin/sauvegarde.json --confirm [--operator=nom] [--confirm-rollback]
 ```
+
+**Retour arrière.** Une sauvegarde qui ne prolonge pas la chaîne d'audit en place **ni** l'ancre externe (sauvegarde
+plus ancienne, ou autre histoire) est un retour arrière : refusé sans `--confirm-rollback`. Dans tous les cas,
+l'événement `audit.restored` (têtes en place / ancrée / restaurée, retour arrière, nombre d'enregistrements perdus,
+empreinte de la sauvegarde) est chaîné à la suite de la chaîne restaurée, puis l'ancre est réécrite.
 
 La sauvegarde est un document JSON `mosolo-sauvegarde/1` : toutes les lignes, un manifeste par dépôt (nombre,
 SHA-256), l'empreinte SHA-256 du contenu et une signature HMAC-SHA256. La restauration est **refusée** si la signature,
 l'empreinte, le manifeste ou (clé d'audit fournie) la chaîne d'audit ne se vérifient pas. Elle remplace tout le
-contenu dans une transaction (le déclencheur d'ajout seul est levé pour cette seule transaction).
+contenu dans une transaction (purge par `mosolo_restore_purge()`, réservée aux opérateurs de restauration).
 
 L'export applicatif `POST /v1/socle/exports` (R26, R27 ; MFA ; motif obligatoire ; journalisé) produit le même format
 depuis l'état en cours, **sans les secrets d'authentification** (empreintes de mot de passe et de PIN, secrets TOTP,

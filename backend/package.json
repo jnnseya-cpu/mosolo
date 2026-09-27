@@ -12,7 +12,8 @@
     "start:demo": "tsx src/persistence/server.ts --demo",
     "db:backup": "tsx src/persistence/backup-cli.ts backup",
     "db:restore": "tsx src/persistence/backup-cli.ts restore",
-    "db:verify": "tsx src/persistence/backup-cli.ts verify"
+    "db:verify": "tsx src/persistence/backup-cli.ts verify",
+    "bootstrap:check": "tsx src/persistence/bootstrap-cli.ts check"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.0",

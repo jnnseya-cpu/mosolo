@@ -2,10 +2,15 @@
  * Outil d'exploitation — sauvegarde / vérification / restauration de la base (instantané JSONB) :
  *   DATABASE_URL=… MOSOLO_BACKUP_KEY=… npm run db:backup  -w backend -- sauvegarde.json
  *   MOSOLO_BACKUP_KEY=… [MOSOLO_AUDIT_HMAC_KEY=…] npm run db:verify -w backend -- sauvegarde.json
- *   DATABASE_URL=… MOSOLO_BACKUP_KEY=… MOSOLO_AUDIT_HMAC_KEY=… npm run db:restore -w backend -- sauvegarde.json --confirm
- * La restauration exige `--confirm`, s'exécute serveur arrêté, avec un rôle d'exploitation distinct du rôle applicatif.
+ *   DATABASE_URL=… MOSOLO_BACKUP_KEY=… MOSOLO_AUDIT_HMAC_KEY=… MOSOLO_AUDIT_ANCHOR_PATH=… npm run db:restore -w backend -- sauvegarde.json --confirm [--confirm-rollback] [--operator=nom]
+ * La restauration exige `--confirm`, s'exécute serveur arrêté, avec un rôle d'exploitation (membre de `mosolo_restore`,
+ * migration 003) distinct du rôle applicatif. Elle compare la sauvegarde à la chaîne en place et à l'ancre externe
+ * (MOSOLO_AUDIT_ANCHOR_PATH, obligatoire hors démonstration) : une sauvegarde plus ancienne (retour arrière) exige
+ * `--confirm-rollback` ; l'événement `audit.restored` est toujours ajouté et l'ancre réécrite.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
+import { isDemoMode } from '../core/auth.js';
+import { FileAuditAnchor } from './anchor.js';
 import { backupStore, restoreStore, verifyBackup, type BackupDocument } from './backup.js';
 import { openPgStore } from './store.js';
 
@@ -35,8 +40,21 @@ if (cmd === 'backup') {
   if (cmd === 'restore') {
     if (!auditKey) fail('Restauration : MOSOLO_AUDIT_HMAC_KEY obligatoire (la chaîne d’audit doit être vérifiée avant toute restauration).');
     if (!flags.includes('--confirm')) fail('Restauration : ajoutez --confirm (opération destructive, serveur arrêté).');
+    const anchorPath = process.env.MOSOLO_AUDIT_ANCHOR_PATH?.trim();
+    if (!anchorPath && !isDemoMode()) fail('Restauration : MOSOLO_AUDIT_ANCHOR_PATH obligatoire hors démonstration (détection du retour arrière).');
+    const operator = flags.find((f) => f.startsWith('--operator='))?.slice('--operator='.length);
     const store = await openPgStore(process.env.DATABASE_URL ?? fail('DATABASE_URL obligatoire.'));
-    await restoreStore(store, doc, key, auditKey);
+    try {
+      const r = await restoreStore(store, doc, key, auditKey, new Date(), {
+        ...(anchorPath ? { anchor: new FileAuditAnchor(anchorPath, auditKey) } : {}),
+        confirmRollback: flags.includes('--confirm-rollback'),
+        ...(operator ? { operator } : {}),
+      });
+      console.info(`Chaîne d'audit : tête en place ${r.previousHead.seq}, ancrée ${r.anchorHead?.seq ?? '—'}, restaurée ${r.restoredHead.seq} → ${r.newHead.seq} (audit.restored).` + (r.rollback ? ' RETOUR ARRIÈRE confirmé et tracé.' : ''));
+    } catch (e) {
+      await store.close();
+      fail(e instanceof Error ? e.message : String(e));
+    }
     await store.close();
     console.info('Restauration terminée. Redémarrez le serveur : l’instantané restauré sera chargé.');
   }

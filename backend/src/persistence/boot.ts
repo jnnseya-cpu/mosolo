@@ -3,7 +3,10 @@
  * Avec DATABASE_URL : migrations, chargement de l'instantané, moteur rendu actif pour le plugin « socle »
  * qui l'attache au contexte après les données de démonstration.
  */
+import { createPrivateKey } from 'node:crypto';
 import { ConfigurationError, isDemoMode } from '../core/auth.js';
+import { loadReceiptSigningKey } from '../modules/receipts/service.js';
+import { FileAuditAnchor } from './anchor.js';
 import { openPgStore } from './store.js';
 import { PersistenceRuntime, setActivePersistence } from './runtime.js';
 
@@ -19,7 +22,50 @@ const consoleLog: BootLog = {
   error: (m) => console.error(`[persistance] ${m}`),
 };
 
+const MIN_KEY_LENGTH = 32;
+
+/**
+ * Contrôle de démarrage HORS DÉMONSTRATION (les deux points d'entrée) : sans clés de signature stables, les
+ * quittances et les clôtures signées au démarrage précédent deviendraient invérifiables (clé éphémère) — refus.
+ *   - MOSOLO_RECEIPT_SIGNING_KEY : clé privée Ed25519 PKCS#8 (PEM ou base64 DER), lue par modules/receipts ;
+ *   - MOSOLO_CLOSURE_SIGNING_KEY : clé de signature des clôtures (lue par le module trésor), distincte de la précédente ;
+ *   - avec DATABASE_URL : MOSOLO_AUDIT_HMAC_KEY et MOSOLO_AUDIT_ANCHOR_PATH (ancre externe de la chaîne d'audit).
+ */
+export function assertBootSecrets(env: NodeJS.ProcessEnv = process.env): void {
+  if (isDemoMode(env)) return;
+  const missing: string[] = [];
+  const receipt = env.MOSOLO_RECEIPT_SIGNING_KEY?.trim();
+  const closure = env.MOSOLO_CLOSURE_SIGNING_KEY?.trim();
+  if (!receipt) missing.push('MOSOLO_RECEIPT_SIGNING_KEY');
+  if (!closure) missing.push('MOSOLO_CLOSURE_SIGNING_KEY');
+  if (env.DATABASE_URL?.trim()) {
+    if (!env.MOSOLO_AUDIT_HMAC_KEY?.trim()) missing.push('MOSOLO_AUDIT_HMAC_KEY');
+    if (!env.MOSOLO_AUDIT_ANCHOR_PATH?.trim()) missing.push('MOSOLO_AUDIT_ANCHOR_PATH');
+  }
+  if (missing.length) {
+    throw new ConfigurationError(`Démarrage refusé hors mode démonstration : ${missing.join(', ')} obligatoire(s) (clés stables — sinon quittances, clôtures ou chaîne d'audit invérifiables après redémarrage). Voir backend/README.md.`);
+  }
+  try {
+    loadReceiptSigningKey(receipt);
+  } catch (e) {
+    throw new ConfigurationError(e instanceof Error ? e.message : String(e));
+  }
+  if (closure!.length < MIN_KEY_LENGTH) throw new ConfigurationError(`MOSOLO_CLOSURE_SIGNING_KEY trop courte (${MIN_KEY_LENGTH} caractères minimum).`);
+  if (closure!.includes('-----BEGIN')) {
+    try {
+      createPrivateKey(closure!.replace(/\\n/g, '\n'));
+    } catch {
+      throw new ConfigurationError('MOSOLO_CLOSURE_SIGNING_KEY illisible : clé privée PEM attendue.');
+    }
+  }
+  if (closure === receipt) throw new ConfigurationError('MOSOLO_CLOSURE_SIGNING_KEY doit être distincte de MOSOLO_RECEIPT_SIGNING_KEY (séparation des clés).');
+  if (env.MOSOLO_AUDIT_HMAC_KEY && env.MOSOLO_AUDIT_HMAC_KEY.trim().length < MIN_KEY_LENGTH) {
+    throw new ConfigurationError(`MOSOLO_AUDIT_HMAC_KEY trop courte (${MIN_KEY_LENGTH} caractères minimum).`);
+  }
+}
+
 export async function preparePersistence(env: NodeJS.ProcessEnv = process.env, log: BootLog = consoleLog): Promise<PersistenceRuntime | undefined> {
+  assertBootSecrets(env);
   const url = env.DATABASE_URL?.trim();
   if (!url) {
     log.info('DATABASE_URL absente : stockage en mémoire (démonstration).');
@@ -34,8 +80,14 @@ export async function preparePersistence(env: NodeJS.ProcessEnv = process.env, l
   if (!env.MOSOLO_RECEIPT_SIGNING_KEY?.trim()) {
     log.warn('MOSOLO_RECEIPT_SIGNING_KEY absente : la clé de signature des quittances change à chaque démarrage ; les quittances restaurées apparaîtront comme suspectes (signature invalide) à la vérification publique.');
   }
+  const anchorPath = env.MOSOLO_AUDIT_ANCHOR_PATH?.trim();
+  const auditKey = env.MOSOLO_AUDIT_HMAC_KEY?.trim() ? env.MOSOLO_AUDIT_HMAC_KEY : undefined;
+  if (!anchorPath || !auditKey) log.warn('Ancre externe de la chaîne d’audit inactive (MOSOLO_AUDIT_ANCHOR_PATH / MOSOLO_AUDIT_HMAC_KEY absentes) : une troncature ou un retour arrière de la base ne serait pas détecté.');
   const store = await openPgStore(url);
-  const runtime = await PersistenceRuntime.open(store, { log: (level, msg) => log[level](msg) });
+  const runtime = await PersistenceRuntime.open(store, {
+    log: (level, msg) => log[level](msg),
+    ...(anchorPath && auditKey ? { anchor: new FileAuditAnchor(anchorPath, auditKey) } : {}),
+  });
   setActivePersistence(runtime);
   return runtime;
 }

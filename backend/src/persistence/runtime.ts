@@ -3,15 +3,19 @@
  * écriture (insert / update / append) par abonnement aux dépôts en mémoire. Les lectures restent en mémoire :
  * aucune interface de dépôt ne change et le fonctionnement par défaut (tests, démonstration) est inchangé.
  *
- * Séquence : les données de démonstration sont semées normalement, puis `attach(ctx)` :
+ * Séquence : les données de démonstration sont semées (en démonstration seulement), puis `attach(ctx)` :
  *   1. fusionne l'instantané chargé (il prévaut) avec l'état semé (les nouveautés semées sont conservées) ;
  *   2. recharge le journal d'audit chaîné et vérifie la chaîne ;
  *   3. avance les générateurs d'identifiants au-delà des numéros restaurés (aucune collision) ;
  *   4. s'abonne aux écritures et écrit par lots (écriture différée courte, `flush()` à l'arrêt).
+ * Ancre externe (option `anchor`, MOSOLO_AUDIT_ANCHOR_PATH) : la chaîne rechargée doit prolonger la dernière ancre
+ * (sinon troncature / retour arrière : démarrage refusé hors démonstration) ; l'ancre est réécrite après chaque lot
+ * d'audit effectivement persisté.
  */
 import type { AuditLog, AuditRecord, AuditVerification } from '../core/audit.js';
 import { ConfigurationError, isDemoMode } from '../core/auth.js';
 import type { Entity } from '../core/repository.js';
+import { anchorLogLine, compareWithAnchor, AnchorError, type AuditAnchorRecord, type AuditAnchorStore } from './anchor.js';
 import { decodeDoc, encodeDoc, stableText } from './codec.js';
 import { AUDIT_REPO, collectRows, discover, isAppendOnly, readableIds, type Discovery } from './registry.js';
 import type { SnapshotRow, SnapshotStore } from './store.js';
@@ -23,6 +27,8 @@ export interface AttachReport {
   newlyPersisted: number;
   audit: AuditVerification | null;
   warnings: string[];
+  /** Ancre externe lue au démarrage (null : aucune ancre configurée ou encore écrite). */
+  anchor: AuditAnchorRecord | null;
 }
 
 export interface PersistenceStats {
@@ -35,6 +41,7 @@ export interface PersistenceStats {
   lastFlushAt: string | null;
   lastError: string | null;
   report: AttachReport | null;
+  lastAnchor: AuditAnchorRecord | null;
 }
 
 interface AttachableContext {
@@ -52,6 +59,8 @@ export interface RuntimeOptions {
    * l'événement `audit.chain.restored_unverified` est ajouté à la chaîne : jamais de restauration silencieuse.
    */
   acceptUnverifiedAudit?: boolean;
+  /** Ancre externe de la tête du journal d'audit (hors base). Obligatoire hors démonstration (voir boot.ts). */
+  anchor?: AuditAnchorStore;
 }
 
 export class PersistenceRuntime {
@@ -62,7 +71,7 @@ export class PersistenceRuntime {
   private discovery: Discovery | null = null;
   private ctx: AttachableContext | null = null;
   private stats: Omit<PersistenceStats, 'store' | 'attached' | 'repositories' | 'pendingWrites'> = {
-    writtenRows: 0, flushes: 0, lastFlushAt: null, lastError: null, report: null,
+    writtenRows: 0, flushes: 0, lastFlushAt: null, lastError: null, report: null, lastAnchor: null,
   };
 
   constructor(
@@ -116,13 +125,13 @@ export class PersistenceRuntime {
     let auditRestored = 0;
     let auditCheck: AuditVerification | null = null;
     const auditRows = byRepo.get(AUDIT_REPO);
+    const accepted = this.opts.acceptUnverifiedAudit ?? ['1', 'true', 'oui', 'yes'].includes((process.env.MOSOLO_AUDIT_ACCEPT_UNVERIFIED ?? '').trim().toLowerCase());
     if (auditRows && auditRows.length > 0) {
       const records = auditRows.slice().sort((a, b) => a.seq - b.seq).map((r) => decodeDoc(r.doc) as AuditRecord);
       restoreAuditLog(ctx.audit, records);
       auditRestored = records.length;
       auditCheck = ctx.audit.verify();
       if (!auditCheck.ok) {
-        const accepted = this.opts.acceptUnverifiedAudit ?? ['1', 'true', 'oui', 'yes'].includes((process.env.MOSOLO_AUDIT_ACCEPT_UNVERIFIED ?? '').trim().toLowerCase());
         if (!isDemoMode() && !accepted) {
           throw new ConfigurationError(
             `Chaîne d'audit restaurée NON VÉRIFIÉE (${auditCheck.reason ?? 'inconnu'}, enregistrement ${auditCheck.brokenAt ?? '?'}) : démarrage refusé. ` +
@@ -135,6 +144,44 @@ export class PersistenceRuntime {
           actor: { kind: 'system', id: 'persistance' }, action: 'audit.chain.restored_unverified', resourceType: 'audit_chain', outcome: 'FAILURE',
           details: { reason: auditCheck.reason ?? 'inconnu', brokenAt: auditCheck.brokenAt ?? null, length: auditCheck.length, accepted: accepted || isDemoMode() ? (accepted ? 'MOSOLO_AUDIT_ACCEPT_UNVERIFIED' : 'demonstration') : null },
         });
+      }
+    }
+
+    // 2 bis. Ancre externe : la chaîne PERSISTÉE doit prolonger la dernière tête ancrée hors base (sinon troncature,
+    // suppression de la base ou réinjection d'une ancienne sauvegarde). Jamais « réparé » : refus ou trace explicite.
+    let anchorRead: AuditAnchorRecord | null = null;
+    if (this.opts.anchor) {
+      const persisted = (auditRows ?? []).map((r) => decodeDoc(r.doc) as AuditRecord).sort((a, b) => a.seq - b.seq);
+      let problem: string | null = null;
+      try {
+        anchorRead = this.opts.anchor.read();
+        if (anchorRead) {
+          const cmp = compareWithAnchor(anchorRead, { length: persisted.length, hashAt: (seq) => persisted[seq - 1]?.hash });
+          if (!cmp.ok) problem = cmp.reason ?? 'inconnu';
+        }
+      } catch (e) {
+        if (!(e instanceof AnchorError)) throw e;
+        problem = e.message;
+      }
+      if (problem) {
+        if (!isDemoMode() && !accepted) {
+          throw new ConfigurationError(
+            `Chaîne d'audit NON CONFORME à l'ancre externe ${this.opts.anchor.location} (${problem}) : démarrage refusé. ` +
+              'Restaurez la dernière sauvegarde qui prolonge l’ancre, ou — après enquête — MOSOLO_AUDIT_ACCEPT_UNVERIFIED=true (tracé dans le journal).',
+          );
+        }
+        warnings.push(`Chaîne d'audit NON CONFORME à l'ancre externe (${problem}).`);
+        ctx.audit.append({
+          actor: { kind: 'system', id: 'persistance' }, action: 'audit.anchor.mismatch', resourceType: 'audit_chain', outcome: 'FAILURE',
+          details: {
+            reason: problem, anchor: anchorRead ? { seq: anchorRead.seq, hash: anchorRead.hash, at: anchorRead.at } : null,
+            persistedLength: persisted.length, accepted: accepted ? 'MOSOLO_AUDIT_ACCEPT_UNVERIFIED' : 'demonstration',
+          },
+        });
+      } else if (anchorRead) {
+        this.opts.log?.('info', `Chaîne d'audit conforme à l'ancre externe (rang ${anchorRead.seq}).`);
+      } else {
+        this.opts.log?.('warn', `Aucune ancre d'audit dans ${this.opts.anchor.location} : première mise en service (elle sera écrite au premier lot).`);
       }
     }
 
@@ -177,7 +224,7 @@ export class PersistenceRuntime {
 
     const report: AttachReport = {
       repositories: discovery.repos.size, restoredDocuments: restored, restoredAuditRecords: auditRestored,
-      newlyPersisted: newly, audit: auditCheck, warnings,
+      newlyPersisted: newly, audit: auditCheck, warnings, anchor: anchorRead,
     };
     this.stats.report = report;
     for (const w of warnings) this.opts.log?.('warn', w);
@@ -217,6 +264,7 @@ export class PersistenceRuntime {
         this.stats.flushes++;
         this.stats.lastFlushAt = new Date().toISOString();
         this.stats.lastError = null;
+        this.writeAnchor(batch);
       } catch (e) {
         // Rien n'est perdu : le lot est remis en attente (sans écraser une version plus récente).
         for (const r of batch) {
@@ -233,6 +281,23 @@ export class PersistenceRuntime {
     return p;
   }
 
+  /** Après un lot PERSISTÉ contenant des enregistrements d'audit : la tête persistée est ancrée hors base. */
+  private writeAnchor(batch: SnapshotRow[]): void {
+    if (!this.opts.anchor) return;
+    let top: SnapshotRow | undefined;
+    for (const r of batch) if (r.repo === AUDIT_REPO && (!top || r.seq > top.seq)) top = r;
+    if (!top) return;
+    const rec = decodeDoc(top.doc) as AuditRecord;
+    if (this.stats.lastAnchor && this.stats.lastAnchor.seq >= rec.seq) return;
+    try {
+      this.stats.lastAnchor = this.opts.anchor.write({ seq: rec.seq, hash: rec.hash }, new Date());
+    } catch (e) {
+      // La base est à jour ; seule l'ancre est en retard (elle reste un préfixe valide) : erreur signalée, pas de perte.
+      this.stats.lastError = `Ancre d'audit non écrite : ${e instanceof Error ? e.message : String(e)}`;
+      this.opts.log?.('error', this.stats.lastError);
+    }
+  }
+
   status(): PersistenceStats {
     return {
       store: this.store.kind,
@@ -245,6 +310,7 @@ export class PersistenceRuntime {
 
   async close(): Promise<void> {
     await this.flush().catch(() => undefined);
+    if (this.stats.lastAnchor) this.opts.log?.('info', anchorLogLine(this.stats.lastAnchor));
     await this.store.close();
   }
 }

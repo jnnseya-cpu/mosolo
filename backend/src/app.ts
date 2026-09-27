@@ -25,11 +25,14 @@ import { registerSystemRoutes } from './modules/system/routes.js';
 import { registerTreasuryRoutes } from './modules/treasury/routes.js';
 import { registerVaultRoutes } from './modules/vault/routes.js';
 import { seed } from './seed.js';
+import { applyBootstrap, loadBootstrapFile, type BootstrapDocument, type BootstrapReport } from './persistence/bootstrap.js';
 import { DEFAULT_PLUGINS } from './plugins/index.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
     ctx: AppContext;
+    /** Compte rendu de l'amorçage hors démonstration (null : aucun fichier d'amorçage). */
+    bootstrapReport: BootstrapReport | null;
   }
 }
 
@@ -62,7 +65,22 @@ export function trustProxyFromEnv(env: NodeJS.ProcessEnv = process.env): boolean
   return v.split(',').map((x) => x.trim()).filter(Boolean);
 }
 
-export function buildApp(opts: AppOptions & { logger?: boolean } = {}): FastifyInstance {
+/**
+ * Données de démonstration : semées UNIQUEMENT en mode démonstration (ou sur demande explicite `seed: true`, tests).
+ * Hors démonstration, la plateforme démarre VIDE : aucun ordre, quittance, écriture, suspens, utilisateur ni compte
+ * fictif — l'amorçage réel passe par le fichier MOSOLO_BOOTSTRAP_FILE (voir persistence/bootstrap.ts).
+ */
+export function shouldSeed(opts: { seed?: boolean }, env: NodeJS.ProcessEnv = process.env): boolean {
+  return opts.seed ?? isDemoMode(env);
+}
+
+export interface BuildOptions extends AppOptions {
+  logger?: boolean;
+  /** Amorçage hors démonstration (défaut : fichier MOSOLO_BOOTSTRAP_FILE s'il est défini). Ignoré si les données de démonstration sont semées. */
+  bootstrap?: BootstrapDocument;
+}
+
+export function buildApp(opts: BuildOptions = {}): FastifyInstance {
   // Sûr par défaut : démonstration refusée en production, secrets de démonstration refusés hors démonstration.
   assertSafeDeployment(process.env);
   const origin = corsOrigins(process.env);
@@ -70,7 +88,10 @@ export function buildApp(opts: AppOptions & { logger?: boolean } = {}): FastifyI
   const ctx = createContext(opts);
   const plugins = opts.plugins ?? DEFAULT_PLUGINS;
   for (const p of plugins) ctx.ext[p.name] = p.create(ctx);
-  if (opts.seed !== false) {
+  const seeded = shouldSeed(opts);
+  // Un amorçage réel et des données fictives ne se mélangent jamais.
+  const bootstrap = seeded ? undefined : opts.bootstrap ?? (process.env.MOSOLO_BOOTSTRAP_FILE?.trim() ? loadBootstrapFile(process.env.MOSOLO_BOOTSTRAP_FILE.trim()) : undefined);
+  if (seeded) {
     seed(ctx);
     for (const p of plugins) p.seed?.(ctx, ctx.ext[p.name]);
     // Doctrine (§ 18.1) : l'alias de règlement de chaque connecteur doit exister dans le coffre — sinon, pas de démarrage.
@@ -154,5 +175,11 @@ export function buildApp(opts: AppOptions & { logger?: boolean } = {}): FastifyI
   registerAppealRoutes(app, ctx);
   registerAlertRoutes(app, ctx);
   for (const p of plugins) p.routes?.(app, ctx, ctx.ext[p.name]);
+  // Amorçage APRÈS le rattachement de la persistance (dans les `routes` du socle) : les comptes du coffre déjà
+  // persistés prévalent (jamais écrasés — toute modification passe par la double validation du coffre) et les
+  // événements d'amorçage entrent dans la chaîne d'audit restaurée au lieu d'être remplacés par elle.
+  let bootstrapReport: BootstrapReport | null = null;
+  if (bootstrap) bootstrapReport = applyBootstrap(ctx, bootstrap);
+  app.decorate('bootstrapReport', bootstrapReport);
   return app;
 }
