@@ -5,12 +5,16 @@
  */
 import type { MoneyJSON } from '@mosolo/shared';
 import { Icon } from './Icon';
+import { useState } from 'react';
 import { MoneyText } from './MoneyText';
+import { AssistedPay } from './AssistedPay';
 
 export interface OverduePenaltyLine {
   module: string; moduleLabel: string; reference: string; nature: string; decidedAt: string; overdueDays: number; amount?: MoneyJSON | null;
   /** Pénalité du module de l'agent (visible à tout âge). */
   sameModule?: boolean;
+  /** Obligation à régler : l'agent peut faire payer sur place par canal numérique (jamais d'espèces). */
+  obligationId?: string;
 }
 export interface OverduePenaltiesData {
   count: number; thresholdDays: number; guidance: string; lines: OverduePenaltyLine[];
@@ -23,6 +27,7 @@ function kinshasaDate(iso: string): string {
 }
 
 export function OverduePenalties({ data }: { data: OverduePenaltiesData | null | undefined }) {
+  const [paying, setPaying] = useState<string | null>(null);
   if (!data || !data.count || data.lines.length === 0) return null;
   const days = data.thresholdDays || 30;
   const mine = data.lines.filter((l) => l.sameModule).length;
@@ -41,6 +46,8 @@ export function OverduePenalties({ data }: { data: OverduePenaltiesData | null |
               <span>{l.nature}</span>
               {l.amount && <strong className="overdue-pen-amount"><MoneyText money={l.amount} /></strong>}
               <span className="muted">décidée le {kinshasaDate(l.decidedAt)}</span>
+              {l.obligationId && paying !== l.obligationId && <button type="button" className="btn btn-secondary btn-sm overdue-pen-pay" onClick={() => setPaying(l.obligationId!)}><Icon name="phone" size={14} /> Faire payer (numérique)</button>}
+              {l.obligationId && paying === l.obligationId && <AssistedPay obligationIds={[l.obligationId]} onClose={() => setPaying(null)} />}
               <span className="overdue-pen-days">{l.overdueDays >= 1 ? `impayée depuis ${l.overdueDays} jour${l.overdueDays > 1 ? 's' : ''}` : 'décidée aujourd’hui, impayée'}</span>
             </li>
           ))}

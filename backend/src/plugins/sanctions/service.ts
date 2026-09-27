@@ -25,6 +25,8 @@ export interface OverdueLine {
   nature: string;
   decidedAt: string;
   overdueDays: number;
+  /** Obligation à régler (paiement numérique assisté par l'agent, jamais d'espèces). */
+  obligationId?: string;
   /** Montant fixé par la décision (non négociable). */
   amount: MoneyJSON;
   /** Pénalité du module de l'agent qui contrôle (visible sans délai). */
@@ -95,7 +97,7 @@ export class SanctionsService {
     const pay = paymentState(this.ctx, ob.id).state;
     if (pay === 'PAYE' || pay === 'RAPPROCHE') return null;
     const days = Math.floor((now - Date.parse(decision.at)) / DAY_MS);
-    return { module, moduleLabel, reference, nature: nature.replace(/_/g, ' ').toLowerCase(), decidedAt: decision.at, overdueDays: days, amount: ob.amount };
+    return { module, moduleLabel, reference, nature: nature.replace(/_/g, ' ').toLowerCase(), decidedAt: decision.at, overdueDays: days, amount: ob.amount, obligationId: ob.id };
   }
 
   /**

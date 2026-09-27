@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { AssistedPay } from '../../components/AssistedPay';
 import type { MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
@@ -239,6 +240,7 @@ function PlatesTab() {
             </dl>
             {scan.obligations && scan.obligations.map((o) => <p key={o.id} className="small">{o.id} — <MoneyText money={o.amount} /> — {OBLIGATION_LABEL[o.status] ?? o.status}</p>)}
             <p className="hint"><Icon name="lock" size={13} /> {scan.notice}</p>
+            {(scan.situation.color === 'red' || scan.situation.color === 'amber') && <AssistedPay objectId={scan.object.id} title="Faire payer ce bien maintenant (numérique)" />}
             <OverduePenalties data={scan.penalitesImpayees} />
           </section>
         )}

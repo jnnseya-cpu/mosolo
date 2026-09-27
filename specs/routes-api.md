@@ -1,11 +1,11 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **578 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **581 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
 | extension acces | 63 |
-| extension canaux | 33 |
+| extension canaux | 36 |
 | extension fiscal | 39 |
 | extension ia | 28 |
 | extension integrite | 52 |
@@ -113,6 +113,9 @@ Généré depuis le code source (`tools/gen_routes.py`) : **578 routes** dans 35
 | Méthode | Chemin |
 |---|---|
 | POST | `${base}/:id/input` |
+| GET | `/v1/agents/assist/payables` |
+| POST | `/v1/agents/assist/payment-orders` |
+| GET | `/v1/agents/assist/payment-orders/:reference` |
 | GET | `/v1/assisted-enrolments` |
 | GET | `/v1/assisted-enrolments/:id` |
 | POST | `/v1/assisted-enrolments/:id/review` |

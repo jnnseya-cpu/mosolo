@@ -65,20 +65,21 @@ export function usePreciseLocation(opts: { targetM?: number; maxWaitMs?: number;
     samples.current = [];
     if (typeof navigator === 'undefined' || !navigator.geolocation) { setStatus('unavailable'); return; }
     setStatus('searching');
-    watch.current = navigator.geolocation.watchPosition(
-      (p) => {
-        const acc = p.coords.accuracy ?? 9999;
-        samples.current.push({ lat: p.coords.latitude, lon: p.coords.longitude, acc, t: Date.now() });
-        const c = combine(samples.current);
-        if (!c) return;
-        const f: PreciseFix = { lat: c.lat, lon: c.lon, accuracy: c.accuracy, samples: samples.current.length, at: new Date().toISOString(), source: 'GPS', quality: qualityOf(c.accuracy) };
-        last.current = f;
-        setFix(f);
-        if (c.accuracy <= targetM && samples.current.length >= 3) { setStatus('ok'); stop(); }
-      },
-      (err) => { setStatus(err.code === err.PERMISSION_DENIED ? 'denied' : 'unavailable'); stop(); },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: maxWaitMs },
-    );
+    const onPos = (p: GeolocationPosition) => {
+      const acc = p.coords.accuracy ?? 9999;
+      samples.current.push({ lat: p.coords.latitude, lon: p.coords.longitude, acc, t: Date.now() });
+      const c = combine(samples.current);
+      if (!c) return;
+      const f: PreciseFix = { lat: c.lat, lon: c.lon, accuracy: c.accuracy, samples: samples.current.length, at: new Date().toISOString(), source: 'GPS', quality: qualityOf(c.accuracy) };
+      last.current = f;
+      setFix(f);
+      if (c.accuracy <= targetM && samples.current.length >= 3) { setStatus('ok'); stop(); }
+    };
+    const onErr = (err: GeolocationPositionError) => { setStatus(err.code === err.PERMISSION_DENIED ? 'denied' : 'unavailable'); stop(); };
+    const opts = { enableHighAccuracy: true, maximumAge: 0, timeout: maxWaitMs };
+    watch.current = navigator.geolocation.watchPosition(onPos, onErr, opts);
+    // Relevé immédiat en plus du suivi : certains navigateurs ne notifient le suivi qu'au premier déplacement.
+    navigator.geolocation.getCurrentPosition((p) => { if (watch.current !== null) onPos(p); }, () => undefined, opts);
     // Certains appareils n'envoient qu'un relevé tant qu'ils ne bougent pas : cible tenue 6 s = position retenue.
     last.current = null;
     const t0 = Date.now();

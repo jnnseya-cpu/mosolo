@@ -30,6 +30,11 @@ definePolicy('canaux:point.supervise', { R17: GRANTS.always, R18: GRANTS.always,
 // Encaissement : UNIQUEMENT l'opérateur d'un point agréé (R32) — jamais un agent public ni un sous-traitant.
 definePolicy('canaux:point.collect', { R32: GRANTS.always });
 
+// Paiement NUMÉRIQUE assisté sur place : l'agent émet la référence au nom du titulaire (jamais d'espèces à l'agent).
+definePolicy('canaux:payment.assist', {
+  R09: GRANTS.inTerritory('minimal'), R10: GRANTS.inTerritory('minimal'), R11: GRANTS.inTerritory('minimal'), R35: GRANTS.inTerritory('minimal'),
+});
+
 // Journal des sessions USSD / SVI (audit, sécurité, protection des données) et indicateurs agrégés.
 definePolicy('canaux:sessions.read', { R22: GRANTS.always, R25: GRANTS.always, R27: GRANTS.always, R28: GRANTS.always });
 definePolicy('canaux:indicators', { ...allAgentRoles(GRANTS.always), R36: GRANTS.always });

@@ -15,6 +15,7 @@ describe('OverduePenalties', () => {
     expect(screen.getByText(/Pénalités impayées depuis plus de 30 jours/)).toBeTruthy();
     expect(screen.getByText('impayée depuis 88 jours')).toBeTruthy();
     expect(screen.getByText(/il ne se négocie pas/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Faire payer/ })).toBeNull();
     const text = container.textContent ?? '';
     expect(text).toMatch(/CDF/);
     expect(text).toMatch(/20.000,00/);
@@ -29,6 +30,11 @@ describe('OverduePenalties', () => {
     expect(screen.getByText(/votre module, et autres modules au-delà de 30 jours/)).toBeTruthy();
     expect(screen.getAllByText(/· votre module/)).toHaveLength(1);
     expect(screen.getByText('impayée depuis 3 jours')).toBeTruthy();
+  });
+
+  it('propose de faire payer par canal numérique quand l’obligation est connue', () => {
+    renderWithApp(<OverduePenalties data={{ ...data, lines: [{ ...data.lines[0]!, obligationId: 'OBL-1' }] }} />);
+    expect(screen.getByRole('button', { name: /Faire payer \(numérique\)/ })).toBeTruthy();
   });
 
   it('ne rend rien sans données ni pour un compte nul', () => {

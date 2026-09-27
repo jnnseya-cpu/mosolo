@@ -876,3 +876,21 @@ input[type='file'] { font-size: 13.5px; max-width: 100%; }
 .ploc-line { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 6px; }
 .ploc-line .ploc-bar { flex-basis: 100%; }
 .ploc-map { margin-top: 6px; display: grid; gap: 6px; }
+
+/* Paiement numérique assisté par l'agent (jamais d'espèces) */
+.apay { display: grid; gap: 10px; padding: 12px; margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.apay-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.apay-head strong { display: inline-flex; align-items: center; gap: 6px; }
+.apay-nocash { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--critical-bg); color: var(--critical-ink); font-size: 13.5px; }
+.apay-nocash a { color: inherit; font-weight: 700; }
+.apay-amount { display: grid; gap: 2px; }
+.apay-amount > strong { font-size: 22px; }
+.apay-channels { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.apay-ch { display: grid; gap: 2px; justify-items: start; text-align: left; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: inherit; font: inherit; cursor: pointer; }
+.apay-ch.is-on { border-color: var(--brand, #232C6B); box-shadow: 0 0 0 2px var(--brand, #232C6B) inset; }
+.apay-issued { display: grid; gap: 8px; justify-items: center; text-align: center; padding: 12px; border-radius: 10px; background: var(--surface-2, #f4f6fa); }
+.apay-ref { font-size: 24px; letter-spacing: 0.04em; }
+.apay-sum { font-size: 20px; }
+.apay-guide { text-align: left; margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.apay-paid { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--good-ink); font-size: 16px; }
+.apay-issued.is-paid { background: var(--good-bg); }

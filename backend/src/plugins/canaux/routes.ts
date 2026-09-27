@@ -1,4 +1,5 @@
 /** Routes HTTP du module « canaux » (§ H.16 : enrôlement assisté, cartes, points agréés, vérification, USSD/SVI). */
+import { assistOrderSchema } from './assisted.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../../context.js';
@@ -148,6 +149,22 @@ export function registerCanauxRoutes(app: FastifyInstance, ctx: AppContext, svc:
     const body = parse(motifSchema, req.body);
     return svc.points.dismissProposal(requireUser(req), req.params.id, body.motif);
   });
+
+  // ---------- Paiement numérique assisté par l'agent (jamais d'espèces) ----------
+  app.get<{ Querystring: { objectId?: string; obligationIds?: string } }>('/v1/agents/assist/payables', async (req) => {
+    const user = requireUser(req);
+    const ids = (req.query.obligationIds ?? '').split(',').map((x) => x.trim()).filter(Boolean).slice(0, 20);
+    return svc.assisted.payables(user, { ...(req.query.objectId ? { objectId: req.query.objectId } : {}), obligationIds: ids });
+  });
+  app.post('/v1/agents/assist/payment-orders', async (req, reply) => {
+    const user = requireUser(req);
+    const key = IdempotencyStore.requireKey(req.headers['idempotency-key']);
+    const body = parse(assistOrderSchema, req.body);
+    const res = await ctx.idempotency.executeAsync(`assist-order:${user.id}`, key, body, async () => ({ statusCode: 201, body: await svc.assisted.issue(user, body) }));
+    if (res.replayed) reply.header('idempotent-replayed', 'true');
+    return reply.code(res.statusCode).send(res.body);
+  });
+  app.get<{ Params: { reference: string } }>('/v1/agents/assist/payment-orders/:reference', async (req) => svc.assisted.status(requireUser(req), req.params.reference));
 
   // ---------- Console de l'opérateur du point agréé (R32) ----------
   app.get('/v1/payment-points/mine', async (req) => svc.points.myPoints(requireUser(req)));

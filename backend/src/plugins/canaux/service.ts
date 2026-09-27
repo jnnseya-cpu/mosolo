@@ -2,6 +2,7 @@
  * Service « canaux » : enrôlement inclusif, carte MOSOLO, USSD / SVI, points de paiement agréés, vérification par
  * code court. Assemble les sous-services et fournit l'avis à pictogrammes, les indicateurs et la démonstration.
  */
+import { AssistedPaymentService } from './assisted.js';
 import type { MoneyJSON, PublicReceiptCheck } from '@mosolo/shared';
 import { Money } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
@@ -27,12 +28,14 @@ export class CanauxService {
   readonly enrolment: EnrolmentService;
   readonly limiter: VerificationLimiter;
   readonly engine: ChannelEngine;
+  readonly assisted: AssistedPaymentService;
 
   constructor(private readonly ctx: AppContext) {
     this.cards = new CardRegistry(ctx.clock, ctx.audit, ctx.comms, ctx.taxpayers);
     this.points = new PaymentPointService(ctx, this.cards);
     this.enrolment = new EnrolmentService(ctx, this.cards);
     this.limiter = new VerificationLimiter(ctx.clock, ctx.audit, ctx.alerts);
+    this.assisted = new AssistedPaymentService(ctx);
     this.engine = new ChannelEngine(ctx, this.cards, this.points, (code, key, channel) => this.verify(code, key, channel));
   }
 

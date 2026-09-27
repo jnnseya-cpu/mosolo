@@ -97,3 +97,13 @@ Les cinq photos réelles sont dans `photo-*.jpg`. Régénération : `tools/captu
 - « Autour de moi » : agent de Limete sur place, biens proches en vert, ambre, rouge (et gris), carte, liste, filtre « rouge » ; hors de son secteur (Gombe), rien n’est montré.
 
 Le fond de carte de Kinshasa n'est pas encore installé dans cet environnement (accès réseau aux serveurs de tuiles bloqué) : les cartes affichent les couches MOSOLO sur fond neutre, avec la note indiquant l'outil `tools/maps/construire-tuiles-kinshasa.sh`. Régénération : `tools/captures/geo.cjs` et `tools/captures/autour.cjs`.
+
+## Partie 9 — Paiement numérique assisté par l'agent (`galerie/paiement-assiste/`)
+
+L'agent ne reçoit jamais d'espèces ; il fait payer sur place par canal numérique, vers le compte public :
+
+- choix du canal (monnaie mobile, USSD, QR, carte) avec le rappel « espèces uniquement dans un point agréé » ;
+- référence officielle émise au nom du titulaire, montant fixé, validité, consignes ;
+- paiement confirmé par le prestataire : quittance envoyée à l'usager.
+
+Régénération : `tools/captures/paiement-assiste.cjs`.

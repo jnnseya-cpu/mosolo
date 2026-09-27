@@ -12,6 +12,7 @@ import { Icon } from '../../components/Icon';
 import { ErrorState, ExampleNotice } from '../../components/States';
 import { PreciseLocation } from '../../components/PreciseLocation';
 import { GeoMapLazy } from '../../components/GeoMapLazy';
+import { AssistedPay } from '../../components/AssistedPay';
 import { api, describeError } from '../../lib/api';
 import { circleRing, metersBetween, type PreciseFix } from '../../lib/geo';
 import { MAP_STATUS } from '../../lib/status';
@@ -44,6 +45,7 @@ export default function AutourDeMoi() {
   const [busy, setBusy] = useState(false);
   const [only, setOnly] = useState<MapStatusColor | null>(null);
   const [sel, setSel] = useState<string | null>(null);
+  const [paying, setPaying] = useState<string | null>(null);
   const lastQuery = useRef<{ lat: number; lon: number; radius: number } | null>(null);
 
   const usable = !!fix && fix.source === 'GPS' && fix.accuracy !== null && fix.accuracy <= MAX_ACC;
@@ -131,6 +133,8 @@ export default function AutourDeMoi() {
                       </span>
                       <span className="adm-dist">{i.distanceM < 1000 ? `${i.distanceM} m` : `${(i.distanceM / 1000).toFixed(1)} km`}</span>
                     </button>
+                    {(i.color === 'red' || i.color === 'amber') && paying !== i.id && <button type="button" className="btn btn-secondary btn-sm adm-pay" onClick={() => setPaying(i.id)}><Icon name="phone" size={14} /> Faire payer (numérique)</button>}
+                    {paying === i.id && <AssistedPay objectId={i.id} position={fix} onClose={() => setPaying(null)} />}
                   </li>
                 ))}
               </ul>

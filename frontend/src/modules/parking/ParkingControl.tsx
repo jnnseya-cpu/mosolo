@@ -3,6 +3,7 @@
  * Contrôle par plaque (résultat minimal : vert, ambre, rouge), constat photographique HUMAIN,
  * vérification par une personne distincte. Aucune sanction, aucun encaissement sur le terrain.
  */
+import { AssistedPay } from '../../components/AssistedPay';
 import { useState, type FormEvent } from 'react';
 import type { MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../../context';
@@ -21,7 +22,7 @@ import { EvidenceCamera } from './EvidenceCamera';
 import { EvidencePhotos } from './EvidencePhotos';
 import './parking.css';
 
-interface PenaltyLine { module: string; reference: string; nature: string; status: string; createdAt: string; decidedAt: string | null; amount: MoneyJSON | null; payment: string; unpaid: boolean; overdueDays: number | null; zone?: string }
+interface PenaltyLine { module: string; reference: string; nature: string; status: string; createdAt: string; decidedAt: string | null; amount: MoneyJSON | null; payment: string; unpaid: boolean; overdueDays: number | null; zone?: string; obligationId?: string | null }
 interface ControlResult { checkId: string; plate: string; zone: { id: string; code: string; name: string } | null; light: Light; title: string | null; validUntil: string | null; checkedAt: string; guidance: string; penalties?: PenaltyLine[]; penaltiesUnpaid?: number }
 interface Evidence { photoIds: string[]; place: string; lat: number; lon: number; accuracy: number | null }
 
@@ -118,6 +119,7 @@ function ControlPanel({ zones, loading, onRecorded }: { zones: Zone[]; loading: 
 /** Pénalités de l'usager (tous les agents du module) : constats en cours et pénalités retenues, payées ou non. */
 function Penalties({ items }: { items: PenaltyLine[] }) {
   const { fmtDate } = useApp();
+  const [paying, setPaying] = useState<string | null>(null);
   if (!items.length) return <p className="small muted"><Icon name="check" size={14} /> Aucune pénalité enregistrée pour cette plaque.</p>;
   const unpaid = items.filter((p) => p.unpaid).length;
   return (
@@ -126,10 +128,12 @@ function Penalties({ items }: { items: PenaltyLine[] }) {
       {items.map((p) => (
         <div key={p.reference} className={`pk-pen-row${p.unpaid ? ' is-unpaid' : ''}`}>
           <span><span className="mono">{p.reference}</span> · {p.nature}{p.zone ? ` · ${p.zone}` : ''}</span>
+          {p.unpaid && p.obligationId && paying !== p.obligationId && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPaying(p.obligationId!)}><Icon name="phone" size={14} /> Faire payer (numérique)</button>}
+          {p.unpaid && p.obligationId && paying === p.obligationId && <AssistedPay obligationIds={[p.obligationId]} onClose={() => setPaying(null)} />}
           <span>{p.amount ? <Money items={[p.amount]} /> : 'montant après décision'} · {p.unpaid ? `impayée${p.overdueDays !== null ? ` depuis ${p.overdueDays} j` : ''}` : p.status === 'RETENU' ? 'payée' : `constat ${p.status.toLowerCase()}`} · {fmtDate(p.decidedAt ?? p.createdAt)}</span>
         </div>
       ))}
-      <p className="small muted">L’usager régularise par les canaux officiels ; aucun encaissement ni mesure sur place.</p>
+      <p className="small muted">L’usager paie par canal numérique (vous pouvez émettre sa référence sur place) ou en espèces dans un point agréé. Vous n’encaissez rien ; aucune mesure sur place.</p>
     </div>
   );
 }

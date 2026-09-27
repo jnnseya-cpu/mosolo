@@ -700,7 +700,7 @@ Tests (`backend/test/parking-field.test.ts`) :
 
 - **Une fois dans la zone** : la liste ne s’affiche que si la position, mesurée par le GPS (100 m de précision au plus, jamais une position saisie à la main), se trouve dans une commune du **secteur de l’agent**. Hors secteur, rien n’est montré.
 - **Carte et liste** : la position de l’agent, le rayon choisi (100 m à 1 km) et les biens colorés sur la carte OSM ; la liste va du plus proche au plus éloigné (référence IGF, plaque posée, quartier, motif de la couleur) ; filtre par couleur ; mise à jour automatique quand l’agent se déplace de 40 m.
-- **Aucun montant ni nom de contribuable** : la couleur oriente la visite, elle ne vaut ni constat ni sanction (circuit RW1 inchangé) ; l’agent n’encaisse rien.
+- **Aucun montant ni nom de contribuable** dans la liste : la couleur oriente la visite, elle ne vaut ni constat ni sanction (circuit RW1 inchangé). L’agent ne reçoit jamais d’espèces ; il peut faire payer un bien ambre ou rouge par canal numérique (§ I.17).
 - **Journalisation** : chaque consultation est tracée (position, précision, rayon, commune, nombre de biens et de rouges montrés), ce qui alimente la surveillance des agents.
 - **Rôles** : agent de terrain, superviseur, contrôleur et sous-traitant de terrain dans leur secteur ; direction, chef de service, audit et anti-fraude partout. Les véhicules (objets mobiles) sont exclus.
 - Tests : `backend/test/fiscal-nearby.test.ts` (dans le secteur, hors secteur, précision insuffisante, rayon plafonné, rôles refusés).
