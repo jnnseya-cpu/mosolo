@@ -45,3 +45,7 @@
 .ch-ruptures { display: grid; gap: 8px; }
 .ch-search { display: flex; flex-wrap: wrap; gap: 8px; }
 .ch-search input { flex: 1 1 200px; min-width: 0; }
+
+/* Visuels (trousse de visualisation, 27/09/2026) */
+.ch-visuel { margin-bottom: 0; }
+.ch-meter { padding: 16px; display: grid; align-content: center; }

@@ -7,6 +7,32 @@ import { ErrorState, Loading } from '../../components/States';
 import { api } from '../../lib/api';
 import { ExportButton, FiltersBar, KPI_STATUS, kpiTone, qs, ScopeLine, TrendMark, useFmt, type Filters, type Kpi, type Scope } from './shared';
 import './pilotage.css';
+import { fmtNombre, KpiTile, StackedBarViz, StatusDistribution } from '../../components/viz';
+import { ETATS_KPI, etatsDe, Tuiles, Visuels } from './visuels';
+
+const STATUTS = Object.keys(ETATS_KPI) as Kpi['status'][];
+const entier = (v: number) => fmtNombre(v, 0);
+
+/** Visuels du catalogue : état de chaque indicateur (couleur d'état + icône + libellé), par domaine. */
+export function VisuelsCatalogue({ kpis, summary }: { kpis: Kpi[]; summary: KpiResponse['summary'] }) {
+  const domaines = [...new Set(kpis.map((k) => k.domain))];
+  return (
+    <div className="dash-grid" style={{ marginBottom: 16 }}>
+      <Tuiles label="Catalogue des indicateurs — synthèse" max={4}>
+        <KpiTile hero label="Indicateurs mesurés" value={summary.measured} format={entier} target={{ value: summary.total, label: `sur ${summary.total} indicateurs`, max: summary.total }} state={{ label: 'Données réelles', tone: 'info' }} />
+        <KpiTile label="Cible atteinte" value={summary.onTarget} format={entier} state={{ label: 'Cible atteinte', tone: 'good' }} />
+        <KpiTile label="Sous la cible" value={summary.offTarget} format={entier} state={{ label: 'Sous la cible', tone: summary.offTarget > 0 ? 'critical' : 'good' }} />
+        <KpiTile label="Non mesurés" value={summary.total - summary.measured} format={entier} state={{ label: 'Source absente', tone: 'neutral' }} sub="Aucune valeur inventée" />
+      </Tuiles>
+      <Visuels label="Indicateurs en graphiques">
+        <StatusDistribution title="Indicateurs par état" subtitle="Cible déclarée par le catalogue (§ 39) ; sans cible = suivi" unitLabel="indicateurs" items={etatsDe(kpis, (k) => k.status, ETATS_KPI)} />
+        <StackedBarViz className="viz-span-2" title="États par domaine" subtitle="Nombre d’indicateurs par état et par domaine" mode="absolute" orientation="horizontal" format={entier}
+          series={STATUTS.map((s) => ({ key: s, label: ETATS_KPI[s]!.label }))}
+          rows={domaines.map((d) => ({ key: d, label: d, values: Object.fromEntries(STATUTS.map((s) => [s, kpis.filter((k) => k.domain === d && k.status === s).length])) }))} />
+      </Visuels>
+    </div>
+  );
+}
 
 interface KpiResponse { generatedAt: string; scope: Scope; summary: { total: number; measured: number; onTarget: number; offTarget: number }; kpis: Kpi[] }
 
@@ -29,6 +55,7 @@ export default function Indicateurs() {
       {q.loading && !q.data ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : q.data && (
         <>
           <ScopeLine scope={q.data.scope} generatedAt={q.data.generatedAt} />
+          <VisuelsCatalogue kpis={q.data.kpis} summary={q.data.summary} />
           <div className="pl-figs" style={{ marginBottom: 16 }}>
             <div className="pl-fig"><span>Indicateurs</span><strong>{q.data.summary.total}</strong></div>
             <div className="pl-fig"><span>Mesurés</span><strong>{q.data.summary.measured}</strong></div>

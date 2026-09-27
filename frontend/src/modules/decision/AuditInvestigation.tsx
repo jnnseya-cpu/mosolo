@@ -10,6 +10,41 @@ import { api, describeError } from '../../lib/api';
 import { Section } from '../pilotage/shared';
 import { Area, Choice, Field, hasRole } from '../pilotage/planif';
 import { date, Ecran, Indicateurs, useRunner, useVue, type Indicator } from './commun';
+import { fmtNombre, KpiTile, LineAreaViz, StatusDistribution } from '../../components/viz';
+import type { Tone } from '../../components/StatusBadge';
+import { EtatIndicateurs, etatsDe, Tuiles, TuilesIndicateurs, Visuels } from '../pilotage/visuels';
+
+const entier = (v: number) => fmtNombre(v, 0);
+const MISSION: Record<string, { label: string; tone: Tone }> = { EN_COURS: { label: 'En cours', tone: 'warning' }, CLOSE: { label: 'Close', tone: 'good' } };
+const RECO: Record<string, { label: string; tone: Tone }> = {
+  EMISE: { label: 'Émise', tone: 'info' }, MISE_EN_OEUVRE_DECLAREE: { label: 'Mise en œuvre déclarée', tone: 'warning' }, MISE_EN_OEUVRE_VERIFIEE: { label: 'Mise en œuvre vérifiée', tone: 'good' }, NON_RETENUE: { label: 'Non retenue', tone: 'neutral' },
+};
+const GRAVITE: Record<string, { label: string; tone: Tone }> = { CRITIQUE: { label: 'Critique', tone: 'critical' }, ELEVEE: { label: 'Élevée', tone: 'serious' }, MOYENNE: { label: 'Moyenne', tone: 'warning' }, FAIBLE: { label: 'Faible', tone: 'info' } };
+
+/** Visuels de l'audit : missions, constats, recommandations, intégrité et racines quotidiennes (lecture seule). */
+function VisuelsAudit({ d }: { d: Vue }) {
+  const constats = d.items.flatMap((m) => m.findings);
+  const recos = constats.flatMap((f) => f.recommendations);
+  return (
+    <>
+      <Tuiles label="Audit et investigation — chiffres clés" max={4}>
+        <KpiTile hero label="Missions d’audit" value={d.items.length} format={entier} state={{ label: `${d.items.filter((m) => m.status !== 'CLOSE').length} en cours`, tone: 'info' }} />
+        <KpiTile label="Constats" value={constats.length} format={entier} state={{ label: 'Revue humaine', tone: 'neutral' }} />
+        <KpiTile label="Recommandations" value={recos.length} format={entier} state={{ label: `${recos.filter((x) => x.status === 'MISE_EN_OEUVRE_VERIFIEE').length} vérifiée(s)`, tone: 'good' }} />
+        <KpiTile label="Journal d’audit chaîné" value={d.integrity.length} format={entier} unit="événements" state={d.integrity.ok ? { label: 'Chaîne intègre', tone: 'good' } : { label: 'Chaîne rompue', tone: 'critical' }} href="/audit" />
+      </Tuiles>
+      <TuilesIndicateurs items={d.indicators} label="Indicateurs de l’audit" />
+      <Visuels label="Audit en graphiques">
+        <StatusDistribution title="Missions par statut" unitLabel="missions" emptyText="Aucune mission" items={etatsDe(d.items, (m) => m.status, MISSION)} />
+        <StatusDistribution title="Constats par gravité" unitLabel="constats" emptyText="Aucun constat" items={etatsDe(constats, (f) => f.severity, GRAVITE)} />
+        <StatusDistribution title="Recommandations par suivi" unitLabel="recommandations" emptyText="Aucune recommandation" items={etatsDe(recos, (x) => x.status, RECO)} />
+        <LineAreaViz className="viz-span-2" title="Événements scellés par jour" subtitle="Racines quotidiennes de Merkle publiées" granularity="day" area format={entier} emptyText="Aucune racine publiée"
+          series={[{ key: 'n', label: 'Événements' }]} points={[...d.dailyRoots.roots].sort((a, b) => a.day.localeCompare(b.day)).map((r) => ({ date: r.day, values: { n: r.count } }))} />
+        <EtatIndicateurs items={d.indicators} />
+      </Visuels>
+    </>
+  );
+}
 
 interface Reco { id: string; text: string; ownerEntity: string; deadline: string; status: string }
 interface Mission { id: string; title: string; objective: string; scope: string; status: string; createdBy: string; samples: { id: string; population: string; seed: string; items: string[]; populationSha256: string }[]; findings: { id: string; title: string; severity: string; recommendations: Reco[] }[] }
@@ -33,6 +68,7 @@ export default function AuditInvestigation() {
   const [seed, setSeed] = useState('');
   const [fTitle, setFTitle] = useState('');
   const [fDesc, setFDesc] = useState('');
+  const [fSev, setFSev] = useState('MOYENNE');
   const [motif, setMotif] = useState('');
   const [reco, setReco] = useState('');
   const [owner, setOwner] = useState('DGIPK');
@@ -48,6 +84,7 @@ export default function AuditInvestigation() {
   return (
     <Ecran eyebrow="Pilotage et décision · module 46" title="Audit et investigation" lead="Lecture intégrale des preuves et journaux, échantillonnage, export scellé ; aucune modification possible." q={q} msg={r.msg}>
       {(d) => (<>
+        <VisuelsAudit d={d} />
         <Section title="Indicateurs"><Indicateurs items={d.indicators} /></Section>
         <Section title="Intégrité et racine quotidienne" sub={d.integrity.note}>
           <StatusBadge tone={d.integrity.ok ? 'good' : 'critical'} label={d.integrity.ok ? `Chaîne intègre (${d.integrity.length} événements)` : 'Chaîne rompue'} />
@@ -86,7 +123,8 @@ export default function AuditInvestigation() {
               <button type="button" className="btn btn-secondary" disabled={r.busy} onClick={() => void r.run(`/v1/decision/audit/missions/${mission}/echantillons`, { population, size: Number(size), ...(seed ? { seed } : {}) }, 'Échantillon tiré.')}>Tirer l’échantillon</button>
               <Field label="Constat — titre" value={fTitle} onChange={setFTitle} />
               <Area label="Constat — description" value={fDesc} onChange={setFDesc} rows={2} />
-              <button type="button" className="btn btn-secondary" disabled={r.busy || fTitle.length < 5 || fDesc.length < 10} onClick={() => void r.run(`/v1/decision/audit/missions/${mission}/constats`, { title: fTitle, description: fDesc, severity: 'MOYENNE', evidence: [] }, 'Constat enregistré.')}>Enregistrer le constat</button>
+              <Choice label="Constat — gravité" value={fSev} onChange={setFSev} options={Object.entries(GRAVITE).map(([k, g]) => [k, g.label] as [string, string])} />
+              <button type="button" className="btn btn-secondary" disabled={r.busy || fTitle.length < 5 || fDesc.length < 10} onClick={() => void r.run(`/v1/decision/audit/missions/${mission}/constats`, { title: fTitle, description: fDesc, severity: fSev, evidence: [] }, 'Constat enregistré.')}>Enregistrer le constat</button>
               {(() => {
                 const last = d.items.find((m) => m.id === mission)?.findings.at(-1);
                 return last ? (

@@ -15,6 +15,28 @@ import { Section } from './shared';
 import { Area, Choice, Field, hasRole, Notice, useRunner } from './planif';
 import { preuveTexte, type Recette as RecetteData, type Suivi } from './programme-types';
 import './pilotage.css';
+import { fmtNombre, KpiTile, StatusDistribution } from '../../components/viz';
+import { ETATS_CONSTRUCTION, ETATS_SUIVI, etatsDe, Tuiles, Visuels } from './visuels';
+
+/** Visuels de la recette : couverture par les tests, stratégie construite / partielle / externe, suivis du monde réel. */
+export function VisuelsRecette({ d }: { d: RecetteData }) {
+  const prouves = d.criteres.filter((c) => c.preuves.length > 0).length;
+  return (
+    <>
+      <Tuiles label="Recette — synthèse" max={4}>
+        <KpiTile hero label="Critères d’acceptation prouvés" value={prouves} format={(v) => fmtNombre(v, 0)} unit={`/ ${d.criteres.length}`} target={{ value: d.criteres.length, label: 'tous les critères', max: d.criteres.length }} state={{ label: 'Test automatisé', tone: 'good' }} />
+        <KpiTile label="Récits utilisateurs" value={d.recits.length} format={(v) => fmtNombre(v, 0)} state={{ label: 'Bout en bout', tone: 'info' }} />
+        <KpiTile label="Points de stratégie construits" value={d.strategie.filter((s) => s.statut === 'CONSTRUIT').length} format={(v) => fmtNombre(v, 0)} unit={`/ ${d.strategie.length}`} state={{ label: 'Ch. 45', tone: 'neutral' }} />
+        <KpiTile label="Suivis réalisés" value={d.suivis.filter((s) => s.etat === 'REALISE').length} format={(v) => fmtNombre(v, 0)} unit={`/ ${d.suivis.length}`} state={{ label: 'Jamais simulés', tone: 'warning' }} />
+      </Tuiles>
+      <Visuels label="Recette en graphiques">
+        <StatusDistribution title="Stratégie de tests (ch. 45)" unitLabel="points" items={etatsDe(d.strategie, (s) => s.statut, ETATS_CONSTRUCTION)} />
+        <StatusDistribution title="Suivis du monde réel" subtitle="Relèvent de personnes habilitées ; jamais simulés" unitLabel="suivis" items={etatsDe(d.suivis, (s) => s.etat, ETATS_SUIVI)} />
+        <StatusDistribution title="Critères reliés à un test" unitLabel="critères" items={[{ key: 'ok', label: 'Prouvé par un test', tone: 'good', count: prouves }, { key: 'ko', label: 'Sans preuve', tone: 'critical', count: d.criteres.length - prouves }]} />
+      </Visuels>
+    </>
+  );
+}
 
 const SUIVI_TONE: Record<string, 'good' | 'warning' | 'critical' | 'neutral'> = { A_PLANIFIER: 'neutral', PLANIFIE: 'warning', REALISE: 'good', ECHEC: 'critical' };
 const WRITERS = ['R02', 'R03', 'R05', 'R22', 'R23', 'R26', 'R27', 'R28'];
@@ -43,6 +65,7 @@ export function RecetteView({ d, onDone }: { d: RecetteData; onDone: () => void 
   const sel = d.suivis.find((s) => s.code === edit) ?? null;
   return (
     <div className="dash-grid">
+      <VisuelsRecette d={d} />
       <Section title={`Critères d’acceptation (${d.criteres.length})`} sub="Chaque critère et le test automatisé qui le prouve">
         <DataTable caption="Recette — critères d’acceptation" rows={d.criteres} rowKey={(c) => c.code} columns={[
           { key: 'c', label: 'Critère', primary: true, render: (c) => <><strong>{c.code}</strong> {c.critere}{c.obligatoire && <span className="small muted" style={{ display: 'block' }}>Exigé : {c.obligatoire}</span>}{c.origine && <span className="small muted" style={{ display: 'block' }}>{c.origine}</span>}</> },

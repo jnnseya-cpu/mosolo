@@ -1142,3 +1142,17 @@ réelles qu'il charge déjà (aucune route nouvelle, aucun droit élargi). Déta
 | Débordement à 360 px corrigé | `/recouvrement/campagnes` (bouton des prorogations) | Retour à la ligne |
 
 Tests : `frontend/test/visuels-tresor.test.tsx`. Captures : `docs/captures/visualisation/tresor/`.
+
+## I.26 Pilotage et décision rendus visuels (27/09/2026)
+
+Tous les écrans des modules `pilotage/*`, `decision/*`, `postes/*` et `chaine/*` (tableaux par profil, indicateurs,
+répartition § 37A, réductions, piste d'audit, transparence, base de référence et RANV, pilote, feuille de route,
+scénarios, assignations, instructions, accords de service, projets et budget voté, partage légal, risques, recette,
+versions, 100 jours, décisions du Gouvernement, avis ; centre de commandement, régies, tableau ministériel, salle de
+contrôle, audit, prévision ; postes de décision et de travail ; chaîne) reçoivent en tête des tuiles d'indicateurs et
+des graphiques de la trousse partagée, calculés sur les données réelles déjà chargées. Rien n'est retiré (tableaux,
+formulaires, boutons conservés). Ajouts fonctionnels : gravité du constat d'audit au choix, accès direct à la chaîne
+des obligations du périmètre, états chargement / erreur de l'écart de prévision, libellés français des états débloqués
+par les décisions, blocs du poste de décision contenus dans le cadre téléphone à 360 px. Détail écran par écran :
+`couverture-visuelle-pilotage.md` ; captures : `docs/captures/visualisation/pilotage/` ; test :
+`frontend/test/pilotage-visuels.test.tsx`.

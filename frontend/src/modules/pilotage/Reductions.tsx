@@ -16,6 +16,46 @@ import { Icon } from '../../components/Icon';
 import { api, describeError } from '../../lib/api';
 import { COMMUNES, ENTITIES, qs, ScopeLine, Section, useFmt, type Scope } from './shared';
 import './pilotage.css';
+import { BarChartViz, DonutViz, fmtCompact, fmtNombre, fmtPct, KpiTile } from '../../components/viz';
+import { BarresParDevise, nombre, Tuiles, Visuels } from './visuels';
+
+/** Visuels des réductions : du brut à l'encaissé (par devise), réductions par type, par commune, assiette en attente d'acte. */
+export function VisuelsReductions({ d }: { d: ReductionReport }) {
+  const n = (m: MoneyJSON) => nombre(m.amount) ?? 0;
+  return (
+    <>
+      <Tuiles label="Réductions de recettes — synthèse par devise" max={4}>
+        {d.totals.map((t) => {
+          const brut = n(t.grossAssessed);
+          const red = n(t.reductions.total);
+          return (
+            <KpiTile key={t.currency} hero={t.currency === d.totals[0]?.currency} label={`Réductions — ${t.currency}`} value={red} unit={t.currency} format={fmtCompact}
+              state={t.reconciliation.reconciled ? { label: 'Rapprochement vérifié', tone: 'good' } : { label: 'Écart à examiner', tone: 'critical' }}
+              sub={`${t.reductions.count} réduction(s) · ${brut > 0 ? fmtPct((red / brut) * 100) : '—'} du brut liquidé`} />
+          );
+        })}
+        {d.totals.length === 0 && <KpiTile label="Réductions" value={null} reason="Aucune obligation liquidée sur la période." />}
+        <KpiTile label="Décideurs non tracés" value={d.untracedDeciders} format={(v) => fmtNombre(v, 0)} state={d.untracedDeciders > 0 ? { label: 'À examiner', tone: 'critical' } : { label: 'Tous tracés', tone: 'good' }} />
+        <KpiTile label="Signaux de concentration ouverts" value={d.signals.open} format={(v) => fmtNombre(v, 0)} state={{ label: 'Examen humain', tone: d.signals.open > 0 ? 'warning' : 'good' }} sub="Aucune mesure automatique" />
+      </Tuiles>
+      <Visuels label="Réductions en graphiques">
+        {d.totals.map((t) => (
+          <BarChartViz key={`b-${t.currency}`} title={`Du brut liquidé à l’encaissé — ${t.currency}`} subtitle="Brut − réductions = net attendu ; encaissé et reste à recouvrer" orientation="horizontal"
+            format={(v) => `${fmtCompact(v)} ${t.currency}`} tickFormat={fmtCompact} series={[{ key: 'm', label: 'Montant' }]}
+            rows={[['Brut liquidé', t.grossAssessed], ['Réductions', t.reductions.total], ['Net attendu', t.netExpected], ['Encaissé', t.collected], ['Reste à recouvrer', t.outstanding]].map(([l, m]) => ({ key: l as string, label: l as string, values: { m: n(m as MoneyJSON) } }))} />
+        ))}
+        {d.totals.map((t) => (
+          <DonutViz key={`d-${t.currency}`} title={`Réductions par type — ${t.currency}`} centerLabel={t.currency} format={(v) => `${fmtCompact(v)} ${t.currency}`} emptyText="Aucune réduction sur la période"
+            slices={t.reductions.byType.map((x) => ({ key: x.type, label: REDUCTION_TYPE_LABELS[x.type] ?? x.label ?? x.type, value: n(x.amount) }))} />
+        ))}
+        <BarresParDevise className="viz-span-2" title="Réductions par commune" series={[{ key: 'r', label: 'Réductions' }]} emptyText="Aucune réduction rattachée à une commune"
+          rows={d.byCommune.filter((c) => c.totals.some((t) => n(t.reductions.total) > 0)).map((c) => ({ key: c.commune, label: c.commune, values: { r: c.totals.map((t) => t.reductions.total) } }))} />
+        <BarChartViz title="Assiette recensée en attente d’acte" subtitle="Unités par verticale — aucun montant estimé" orientation="horizontal" format={(v) => fmtNombre(v, 0)} emptyText="Aucune assiette en attente d’acte"
+          series={[{ key: 'u', label: 'Unités' }]} rows={d.potentialUnassessed.byVertical.map((v) => ({ key: v.vertical, label: v.vertical, values: { u: v.units } }))} />
+      </Visuels>
+    </>
+  );
+}
 
 export const REDUCTION_TYPE_LABELS: Record<string, string> = {
   EXONERATION: 'Exonération appliquée à la liquidation', MINORATION_LIQUIDATION: 'Minoration à la liquidation (forçage de base)',
@@ -146,6 +186,7 @@ export default function Reductions() {
             <ScopeLine scope={d.scope} generatedAt={d.generatedAt} />
             <p className="small muted">{d.method} Formule : {d.formula}.{filtered ? ' Filtre type / décideur : chaînes portant au moins une réduction retenue ; leurs autres réductions n’entrent que dans le rapprochement.' : ''}</p>
           </div>
+          <VisuelsReductions d={d} />
           <Section title="Totaux par devise" sub={d.reconciled ? 'Rapprochement brut − réductions = net vérifié' : 'Écart de rapprochement à examiner'}>
             {d.totals.length === 0 ? <EmptyState title="Aucune obligation liquidée sur la période" icon="chart" /> : (
               <DataTable caption="Totaux par devise" rows={d.totals} rowKey={(t) => t.currency} columns={[

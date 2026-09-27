@@ -16,7 +16,7 @@ import {
   BandeauHorsLigne, Bloc, ChiffreView, FicheCard, Illustrations, MenuPoste, PhoneFrame, Reperes, ReglesEcrans, SixEtats, usePosteApi, useTempsRendu,
   type Chiffre, type Commun, type Fiche, type Illustration,
 } from './common';
-import { SixEtatsRecettes, VignetteCommunes, VilleAujourdhui } from './visuels';
+import { CarteClassement, CorbeillesVisuel, EtatExecution, EtatInstruction, SixEtatsRecettes, TuilesChiffres, VignetteCommunes, VilleAujourdhui } from './visuels';
 
 type Accueil = Commun & Record<string, unknown>;
 interface Alerte { id: string; type: string; gravite: string; cause: string; ageJours: number; enjeu: Chiffre | null; lien: string }
@@ -67,6 +67,7 @@ function PosteCabinet({ a, onDone }: { a: Accueil; onDone: () => void }) {
         <ChiffreView c={cg.chiffre} />
       </Bloc>
       <Bloc titre="À traiter">
+        <EtatInstruction items={items} />
         <ul className="ps-liste">{items.map((i) => (
           <li key={i.id}><strong>{i.objet}</strong> <StatusBadge tone={i.etat === 'INSTRUIT' ? 'good' : i.etat === 'INCOMPLET' ? 'critical' : 'warning'} label={i.etatLabel} />
             <span className="ps-small"> {i.detail}{i.position ? ` · ${i.position}` : ''}{i.reexamenLe ? ` · réexamen le ${i.reexamenLe}` : ''}{i.exemple ? ' · [EXEMPLE]' : ''}</span></li>
@@ -91,6 +92,7 @@ function TableExecution({ rows, onDone }: { rows: ExecRow[]; onDone?: () => void
   }
   return (
     <>
+      <EtatExecution rows={rows} />
       <ul className="ps-liste">{rows.map((r) => (
         <li key={r.id}>
           <strong>{r.acteLibelle}</strong> <StatusBadge tone={r.etat === 'EXECUTE' ? 'good' : r.enRetard ? 'critical' : 'info'} label={r.enRetard && r.etat !== 'EXECUTE' ? `Retard ${r.joursRetard} j` : r.etat === 'EXECUTE' ? 'Exécuté' : `Échéance ${r.echeance}`} />
@@ -128,6 +130,7 @@ function PosteMinistre({ a, onDone }: { a: Accueil; onDone: () => void }) {
     <>
       <Bloc titre="Mes décisions" sous={d.libelle}>{d.fiches.length ? d.fiches.map((f) => <FicheCard key={f.id} f={f} onDone={onDone} />) : <EmptyState title="Aucune décision de mon périmètre" icon="check" />}</Bloc>
       <Bloc titre="Mes recettes · face aux objectifs">
+        <TuilesChiffres chiffres={a.mesRecettes as Chiffre[]} label="Mes recettes — chiffres clés" />
         <div className="ps-grille">{(a.mesRecettes as Chiffre[]).map((c) => <ChiffreView key={c.code} c={c} />)}</div>
         <Illustrations items={a.illustrations?.MES_RECETTES as Illustration[] | undefined} />
       </Bloc>
@@ -155,8 +158,8 @@ function PosteAutorite({ a }: { a: Accueil }) {
   return (
     <>
       <p className="ps-bandeau" role="note">{String(a.bandeau)}</p>
-      <Bloc titre="Recettes provinciales"><div className="ps-grille">{rec.map((c) => <ChiffreView key={c.code} c={c} grand />)}</div><Illustrations items={a.illustrations?.RECETTES} /></Bloc>
-      <Bloc titre="Par catégorie" sous="part de l’objectif de l’exercice">{cat.length ? <div className="ps-grille">{cat.map((c) => <ChiffreView key={c.code} c={c} />)}</div> : <p className="ps-small">Aucune recette rapprochée par catégorie dans le périmètre déclaré.</p>}<Illustrations items={a.illustrations?.PAR_CATEGORIE} /></Bloc>
+      <Bloc titre="Recettes provinciales"><TuilesChiffres chiffres={rec} label="Recettes provinciales — chiffres clés" /><div className="ps-grille">{rec.map((c) => <ChiffreView key={c.code} c={c} grand />)}</div><Illustrations items={a.illustrations?.RECETTES} /></Bloc>
+      <Bloc titre="Par catégorie" sous="part de l’objectif de l’exercice"><TuilesChiffres chiffres={cat} label="Par catégorie — chiffres clés" max={2} />{cat.length ? <div className="ps-grille">{cat.map((c) => <ChiffreView key={c.code} c={c} />)}</div> : <p className="ps-small">Aucune recette rapprochée par catégorie dans le périmètre déclaré.</p>}<Illustrations items={a.illustrations?.PAR_CATEGORIE} /></Bloc>
       <Bloc titre="Réalisations financées">{real.items.length ? <ul className="ps-liste">{real.items.map((r) => <li key={r.titre + r.commune}><strong>{r.titre}</strong> — {r.statut} · {r.commune}</li>)}</ul> : <p className="ps-small">{real.note}</p>}<Link to={real.lien}>Tableau public de transparence</Link><Illustrations items={a.illustrations?.REALISATIONS} /></Bloc>
       <p className="ps-small">{String(a.phrase)}</p>
     </>
@@ -248,6 +251,7 @@ function VueGenerique({ vue, d, onDone }: { vue: string; d: Record<string, unkno
       )}
       {vue === 'communes' && (
         <Bloc titre="Communes" sous={String(d.note)}>
+          <CarteClassement classement={d.classement as { commune: string; tauxPct: string | null; couleur: string }[]} note={String(d.note)} />
           <ol className="ps-liste">{(d.classement as { commune: string; tauxPct: string | null; couleur: string; couverture: Chiffre; responsable: { nom: string; role: string; interpeller: string } | null }[]).map((c) => (
             <li key={c.commune}><strong>{c.commune}</strong> <span className={`ps-commune c-${c.couleur.toLowerCase()}`}>{c.tauxPct ?? '—'} %</span><ChiffreView c={c.couverture} />
               {c.responsable && <span className="ps-small">Responsable : {c.responsable.nom} ({c.responsable.role}) — <Link to={c.responsable.interpeller}>interpeller</Link></span>}</li>
@@ -387,6 +391,7 @@ function IndicateursCorbeilles() {
   return (
     <Bloc titre="Taille des corbeilles" sous={`alerte au-delà de ${d.data.seuil} éléments pendant ${d.data.jours} jours (${d.data.statut})`}>
       <p className="ps-small">{d.data.regle}</p>
+      <CorbeillesVisuel autorites={d.data.autorites} seuil={d.data.seuil} statut={d.data.statut} />
       <ul className="ps-liste">{d.data.autorites.map((x) => <li key={x.userId}><strong>{x.nom}</strong> ({x.role}) {x.alerte && <StatusBadge tone="critical" label="Revoir les seuils de délégation" />}<ChiffreView c={x.chiffre} /></li>)}</ul>
     </Bloc>
   );

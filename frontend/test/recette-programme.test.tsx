@@ -120,7 +120,7 @@ describe('Écrans du programme (ch. 41–48)', () => {
     mockFetch('u-min', ['R05']);
     render(wrap(<VersionsView p={VERSIONS} onDone={() => undefined} />));
     expect(screen.getByText('V0.1 socle interne')).toBeTruthy();
-    expect(screen.getByText('Construit')).toBeTruthy();
+    expect(screen.getAllByText('Construit').length).toBeGreaterThan(0);
     expect(screen.getByText(/Communes du pilote : Gombe, Limete, Kalamu, Ngaliema/)).toBeTruthy();
   });
 

@@ -16,6 +16,35 @@ import { Section } from './shared';
 import { Area, Callout, Choice, Field, hasRole, Notice, useRunner } from './planif';
 import type { Decision, RegistreDecisions } from './programme-types';
 import './pilotage.css';
+import { fmtNombre, KpiTile, StatusDistribution } from '../../components/viz';
+import { etatsDe, STATUTS_DECISION, Tuiles, Visuels } from './visuels';
+
+/** États calculés de ce que débloque chaque décision (codes du serveur, libellés français). */
+const DEBLOQUE: Record<string, { label: string; tone: 'good' | 'warning' | 'neutral' }> = {
+  CONSTRUIT: { label: 'Construit', tone: 'good' }, GARDE_ACTIVE: { label: 'Garde active', tone: 'good' }, CIBLE_TENUE: { label: 'Cible tenue', tone: 'good' },
+  EN_ATTENTE: { label: 'En attente de la décision', tone: 'warning' }, ACTE_REQUIS: { label: 'Acte requis', tone: 'warning' },
+  INCHANGE: { label: 'Inchangé', tone: 'neutral' }, SANS_EFFET_TECHNIQUE: { label: 'Sans effet technique', tone: 'neutral' },
+};
+
+/** Visuels des dix décisions : statut, validations attendues, contradictions signalées. */
+export function VisuelsDecisions({ reg }: { reg: RegistreDecisions }) {
+  const debloques = reg.items.flatMap((d) => d.debloque);
+  return (
+    <>
+      <Tuiles label="Décisions du Gouvernement — synthèse" max={4}>
+        <KpiTile hero label="Décisions prises" value={reg.compte.PRISE} format={(v) => fmtNombre(v, 0)} unit={`/ ${reg.items.length}`} target={{ value: reg.items.length, label: 'dix décisions (48.1)', max: reg.items.length }} state={{ label: 'Acte enregistré et validé', tone: 'good' }} />
+        <KpiTile label="À valider (seconde personne)" value={reg.compte.aValider} format={(v) => fmtNombre(v, 0)} state={{ label: 'Quatre yeux', tone: 'warning' }} />
+        <KpiTile label="Refusées" value={reg.compte.REFUSEE} format={(v) => fmtNombre(v, 0)} state={{ label: 'Refus motivé', tone: 'neutral' }} />
+        <KpiTile label="Contradictions signalées" value={reg.contradictions.length} format={(v) => fmtNombre(v, 0)} state={{ label: 'Arbitrage du maître d’ouvrage', tone: reg.contradictions.length ? 'warning' : 'good' }} />
+      </Tuiles>
+      <Visuels label="Décisions en graphiques">
+        <StatusDistribution title="Décisions par statut" unitLabel="décisions" items={etatsDe(reg.items, (d) => d.statut, STATUTS_DECISION)} />
+        <StatusDistribution title="Contrôles débloqués par les décisions" unitLabel="contrôles" emptyText="Aucun contrôle rattaché"
+          items={etatsDe(debloques, (x) => x.etat, DEBLOQUE)} />
+      </Visuels>
+    </>
+  );
+}
 
 const STATUT_TONE: Record<string, 'good' | 'critical' | 'neutral'> = { A_PRENDRE: 'neutral', PRISE: 'good', REFUSEE: 'critical' };
 
@@ -70,12 +99,13 @@ export function DecisionsView({ reg, onDone }: { reg: RegistreDecisions; onDone:
   const acts = sel ? decisionActions(sel, user) : null;
   return (
     <div className="dash-grid">
+      <VisuelsDecisions reg={reg} />
       <Section title="Dix décisions immédiates (48.1)" sub={`${reg.compte.A_PRENDRE} à prendre · ${reg.compte.PRISE} prise(s) · ${reg.compte.REFUSEE} refusée(s) · ${reg.compte.aValider} à valider`}>
         {reg.contradictions.map((c) => <Callout key={c.numero} tone="warn"><strong>Décision {c.numero} — {c.texte}.</strong> Contradiction avec {c.avec}. {c.comportement}</Callout>)}
         <DataTable caption="Registre des décisions du Gouvernement provincial" rows={reg.items} rowKey={(d) => d.id} columns={[
           { key: 'd', label: 'Décision', primary: true, render: (d) => <><strong>{d.numero}.</strong> {d.decision}</> },
           { key: 's', label: 'Statut', render: (d) => <><StatusBadge tone={STATUT_TONE[d.statut] ?? 'neutral'} label={d.statutLibelle} />{d.enAttente && <StatusBadge tone="warning" label="Validation attendue" />}{d.acte && <span className="small" style={{ display: 'block' }}>Acte {d.acte.reference} · <code className="hash">{d.acte.sha256.slice(0, 12)}…</code></span>}</> },
-          { key: 'u', label: 'Ce qu’elle débloque (état calculé)', full: true, render: (d) => <ul className="small">{d.debloque.map((l) => <li key={l.controle}><strong>{l.etat}</strong> — {l.libelle}. {l.detail}</li>)}</ul> },
+          { key: 'u', label: 'Ce qu’elle débloque (état calculé)', full: true, render: (d) => <ul className="small">{d.debloque.map((l) => <li key={l.controle}><strong>{DEBLOQUE[l.etat]?.label ?? l.etat}</strong> — {l.libelle}. {l.detail}</li>)}</ul> },
           { key: 'a', label: 'Détail', render: (d) => <button type="button" className="btn btn-secondary btn-sm" aria-expanded={open === d.numero} onClick={() => setOpen(open === d.numero ? null : d.numero)}>{open === d.numero ? 'Replier' : 'Ouvrir'}</button> },
         ]} />
         {sel && acts && (

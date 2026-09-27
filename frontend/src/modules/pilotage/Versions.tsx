@@ -15,6 +15,27 @@ import { Section } from './shared';
 import { Area, Choice, Field, hasRole, Notice, useRunner } from './planif';
 import type { PlanVersions, Version } from './programme-types';
 import './pilotage.css';
+import { fmtNombre, KpiTile, StackedBarViz, StatusDistribution } from '../../components/viz';
+import { ETATS_VERSION, etatsDe, Tuiles, Visuels } from './visuels';
+
+/** Visuels du plan de livraison : contenus construits par version, état de mise en service. */
+export function VisuelsVersions({ p }: { p: PlanVersions }) {
+  const contenus = p.items.flatMap((v) => v.contenus);
+  return (
+    <>
+      <Tuiles label="Plan de livraison — synthèse" max={3}>
+        <KpiTile hero label="Contenus construits" value={contenus.filter((c) => c.construit).length} format={(v) => fmtNombre(v, 0)} unit={`/ ${contenus.length}`} target={{ value: contenus.length, label: 'tous les contenus', max: contenus.length }} state={{ label: 'Preuve dans le code', tone: 'good' }} />
+        <KpiTile label="Versions en service" value={p.items.filter((v) => v.etat === 'EN_SERVICE').length} format={(v) => fmtNombre(v, 0)} unit={`/ ${p.items.length}`} state={{ label: 'Décision humaine', tone: 'info' }} />
+        <KpiTile label="Communes du pilote" value={p.communes.pilote.length} format={(v) => fmtNombre(v, 0)} unit={`/ ${p.communes.referentiel}`} state={{ label: 'Référentiel', tone: 'neutral' }} />
+      </Tuiles>
+      <Visuels label="Versions en graphiques">
+        <StackedBarViz className="viz-span-2" title="Contenus par version" subtitle="Construits et restant à construire" mode="absolute" orientation="horizontal" format={(v) => fmtNombre(v, 0)}
+          series={[{ key: 'c', label: 'Construit' }, { key: 'r', label: 'À construire' }]} rows={p.items.map((v) => ({ key: v.code, label: `${v.code} — ${v.public}`, values: { c: v.contenus.filter((c) => c.construit).length, r: v.contenus.filter((c) => !c.construit).length } }))} />
+        <StatusDistribution title="Mise en service" unitLabel="versions" items={etatsDe(p.items, (v) => v.etat, ETATS_VERSION)} />
+      </Visuels>
+    </>
+  );
+}
 
 const ETAT_TONE: Record<string, 'good' | 'warning' | 'neutral'> = { PREVUE: 'neutral', EN_RECETTE: 'warning', EN_SERVICE: 'good' };
 
@@ -40,6 +61,7 @@ export function VersionsView({ p, onDone }: { p: PlanVersions; onDone: () => voi
   const sel = p.items.find((v) => v.code === edit) ?? null;
   return (
     <div className="dash-grid">
+      <VisuelsVersions p={p} />
       <Section title="Versions V0.1 à V3.0" sub={p.regle}>
         <DataTable caption="Plan de livraison par versions" rows={p.items} rowKey={(v) => v.code} columns={[
           { key: 'v', label: 'Version', primary: true, render: (v) => <><strong>{v.version}</strong><span className="small muted" style={{ display: 'block' }}>Public : {v.public}</span></> },

@@ -11,12 +11,14 @@ import { Section } from '../pilotage/shared';
 import { Area, Choice, Field } from '../pilotage/planif';
 import { Ecran, Indicateurs, montant, pct, useRunner, useVue, type Indicator } from './commun';
 import type { MoneyJSON } from '@mosolo/shared';
+import { DonutViz, fmtCompact, fmtNombre, HeatGrid, KpiTile, LadderFunnel, sixEtatsFromLadder, StackedBarViz, StatusDistribution, type LadderLevelLike } from '../../components/viz';
+import { EtatIndicateurs, nombre, Tuiles, TuilesIndicateurs, Visuels } from '../pilotage/visuels';
 
 interface Row { key: string; obligations: number; assessedCdf: MoneyJSON; reconciledCdf: MoneyJSON; overdueCdf: MoneyJSON; recoveryPct: string | null; overduePct: string | null; coveragePct: string | null; situations: Record<string, { count: number }> }
 interface Alert { family: string; severity: 'CRITIQUE' | 'ELEVEE' | 'MOYENNE'; code: string; title: string; detail: string; count: number; link: string }
 interface Vue {
   generatedAt: string; rule: string; financialEdit: false;
-  ladder: { levels: { level: string; label: string; count: number | null; consolidatedCdf: MoneyJSON | null }[] } | null;
+  ladder: { levels: (LadderLevelLike & { label: string })[] } | null;
   heatmap: { dimension: string; metricNote: string; rows: Row[]; situations: Record<string, string> };
   alerts: { items: Alert[]; critical: number; byFamily: { family: string; count: number }[] };
   indicators: Indicator[];
@@ -24,6 +26,48 @@ interface Vue {
 }
 
 const SEV = { CRITIQUE: 'critical', ELEVEE: 'serious', MOYENNE: 'warning' } as const;
+const SEV_LABEL = { CRITIQUE: 'Critique', ELEVEE: 'Élevée', MOYENNE: 'Moyenne' } as const;
+const FAMILLE: Record<string, string> = { ECARTS: 'Écarts', FRAUDE: 'Fraude', RETARDS: 'Retards' };
+const SITUATIONS = [{ key: 'PAYE', label: 'Payé' }, { key: 'EXIGIBLE', label: 'Exigible' }, { key: 'EN_RETARD', label: 'En retard' }, { key: 'CONTESTE', label: 'Contesté' }];
+const montantsTexte = (a: MoneyJSON[]) => a.map((m) => `${fmtCompact(Number(m.amount))} ${m.currency}`).join(' · ');
+
+/** Visuels du Centre de commandement : six états, carte de chaleur, situations, alertes (données de la vue). */
+function VisuelsCommandement({ d, dimension }: { d: Vue; dimension: string }) {
+  const rows = d.heatmap.rows;
+  const nomDim = dimension === 'categorie' ? 'catégorie' : dimension === 'quartier' ? 'quartier' : 'commune';
+  const alertes = d.alerts.items;
+  return (
+    <>
+      <Tuiles label="Centre de commandement — chiffres clés" max={4}>
+        <KpiTile hero label="Rapproché (contre-valeur)" value={nombre(d.ladder?.levels.find((l) => l.level === 'reconciled')?.consolidatedCdf?.amount)} unit="CDF" format={fmtCompact}
+          state={{ label: 'Rapproché', tone: 'good' }} reason="Échelle indisponible pour ce profil." sub="Contre-valeur indicative ; montants par devise dans l’échelle" />
+        <KpiTile label="Liquidé (contre-valeur)" value={nombre(d.ladder?.levels.find((l) => l.level === 'assessed')?.consolidatedCdf?.amount)} unit="CDF" format={fmtCompact}
+          state={{ label: 'Constaté', tone: 'neutral' }} reason="Échelle indisponible pour ce profil." />
+        <KpiTile label="Alertes ouvertes" value={alertes.reduce((s, a) => s + a.count, 0)} format={(v) => fmtNombre(v, 0)}
+          state={d.alerts.critical > 0 ? { label: `${d.alerts.critical} critique(s)`, tone: 'critical' } : { label: 'Aucune critique', tone: 'good' }} />
+        <KpiTile label="Instructions suivies" value={d.decisions.instructions?.total ?? null} format={(v) => fmtNombre(v, 0)} href="/pilotage/instructions"
+          reason="Circuit des instructions non chargé." state={{ label: 'Circuit tracé', tone: 'info' }} />
+      </Tuiles>
+      <TuilesIndicateurs items={d.indicators} label="Indicateurs du Centre de commandement" />
+      <Visuels label="Centre de commandement en graphiques">
+        <LadderFunnel className="viz-span-2" title="Les six états de la recette" subtitle="Emboîtés, jamais additionnés — contre-valeur indicative CDF"
+          steps={d.ladder ? sixEtatsFromLadder(d.ladder.levels, montantsTexte) : []} emptyText="Échelle indisponible pour ce profil" />
+        {dimension === 'commune' ? (
+          <HeatGrid className="viz-span-2" title="Intensité du recouvrement par commune" subtitle="Rapproché / liquidé ; gris hachuré = aucune obligation rattachée" measureLabel="Rapproché / liquidé"
+            unit="%" domain={[0, 100]} format={(v) => fmtNombre(v, 0)} unmeasuredReason="aucune obligation liquidée rattachée à cette commune"
+            cells={rows.map((r) => ({ commune: r.key, value: nombre(r.recoveryPct), detail: `${r.obligations} obligation(s) · couverture ${r.coveragePct ?? '—'} %` }))} />
+        ) : null}
+        <StackedBarViz className="viz-span-2" title={`Situation des obligations par ${nomDim}`} subtitle="Parts disjointes (nombre d’obligations) — payé, exigible, en retard, contesté" mode="percent" orientation="horizontal"
+          series={SITUATIONS} format={(v) => fmtNombre(v, 0)}
+          rows={rows.map((r) => ({ key: r.key, label: r.key, values: Object.fromEntries(SITUATIONS.map((s) => [s.key, r.situations[s.key]?.count ?? 0])) }))} />
+        <StatusDistribution title="Alertes par sévérité" unitLabel="alertes" emptyText="Aucune alerte ouverte"
+          items={(['CRITIQUE', 'ELEVEE', 'MOYENNE'] as const).map((k) => ({ key: k, label: SEV_LABEL[k], tone: SEV[k], count: alertes.filter((a) => a.severity === k).reduce((s, a) => s + a.count, 0) }))} />
+        <DonutViz title="Alertes par famille" centerLabel="alertes" slices={d.alerts.byFamily.map((f) => ({ key: f.family, label: FAMILLE[f.family] ?? f.family, value: f.count }))} emptyText="Aucune alerte ouverte" />
+        <EtatIndicateurs items={d.indicators} />
+      </Visuels>
+    </>
+  );
+}
 
 export default function Commandement() {
   const [dimension, setDimension] = useState('commune');
@@ -44,6 +88,7 @@ export default function Commandement() {
   return (
     <Ecran eyebrow="Pilotage et décision · module 41" title="Centre de commandement exécutif (Command Centre)" lead="Vision en temps réel fondée sur des montants rapprochés ; agrégats seulement, aucune édition financière." q={q} msg={r.msg}>
       {(d) => (<>
+        <VisuelsCommandement d={d} dimension={dimension} />
         <Section title="Indicateurs" sub={d.rule}><Indicateurs items={d.indicators} /></Section>
         <Section title="Échelle des onze états" sub="Du potentiel estimé au disponible pour affectation (servie par le pilotage).">
           {d.ladder ? (

@@ -16,6 +16,33 @@ import { Section } from './shared';
 import { Area, Callout, Choice, hasRole, Notice, useRunner } from './planif';
 import { preuveTexte, SUPERVISION, type RegistreRisques, type Risque } from './programme-types';
 import './pilotage.css';
+import { fmtNombre, KpiTile, MatrixHeat, StatusDistribution, TimelineStrip } from '../../components/viz';
+import { etatsDe, Tuiles, Visuels } from './visuels';
+
+/** Visuels du registre : matrice probabilité × impact (nombre de risques), zones, prochaines revues. */
+export function VisuelsRisques({ r }: { r: RegistreRisques }) {
+  const probs = [...r.carteChaleur.probabilites].sort((a, b) => b.rang - a.rang);
+  const imps = [...r.carteChaleur.impacts].sort((a, b) => a.rang - b.rang);
+  const zones = Object.fromEntries(Object.entries(ZONE).map(([k, z]) => [k, { label: r.carteChaleur.cellules.find((c) => c.zone === k)?.libelle ?? k, tone: z.tone }]));
+  return (
+    <>
+      <Tuiles label="Registre des risques — synthèse" max={4}>
+        <KpiTile hero label="Risques suivis" value={r.synthese.total} format={(v) => fmtNombre(v, 0)} state={{ label: 'Document maître, ch. 41', tone: 'info' }} />
+        <KpiTile label="En zone critique" value={r.synthese.critiques} format={(v) => fmtNombre(v, 0)} state={{ label: 'Critique', tone: r.synthese.critiques > 0 ? 'critical' : 'good' }} />
+        <KpiTile label="Revues en retard" value={r.synthese.enRetard} format={(v) => fmtNombre(v, 0)} state={{ label: r.synthese.enRetard > 0 ? 'À revoir' : 'À jour', tone: r.synthese.enRetard > 0 ? 'warning' : 'good' }} />
+        <KpiTile label="Mesures relevant d’un tiers" value={r.synthese.mesuresExternes} format={(v) => fmtNombre(v, 0)} state={{ label: 'Externe', tone: 'neutral' }} />
+      </Tuiles>
+      <Visuels label="Risques en graphiques">
+        <MatrixHeat className="viz-span-2" title="Matrice probabilité × impact" subtitle="Nombre de risques par case ; le détail des codes figure dans la carte ci-dessous" measureLabel="Risques"
+          rows={probs.map((p) => p.libelle)} cols={imps.map((i) => i.libelle)} format={(v) => fmtNombre(v, 0)}
+          values={probs.map((p) => imps.map((i) => r.carteChaleur.cellules.find((c) => c.probabilite === p.code && c.impact === i.code)?.risques.length ?? 0))} />
+        <StatusDistribution title="Risques par zone de criticité" unitLabel="risques" items={etatsDe(r.items, (x) => x.criticite.zone, zones)} />
+        <TimelineStrip className="viz-span-2" title="Prochaines revues" categories={['En retard', 'À venir']} emptyText="Aucune revue planifiée"
+          events={r.items.map((x) => ({ id: x.code, at: x.prochaineRevue, category: x.revueEnRetard ? 'En retard' : 'À venir', label: `${x.code} — ${x.risque}` }))} />
+      </Visuels>
+    </>
+  );
+}
 
 const ZONE: Record<string, { tone: Tone; color: string }> = {
   CRITIQUE: { tone: 'critical', color: STATUS.critical }, ELEVEE: { tone: 'serious', color: STATUS.serious },
@@ -73,6 +100,7 @@ export function RisquesView({ r, onDone }: { r: RegistreRisques; onDone: () => v
   const sel = r.items.find((x) => x.code === open) ?? null;
   return (
     <div className="dash-grid">
+      <VisuelsRisques r={r} />
       <Section title="Carte de chaleur" sub={`${r.synthese.total} risques · ${r.synthese.critiques} en zone critique · ${r.synthese.enRetard} revue(s) en retard`}>
         {r.synthese.enRetard > 0 && <Callout tone="warn">{r.synthese.enRetard} revue(s) en retard : à revoir par le propriétaire du risque ou la supervision du programme.</Callout>}
         <CarteChaleur r={r} />

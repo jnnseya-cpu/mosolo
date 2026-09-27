@@ -13,6 +13,8 @@ import { api } from '../../lib/api';
 import { Section } from './shared';
 import { Area, Choice, Field, hasRole, Notice, useRunner } from './planif';
 import './pilotage.css';
+import { BarChartViz, DonutViz, fmtNombre, KpiTile, StatusDistribution, TimelineStrip } from '../../components/viz';
+import { etatsDe, lignesCompte, Tuiles, Visuels } from './visuels';
 
 export interface InstructionRow {
   id: string; number: string; authority: string; origin: string; originLabel: string; subject: string; body: string; deadline: string; status: string; overdue: boolean; daysLeft: number;
@@ -33,6 +35,30 @@ export function instructionActions(i: InstructionRow, user: { id: string; roles:
   };
 }
 
+/** Visuels du circuit des instructions : statuts, échéances, origines, services destinataires. */
+export function VisuelsInstructions({ items, origins }: { items: InstructionRow[]; origins: Record<string, string> }) {
+  const entier = (v: number) => fmtNombre(v, 0);
+  const closes = items.filter((i) => i.closure);
+  return (
+    <>
+      <Tuiles label="Instructions — synthèse" max={4}>
+        <KpiTile hero label="Instructions" value={items.length} format={entier} state={{ label: `${items.filter((i) => i.status !== 'CLOSE').length} en cours`, tone: 'info' }} />
+        <KpiTile label="En retard" value={items.filter((i) => i.overdue && i.status !== 'CLOSE').length} format={entier} state={{ label: 'Échéance dépassée', tone: items.some((i) => i.overdue && i.status !== 'CLOSE') ? 'critical' : 'good' }} />
+        <KpiTile label="Closes dans le délai" value={closes.filter((i) => i.closure?.onTime).length} format={entier} unit={`/ ${closes.length}`} state={{ label: 'Preuve de clôture', tone: 'good' }} />
+        <KpiTile label="Rapports déposés" value={items.reduce((s, i) => s + i.reports.length, 0)} format={entier} state={{ label: 'Service destinataire', tone: 'neutral' }} />
+      </Tuiles>
+      <Visuels label="Instructions en graphiques">
+        <StatusDistribution title="Instructions par statut" unitLabel="instructions" emptyText="Aucune instruction" items={etatsDe(items, (i) => i.status, INSTR_STATUS)} />
+        <DonutViz title="Instructions par bloc d’origine" centerLabel="instructions" emptyText="Aucune instruction"
+          slices={lignesCompte(items, (i) => i.origin).map((r) => ({ key: r.key, label: (origins[r.key] ?? r.key).split(' — ')[0]!, value: r.values.n }))} />
+        <TimelineStrip className="viz-span-2" title="Échéances des instructions" categories={['En retard', 'À échéance', 'Close']} emptyText="Aucune instruction"
+          events={items.map((i) => ({ id: i.id, at: i.deadline, category: i.status === 'CLOSE' ? 'Close' : i.overdue ? 'En retard' : 'À échéance', label: `${i.number} — ${i.subject}` }))} />
+        <BarChartViz title="Par service destinataire" orientation="horizontal" format={entier} emptyText="Aucune instruction" series={[{ key: 'n', label: 'Instructions' }]} rows={lignesCompte(items, (i) => i.assignee.entity)} />
+      </Visuels>
+    </>
+  );
+}
+
 export default function Instructions() {
   const { user } = useApp();
   const q = useApi(() => api<{ items: InstructionRow[]; origins: Record<string, string> }>('/v1/pilotage/instructions'), [user?.id]);
@@ -45,6 +71,7 @@ export default function Instructions() {
     <div className="page page-wide">
       <PageHead eyebrow="Pilotage · § 26.1–26.2" title="Instructions et suivi" lead="Chaque instruction a un service destinataire, une échéance, un rapport et une clôture motivée par l’autorité ; le suivi alimente le tableau du cabinet." />
       <div className="dash-grid">
+        {q.data && <VisuelsInstructions items={q.data.items} origins={q.data.origins} />}
         <Section title="Instructions" sub="Visibles de l’autorité, de l’audit et du service destinataire">
           <Notice msg={r.msg} />
           {q.loading && !q.data ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : (

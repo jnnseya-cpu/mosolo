@@ -16,6 +16,35 @@ import { api } from '../../lib/api';
 import { currentQuarter, Section } from './shared';
 import { Callout, Field, hasRole, moneysText, moneyText, Notice, useRunner } from './planif';
 import './pilotage.css';
+import { fmtNombre, KpiTile, StatusDistribution } from '../../components/viz';
+import { BarresParDevise, etatsDe, Tuiles, Visuels } from './visuels';
+
+const CLE_ETAT = { ACTIVE: { label: 'Active (certifiée)', tone: 'good' as const }, A_VERIFIER: { label: 'À vérifier', tone: 'warning' as const } };
+
+/** Visuels du partage légal : statut des clés, parts par entité (rapproché / comptabilisé), cadres d'incitation. */
+export function VisuelsPartage({ keys, last, incitations }: { keys: KeyRow[]; last: Calc | undefined; incitations: Incentive[] }) {
+  const entier = (v: number) => fmtNombre(v, 0);
+  return (
+    <>
+      <Tuiles label="Partage légal — synthèse" max={4}>
+        <KpiTile hero label="Clés légales" value={keys.length} format={entier} state={{ label: `${keys.filter((k) => k.status === 'ACTIVE').length} active(s)`, tone: keys.some((k) => k.status === 'ACTIVE') ? 'good' : 'warning' }} sub="Distinctes de la clé du § 37A" />
+        <KpiTile label="Entités bénéficiaires" value={new Set(keys.flatMap((k) => k.beneficiaries.map((b) => b.beneficiary))).size} format={entier} state={{ label: 'Province, ETD, pouvoir central', tone: 'info' }} />
+        <KpiTile label="Dernier calcul" value={last ? last.period : null} reason="Aucun calcul enregistré." state={last ? { label: 'Aucun virement', tone: 'neutral' } : undefined} />
+        <KpiTile label="Cadres d’incitation" value={incitations.length} format={entier} state={{ label: 'Registre seulement', tone: 'neutral' }} />
+      </Tuiles>
+      <Visuels label="Partage légal en graphiques">
+        <StatusDistribution title="Clés légales par statut" unitLabel="clés" items={etatsDe(keys, (k) => (k.status === 'ACTIVE' ? 'ACTIVE' : 'A_VERIFIER'), CLE_ETAT)} />
+        <BarresParDevise className="viz-span-2" title="Parts par entité" subtitle={last ? `Calcul ${last.id} (${last.period}) — clés certifiées seulement` : undefined} emptyText="Aucune part calculée (clés non certifiées : assiette seulement)"
+          series={[{ key: 'r', label: 'Sur le rapproché' }, { key: 'k', label: 'Sur le comptabilisé' }]}
+          rows={(last?.byEntity ?? []).map((b) => ({ key: `${b.entity}-${b.currency}`, label: b.entity, values: { r: b.calculatedOnReconciled, k: b.calculatedOnRecorded } }))} />
+        {last && last.notCalculable.length > 0 && (
+          <BarresParDevise title="Assiette des clés non calculables" subtitle="Clés à vérifier : assiette seulement, aucune part" series={[{ key: 'b', label: 'Assiette' }]}
+            rows={last.notCalculable.map((n) => ({ key: n.code, label: n.code, values: { b: n.base } }))} />
+        )}
+      </Visuels>
+    </>
+  );
+}
 
 interface KeyRow { code: string; label: string; status: string; reason?: string; legalReference: string; categories: string[]; beneficiaries: { beneficiary: string; label: string; rateKey: string; remainder: boolean }[]; versions: { id: string; version: number; status: string; executable: boolean }[] }
 interface Calc { id: string; period: string; calculatedAt: string; scope: string; notice: string; notCalculable: { code: string; reason: string; base: MoneyJSON[] }[]; byEntity: { entity: string; label: string; currency: string; calculatedOnReconciled: MoneyJSON; calculatedOnRecorded: MoneyJSON }[] }
@@ -38,6 +67,7 @@ export default function PartageLegal() {
       {keys.loading && !keys.data ? <Loading /> : keys.error ? <ErrorState error={keys.error} onRetry={reload} /> : keys.data && (
         <div className="dash-grid">
           <div className="span-12"><Callout tone="warn">{keys.data.notice}</Callout></div>
+          <VisuelsPartage keys={keys.data.keys} last={last} incitations={inc.data?.items ?? []} />
           <Section title="Clés légales">
             <DataTable caption="Clés" rows={keys.data.keys} rowKey={(k) => k.code} columns={[
               { key: 'c', label: 'Clé', primary: true, render: (k) => <><strong>{k.label}</strong><span className="small muted" style={{ display: 'block' }}>{k.code} · {k.legalReference}</span></> },

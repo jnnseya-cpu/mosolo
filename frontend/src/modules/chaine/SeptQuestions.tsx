@@ -15,6 +15,25 @@ import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
 import type { Answer, AnswerStatus, Maillon, MaillonStatus, SeptQuestionsView } from './types';
 import './chaine.css';
+import { ProgressMeter, StatusDistribution } from '../../components/viz';
+
+/** Visuel compact de la chaîne et des sept réponses : maillons par état, réponses par état, part accomplie. */
+export function VisuelChaine({ maillons, questions }: { maillons: Maillon[]; questions: Answer[] }) {
+  const faits = maillons.filter((m) => m.status === 'FAIT').length;
+  const utiles = maillons.filter((m) => m.status !== 'SANS_OBJET').length;
+  return (
+    <div className="viz-grid ch-visuel" style={{ ['--viz-min' as string]: '260px' }}>
+      <StatusDistribution title="Maillons par état" unitLabel="maillons"
+        items={(Object.keys(MAILLON_STATUS) as MaillonStatus[]).map((k) => ({ key: k, label: MAILLON_STATUS[k].label, tone: MAILLON_STATUS[k].tone, icon: MAILLON_STATUS[k].icon, count: maillons.filter((m) => m.status === k).length }))} />
+      <StatusDistribution title="Les sept réponses par état" unitLabel="questions"
+        items={(Object.keys(ANSWER_STATUS) as AnswerStatus[]).map((k) => ({ key: k, label: ANSWER_STATUS[k].label, tone: ANSWER_STATUS[k].tone, count: questions.filter((q) => q.status === k).length })).filter((i) => i.count > 0)} />
+      <div className="panel ch-meter">
+        <ProgressMeter label="Maillons accomplis (hors sans objet)" value={utiles ? Math.round((faits / utiles) * 1000) / 10 : null} unit="%" target={100} targetLabel="chaîne complète" reason="aucun maillon applicable"
+          tone={maillons.some((m) => m.status === 'BLOQUE') ? 'critical' : undefined} toneLabel={maillons.some((m) => m.status === 'BLOQUE') ? 'Maillon bloqué' : undefined} />
+      </div>
+    </div>
+  );
+}
 
 export const MAILLON_STATUS: Record<MaillonStatus, { label: string; tone: Tone; icon: string }> = {
   FAIT: { label: 'Fait', tone: 'good', icon: 'check' },
@@ -161,6 +180,7 @@ export function SeptQuestionsPanel({ objectId, obligationId, standaloneLink = tr
         </p>
         {d.access === 'minimal' && <StatusBadge tone="info" label="Accès minimal : ni nom ni montant" icon="lock" />}
       </div>
+      <VisuelChaine maillons={chain.maillons} questions={d.questions} />
       <section aria-labelledby={`${idBase}-q`}>
         <h3 className="h-sub" id={`${idBase}-q`}>Les sept questions</h3>
         <QuestionsList questions={d.questions} />
