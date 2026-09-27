@@ -1,6 +1,8 @@
 /* Trésor avancé — files d'exception, suspens, double validation, clôtures. */
 .tr-workbench { display: grid; gap: 16px; min-width: 0; }
 .tr-kpis { margin-bottom: 0; }
+/* Valeur sur sa propre ligne (points de suspension si trop longue) : pas de débordement de la tuile à 360 px. */
+.tr-kpis .kpi-value { display: block; }
 .tr-kpis .kpi-sub { display: inline-flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .tr-tabs { margin-bottom: 0; max-width: 100%; }
 .tr-tabs button { flex: 1 1 auto; justify-content: center; }

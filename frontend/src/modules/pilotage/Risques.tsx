@@ -26,6 +26,7 @@ const ZONE: Record<string, { tone: Tone; color: string }> = {
 export function CarteChaleur({ r }: { r: RegistreRisques }) {
   const probs = [...r.carteChaleur.probabilites].sort((a, b) => b.rang - a.rang);
   return (
+    <div className="table-scroll">
     <table className="data-table heatmap-risques">
       <caption>Carte de chaleur des risques (probabilité × impact)</caption>
       <thead><tr><th scope="col">Probabilité \ Impact</th>{r.carteChaleur.impacts.map((i) => <th key={i.code} scope="col">{i.libelle}</th>)}</tr></thead>
@@ -47,6 +48,7 @@ export function CarteChaleur({ r }: { r: RegistreRisques }) {
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
 

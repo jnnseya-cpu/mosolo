@@ -45,7 +45,7 @@ function Objet() {
     <section className="panel stack-sm" aria-label="Objet">
       <p className="panel-title">Historique spatial et hiérarchie d’un objet</p>
       <form className="cit-inline" onSubmit={(e) => void charger(e)}>
-        <input aria-label="Identifiant de l’objet" placeholder="Identifiant de l’objet" value={id} onChange={(e) => setId(e.target.value)} />
+        <input aria-label="Identifiant de l’objet" placeholder="Identifiant de l’objet" required value={id} onChange={(e) => setId(e.target.value)} />
         <button type="submit" className="btn btn-secondary btn-sm">Afficher</button>
       </form>
       {err && <p className="notice notice-err small" role="alert">{err}</p>}

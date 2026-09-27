@@ -52,7 +52,7 @@ function Simulateur({ f }: { f: Famille }) {
           </div>
           {r?.entrees.map((k) => (
             <div className="field" key={k}><label className="label" htmlFor={`sim-${f.famille}-${k}`}>{k.replace(/_/g, ' ')}</label>
-              <input id={`sim-${f.famille}-${k}`} inputMode="decimal" value={vals[k] ?? ''} onChange={(e) => setVals({ ...vals, [k]: e.target.value })} /></div>
+              <input id={`sim-${f.famille}-${k}`} inputMode="decimal" required pattern="[0-9]+([.,][0-9]+)?" title="Nombre (ex. 120 ou 120,5)" value={vals[k] ?? ''} onChange={(e) => setVals({ ...vals, [k]: e.target.value })} /></div>
           ))}
           <button type="submit" className="btn btn-primary btn-sm">Simuler</button>
         </>

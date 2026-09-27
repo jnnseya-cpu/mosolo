@@ -51,7 +51,7 @@ export default function Vehicules() {
       <p className="small"><Link to="/titres/controle">Contrôle hors ligne (paquet signé des titres)</Link> · <Link to="/fiscal/dependances">Mutation : conditions (quitus, vignette)</Link> · <Link to="/services/mobilite">Déclarer une mutation</Link></p>
       <form className="panel stack-sm" onSubmit={(e) => void controler(e)} aria-label="Contrôle par plaque">
         <p className="panel-title">Contrôle par plaque</p>
-        <div className="cit-inline"><input aria-label="Plaque" placeholder="Plaque" value={plaque} onChange={(e) => setPlaque(e.target.value)} /><button type="submit" className="btn btn-primary btn-sm">Contrôler</button></div>
+        <div className="cit-inline"><input aria-label="Plaque" placeholder="Plaque" required value={plaque} onChange={(e) => setPlaque(e.target.value)} /><button type="submit" className="btn btn-primary btn-sm">Contrôler</button></div>
         {ctl && (
           <div className="stack-sm" role="status">
             <p className="small">Plaque <span className="mono">{ctl.plaque}</span> {ctl.enregistre ? `— ${ctl.categorie ?? 'catégorie non renseignée'}` : '— véhicule non enregistré'}</p>

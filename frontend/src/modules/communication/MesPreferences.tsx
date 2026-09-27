@@ -16,7 +16,8 @@ const LANGS: Record<string, string> = { fr: 'Français', ln: 'Lingala', sw: 'Swa
 export default function MesPreferences() {
   const { user } = useApp();
   const tp = user?.taxpayerId ?? '';
-  const q = useApi(() => api<Prefs>(`/v1/communication/preferences/${encodeURIComponent(tp)}`), [tp]);
+  // Aucun appel tant que le compte n'est pas connu (sinon « /preferences/ » sans identifiant ⇒ refus 403 inutile).
+  const q = useApi(tp ? () => api<Prefs>(`/v1/communication/preferences/${encodeURIComponent(tp)}`) : null, [tp]);
   const [f, setF] = useState({ preferredChannel: '', disabled: [] as string[], whatsappConsent: false, optedOut: false, language: 'fr' });
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);

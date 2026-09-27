@@ -1,4 +1,7 @@
 /* Écrans « parcours du citoyen » (modules 1 à 12). */
 .cit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: var(--space-4, 16px); }
 .cit-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: var(--space-4, 16px); }
+/* Détails techniques (répartitions JSON) : passage à la ligne n'importe où — jamais de défilement horizontal à 360 px. */
+.cit-kpis > * { min-width: 0; }
+.cit-kpis .plain-list { overflow-wrap: anywhere; }
 .cit-inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

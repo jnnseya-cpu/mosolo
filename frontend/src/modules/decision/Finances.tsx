@@ -25,7 +25,8 @@ export function TableauMinistere() {
   const list = useVue<{ items: { id: string; name: string }[] }>(province ? '/v1/decision/ministeres' : null);
   const [entity, setEntity] = useState('');
   const ent = province ? entity || list.data?.items[0]?.id || '' : '';
-  const q = useVue<Ministere>(province && !ent ? null : `/v1/decision/ministere${ent ? `?entity=${encodeURIComponent(ent)}` : ''}`, [ent]);
+  // Aucun appel avant que l'utilisateur soit connu (sinon appel sans entité ⇒ 400 ENTITY_REQUIRED pour le Gouverneur).
+  const q = useVue<Ministere>(!user || (province && !ent) ? null : `/v1/decision/ministere${ent ? `?entity=${encodeURIComponent(ent)}` : ''}`, [ent, user?.id]);
   const r = useRunner(q.reload);
   const [period, setPeriod] = useState('');
   const [amount, setAmount] = useState('');
