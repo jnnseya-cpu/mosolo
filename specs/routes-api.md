@@ -1,10 +1,10 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1514 routes** dans 49 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1531 routes** dans 49 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
-| extension acces | 75 |
+| extension acces | 89 |
 | extension apprentissage | 17 |
 | extension canaux | 46 |
 | extension catalogue-api | 20 |
@@ -16,7 +16,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1514 routes** dans 4
 | extension equipements | 11 |
 | extension fiscal | 91 |
 | extension ia | 40 |
-| extension integrite | 83 |
+| extension integrite | 86 |
 | extension juridique | 11 |
 | extension opportunites | 32 |
 | extension parking | 74 |
@@ -67,6 +67,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1514 routes** dans 4
 | POST | `/v1/acces/arbitrations/:id/decision` |
 | POST | `/v1/acces/arbitrations/:id/opinion` |
 | POST | `/v1/acces/assisted-enrolments` |
+| GET | `/v1/acces/catalogue-modules` |
 | GET | `/v1/acces/claims` |
 | POST | `/v1/acces/claims` |
 | POST | `/v1/acces/claims/liquidations` |
@@ -74,10 +75,19 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1514 routes** dans 4
 | POST | `/v1/acces/consultations` |
 | GET | `/v1/acces/consultations/:id/dossier` |
 | POST | `/v1/acces/consultations/:id/review` |
+| GET | `/v1/acces/contrats-partenaires` |
+| POST | `/v1/acces/contrats-partenaires` |
+| POST | `/v1/acces/contrats-partenaires/:id/decision` |
 | GET | `/v1/acces/delegations` |
 | POST | `/v1/acces/delegations` |
 | POST | `/v1/acces/delegations/:id/decision` |
 | POST | `/v1/acces/delegations/:id/fin` |
+| GET | `/v1/acces/departements` |
+| GET | `/v1/acces/departements/:id` |
+| POST | `/v1/acces/departements/:id/modules` |
+| POST | `/v1/acces/departements/:id/modules/:code/detachement` |
+| GET | `/v1/acces/departements/liens` |
+| POST | `/v1/acces/departements/liens/:id/decision` |
 | GET | `/v1/acces/duplicates` |
 | POST | `/v1/acces/echeancier` |
 | GET | `/v1/acces/elevations` |
@@ -106,11 +116,14 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1514 routes** dans 4
 | GET | `/v1/acces/invitations/lookup` |
 | GET | `/v1/acces/journal` |
 | GET | `/v1/acces/levels` |
+| POST | `/v1/acces/mandataires/inscriptions` |
+| POST | `/v1/acces/mandataires/inscriptions/:id/verification` |
 | GET | `/v1/acces/mandates` |
 | POST | `/v1/acces/mandates` |
 | POST | `/v1/acces/mandates/:id/revoke` |
 | GET | `/v1/acces/mandates/check` |
 | GET | `/v1/acces/me` |
+| GET | `/v1/acces/menu-rattachements` |
 | POST | `/v1/acces/merges` |
 | POST | `/v1/acces/merges/:id/approve` |
 | POST | `/v1/acces/merges/:id/close` |
@@ -130,6 +143,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1514 routes** dans 4
 | POST | `/v1/acces/modules/:id/visa-programme` |
 | POST | `/v1/acces/organisations` |
 | GET | `/v1/acces/sandbox/outbox` |
+| GET | `/v1/acces/types-de-comptes` |
 | GET | `/v1/acces/validations` |
 | POST | `/v1/acces/validations/:id/decision` |
 | GET | `/v1/acces/validations/mine` |
@@ -617,6 +631,9 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1514 routes** dans 4
 | GET | `/v1/integrite/transmissions` |
 | POST | `/v1/integrite/transmissions/:id/accuse` |
 | GET | `/v1/integrite/transmissions/:id/verification` |
+| GET | `/v1/parametres/effectifs` |
+| GET | `/v1/parametres/surcharges` |
+| POST | `/v1/parametres/surcharges` |
 | POST | `/v1/public/integrite/reports` |
 | POST | `/v1/public/integrite/reports/sms` |
 | POST | `/v1/public/integrite/reports/svi` |

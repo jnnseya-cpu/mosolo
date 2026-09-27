@@ -44,6 +44,13 @@ export const ACCES = {
   elevationRequest: 'acces:elevation.request',
   elevationApprove: 'acces:elevation.approve',
   elevationSessionRead: 'acces:elevation.session.read',
+  // Types de comptes, contrats de partenariat, départements (27/09/2026).
+  accountTypesRead: 'acces:account-types.read',
+  partnerContractRead: 'acces:partner-contract.read',
+  partnerContractPropose: 'acces:partner-contract.propose',
+  partnerContractApprove: 'acces:partner-contract.approve',
+  departementsRead: 'acces:departements.read',
+  departementsLink: 'acces:departements.link',
 } as const;
 
 /** Lecture des dossiers d'accès d'une entité : son administration, sa direction, l'audit et la sécurité. */
@@ -105,4 +112,15 @@ export function registerAccesPolicies(): void {
   definePolicy(ACCES.elevationRequest, { R26: always, R27: always, R28: always });
   definePolicy(ACCES.elevationApprove, { R28: always });
   definePolicy(ACCES.elevationSessionRead, { R28: always, R22: always, R23: always });
+  // Référentiel des types de comptes (27/09/2026) : administration des accès, sécurité, audit ; R08 dans son périmètre.
+  definePolicy(ACCES.accountTypesRead, { R26: always, R28: always, R22: always, R23: always, R08: always, R06: always, R02: always, R03: always });
+  // Contrats de partenariat (R32 à R34) : enregistrés par l'administrateur de la plateforme, approuvés par le Cabinet ou
+  // le ministre des Finances (personne distincte) — valideurs PAR DÉFAUT, à confirmer par le maître d'ouvrage.
+  definePolicy(ACCES.partnerContractRead, { R26: always, R28: always, R22: always, R23: always, R02: always, R05: always, R08: always });
+  definePolicy(ACCES.partnerContractPropose, { R26: always });
+  definePolicy(ACCES.partnerContractApprove, { R02: always, R05: always });
+  // Départements : lecture par l'administration (R26 tout, R08 son sous-arbre — contrôlé dans le service), la sécurité et
+  // l'audit ; rattachement par R26 et R08 (sous-arbre). Les modules porteurs de recettes suivent le circuit des fiches.
+  definePolicy(ACCES.departementsRead, { R26: always, R08: always, R28: always, R22: always, R23: always });
+  definePolicy(ACCES.departementsLink, { R26: always, R08: always });
 }

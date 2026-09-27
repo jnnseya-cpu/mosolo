@@ -995,3 +995,32 @@ par des propriétés facultatives) :
 | Galerie | `/visualisation/galerie` (rôles internes) | Données réelles, sinon `[EXEMPLE]` |
 
 Tests : `aggregate`, `viz` (frontend). Captures : `docs/captures/visualisation/`.
+
+## I.26 Types de comptes ; départements, modules et variables (27/09/2026, § 12A et § 12.8)
+
+Demande du maître d'ouvrage : « tous les types de comptes sont créés et l'administrateur rattache modules et variables
+aux départements ». Ajouts, sans rien retirer (invitations en cascade, fiches de module, circuit de réattribution,
+registre des seuils et son circuit à deux personnes, données de démonstration : tout est conservé et réutilisé) :
+
+| Ajout | Emplacement | Règle |
+|---|---|---|
+| Référentiel des familles, parcours de création et natures d'entité (indicatives) des 37 rôles | `shared/src/comptes.ts` | Présentation ; les contrôles restent au serveur |
+| Référentiel des types de comptes | `GET /v1/acces/types-de-comptes` ; écran `/acces/types-de-comptes` (tuiles, pile famille × état) | Décompte vivant dans le périmètre (R08 : son sous-arbre) ; exemples de démonstration marqués `[EXEMPLE]` |
+| Contrats de partenariat (R32 à R34) | `GET/POST /v1/acces/contrats-partenaires`, `POST …/:id/decision` ; garde `PARTNER_CONTRACT_REQUIRED` de l'invitation | Enregistré par R26, approuvé par R02 ou R05, personne distincte (valideurs par défaut, à confirmer) |
+| Inscription publique du mandataire (R31) | `POST /v1/acces/mandataires/inscriptions`, `POST …/:id/verification` | Téléphone vérifié par code ; un compte par numéro ; agit seulement sous mandat |
+| Catalogue des modules rattachables | `backend/src/plugins/acces/catalogue-modules.ts` ; `GET /v1/acces/catalogue-modules` | `M01`–`M81` (spécification fonctionnelle), `V-<slug>` (verticales) ; fiches liées par compétence ; versions du plan de livraison ; domaines de compétence par défaut, à confirmer |
+| Rattachement de modules aux entités | `GET /v1/acces/departements`, `GET /v1/acces/departements/:id`, `POST /v1/acces/departements/:id/modules`, `POST /v1/acces/departements/:id/modules/:code/detachement`, `GET /v1/acces/departements/liens`, `POST /v1/acces/departements/liens/:id/decision` | R26 partout, R08 dans son sous-arbre ; motif, dates, historique ; recettes : circuit existant des fiches (acte, seconde validation par une personne distincte) |
+| Menu reflétant les rattachements | `GET /v1/acces/menu-rattachements` ; `frontend/src/hooks/useMenuRattachements.ts` (menu latéral et barre du bas) | Présentation seulement ; rôles transverses (audit, exploitation, sécurité) et comptes publics non concernés |
+| Variables par département | `backend/src/plugins/integrite/gouvernance/parametres-entites.ts` ; `GET /v1/parametres/effectifs?entity=…`, `GET/POST /v1/parametres/surcharges` ; décision par la route existante `POST /v1/integrite/thresholds/change-requests/:id/decision` | Paramètres modulables par défaut (à confirmer) ; entité → parente → globale ; date d'effet ; barèmes juridiques jamais surchargés |
+| Consommateurs branchés | `integrite/securite/surveillance.ts` (plafonds par agent, DLP), `postes/service.ts` (plafond de notifications, corbeille) | Valeur de l'entité de la personne concernée |
+| Écran « Départements, modules et variables » | `/acces/departements` (R26, R08) | Arborescence, interrupteurs, historique, variables et provenance, comptes par type ; barres des modules par entité, anneau des comptes par famille ; 360 px |
+| Sélecteur de démonstration regroupé par famille | `frontend/src/components/Selectors.tsx` | Les 37 rôles, dix familles |
+
+Tests : `types-de-comptes` (un test par rôle : création par la voie réelle et lecture d'une route du rôle),
+`departements` (catalogue, rattachement et historique, second facteur, circuit des recettes à deux personnes, périmètre
+R08, cloisonnement, menu, date d'effet, résolution des variables pour deux entités, refus des surcharges), `menu-droits`
+(nouvelles entrées) — backend ; `departements` — frontend.
+
+Décisions demandées au maître d'ouvrage (valeurs par défaut en attendant) : liste des paramètres modulables par entité ;
+valideurs des contrats de partenariat ; domaine de compétence associé à chaque module porteur de recettes ; natures
+d'entité de chaque rôle ; faut-il que les rôles d'autorité (R01 à R05) échappent eux aussi à la restriction de menu.

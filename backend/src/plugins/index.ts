@@ -43,6 +43,7 @@ import { citoyenPlugin } from './citoyen/plugin.js';
 import { decisionPlugin } from './decision/plugin.js';
 import { plateformePlugin } from './plateforme/plugin.js';
 import { accesDelegationsPlugin } from './acces/delegations-plugin.js';
+import { accesDepartementsPlugin } from './acces/departements-plugin.js';
 import { equipementsPlugin } from './equipements/plugin.js';
 import { grandsRedevablesPlugin } from './verticales/grands-redevables-plugin.js';
 import { integriteEnquetesPlugin } from './integrite/enquetes/plugin.js';
@@ -107,6 +108,8 @@ export const DEFAULT_PLUGINS: MosoloPlugin<unknown>[] = [
   decisionPlugin,
   // Accès et délégations (module 51) : délégations, ABAC expliqué, détections, révocation à la fin d'une affectation.
   accesDelegationsPlugin,
+  // Types de comptes, contrats de partenariat, mandataires, modules et variables par département (27/09/2026).
+  accesDepartementsPlugin,
   // Grands redevables (module 56) : portefeuille, gestionnaire dédié et rotation, conventions, journal des décisions.
   grandsRedevablesPlugin,
   // Gestion des équipements terrain (module 58) : MDM, attestation, expiration des données, appareil modifié.

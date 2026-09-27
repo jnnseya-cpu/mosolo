@@ -469,7 +469,7 @@ export class PostesService {
     const prev = this.tailles.get(id);
     if (prev) this.tailles.update({ ...prev, taille });
     else this.tailles.insert({ id, userId: u.id, jour, taille });
-    const seuil = this.param('postes.corbeille.taille_alerte');
+    const seuil = posteParam(this.ctx, 'postes.corbeille.taille_alerte', u.entity);
     const n = this.param('postes.corbeille.alerte_jours');
     const hist = this.tailles.find((t) => t.userId === u.id).sort((a, b) => (a.jour < b.jour ? 1 : -1)).slice(0, n);
     if (hist.length >= n && hist.every((t) => t.taille > seuil) && !this.ctx.audit.list({ action: 'postes.corbeille.surcharge', resourceId: `${u.id}|${jour}`, limit: 1 }).total) {
@@ -902,7 +902,7 @@ export class PostesService {
 
   // ————————————————————————— § 27.11 notifications —————————————————————————
 
-  plafond(userId: string): number { return this.preferences.get(userId)?.plafondJournalier ?? this.param('postes.notifications.plafond_defaut'); }
+  plafond(userId: string): number { return this.preferences.get(userId)?.plafondJournalier ?? posteParam(this.ctx, 'postes.notifications.plafond_defaut', this.ctx.users.get(userId)?.entity); }
 
   fixerPlafond(u: User, plafond: number) {
     authorize(u, 'postes:decision.read');

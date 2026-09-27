@@ -141,6 +141,55 @@ Légende : **V** voir (agrégats) ; **Vn** voir nominatif dans le périmètre ; 
 
 L'inscription publique est réservée aux contribuables. Les comptes de travail ne sont créés **que sur invitation** : le Comité de pilotage invite les responsables d'entité, qui invitent leurs directeurs, qui invitent leurs agents, chacun dans son périmètre et sans pouvoir accorder plus de droits qu'il n'en détient. Une invitation est nominative, limitée dans le temps, liée à une adresse ou un numéro vérifié, et finalisée par la personne invitée elle-même (ou par l'opérateur d'accès de son entité, en sa présence). Tout compte de travail inactif 60 jours est suspendu.
 
+## 12.8 Types de comptes, départements, modules et variables (§ 12A — ajout du 27/09/2026)
+
+*Demande du maître d'ouvrage : « tous les types de comptes sont créés ; l'administrateur rattache modules et variables
+aux départements ». Ajout par-dessus le § 12.7 : aucun contrôle retiré (pas d'élévation, seconde validation par une
+personne distincte, MFA, un compte par personne).*
+
+**Types de comptes.** Chacun des 37 rôles a une voie de création réelle, jamais un amorçage :
+
+| Rôles | Parcours de création | Seconde validation |
+|---|---|---|
+| R01 | Invitation → acceptation (clé d'accès) | Confirmation hors bande par le Cabinet ou le Secrétariat général |
+| R02 à R06, R08, R13 à R19, R21, R26 à R29 | Invitation → acceptation (clé d'accès) | Responsable sécurité ou direction de l'entité, personne distincte |
+| R07, R09, R11, R20 | Invitation → acceptation | Seconde validation (chaîne constat → décision) |
+| R10 | Invitation → acceptation (terminal enregistré) | Habilitation par la régie sur formation certifiée |
+| R12 | Invitation → acceptation | Aucune (compte actif à l'acceptation) |
+| R22 à R25 | Invitation au niveau « Audit » par l'administrateur de la plateforme | Autorité d'audit |
+| R30 | Inscription publique, téléphone vérifié par code, connexion par code | — |
+| R31 | Inscription publique du mandataire (téléphone vérifié) ; agit seulement sous mandat daté du contribuable | — (mandat professionnel : certification N3) |
+| R32 à R34 | Contrat de partenariat enregistré par R26, approuvé par une personne distincte (Cabinet ou ministre des Finances — par défaut, à confirmer), puis invitation dans l'entité partenaire | Contrat à deux personnes |
+| R35 | Invitation du sous-traitant par la régie → dossier → diligences → accréditation à deux personnes | Accréditation |
+| R36 | Invitation au niveau « Consultation » (observateur désigné) | Aucune |
+| R37 | Invitation au niveau « Consultation » d'un agent du service vérificateur du quitus | Aucune |
+
+Le référentiel `GET /v1/acces/types-de-comptes` (écran « Types de comptes ») donne pour chaque rôle : libellé français,
+famille (autorité, régie, trésor, juridique, contrôle, terrain, audit, technique, public, partenaire), parcours, qui peut
+inviter, seconde validation, niveau de second facteur, natures d'entité (indicatives — par défaut, à confirmer) et le
+décompte vivant des comptes par état, dans le périmètre de la personne.
+
+**Modules rattachés aux départements.** Un catalogue à codes stables (`M01` à `M81` : les 81 modules de la spécification
+fonctionnelle ; `V-<slug>` : les verticales de la Partie V) se rattache à une entité (ministère, régie, commune,
+service) par l'administrateur de la plateforme (R26) ou l'administrateur d'entité (R08, dans son sous-arbre), avec
+motif, date d'effet, date de fin facultative et historique complet :
+- module **sans recette** : une personne, second facteur, acte journalisé ;
+- module **porteur de recettes** : référence de l'acte obligatoire et circuit **existant** des fiches de module
+  (création de fiche → visas programme et juridique → recette → activation par le comité ; réattribution proposée par
+  R26 et décidée par le Gouverneur ou le Cabinet ; retrait proposé puis décidé par une personne distincte).
+
+Effet : les personnes de l'entité (et de sa lignée) voient le module dans leur menu, filtré par rôle comme aujourd'hui ;
+les autres ne le voient plus. Présentation seulement : le serveur continue d'appliquer les droits sur chaque route
+(ABAC) et chaque donnée d'entité reste cloisonnée à son entité.
+
+**Variables par département.** Les paramètres du registre des seuils déclarés « modulables par entité » (liste par
+défaut, à confirmer : plafonds de références par agent, lecture massive DLP, plafond de notifications, taille d'alerte
+de corbeille) reçoivent une valeur par entité par le **même circuit à deux personnes** que les valeurs globales, avec
+motif et date d'effet. Résolution : entité → entité parente → valeur globale (`GET /v1/parametres/effectifs?entity=…`
+donne la valeur et sa provenance). Les variables des barèmes juridiques restent gouvernées par le registre des règles
+et ses quatre visas : **aucune surcharge par entité**.
+
+
 # 13. Parcours des contribuables
 
 ## 13.1 Inscription et rattachement d'un bien (propriétaire)

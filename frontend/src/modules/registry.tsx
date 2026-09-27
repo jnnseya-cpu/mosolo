@@ -28,6 +28,9 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/acces/identite', element: lazy(() => import('./acces/Identite')), nav: { label: 'Registre d’identité', short: 'Identité', icon: 'user', group: 'operations', roles: ['R12', 'R11', 'R07', 'R06', 'R09', 'R10'] } },
   { path: '/acces/arbitrages', element: lazy(() => import('./acces/Arbitrages')), nav: { label: 'Arbitrages entre entités', short: 'Arbitrages', icon: 'scale', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R05', 'R13', 'R14', 'R06', 'R07', 'R08', 'R11', 'R22', 'R23'] } },
   { path: '/acces/consultation', element: lazy(() => import('./acces/Consultation')), nav: { label: 'Consultation motivée', short: 'Motif', icon: 'lock', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R12', 'R20', 'R21', 'R22', 'R23', 'R24', 'R28'] } },
+  // Types de comptes ; départements, modules et variables (27/09/2026, § 12A).
+  { path: '/acces/types-de-comptes', element: lazy(() => import('./acces/TypesDeComptes')), nav: { label: 'Types de comptes', short: 'Comptes', icon: 'users', group: 'pilotage', roles: ['R26', 'R28', 'R22', 'R23', 'R08', 'R06', 'R02', 'R03'] } },
+  { path: '/acces/departements', element: lazy(() => import('./acces/Departements')), nav: { label: 'Départements, modules et variables', short: 'Départements', icon: 'building', group: 'pilotage', roles: ['R26', 'R08'] } },
 
   // Fiscal : biens, déclarations, exonérations, quitus, baux, carte
   { path: '/fiscal/biens', element: lazy(() => import('./fiscal/MesBiens')), nav: { label: 'Biens et relations', short: 'Biens', icon: 'building', group: 'public', roles: ['R30', 'R31', 'R06', 'R07', 'R09', 'R10', 'R11', 'R12', 'R22'] } },

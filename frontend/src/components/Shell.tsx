@@ -11,6 +11,7 @@ import { MODULE_ROUTES } from '../modules/registry';
 import { menuMasque } from '@mosolo/shared';
 import { focusables, useFocusTrap } from '../hooks/useFocusTrap';
 import { ID_ANNONCES } from '../lib/annonce';
+import { sansMasques, useMenuRattachements } from '../hooks/useMenuRattachements';
 
 export interface NavItem { to: string; key: UIKey; icon: string; group: 'public' | 'pilotage' | 'operations'; label?: string; short?: string; roles?: string[] }
 
@@ -169,7 +170,8 @@ function Header() {
 
 function Sidebar() {
   const { tr, user } = useApp();
-  const items = menuDe(user?.roles);
+  // Rattachements de modules aux entités (27/09/2026) : présentation seulement, les droits restent ceux du serveur.
+  const items = sansMasques(menuDe(user?.roles), useMenuRattachements(user?.id));
   return (
     <nav className="sidebar" aria-label={tr('nav.main')}>
       {GROUPS.filter((g) => items.some((n) => n.group === g.id)).map((g) => (
@@ -193,7 +195,7 @@ function Sidebar() {
 
 function BottomNav() {
   const { tr, user } = useApp();
-  const items = menuDe(user?.roles);
+  const items = sansMasques(menuDe(user?.roles), useMenuRattachements(user?.id));
   const hasMore = items.length > 5;
   const bottom = hasMore ? items.slice(0, 4) : items;
   const [more, setMore] = useState(false);

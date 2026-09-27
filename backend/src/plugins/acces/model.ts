@@ -433,3 +433,74 @@ export interface Mandate {
   revokeReason?: string;
   demo?: boolean;
 }
+
+// ─────────────────────────────── Types de comptes (27/09/2026) ───────────────────────────────
+
+/**
+ * Contrat de partenariat (R32 point de paiement agréé, R33 partenaire bancaire / monnaie mobile, R34 partenaire de
+ * données) : enregistré par une personne, approuvé par une personne DISTINCTE ; tant qu'il n'est pas actif, aucune
+ * invitation d'un rôle partenaire n'est possible dans l'entité.
+ */
+export interface PartnerContract {
+  id: string;
+  entity: string;
+  reference: string;
+  roles: RoleCode[];
+  object: string;
+  validFrom: string;
+  validTo?: string;
+  status: 'PROPOSE' | 'ACTIF' | 'REJETE' | 'RESILIE';
+  proposedBy: string;
+  proposedAt: string;
+  decidedBy?: string;
+  decidedAt?: string;
+  decisionNote?: string;
+  history: { at: string; by: string; action: string; note?: string }[];
+  demo?: boolean;
+}
+
+/** Inscription publique d'un mandataire (R31) : téléphone vérifié par code, puis compte public de mandataire. */
+export interface MandataireRegistration {
+  id: string;
+  fullName: string;
+  phone: string;
+  kind: 'PERSONNE_PHYSIQUE' | 'CABINET';
+  language: string;
+  status: 'EN_ATTENTE_CODE' | 'ACTIF';
+  userId?: string;
+  createdAt: string;
+  activatedAt?: string;
+}
+
+// ─────────────────────────────── Départements : modules rattachés (27/09/2026) ───────────────────────────────
+
+export type ModuleLinkStatus = 'ACTIF' | 'DETACHE' | 'EN_ATTENTE' | 'REFUSE' | 'CLOS';
+
+/**
+ * Lien « module fonctionnel du catalogue ↔ entité » (§ 12A, ajout du 27/09/2026).
+ * - Module SANS compétence de recette : une personne habilitée (R26, ou R08 dans son sous-arbre) rattache ou détache,
+ *   avec motif, date d'effet et date de fin facultative ; chaque acte est journalisé et historisé.
+ * - Module PORTEUR DE RECETTES : le lien ne fait que tracer la demande ; la compétence passe par le circuit EXISTANT
+ *   des fiches de module (création de fiche, visas, activation ou réattribution approuvée par une personne distincte).
+ *   Un retrait est proposé ici puis décidé par une personne distincte habilitée à changer l'état d'une fiche.
+ */
+export interface ModuleLink {
+  id: string;
+  moduleCode: string;
+  entity: string;
+  revenue: boolean;
+  action: 'RATTACHEMENT' | 'DETACHEMENT';
+  status: ModuleLinkStatus;
+  from: string;
+  to?: string;
+  motif: string;
+  actReference?: string;
+  moduleConfigId?: string;
+  circuit?: 'FICHE' | 'REATTRIBUTION' | 'RETRAIT' | 'DIRECT';
+  createdBy: string;
+  createdAt: string;
+  decidedBy?: string;
+  decidedAt?: string;
+  history: { at: string; by: string; action: string; note?: string }[];
+  demo?: boolean;
+}
