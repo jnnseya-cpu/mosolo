@@ -442,6 +442,8 @@ input[type='file'] { font-size: 13.5px; max-width: 100%; }
 .kpi-value { font-size: clamp(20px, 2.4vw, 28px); font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kpi-foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; min-height: 24px; }
 .kpi-sub { font-size: 12.5px; color: var(--ink-3); overflow-wrap: anywhere; }
+/* Valeur écrite en <span> directement dans la tuile : sur sa propre ligne (sinon, insécable, elle pousse le texte hors de l'écran à 360 px). */
+.kpi > span.kpi-value { display: block; }
 .stat-strip { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); margin-bottom: 16px; }
 .stat-strip > div { padding: 16px; border-bottom: 1px solid var(--line-soft); min-width: 0; }
 .stat-strip > div:nth-child(odd) { border-right: 1px solid var(--line-soft); }
