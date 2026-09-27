@@ -4,6 +4,7 @@
  * s'additionnent JAMAIS. Le contesté est un indicateur séparé, hors échelle.
  */
 import { REVENUE_LADDER, UNATTRIBUTED_COMMUNE, type MoneyJSON, type RevenueLadderLevel } from '@mosolo/shared';
+import { kinshasaDate } from '../../core/clock.js';
 import { badRequest } from '../../core/errors.js';
 import type { Facts, ObligationFact, OrderFact, RecordedFact } from './facts.js';
 import { CurrencyTotals } from './money.js';
@@ -97,9 +98,12 @@ export function quarterOf(date: string): string {
   return `${y}-T${q}`;
 }
 
+/** Journée de Kinshasa (UTC+1) d'un horodatage ; une date seule (AAAA-MM-JJ) est déjà une journée. */
+export const kinshasaDay = (ts: string): string => (ts.length <= 10 ? ts : kinshasaDate(new Date(ts)));
+
 export function inPeriod(ts: string | undefined, f: Filters): boolean {
   if (!ts) return false;
-  const d = ts.slice(0, 10);
+  const d = kinshasaDay(ts);
   if (f.from && d < f.from) return false;
   if (f.to && d > f.to) return false;
   return true;
@@ -114,7 +118,7 @@ export const matchesChannel = (x: { channel: string }, f: Filters) => !f.channel
 
 /** Obligations « vivantes » (non annulées, non remplacées). */
 export const liveObligations = (facts: Facts) => facts.obligations.filter((o) => !o.cancelled);
-export const isDue = (o: ObligationFact, asOf: string) => !o.cancelled && !o.contested && o.dueDate <= asOf.slice(0, 10);
+export const isDue = (o: ObligationFact, asOf: string) => !o.cancelled && !o.contested && o.dueDate <= kinshasaDay(asOf);
 export const isOverdue = (o: ObligationFact, asOf: string) => isDue(o, asOf) && !o.paidAt && o.status !== 'SOLDEE';
 export const isConfirmed = (o: OrderFact) => !!o.confirmedAt && ['CONFIRME', 'REGLE', 'RAPPROCHE', 'CONTESTE'].includes(o.status);
 export const isSettled = (o: OrderFact) => !!o.settledAt && (o.status === 'REGLE' || o.status === 'RAPPROCHE' || o.status === 'CONTESTE');

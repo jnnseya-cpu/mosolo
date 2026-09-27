@@ -20,6 +20,7 @@ import type { AppContext } from '../../context.js';
 import type { AuditRecord } from '../../core/audit.js';
 import type { Obligation } from '../../modules/assessment/service.js';
 import type { FiscalObject } from '../../modules/objects/service.js';
+import { kinshasaDay } from './ladder.js';
 import { findVertical, LEGAL_LABEL, NO_LEVY_STATUSES, OBJECT_TYPE_VERTICAL, VERTICALS } from '../verticales/catalogue.js';
 
 export const REDUCTION_TYPES = [
@@ -208,7 +209,7 @@ export function collectReductions(ctx: AppContext, f: ReductionFilters = {}): Re
   const currencyAnomalies: string[] = [];
   const inScope = (o: Obligation) => {
     const commune = o.attribution?.commune ?? UNATTRIBUTED_COMMUNE;
-    const day = o.createdAt.slice(0, 10);
+    const day = kinshasaDay(o.createdAt);
     return (!f.commune || f.commune === commune) && (!f.communes || f.communes.includes(commune)) && (!f.entity || f.entity === o.entity)
       && (!f.from || day >= f.from) && (!f.to || day <= f.to);
   };

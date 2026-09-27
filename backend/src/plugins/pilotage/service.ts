@@ -6,7 +6,7 @@
 import type { MoneyJSON, RoleCode } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
-import { DAY_MS, isoDate } from '../../core/clock.js';
+import { DAY_MS, kinshasaDate } from '../../core/clock.js';
 import { badRequest, conflict, forbidden, notFound } from '../../core/errors.js';
 import { authorize, evaluate } from '../../core/policy.js';
 import { IdGenerator, InMemoryAppendOnlyRepository } from '../../core/repository.js';
@@ -15,7 +15,7 @@ import { ExportSigner, EXPORT_KEY_ID, jsonPayload, toCsv, type CsvCell, type Exp
 import { collectFacts, type Facts } from './facts.js';
 import { computeKpis, type KpiInputs, type KpiResult } from './kpis.js';
 import {
-  computeLadder, contestedIndicator, drill, isConfirmed, isReconciled, isSettled, matchesDims, monthlySeries, periodRange, quarterOf,
+  computeLadder, contestedIndicator, drill, isConfirmed, kinshasaDay, isReconciled, isSettled, matchesDims, monthlySeries, periodRange, quarterOf,
   selectLevel, selectionTotals, type DrillDimension, type Filters, type LadderContext,
 } from './ladder.js';
 import { CurrencyTotals } from './money.js';
@@ -291,8 +291,8 @@ export class PilotageService {
   }
 
   private dayTiles(facts: Facts, f: Filters) {
-    const today = facts.asOf.slice(0, 10);
-    const yesterday = isoDate(new Date(new Date(facts.asOf).getTime() - DAY_MS));
+    const today = kinshasaDay(facts.asOf);
+    const yesterday = kinshasaDate(new Date(new Date(facts.asOf).getTime() - DAY_MS));
     const at = (day: string, level: 'confirmed' | 'settled' | 'reconciled') => {
       const { totals, count } = selectionTotals(selectLevel(level, facts, { ...f, from: day, to: day })!);
       return { amounts: totals.toJSON(), consolidatedCdf: totals.consolidated(this.convert), count };
