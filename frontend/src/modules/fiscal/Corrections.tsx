@@ -18,6 +18,7 @@ import type { FiscalObjectView } from './types';
 import { AideContextuelle } from '../apprentissage/AideContextuelle';
 import { LifecyclePanel } from './CycleDeVie';
 import './fiscal.css';
+import { CorrectionsVisuels } from './visuels';
 
 export interface ObjectCorrection {
   id: string; objectId: string; taxpayerId?: string;
@@ -229,6 +230,7 @@ export default function Corrections() {
     <div className="page page-wide fs-page">
       <PageHead eyebrow="Fiscalité" title="Corrections d’objets" lead="Rang de localité et attributs de base (surface…) : proposition motivée, approbation par une seconde personne, historique conservé et obligations ouvertes réévaluées."><AideContextuelle cle="fiscal.corrections" libelle="Aide : proposer une correction" /></PageHead>
       <FiscalTabs />
+      {objs.data && <CorrectionsVisuels objets={objs.data} enAttente={queue.data ? queue.data.length : null} />}
       <section className="panel fs-corr-queue" aria-label="Corrections en attente">
         <div className="panel-head"><div><p className="panel-title">Corrections en attente d’approbation</p><p className="panel-sub">{canApprove ? 'Tous objets de votre périmètre ; vous ne pouvez pas approuver votre propre proposition.' : 'Suivi des propositions ; l’approbation revient au chef de service ou à la direction.'}</p></div></div>
         {queue.loading && <Loading />}

@@ -13,6 +13,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { ActionMotivee, Tableau } from './common';
 import './citoyen.css';
+import { VehiculesVisuels } from './visuels';
 
 interface Vue { code: string; statut: 'PAYEE' | 'NON_REGULARISEE'; titre: { numero: string; texte: string } | null; exigible: boolean }
 interface Controle { plaque: string; enregistre: boolean; categorie: string | null; vignette: Vue; taxeCirculation: Vue; dernierPaiement: string | null; heureServeur: string; notice: string; horsLigne: string }
@@ -65,6 +66,7 @@ export default function Vehicules() {
       {list.data && (
         <section className="panel stack-sm" aria-label="Référentiel">
           <p className="panel-title">Référentiel des véhicules</p>
+          <VehiculesVisuels vehicules={list.data} />
           <Tableau entetes={['Plaque', 'Catégorie', 'Usage', 'Propriétaire', 'Commune', 'Mutations']} vide="Aucun véhicule." lignes={list.data.map((v) => [v.plaque, v.categorie ?? '—', v.usage ?? '—', v.proprietaire?.nom ?? '—', v.commune, v.mutations.map((m) => `${m.date} ${m.nature} (${m.statut})`).join(', ') || '—'])} />
         </section>
       )}

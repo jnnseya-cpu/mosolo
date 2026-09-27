@@ -17,6 +17,7 @@ import { DemoNote, FiscalTabs, ReasonAction, useViewer } from './common';
 import type { Exemption, FiscalObjectView, Reference } from './types';
 import './fiscal.css';
 import { RegistreExonerations } from './RegistreExonerations';
+import { ExonerationsVisuels } from './visuels';
 
 const STATUS: Record<string, { label: string; tone: Tone }> = {
   DEMANDEE: { label: 'Demandée — à instruire', tone: 'neutral' }, INSTRUITE: { label: 'Instruite — visa juridique attendu', tone: 'info' },
@@ -157,6 +158,7 @@ export default function Exonerations() {
         lead="Chaque exonération a une base légale (instrument en vigueur du registre juridique), des pièces, une durée et deux validations par des personnes distinctes. Elle n’est jamais décidée par l’IA et ne rétroagit jamais sans décision expresse." />
       <FiscalTabs />
       <DemoNote />
+      {(isTaxpayer || agent) && list.data && <ExonerationsVisuels items={list.data.items} />}
       {!isTaxpayer && !agent && <EmptyState title="Réservé aux contribuables et aux agents habilités." icon="lock" />}
       {isTaxpayer && (
         <section className="section panel">

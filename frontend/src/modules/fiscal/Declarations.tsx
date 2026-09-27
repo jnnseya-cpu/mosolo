@@ -17,6 +17,7 @@ import { DemoNote, FiscalTabs, PROBATIVE, ReasonAction, useViewer } from './comm
 import type { CalculAffiche, Declaration, FiscalObjectView, Prefill } from './types';
 import { sha256Hex } from '../../lib/crypto';
 import './fiscal.css';
+import { DeclarationsVisuels } from './visuels';
 
 const KIND_LABEL: Record<string, string> = { IF: 'Impôt foncier', IRL: 'Impôt sur les revenus locatifs' };
 const STATUS: Record<string, { label: string; tone: 'good' | 'warning' | 'neutral' | 'info' | 'critical' | 'serious' }> = {
@@ -228,6 +229,7 @@ export default function Declarations() {
         lead="Les données connues (bien, baux déclarés, rang de localité) sont pré-remplies ; vous confirmez ou corrigez. Seule une règle ACTIVE du registre, publiée par quatre personnes distinctes, produit une obligation ; sinon le calcul reste une simulation non opposable." />
       <FiscalTabs />
       <DemoNote />
+      {(isTaxpayer || canInstruct) && list.data && <DeclarationsVisuels decls={list.data} taxpayer={isTaxpayer} />}
       {!isTaxpayer && !canInstruct && <EmptyState title="Réservé aux contribuables, mandataires et contrôleurs." icon="lock" />}
       {isTaxpayer && (
         <section className="section panel" aria-labelledby="nd-title">

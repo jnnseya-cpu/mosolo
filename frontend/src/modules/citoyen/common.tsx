@@ -4,6 +4,7 @@
  */
 import { useState, type ReactNode } from 'react';
 import { describeError } from '../../lib/api';
+import { TuilesIndicateurs } from './visuels';
 
 export interface Indicateur { valeur?: unknown; raison?: string; numerateur?: number; denominateur?: number; unite?: string; definition?: string; [k: string]: unknown }
 
@@ -53,6 +54,7 @@ export function BlocIndicateurs({ titre, indicateurs }: { titre: string; indicat
   return (
     <section className="panel stack-sm" aria-label={titre}>
       <p className="panel-title">{titre}</p>
+      <TuilesIndicateurs titre={titre} indicateurs={indicateurs} />
       <ul className="plain-list small">{Object.entries(indicateurs).map(([k, v]) => <LigneIndicateur key={k} cle={k} ind={v} />)}</ul>
     </section>
   );

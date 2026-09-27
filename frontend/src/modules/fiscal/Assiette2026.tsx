@@ -12,6 +12,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { FiscalTabs, useViewer } from './common';
 import './fiscal.css';
+import { AssietteVisuels } from './visuels';
 
 interface Field { name: string; label: string; type: string; required: boolean; choices?: string[]; objectAttribute?: boolean }
 interface CaseDef { code: string; label: string; ruleCode: string; appealPath: string; fields: Field[]; coherence: string[]; rules: { code: string; version: number; status: string }[]; active: boolean; notice: string }
@@ -64,6 +65,7 @@ export default function Assiette2026() {
       {q.loading && <Loading />}
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
       {q.data && <p className="small muted">{q.data.notice}</p>}
+      {q.data && <AssietteVisuels cases={q.data.cases} decls={user ? mine.data ?? null : null} />}
       <div className="fs-grid">{(q.data?.cases ?? []).map((c) => (
         <article key={c.code} className="panel stack-sm">
           <div className="panel-head"><p className="panel-title">{c.label}</p><StatusBadge tone={c.active ? 'good' : 'warning'} label={c.active ? 'Règle active' : `Règle ${c.rules[0]?.status === 'A_VERIFIER' ? 'À VÉRIFIER' : c.rules[0]?.status ?? 'absente'} — rien d’actif`} /></div>

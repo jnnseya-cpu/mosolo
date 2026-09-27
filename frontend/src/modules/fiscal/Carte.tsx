@@ -17,6 +17,7 @@ import { ColorChip, DemoNote, FiscalTabs } from './common';
 import type { MapResponse } from './types';
 import { CouchesCadastre } from './Couches';
 import './fiscal.css';
+import { CarteVisuels } from './visuels';
 
 /** Disposition schématique (non géographique) des communes : [ligne, colonne]. */
 const TILE_POS: Record<string, [number, number]> = {
@@ -82,6 +83,7 @@ export default function Carte() {
       </div>
       {q.loading && <Loading />}
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
+      {d && <CarteVisuels d={d} />}
       {d && (
         <div className="fs-map-layout">
           <section className="panel">

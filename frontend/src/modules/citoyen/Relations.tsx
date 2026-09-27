@@ -13,6 +13,7 @@ import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { ActionMotivee, BlocIndicateurs, Tableau } from './common';
 import './citoyen.css';
+import { RelationsVisuel } from './visuels';
 
 interface Revue { id: string; obligationId: string; relationId: string; objectId: string; dateEffet: string; echeance: string; motifDetachement: string; statut: string; obligation: { label: string; amount: { amount: string; currency: string }; status: string } | null; decision?: { par: string; motif: string } }
 
@@ -28,6 +29,7 @@ export default function Relations() {
       {q.loading ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : (
         <section className="panel stack-sm" aria-label="Obligations à revoir">
           <p className="panel-title">Obligations à revoir après un détachement</p>
+          <RelationsVisuel revues={q.data ?? []} />
           <Tableau entetes={['Obligation', 'Objet', 'Motif', 'Date d’effet', 'Échéance', 'Statut', 'Décision']} vide="Aucune obligation à revoir."
             lignes={(q.data ?? []).map((r) => [r.obligation ? `${r.obligation.label} — ${r.obligation.amount.amount} ${r.obligation.amount.currency}` : r.obligationId, r.objectId, r.motifDetachement, r.dateEffet, r.echeance.slice(0, 10), r.statut,
               r.statut === 'A_REVOIR' ? <span className="cit-inline">

@@ -18,6 +18,7 @@ import {
 } from './shared';
 import { OppIndicatorsPanel, PilotResultsSection } from './Pilotes';
 import './opportunites.css';
+import { RegistreVisuels } from './visuels';
 
 const READ = ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R09', 'R11', 'R13', 'R14', 'R15', 'R22', 'R23', 'R24', 'R25'];
 const GRID_WRITE = ['R02', 'R05', 'R06', 'R07', 'R13', 'R14', 'R15', 'R22', 'R24'];
@@ -229,6 +230,7 @@ export default function Registre() {
             <Kpi label="Signaux versés" value={all.filter((o) => o.section === 'SIGNAL').length} />
             <Kpi label="Décidées" value={all.filter((o) => o.status === 'DECIDEE').length} sub="activation, report ou abandon" />
           </div>
+          <RegistreVisuels all={all} />
           <OppIndicatorsPanel />
           {pipe.data && <p className="callout callout-info"><Icon name="shieldCheck" size={18} /><span>{pipe.data.guardrail} Étapes : {pipe.data.steps.map((s) => s.label).join(' → ')}.</span></p>}
           <IaSignalsPanel onImported={(id) => { list.reload(); setSel(id); }} />

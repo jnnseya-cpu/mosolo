@@ -9,6 +9,7 @@ import { useApp } from '../../context';
 import { ErrorState, Loading } from '../../components/States';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
+import { CouvertureLocativeVisuel } from './visuels';
 
 export interface RentalCoverageRow {
   level: 'COMMUNE' | 'QUARTIER' | 'AVENUE'; commune: string; quartier: string | null; avenue: string | null;
@@ -72,6 +73,7 @@ export function CouvertureLocative({ commune }: { commune: string }) {
       </div>
       {q.loading && <Loading />}
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
+      {q.data && <CouvertureLocativeVisuel rows={q.data.rows} />}
       {q.data && <RentalCoverageTable data={q.data} />}
     </section>
   );

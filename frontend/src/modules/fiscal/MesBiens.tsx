@@ -16,6 +16,7 @@ import { api, describeError } from '../../lib/api';
 import { ColorChip, DemoNote, FiscalTabs, PROBATIVE, PROOF_LABELS, ReasonAction, RELATION_STATUS, useViewer, VerifyQr } from './common';
 import type { FiscalObjectView, QueueResponse, Reference, RelationView } from './types';
 import './fiscal.css';
+import { BiensVisuels, FileValidationVisuel } from './visuels';
 
 function Breadcrumb({ o }: { o: FiscalObjectView }) {
   const parts = [...o.tree.geo.map((g) => `${g.name}${g.code !== '—' ? ` (${g.code})` : ''}`), ...o.tree.objects.slice(0, -1).map((x) => x.label)];
@@ -166,6 +167,7 @@ function AgentQueue() {
   return (
     <div className="stack">
       {flash && <p className="notice notice-ok" role="status">{flash}</p>}
+      <FileValidationVisuel d={d} />
       <section className="panel">
         <div className="panel-head"><div><p className="panel-title">Objets à valider</p><p className="panel-sub">Validation = IGF stable + QR par bien. L’auteur du recensement ne valide pas.</p></div><span className="count">{d.objectsToValidate.length}</span></div>
         {d.objectsToValidate.length === 0 ? <EmptyState title="Aucun objet en attente." /> : (
@@ -276,6 +278,7 @@ export default function MesBiens() {
       <FiscalTabs />
       <DemoNote />
       {!user && <EmptyState title="Choisissez un utilisateur de démonstration (en-tête) pour voir ses biens." icon="user" />}
+      {user && objs.data && <BiensVisuels objets={objs.data} taxpayer={isTaxpayer} />}
 
       {agent && <section className="section" aria-labelledby="fs-queue"><div className="section-head"><h2 id="fs-queue">File de validation</h2></div><AgentQueue /></section>}
       {scanner && <section className="section"><PlateScan /></section>}

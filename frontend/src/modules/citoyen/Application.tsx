@@ -17,6 +17,7 @@ import {
 } from '../../lib/mobile';
 import { DynamicQr, type CredentialView } from '../titres/common';
 import './citoyen.css';
+import { PortefeuilleVisuel } from './visuels';
 
 interface InstallationVue { id: string; plateforme: string; versionApp: string; integrite: { statut: string; signaux: string[]; source: string }; heureServeur: string }
 
@@ -134,6 +135,7 @@ function PortefeuilleVue({ pin, compromis }: { pin: string; compromis: boolean }
         <div className="panel stack-sm">
           <p className="panel-title">Titres enregistrés sur l’appareil (chiffrés)</p>
           <p className="small muted">État fourni par le serveur le {fmtDate(wallet.synchroniseA, true)} — jamais recalculé sur l’horloge du téléphone.</p>
+          <PortefeuilleVisuel titres={wallet.titres} />
           <ul className="plain-list small">{wallet.titres.map((t) => (
             <li key={t.id}>
               <strong>{t.libelle}</strong> <span className="mono">{t.numero}</span> — {t.texteServeur} (état {t.etatServeur} à la synchronisation ; fin {fmtDate(t.validUntil, true)})

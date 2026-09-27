@@ -11,6 +11,7 @@ import { api } from '../../lib/api';
 import { FiscalTabs } from './common';
 import { CouvertureLocative } from './CouvertureLocative';
 import './fiscal.css';
+import { RecensementVisuels } from './visuels';
 
 interface Coverage {
   total: number; imported: number; withExplicitProvenance: number;
@@ -34,6 +35,7 @@ export default function Recensement() {
         <div className="stack">
           <div className="field"><label className="label" htmlFor="rc-com">Commune</label>
             <select id="rc-com" value={commune} onChange={(e) => setCommune(e.target.value)}><option value="">Toutes</option>{(commune ? [commune] : communes).map((c) => <option key={c} value={c}>{c}</option>)}</select></div>
+          <RecensementVisuels d={q.data} />
           <p className="small">{q.data.total} objet(s) · {q.data.imported} repris d’un système existant · {q.data.withExplicitProvenance} avec provenance vérifiée enregistrée.</p>
           <div className="rtable-wrap"><table className="data-table rtable">
             <thead><tr><th>Vague</th><th>Cible</th><th>Sortie attendue</th><th className="num">Objets</th><th className="num">Part</th><th className="num">Au moins cette vague</th></tr></thead>

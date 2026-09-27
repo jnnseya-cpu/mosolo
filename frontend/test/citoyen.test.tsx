@@ -193,7 +193,8 @@ describe('Écrans des modules 7 à 12 et indicateurs', () => {
     wrap(<Indicateurs />);
     expect(await screen.findByText(/Module 1 — Identité/)).toBeTruthy();
     expect(screen.getByText(/25\.0/)).toBeTruthy();
-    expect(screen.getByText(/Aucun tarif opérateur conventionné/)).toBeTruthy();
+    // La raison apparaît dans la liste ET dans la tuile « non mesuré » (trousse de visualisation).
+    expect(screen.getAllByText(/Aucun tarif opérateur conventionné/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('non mesuré')).toBeTruthy();
   });
 

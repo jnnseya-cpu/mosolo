@@ -15,6 +15,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { ActionMotivee, BlocIndicateurs, Tableau } from './common';
 import './citoyen.css';
+import { TransportVisuels } from './visuels';
 
 interface Autorisation { id: string; certificatCode: string; categorieLibelle: string; plaque: string; zones: string[]; corridor?: string; horaires: { debut: string; fin: string }; statut: string; opposable: boolean; mention: string | null; validite: { text: string }; cartes: { numero: string; statut: string }[]; suspension?: { proposee: { par: string; motif: string; action: string }; approuvee?: unknown }; taxeJournaliere: string }
 interface Controle { couleur: string; resultat: string; heureKinshasa: string; vignette: { texte: string }; notice: string }
@@ -64,6 +65,7 @@ export default function Transport() {
       {list.loading ? <Loading /> : list.error ? <ErrorState error={list.error} onRetry={list.reload} /> : (
         <section className="panel stack-sm" aria-label="Autorisations">
           <p className="panel-title">{citoyen ? 'Mes autorisations' : 'Registre des autorisations'}</p>
+          <TransportVisuels autorisations={list.data ?? []} />
           <Tableau entetes={['Certificat', 'Catégorie', 'Plaque', 'Zones / corridor', 'Horaires', 'Statut', 'Validité', 'Actions']} vide="Aucune autorisation enregistrée."
             lignes={(list.data ?? []).map((a) => [a.certificatCode, a.categorieLibelle, a.plaque, `${a.zones.join(', ') || 'toutes'}${a.corridor ? ` — ${a.corridor}` : ''}`, `${a.horaires.debut}–${a.horaires.fin}`,
               <span key="s"><StatusBadge tone={a.statut === 'ACTIVE' ? 'good' : a.statut === 'SUSPENDUE' ? 'critical' : 'neutral'} label={a.statut} />{a.mention && <span className="small muted"> {a.mention}</span>}</span>,

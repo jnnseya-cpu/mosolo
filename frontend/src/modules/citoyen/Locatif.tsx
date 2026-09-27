@@ -14,6 +14,7 @@ import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { BlocIndicateurs, Tableau } from './common';
 import './citoyen.css';
+import { LocatifVisuels } from './visuels';
 
 type M = { amount: string; currency: string } | null;
 interface Ligne { bail: string; igf: string | null; commune: string; quartier: string; avenue: string | null; rang: number; statutProbant: string; loyerAnnuel: M; locataire: string | null; retenue: M; irlAnnuel: M; regle: { code: string; version: number; statut: string } | null; nature: string; mention: string }
@@ -30,6 +31,7 @@ export default function Locatif() {
     <div className="stack">
       <PageHead eyebrow="Module 9" title="Intelligence foncière et locative" lead="Registre parcelle → bâtiment → unité → bail. Calcul de la retenue et de l’IRL annuel sur baux vérifiés : proposition, jamais une dette automatique." />
       <p className="small"><Link to="/fiscal/anomalies-locatives">Détection d’anomalies (signal ⇒ dossier de vérification)</Link> · <Link to="/fiscal/assiette-2026">Élargissement 2026</Link> · <Link to="/fiscal/carte">Carte à deux couches</Link> · <Link to="/fiscal/baux">Attestations de bail</Link> · <Link to="/recouvrement/campagnes">Campagne annuelle pré-remplie</Link></p>
+      <LocatifVisuels couverture={cov.data?.lignes ?? null} lignes={calc.data?.lignes ?? null} />
       <BlocIndicateurs titre="Indicateurs du module 9" indicateurs={kpi.data} />
       <section className="panel stack-sm" aria-label="Calcul IRL">
         <p className="panel-title">Retenue et IRL annuel par bail</p>

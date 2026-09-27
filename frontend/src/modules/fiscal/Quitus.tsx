@@ -17,6 +17,7 @@ import { DemoNote, FiscalTabs, ReasonAction, useViewer, VerifyQr } from './commo
 import type { Clearance, Eligibility } from './types';
 import './fiscal.css';
 import { PrintProofLink } from '../preuves/PrintLink';
+import { QuitusVisuels, RevueQuitusVisuel } from './visuels';
 
 export const CLEARANCE_CHECK: Record<string, { label: string; tone: Tone; icon: string }> = {
   VALIDE: { label: 'Valide', tone: 'good', icon: 'check' },
@@ -78,6 +79,7 @@ function TaxpayerQuitus() {
   const current = (list.data ?? []).find((c) => c.status === 'ACTIF' && c.check !== 'EXPIRE');
   return (
     <div className="stack">
+      <QuitusVisuels list={list.data ?? []} blockers={e ? e.blockers.length : null} eligible={e ? e.eligible : null} />
       <section className="panel">
         <div className="panel-head"><div><p className="panel-title"><Icon name="shieldCheck" size={18} /> Conditions de délivrance</p><p className="panel-sub">Examinées par le serveur à l’instant de la demande.</p></div>
           {e && <StatusBadge tone={e.eligible ? 'good' : 'critical'} label={e.eligible ? 'Conditions réunies' : 'Conditions non réunies'} />}</div>
@@ -140,6 +142,8 @@ function Review() {
   if (q.error) return <ErrorState error={q.error} onRetry={q.reload} />;
   const rows = q.data ?? [];
   return (
+    <>
+    <RevueQuitusVisuel rows={rows} labels={BLOCKER} />
     <section className="panel">
       <div className="panel-head"><div><p className="panel-title">Revue des quitus actifs</p><p className="panel-sub">Le système PROPOSE ; une personne habilitée décide avec motif. Aucune révocation automatique.</p></div><span className="count">{rows.length}</span></div>
       {rows.length === 0 ? <EmptyState title="Tous les quitus actifs remplissent encore leurs conditions." /> : (
@@ -153,6 +157,7 @@ function Review() {
         </ul>
       )}
     </section>
+    </>
   );
 }
 

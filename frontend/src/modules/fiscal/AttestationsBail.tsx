@@ -15,6 +15,7 @@ import { api, describeError } from '../../lib/api';
 import { DemoNote, FiscalTabs, PERIODICITY, PROBATIVE, ReasonAction, useViewer, VerifyQr } from './common';
 import type { LeaseAttestationView, LeaseRow } from './types';
 import './fiscal.css';
+import { BauxVisuels } from './visuels';
 
 function Attestation({ a }: { a: LeaseAttestationView }) {
   const { fmtDate } = useApp();
@@ -68,6 +69,7 @@ export default function AttestationsBail() {
         lead="Après enregistrement d’un bail, le bailleur et le locataire peuvent obtenir une attestation vérifiable par QR. La vérification publique confirme l’enregistrement sans révéler ni les noms ni le loyer." />
       <FiscalTabs />
       <DemoNote />
+      {isTaxpayer && q.data && <BauxVisuels baux={q.data} />}
       {!isTaxpayer && <EmptyState title="Réservé au bailleur, au locataire ou à leur mandataire." icon="lock" />}
       {q.loading && <Loading />}
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}

@@ -14,6 +14,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { ActionMotivee, Tableau } from './common';
 import './citoyen.css';
+import { ActivitesVisuels } from './visuels';
 
 interface Etab { objectId: string; igf: string | null; entreprise: string | null; etablissement: string; activite: string | null; categorie: string | null; localisation: { commune: string; quartier: string }; dirigeants: { nom: string; fonction: string }[]; patente: { active: boolean; titre: { numero: string; statut: string } | null; exigible: boolean }; autorisations: { code: string; libelle: string; statut: string }[]; signauxOuverts: number }
 interface Signal { id: string; objectId: string; etablissement: string | null; commune: string; motif: string; source: string; detail: string; statut: string }
@@ -45,6 +46,7 @@ export default function Activites() {
       <PageHead eyebrow="Module 10" title="Registre des activités et patentes" lead="Existence d’une activité ≠ assujettissement : la règle décide. Pas de visite sans mission autorisée." />
       <p className="small"><Link to="/titres/catalogue">Patente : certificat à QR vérifiable, renouvellement par Mobile Money avec rappel ambre</Link> · <Link to="/services/entreprises">Autorisation d’exploitation (débits de boissons : catégorie, horaires)</Link> · <Link to="/services/marches">Commerces de marché</Link></p>
       {msg && <p className="notice small" role="status">{msg}</p>}
+      {reg.data && <ActivitesVisuels etabs={reg.data.lignes} signaux={agent ? sig.data ?? null : null} />}
       {reg.loading ? <Loading /> : reg.error ? <ErrorState error={reg.error} onRetry={reg.reload} /> : reg.data && (
         <section className="panel stack-sm" aria-label="Établissements">
           <p className="panel-title">Établissements</p>

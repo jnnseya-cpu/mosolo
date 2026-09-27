@@ -15,6 +15,7 @@ import { api } from '../../lib/api';
 import { useApp } from '../../context';
 import { ActionError, hasRole, Kpi, useAction } from '../integrite/shared';
 import '../integrite/integrite.css';
+import { DonneesVisuels } from './visuels';
 
 interface Depot {
   depot: string; enregistrements: number; classe: string; nature: string; libelle: string; source: string;
@@ -62,6 +63,7 @@ export default function DonneesConservation() {
             <Kpi label="Purgeables (règle de conservation)" value={cls.data.depots.filter((d) => d.purgeable).length} />
             <Kpi label="Purges à décider" value={pending.length} />
           </div>
+          <DonneesVisuels depots={cls.data.depots} classes={cls.data.classes} />
           <p className="callout callout-info ig-note"><Icon name="info" size={18} /><span>{cls.data.note} Classes : {Object.entries(cls.data.classes).map(([k, v]) => `${k} ${v}`).join(' · ')}.</span></p>
 
           <section className="panel" aria-labelledby="dc-purge">

@@ -16,6 +16,7 @@ import { api } from '../../lib/api';
 import { useApp } from '../../context';
 import { ActionError, DashboardsView, hasRole, LeversView, money, Tabs, useAction, type Lever, type RankingReport } from './shared';
 import './opportunites.css';
+import { ClassementVisuel, CommercesPatentesVisuel, LeviersVisuel } from './visuels';
 
 const READ = ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R09', 'R11', 'R13', 'R14', 'R15', 'R17', 'R18', 'R22', 'R23', 'R24', 'R25'];
 const WRITE = ['R06', 'R07', 'R15'];
@@ -79,6 +80,7 @@ function RankingTab({ canWrite }: { canWrite: boolean }) {
     <div className="stack">
       <p className="callout callout-info"><Icon name="info" size={18} /><span>{r.method} {r.rule}</span></p>
       <DashboardsView report={r} />
+      <ClassementVisuel report={r} />
       {canWrite && <InputEditor report={r} onDone={q.reload} />}
       <DataTable rows={r.ranked} rowKey={(x) => x.id} caption="Opportunités classées"
         empty={<EmptyState title="Aucune opportunité classée" icon="chart">Toutes les entrées doivent être renseignées, datées et sourcées.</EmptyState>}
@@ -123,6 +125,7 @@ function UseCasesTab() {
       <section className="panel" aria-labelledby="uc-shops">
         <h2 className="panel-title" id="uc-shops">Commerces visibles × patentes actives</h2>
         <p className="small muted">{u.shopsVsPatentes.note}</p>
+        <CommercesPatentesVisuel rows={u.shopsVsPatentes.rows} notReconciled={u.confirmedNotReconciled} />
         <DataTable rows={u.shopsVsPatentes.rows} rowKey={(r) => r.commune} caption="Par commune"
           columns={[{ key: 'c', label: 'Commune', primary: true, render: (r) => r.commune }, { key: 'v', label: 'Commerces visibles', num: true, render: (r) => r.visible }, { key: 'p', label: 'Patentes actives', num: true, render: (r) => r.activePatentes }]} />
       </section>
@@ -188,7 +191,7 @@ function LeversTab() {
   const q = useApi(() => api<{ levers: Lever[]; rule: string }>('/v1/opportunites-leviers'), []);
   if (q.loading && !q.data) return <Loading />;
   if (q.error || !q.data) return <ErrorState error={q.error} onRetry={q.reload} />;
-  return <div className="stack"><p className="small muted">{q.data.rule}</p><LeversView levers={q.data.levers} /></div>;
+  return <div className="stack"><p className="small muted">{q.data.rule}</p><LeviersVisuel levers={q.data.levers} /><LeversView levers={q.data.levers} /></div>;
 }
 
 export default function Maximisation() {
