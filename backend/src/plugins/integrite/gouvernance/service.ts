@@ -255,22 +255,72 @@ export class GouvernanceService {
         enforced: p.rotationEnforced, maxPerPair: p.rotationMaxPerPair, windowDays: p.rotationWindowDays,
         atLimit: pairs.filter((x) => x.inRotationWindow >= p.rotationMaxPerPair).map((x) => ({ proposerId: x.proposerId, approverId: x.approverId, count: x.inRotationWindow })),
       },
+      schedule: {
+        intervalHours: this.num('collusion.detection_intervalle_h'), statut: statusOf('collusion.detection_intervalle_h'), active: this.schedulerActive,
+        lastRunAt: this.lastScheduledRun() === null ? null : new Date(this.lastScheduledRun()!).toISOString(),
+      },
       automaticEffect: 'AUCUN' as const,
       note: 'Signaux à examiner par un humain : ils ne valent ni preuve ni soupçon établi. Aucune sanction automatique.',
     };
   }
 
   /** Lève les alertes (mécanisme commun des alertes de sécurité → reprises par la détection du module Intégrité). */
-  runCollusion(user: User | 'system') {
+  runCollusion(user: User | 'system', trigger: 'MANUELLE' | 'PLANIFIEE' = 'MANUELLE') {
     if (user !== 'system') authorize(user, 'integrite:collusion.run');
     const r = this.compute();
     const raised = r.findings.map((f) => this.raise(f, user)).filter((a) => a !== null);
     this.ctx.audit.append({
       actor: user === 'system' ? { kind: 'system', id: 'integrite:collusion' } : this.actor(user),
-      action: 'integrite.collusion.run', resourceType: 'collusion', resourceId: '*', details: { findings: r.findings.length, raised: raised.length },
+      action: 'integrite.collusion.run', resourceType: 'collusion', resourceId: '*', details: { findings: r.findings.length, raised: raised.length, trigger, automaticEffect: 'AUCUN' },
     });
     return { findings: r.findings.length, raised: raised.length, alertIds: raised.map((a) => a!.id), automaticEffect: 'AUCUN' as const };
   }
+
+  /* ---------------- Détection planifiée ---------------- */
+
+  private timer: ReturnType<typeof setInterval> | undefined;
+  /** Instant (ms) de la dernière exécution planifiée ; relu au journal d'audit au premier passage (reprise après redémarrage). */
+  private lastScheduled: number | null | undefined;
+
+  private lastScheduledRun(): number | null {
+    if (this.lastScheduled === undefined) {
+      const runs = this.ctx.audit.list({ action: 'integrite.collusion.run', limit: Number.MAX_SAFE_INTEGER }).items.filter((e) => e.details.trigger === 'PLANIFIEE');
+      this.lastScheduled = runs.length ? Date.parse(runs[runs.length - 1]!.at) : null;
+    }
+    return this.lastScheduled;
+  }
+
+  /**
+   * Passage du planificateur : exécute la détection si l'intervalle du registre (`collusion.detection_intervalle_h`,
+   * 0 = désactivée) est écoulé depuis la dernière exécution planifiée. Chaque exécution — ou échec — est journalisée.
+   */
+  scheduledTick(): { ran: boolean; findings?: number; raised?: number } {
+    const hours = this.num('collusion.detection_intervalle_h');
+    if (!(hours > 0)) return { ran: false };
+    const now = this.ctx.clock.now().getTime();
+    const last = this.lastScheduledRun();
+    if (last !== null && now - last < hours * 3_600_000) return { ran: false };
+    this.lastScheduled = now;
+    try {
+      const r = this.runCollusion('system', 'PLANIFIEE');
+      return { ran: true, findings: r.findings, raised: r.raised };
+    } catch (e) {
+      this.ctx.audit.append({
+        actor: { kind: 'system', id: 'integrite:collusion' }, action: 'integrite.collusion.run_failed', resourceType: 'collusion', resourceId: '*', outcome: 'FAILURE',
+        details: { trigger: 'PLANIFIEE', error: e instanceof Error ? e.message : String(e) },
+      });
+      return { ran: false };
+    }
+  }
+
+  /** Planificateur léger : vérifie périodiquement (défaut : toutes les 5 minutes) si une exécution est due. */
+  startScheduler(tickMs = 300_000): void {
+    this.stopScheduler();
+    this.timer = setInterval(() => { try { this.scheduledTick(); } catch { /* échec journalisé par scheduledTick */ } }, tickMs);
+    this.timer.unref?.();
+  }
+  stopScheduler(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; }
+  get schedulerActive(): boolean { return this.timer !== undefined; }
 
   private raise(f: Finding, by: User | 'system') {
     return this.ctx.alerts.raiseOnce(f.fingerprint, {

@@ -33,6 +33,8 @@ export interface CollusionReport {
   findings: CollusionFinding[];
   masked: number;
   rotation: { enforced: boolean; maxPerPair: number; windowDays: number; atLimit: { proposerId: string; approverId: string; count: number }[] };
+  /** Détection planifiée (intervalle du registre, dernière exécution) — absente sur un serveur plus ancien. */
+  schedule?: { intervalHours: number; statut: string; active: boolean; lastRunAt: string | null };
   automaticEffect: 'AUCUN';
   note: string;
 }
@@ -113,6 +115,12 @@ export function CollusionView({ report }: { report: CollusionReport }) {
           ))}
         </ul>
         <p className="hint">Heures ouvrables : {p.workStartHour} h – {p.workEndHour} h, lundi au vendredi (heure de Kinshasa). Paramètres : {p.rotationStatut}.</p>
+        {report.schedule && (
+          <p className="hint" data-testid="collusion-schedule">
+            Détection planifiée : {report.schedule.intervalHours > 0 ? `toutes les ${report.schedule.intervalHours} h` : 'désactivée'} ({report.schedule.statut})
+            {' · '}dernière exécution : {report.schedule.lastRunAt ? new Date(report.schedule.lastRunAt).toLocaleString('fr-FR', { timeZone: 'Africa/Kinshasa' }) : 'aucune'} · alertes seulement, jamais de sanction.
+          </p>
+        )}
       </section>
     </>
   );

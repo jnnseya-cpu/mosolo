@@ -619,22 +619,38 @@ describe('canaux — points de paiement agréés (R32)', () => {
     expect(ctx.audit.list({ action: 'reconciliation.exception.resolved', resourceId: orphan.id }).total).toBe(1);
   });
 
-  it('attaque : un seul R17 rétablit un point suspendu ou écarte une proposition ⇒ quatre yeux exigés', async () => {
-    const req = await c.env.req('POST', '/v1/payment-points/PA-KALAMU-MM01/reinstate', 'u-analyste-rappro', { motif: 'Écart régularisé, pièces justificatives reçues.' });
+  it('attaque : un seul R17 rétablit un point suspendu ou écarte une proposition ⇒ quatre yeux exigés (demande puis décision, deux routes)', async () => {
+    const base = '/v1/payment-points/PA-KALAMU-MM01/reinstatement-request';
+    // Décision sans demande : refusée (la demande motivée précède toute décision).
+    expect((await c.env.req('POST', `${base}/decision`, 'canaux-tresor-2', { approve: true, motif: 'Rétablissement sans demande préalable.' })).json().code).toBe('NO_REINSTATEMENT_REQUEST');
+    const req = await c.env.req('POST', base, 'u-analyste-rappro', { motif: 'Écart régularisé, pièces justificatives reçues.' });
+    expect(req.statusCode).toBe(201);
     expect(req.json().status).toBe('SUSPENDU');
     expect(c.env.app.ctx.secrets.providerSecrets['point-agree-pa-kalamu-mm01']).toBeUndefined();
-    // Celui qui a suspendu (u-tresor) ne peut pas décider seul du rétablissement, ni le demandeur.
-    expect((await c.env.req('POST', '/v1/payment-points/PA-KALAMU-MM01/reinstate', 'u-tresor', { motif: 'Je rétablis moi-même ce point.' })).json().code).toBe('SEPARATION_OF_DUTIES');
-    expect((await c.env.req('POST', '/v1/payment-points/PA-KALAMU-MM01/reinstate', 'u-analyste-rappro', { motif: 'Je rétablis moi-même ce point.' })).statusCode).toBe(403);
-    const done = await c.env.req('POST', '/v1/payment-points/PA-KALAMU-MM01/reinstate', 'canaux-tresor-2', { motif: 'Rétablissement validé en seconde lecture.' });
+    // L'ancienne route n'enregistre plus qu'une demande : jamais une décision, même par un second R17.
+    expect((await c.env.req('POST', '/v1/payment-points/PA-KALAMU-MM01/reinstate', 'canaux-tresor-2', { motif: 'Je décide par l’ancienne route.' })).json().code).toBe('REINSTATEMENT_ALREADY_REQUESTED');
+    // Celui qui a suspendu (u-tresor) ne peut pas décider du rétablissement, ni le demandeur (R18 : pas habilité à décider).
+    expect((await c.env.req('POST', `${base}/decision`, 'u-tresor', { approve: true, motif: 'Je rétablis moi-même ce point.' })).json().code).toBe('SEPARATION_OF_DUTIES');
+    expect((await c.env.req('POST', `${base}/decision`, 'u-analyste-rappro', { approve: true, motif: 'Je rétablis moi-même ce point.' })).statusCode).toBe(403);
+    // Refus par une seconde personne : la demande est close, le point reste suspendu ; une nouvelle demande est possible.
+    const refused = await c.env.req('POST', `${base}/decision`, 'canaux-tresor-2', { approve: false, motif: 'Pièces insuffisantes, compléter le dossier.' });
+    expect(refused.json()).toMatchObject({ status: 'SUSPENDU' });
+    expect(refused.json().reinstatementRequest).toBeUndefined();
+    expect(c.env.app.ctx.audit.list({ action: 'canaux.point.reinstatement_rejected' }).total).toBe(1);
+    expect((await c.env.req('POST', base, 'u-analyste-rappro', { motif: 'Dossier complété, relevés joints.' })).statusCode).toBe(201);
+    const done = await c.env.req('POST', `${base}/decision`, 'canaux-tresor-2', { approve: true, motif: 'Rétablissement validé en seconde lecture.' });
     expect(done.json().status).toBe('ACTIF');
     // Proposition de suspension (écart de caisse) : écartement à quatre yeux.
     await c.env.req('POST', '/v1/payment-points/PA-LIMETE-MM01/cash-days/2026-09-26/close', 'canaux-op-limete', { counted: [{ amount: '1.00', currency: 'USD' }] });
     const prop = c.svc.points.proposals.findOne((p) => p.pointId === 'PA-LIMETE-MM01' && p.status === 'PROPOSEE')!;
-    const first = await c.env.req('POST', `/v1/payment-point-proposals/${prop.id}/dismiss`, 'u-tresor', { motif: 'Erreur de saisie du comptage, justifiée.' });
+    const dis = `/v1/payment-point-proposals/${prop.id}/dismissal-request`;
+    const first = await c.env.req('POST', dis, 'u-tresor', { motif: 'Erreur de saisie du comptage, justifiée.' });
+    expect(first.statusCode).toBe(201);
     expect(first.json().status).toBe('PROPOSEE');
-    expect((await c.env.req('POST', `/v1/payment-point-proposals/${prop.id}/dismiss`, 'u-tresor', { motif: 'Erreur de saisie du comptage, justifiée.' })).json().code).toBe('SEPARATION_OF_DUTIES');
-    expect((await c.env.req('POST', `/v1/payment-point-proposals/${prop.id}/dismiss`, 'canaux-tresor-2', { motif: 'Confirmé en seconde lecture.' })).json().status).toBe('ECARTEE');
+    expect((await c.env.req('POST', `/v1/payment-point-proposals/${prop.id}/dismiss`, 'canaux-tresor-2', { motif: 'Je décide par l’ancienne route.' })).json().code).toBe('DISMISSAL_ALREADY_REQUESTED');
+    expect((await c.env.req('POST', `${dis}/decision`, 'u-tresor', { approve: true, motif: 'Erreur de saisie du comptage, justifiée.' })).json().code).toBe('SEPARATION_OF_DUTIES');
+    expect((await c.env.req('POST', `${dis}/decision`, 'canaux-tresor-2', { approve: true, motif: 'Confirmé en seconde lecture.' })).json().status).toBe('ECARTEE');
+    expect(c.env.app.ctx.audit.list({ action: 'canaux.point.suspension_dismissed' }).items[0]!.details).toMatchObject({ requestedBy: 'u-tresor' });
   });
 
   it('attaque : espèces reçues sur une référence dont l’obligation n’est plus payable ⇒ refus ; non-affecté compté dans l’attendu', async () => {

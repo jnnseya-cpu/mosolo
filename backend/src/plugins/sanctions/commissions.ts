@@ -66,7 +66,12 @@ export type CommissionLine = EarningLine & {
   rankAt: string;
   /** Attribution figée (commission acquise) : ne peut plus être déplacée. */
   frozen?: boolean;
+  /** Personnes qui ont vérifié ou décidé le constat d'origine : jamais valideurs de la commission. */
+  verifierIds?: string[];
 };
+
+/** État de validation humaine d'une ligne (circuit à deux personnes avant versement). */
+export type ValidationState = 'A_DEMANDER' | 'DEMANDEE' | 'VALIDEE' | 'REFUSEE';
 
 /** Attribution figée d'un paiement (ordre) : conservée dès que sa commission est acquise (rapprochée). */
 export interface FrozenAttribution {
@@ -85,6 +90,8 @@ const push = <K, V>(m: Map<K, V[]>, k: K, v: V) => { const l = m.get(k); if (l) 
 export class CommissionService {
   /** Attributions figées (ordres dont la commission est acquise) : persistées, jamais recalculées. */
   readonly frozen = new InMemoryRepository<FrozenAttribution>();
+  /** État de validation d'une ligne (fourni par le circuit de validation, voir validations.ts). */
+  validationState: ((key: string) => ValidationState) | undefined;
 
   constructor(private readonly ctx: AppContext) {}
 
@@ -121,9 +128,12 @@ export class CommissionService {
     // Stationnement : logique du module (pénalités des constats, sessions dans l'heure d'un contrôle rouge).
     const pk = this.ctx.ext.parking as ParkingService | undefined;
     if (pk) {
+      const byRef = new Map(pk.violations.all().map((v) => [v.reference, v]));
       for (const l of pk.field.allEarningsLines(orders)) {
+        const v = l.source === 'PENALITE' ? byRef.get(l.reference) : undefined;
+        const verifierIds = v ? [v.verification?.by, v.decision?.by].filter((x): x is string => !!x) : [];
         // Heure du contrôle ou du constat : heure du serveur.
-        if (l.obligationId && l.triggerAt && l.agentId) out.push({ ...l, module: 'STATIONNEMENT', moduleLabel: MODULE_LABEL.STATIONNEMENT!, obligationId: l.obligationId, triggerAt: l.triggerAt, agentId: l.agentId, rankAt: l.triggerAt });
+        if (l.obligationId && l.triggerAt && l.agentId) out.push({ ...l, module: 'STATIONNEMENT', moduleLabel: MODULE_LABEL.STATIONNEMENT!, obligationId: l.obligationId, triggerAt: l.triggerAt, agentId: l.agentId, rankAt: l.triggerAt, verifierIds });
       }
     }
 
@@ -174,7 +184,7 @@ export class CommissionService {
         if (f.status !== 'VALIDE' || !f.photoSha256) continue;
         for (const ob of byObject.get(f.objectId) ?? []) {
           if (!this.dueAndUnpaidAt(ob, orders, f.capturedAt)) continue;
-          add(this.generated(orders, 'TERRAIN', f.agentId, f.capturedAt, ob, `Constat terrain ${f.id} · ${ob.id}`, '', f.commune, f.receivedAt));
+          add(this.generated(orders, 'TERRAIN', f.agentId, f.capturedAt, ob, `Constat terrain ${f.id} · ${ob.id}`, '', f.commune, f.receivedAt).map((l) => ({ ...l, verifierIds: f.review?.by ? [f.review.by] : [] })));
         }
       }
     }
@@ -196,7 +206,8 @@ export class CommissionService {
         const authOb = pub.currentAuthorization(d)?.liquidation?.obligationId;
         if (authOb) ids.add(authOb);
         if (kase.decision?.obligationId) ids.add(kase.decision.obligationId);
-        for (const id of ids) add(this.generated(orders, 'PUBLICITE', insp.inspectorId, insp.observedAt, obligations.get(id), `${insp.reference} · ${d.reference}`, d.vehiclePlate ?? '', kase?.commune ?? d.commune));
+        const verifierIds = [kase.verification?.by, kase.decision?.by].filter((x): x is string => !!x);
+        for (const id of ids) add(this.generated(orders, 'PUBLICITE', insp.inspectorId, insp.observedAt, obligations.get(id), `${insp.reference} · ${d.reference}`, d.vehiclePlate ?? '', kase?.commune ?? d.commune).map((l) => ({ ...l, verifierIds })));
       }
     }
     return out;
@@ -256,15 +267,30 @@ export class CommissionService {
     return m;
   }
 
-  summary(agentId: string, lines: CommissionLine[] = this.lines(agentId)) {
+  /** Lignes enrichies de leur état de validation ; totaux « payable » (validée par un superviseur, toujours acquise). */
+  private withValidation(lines: CommissionLine[]) {
+    const out = lines.map((l) => {
+      const key = l.state === 'ACQUISE' && l.orderId ? `${l.source}:${l.orderId}` : null;
+      return { ...l, validationKey: key, validation: key ? (this.validationState?.(key) ?? 'A_DEMANDER') : null };
+    });
+    return { lines: out, payable: sumByCurrency(out.filter((l) => l.validation === 'VALIDEE').map((l) => l.commission)) };
+  }
+
+  summary(agentId: string, raw: CommissionLine[] = this.lines(agentId)) {
+    const { lines, payable } = this.withValidation(raw);
     const modules = [...new Set(lines.map((l) => l.module))].map((m) => ({
       module: m, moduleLabel: MODULE_LABEL[m] ?? m, lines: lines.filter((l) => l.module === m).length,
       commission: sumByCurrency(lines.filter((l) => l.module === m && l.state !== 'ANNULEE').map((l) => l.commission)),
     }));
     return {
       agentId, ratePct: AGENT_COMMISSION_PCT,
-      totals: earningTotals(lines, this.ctx.clock.now()),
+      totals: { ...earningTotals(lines, this.ctx.clock.now()), payable },
       counts: { penalites: lines.filter((l) => l.source === 'PENALITE').length, paiements: lines.filter((l) => l.source === 'PAIEMENT').length },
+      validation: {
+        aDemander: lines.filter((l) => l.validation === 'A_DEMANDER' || l.validation === 'REFUSEE').length,
+        demandees: lines.filter((l) => l.validation === 'DEMANDEE').length,
+        validees: lines.filter((l) => l.validation === 'VALIDEE').length,
+      },
       modules, lines,
       windows: Object.entries(ATTRIBUTION_WINDOWS_MINUTES).map(([m, min]) => ({ module: m, moduleLabel: MODULE_LABEL[m], minutes: min })),
       rules: [
@@ -272,6 +298,7 @@ export class CommissionService {
         'Paiement provoqué : effectué après votre contrôle qui a révélé un défaut — dans l’heure (stationnement, titres, pass wewa) ou dans les 72 h (plaques des verticales, publicité, missions de terrain). Un paiement n’est attribué qu’une fois, au premier contrôle (heure du serveur) ; acquise, l’attribution est figée.',
         'Contrôle ouvrant droit : position GPS attestée près de la zone ou de l’objet (stationnement, plaques) ; dossier retenu (publicité) ; constat validé et photographié sur une dette échue (terrain). Aucun paiement dans les premières minutes suivant l’arrivée du véhicule.',
         'Calculée sur des recettes arrivées au compte public, échéance par échéance ; acquise après rapprochement bancaire ; versée par le Trésor (paie). Vous ne recevez jamais d’argent de l’usager.',
+        'Acquise, la commission n’est payable qu’après validation par un superviseur distinct de vous et des personnes qui ont vérifié ou décidé le constat (demande de validation, décision motivée et journalisée).',
         'Une pénalité n’existe qu’après vérification et décision par d’autres personnes ; annulée sur recours, elle annule la commission.',
         'Taux fixé par décision du maître d’ouvrage : un acte (arrêté) est requis avant tout versement réel.',
       ],
