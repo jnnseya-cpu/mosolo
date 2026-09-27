@@ -247,9 +247,13 @@ describe('Partie V — verticales de bout en bout (une verticale = un test)', ()
     // 3. Avis annuel sur règle ACTIVE (sites déclarés ou vérifiés seulement).
     expect((await env.req('GET', '/v1/verticales/secteurs/antennes/liquidation-annuelle', U.instructor)).json().rule.status).not.toBe('ACTIVE');
     exampleRule(env, { code: 'VX-TEL-SITES', formula: 'forfait_site', rateTable: { forfait_site: '500' }, periodicity: 'ANNUELLE' });
+    // Avis annuel AUTOMATIQUE sur règle ACTIVE (décision du maître d'ouvrage) ; idempotent ; le passage manuel reste possible.
+    const auto = await env.req('POST', '/v1/verticales/secteurs/antennes/liquidation-annuelle/automatique', U.instructor, {});
+    expect(auto.statusCode, auto.body).toBe(201);
+    expect(auto.json().executed.find((e: { taxpayerId: string }) => e.taxpayerId === VX_DEMO.telecomTaxpayerId).issued).toBeGreaterThan(0);
+    expect((await env.req('POST', '/v1/verticales/secteurs/antennes/liquidation-annuelle/automatique', U.instructor, {})).json().executed).toEqual([]);
     const annual = await env.req('POST', '/v1/verticales/secteurs/antennes/liquidation-annuelle', U.instructor, { exercice: '2026', taxpayerId: VX_DEMO.telecomTaxpayerId });
-    expect(annual.statusCode, annual.body).toBe(201);
-    expect(annual.json().issued.length).toBeGreaterThan(0);
+    expect(annual.json().issued).toHaveLength(0);
     const again = (await env.req('GET', '/v1/verticales/secteurs/antennes/liquidation-annuelle', U.instructor)).json();
     expect(again.operators.find((o: { taxpayerId: string }) => o.taxpayerId === VX_DEMO.telecomTaxpayerId).toLiquidate).toBe(0);
     // 4. Suivi par la cellule grands redevables.

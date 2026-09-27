@@ -41,6 +41,8 @@ export const verticalesPlugin = definePlugin<VerticalesService>({
     // Module 79 : habilitation NFIU, situation complète pour l'agent habilité, rapports journaliers automatiques.
     svc.nfiu = new NfiuService(ctx, svc);
     if (nfiuReportSchedulerEnabled(process.env)) svc.nfiu.startScheduler();
+    // Module 16 (parcours Telecom) : avis annuel automatique sur règle ACTIVE (même garde de planificateur).
+    if (aviaAutoSchedulerEnabled(process.env)) svc.secteurs.startAntennesScheduler();
     return svc;
   },
   seed: (ctx, svc) => {
@@ -53,7 +55,7 @@ export const verticalesPlugin = definePlugin<VerticalesService>({
     registerPartie5Routes(app, { actifs: svc.actifs!, environnement: svc.environnement!, entreprises: svc.entreprises! });
     registerAviaAutoRoutes(app, svc.aviaAuto!);
     registerNfiuRoutes(app, svc);
-    app.addHook('onClose', async () => { svc.aviaAuto?.stopScheduler(); svc.nfiu?.stopScheduler(); });
+    app.addHook('onClose', async () => { svc.aviaAuto?.stopScheduler(); svc.nfiu?.stopScheduler(); svc.secteurs.stopAntennesScheduler(); });
   },
 });
 

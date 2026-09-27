@@ -115,7 +115,7 @@ export const PARCOURS: Record<string, ParcoursVerticale> = {
     etapes: [
       e(1, 'Import des listes de sites', [16], '/services/telecom', 'POST /v1/verticales/telecom/cases'),
       e(2, 'Rapprochement sites déclarés / observés', [16], '/verticales/console', 'GET /v1/verticales/telecom/reconciliation'),
-      e(3, 'Avis annuel automatique', [16, 27], '/verticales/secteurs', 'POST /v1/verticales/secteurs/antennes/liquidation-annuelle'),
+      e(3, 'Avis annuel automatique', [16, 27], '/verticales/secteurs', 'POST /v1/verticales/secteurs/antennes/liquidation-annuelle/automatique'),
       e(4, 'Suivi par la cellule grands redevables', [56], '/verticales/secteurs', 'POST /v1/verticales/secteurs/grands-redevables'),
     ],
     reglesPropres: ['Peu de redevables, rendement élevé.', 'Données opérateurs sous protocole.'],

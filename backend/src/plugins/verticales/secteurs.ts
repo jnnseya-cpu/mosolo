@@ -92,7 +92,7 @@ export const SECTOR_MODULES: SectorModuleDef[] = [
   { module: '16', name: 'Antennes et infrastructures télécoms', function: 'Sites, opérateurs, liquidation annuelle', vertical: 'telecom', legal: 'ACTE_REQUIS',
     prerequisites: ['J1, J3 — base légale et barème', 'J13 — protocole avec les opérateurs et l’ARPTC'], revenueCodes: ['R73-ANTENNES'], objectTypes: ['SITE_TELECOM'], credentialTypes: [],
     declarations: [], observationSources: [], referenceKinds: [], control: ['QR'], routes: ['GET /v1/verticales/secteurs/antennes/liquidation-annuelle', 'GET /v1/verticales/telecom/reconciliation'],
-    note: 'Liquidation annuelle : proposée par le système, exécutée par une personne sur une règle ACTIVE — aucune taxation automatique.' },
+    note: 'Liquidation annuelle : proposée par le système ; sur règle ACTIVE, avis annuel émis automatiquement (décision du maître d’ouvrage du 27/09/2026) ou par une personne — jamais pour un site seulement observé (aucune taxation automatique sans contradictoire), aucune sanction automatique.' },
   { module: '17', name: 'Boissons, alcools et tabac', function: 'Volumes, déclarations, rapprochement grands redevables', vertical: 'entreprises', legal: 'ACTE_REQUIS',
     prerequisites: ['J1 — taxe d’intérêt commun et clé', 'J13 — protocoles de données (accises, facturation)'], revenueCodes: ['R72-CONSO-BAT', 'R73-DEBIT-BOISSONS'], objectTypes: ['ETABLISSEMENT'], credentialTypes: [],
     declarations: ['VOLUMES_BAT'], observationSources: ['ACCISES', 'FACTURATION'], referenceKinds: [], control: [], routes: ['POST /v1/verticales/secteurs/declarations', 'POST /v1/verticales/secteurs/donnees-tierces'] },
@@ -505,7 +505,9 @@ export class SecteursService {
               : liquidable.length === done.length ? 'Avis annuel déjà émis pour tous les sites déclarés ou vérifiés' : 'Avis annuel prêt : exécution par une personne habilitée (sites observés non déclarés exclus : contradictoire d’abord)',
         };
       }),
-      notice: 'Proposition seulement : la liquidation annuelle n’est jamais automatique ; chaque site reste contestable ; un site seulement observé n’est jamais liquidé avant la procédure contradictoire.',
+      notice: active
+        ? 'Règle ACTIVE : l’avis annuel est émis automatiquement (décision du maître d’ouvrage) pour les sites déclarés ou vérifiés ; chaque site reste contestable ; un site seulement observé n’est jamais liquidé avant la procédure contradictoire ; aucune sanction automatique.'
+        : 'Proposition seulement tant qu’aucune règle ACTIVE n’existe : aucun montant, avis jamais automatique sans règle ACTIVE ; chaque site reste contestable ; un site seulement observé n’est jamais liquidé avant la procédure contradictoire.',
     };
   }
 
@@ -532,6 +534,40 @@ export class SecteursService {
     this.ctx.audit.append({ actor: actorOf(user), action: 'verticales.antennes.annual_executed', resourceType: 'taxpayer', resourceId: taxpayerId, details: { exercice, issued: issued.length, skipped: skipped.length } });
     return { exercice, taxpayerId, issued, skipped };
   }
+
+  /**
+   * Avis annuel AUTOMATIQUE sur règle ACTIVE (décision du maître d'ouvrage du 27/09/2026 : « liquidation automatique des
+   * modules qui la prévoient — antennes… ») : pour chaque opérateur identifié, sites déclarés ou vérifiés de l'exercice
+   * non encore liquidés ; même chemin que l'exécution par une personne (moteur commun, aucune double facturation), sites
+   * seulement observés exclus, sanctions toujours décidées par une personne. Sans règle ACTIVE : rien (proposition).
+   */
+  antennesAuto(trigger: 'PLANIFIEE' | 'MANUELLE' = 'PLANIFIEE', by?: User) {
+    if (by) authorize(by, P.telecomReconcile, { entity: SECTOR_ENTITY });
+    const exercice = String(this.now().getUTCFullYear());
+    if (!this.vx.activeRuleFor('telecom')) return { exercice, executed: [] as { taxpayerId: string; issued: number; skipped: number }[], reason: 'NO_RULE' as const };
+    const system: User = { kind: 'user', id: 'svc-antennes-annuel', name: 'Avis annuel automatique des antennes (règle ACTIVE)', roles: ['R11'], entity: SECTOR_ENTITY };
+    const code = ruleCodeFor('telecom')!;
+    const operators = [...new Set(this.ctx.objects.objects.find((o) => o.attributes.objectType === 'SITE_TELECOM' && !!o.taxpayerId && o.probativeStatus !== 'OBSERVE').map((o) => o.taxpayerId!))];
+    const executed: { taxpayerId: string; issued: number; skipped: number }[] = [];
+    for (const taxpayerId of operators) {
+      const pending = this.ctx.objects.objects.find((o) => o.attributes.objectType === 'SITE_TELECOM' && o.taxpayerId === taxpayerId && o.probativeStatus !== 'OBSERVE' && !this.vx.cessations.findOne((c) => c.objectId === o.id)
+        && !this.ctx.assessment.obligations.findOne((ob) => ob.objectId === o.id && ob.ruleCode === code && ob.status !== 'ANNULEE' && ob.createdAt.startsWith(exercice)));
+      if (!pending.length) continue;
+      const r = this.antennesExecute(system, exercice, taxpayerId);
+      executed.push({ taxpayerId, issued: r.issued.length, skipped: r.skipped.length });
+    }
+    this.ctx.audit.append({ actor: by ? actorOf(by) : actorOf(system), action: 'verticales.antennes.annual_auto', resourceType: 'sector_module', resourceId: '16', details: { exercice, trigger, operators: executed.length, issued: executed.reduce((n, e) => n + e.issued, 0) } });
+    return { exercice, executed, reason: null };
+  }
+
+  private antennesTimer: ReturnType<typeof setInterval> | undefined;
+  /** Planificateur quotidien de l'avis annuel automatique (idempotent : aucune double facturation). */
+  startAntennesScheduler(tickMs = 86_400_000): void {
+    this.stopAntennesScheduler();
+    this.antennesTimer = setInterval(() => { try { this.antennesAuto('PLANIFIEE'); } catch { /* journalisé par la liquidation */ } }, tickMs);
+    this.antennesTimer.unref?.();
+  }
+  stopAntennesScheduler(): void { if (this.antennesTimer) clearInterval(this.antennesTimer); this.antennesTimer = undefined; }
 
   // ------------------------------------------------------------------ contrôle d'un véhicule par plaque (module 11, 12, 25)
 

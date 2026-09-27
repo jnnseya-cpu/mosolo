@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1035 routes** dans 40 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -13,19 +13,19 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | extension integrite | 70 |
 | extension juridique | 11 |
 | extension opportunites | 29 |
-| extension parking | 64 |
+| extension parking | 66 |
 | extension pilotage | 67 |
 | extension preuves | 14 |
 | extension publicite | 52 |
-| extension rakapay | 41 |
+| extension rakapay | 53 |
 | extension recouvrement | 58 |
 | extension referentiel | 10 |
 | extension sanctions | 8 |
 | extension socle | 24 |
 | extension terrain | 50 |
-| extension titres | 20 |
+| extension titres | 22 |
 | extension tresor | 39 |
-| extension verticales | 102 |
+| extension verticales | 129 |
 | module ai | 3 |
 | module alerts | 1 |
 | module appeals | 9 |
@@ -503,6 +503,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | POST | `/v1/parking/tariff-grids` |
 | GET | `/v1/parking/tariff-modes` |
 | POST | `/v1/parking/tariff-simulations` |
+| GET | `/v1/parking/tarification-dynamique` |
+| POST | `/v1/parking/tarification-dynamique/run` |
 | GET | `/v1/parking/urban-data` |
 | POST | `/v1/parking/vehicles` |
 | GET | `/v1/parking/vehicles/mine` |
@@ -674,8 +676,11 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | Méthode | Chemin |
 |---|---|
 | GET | `/v1/public/wewa/:code` |
+| GET | `/v1/rakapay/blocages` |
+| POST | `/v1/rakapay/blocages/:id/levee` |
 | GET | `/v1/rakapay/catalogue` |
 | GET | `/v1/rakapay/circuits` |
+| GET | `/v1/rakapay/commissions/mes-commissions` |
 | GET | `/v1/rakapay/cooperatives` |
 | GET | `/v1/rakapay/cooperatives/:id` |
 | POST | `/v1/rakapay/cooperatives/:id/decisions` |
@@ -684,16 +689,25 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | GET | `/v1/rakapay/lignes` |
 | GET | `/v1/rakapay/offres` |
 | POST | `/v1/rakapay/offres/:id/decision` |
+| POST | `/v1/rakapay/offres/:id/prix` |
 | GET | `/v1/rakapay/operateurs` |
 | POST | `/v1/rakapay/operateurs/:id/agents` |
+| POST | `/v1/rakapay/operateurs/:id/agents/:userId/blocage` |
 | POST | `/v1/rakapay/operateurs/:id/agents/:userId/retrait` |
 | GET | `/v1/rakapay/operateurs/:id/agrement` |
 | POST | `/v1/rakapay/operateurs/:id/agrement/decision` |
 | POST | `/v1/rakapay/operateurs/:id/agrement/proposition` |
+| GET | `/v1/rakapay/operateurs/:id/analyse-quotidienne` |
+| POST | `/v1/rakapay/operateurs/:id/grille-commissions` |
+| GET | `/v1/rakapay/operateurs/:id/limites` |
+| POST | `/v1/rakapay/operateurs/:id/limites` |
 | POST | `/v1/rakapay/operateurs/:id/offres` |
 | GET | `/v1/rakapay/operateurs/:id/tableau` |
 | POST | `/v1/rakapay/operateurs/candidatures` |
 | GET | `/v1/rakapay/operateurs/mon-rattachement` |
+| GET | `/v1/rakapay/periode-grace` |
+| POST | `/v1/rakapay/periode-grace` |
+| POST | `/v1/rakapay/periode-grace/:id/decision` |
 | GET | `/v1/rakapay/redevance-plateforme/simulation` |
 | GET | `/v1/rakapay/revues-ventes` |
 | POST | `/v1/rakapay/revues-ventes/:id/decision` |
@@ -906,7 +920,9 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | GET | `/v1/titres/commandes` |
 | POST | `/v1/titres/commandes/:id/annulation` |
 | GET | `/v1/titres/constats` |
+| POST | `/v1/titres/constats/:id/contestation` |
 | POST | `/v1/titres/constats/:id/decision` |
+| GET | `/v1/titres/constats/mine` |
 | POST | `/v1/titres/controles` |
 | POST | `/v1/titres/controles/lots` |
 | GET | `/v1/titres/hors-ligne/paquet` |
@@ -963,6 +979,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 
 | Méthode | Chemin |
 |---|---|
+| GET | `/v1/public/verticales/actifs/appels` |
 | GET | `/v1/public/verticales/avia/ifa/cle-publique` |
 | POST | `/v1/public/verticales/avia/ifa/verify` |
 | GET | `/v1/public/verticales/certificates/:code` |
@@ -972,6 +989,19 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | POST | `/v1/verticales/:slug/cases` |
 | POST | `/v1/verticales/:slug/objects/:objectId/liquidate` |
 | GET | `/v1/verticales/:slug/space` |
+| GET | `/v1/verticales/actifs` |
+| POST | `/v1/verticales/actifs/appels` |
+| POST | `/v1/verticales/actifs/appels/:id/attribution` |
+| POST | `/v1/verticales/actifs/appels/:id/infructueux` |
+| POST | `/v1/verticales/actifs/appels/:id/ouverture` |
+| POST | `/v1/verticales/actifs/inventaire` |
+| POST | `/v1/verticales/actifs/inventaire/:id/evaluations` |
+| GET | `/v1/verticales/actifs/revenus` |
+| GET | `/v1/verticales/avia/auto` |
+| GET | `/v1/verticales/avia/auto/executions` |
+| GET | `/v1/verticales/avia/auto/executions/:id` |
+| POST | `/v1/verticales/avia/auto/executions/:id/observations` |
+| POST | `/v1/verticales/avia/auto/run` |
 | GET | `/v1/verticales/avia/cadre` |
 | POST | `/v1/verticales/avia/cadre/actes` |
 | POST | `/v1/verticales/avia/cadre/actes/:id/validate` |
@@ -1038,12 +1068,24 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | POST | `/v1/verticales/cases/:id/take` |
 | POST | `/v1/verticales/cases/:id/visits` |
 | GET | `/v1/verticales/domaine-public/emprises` |
+| GET | `/v1/verticales/entreprises/etablissements/:objectId/obligations` |
+| GET | `/v1/verticales/environnement/registre` |
+| POST | `/v1/verticales/environnement/simulations` |
 | POST | `/v1/verticales/evenements/events/:objectId/controls` |
 | POST | `/v1/verticales/evenements/events/:objectId/ticketing` |
 | GET | `/v1/verticales/indicators` |
 | GET | `/v1/verticales/marches/plan` |
 | POST | `/v1/verticales/marches/stalls/:id/titles` |
 | GET | `/v1/verticales/me/summary` |
+| GET | `/v1/verticales/nfiu/habilitations` |
+| POST | `/v1/verticales/nfiu/habilitations` |
+| POST | `/v1/verticales/nfiu/habilitations/:userId/revocation` |
+| GET | `/v1/verticales/nfiu/habilitations/mienne` |
+| GET | `/v1/verticales/nfiu/indicateurs` |
+| GET | `/v1/verticales/nfiu/plates/:code/situation` |
+| GET | `/v1/verticales/nfiu/rapports` |
+| POST | `/v1/verticales/nfiu/rapports` |
+| GET | `/v1/verticales/nfiu/rapports/historique` |
 | POST | `/v1/verticales/plates` |
 | GET | `/v1/verticales/plates-report/daily` |
 | GET | `/v1/verticales/plates/:code/counter` |
@@ -1052,6 +1094,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | GET | `/v1/verticales/secteurs` |
 | POST | `/v1/verticales/secteurs/:module/releves` |
 | GET | `/v1/verticales/secteurs/antennes/liquidation-annuelle` |
+| POST | `/v1/verticales/secteurs/antennes/liquidation-annuelle` |
 | GET | `/v1/verticales/secteurs/declarations` |
 | POST | `/v1/verticales/secteurs/declarations` |
 | GET | `/v1/verticales/secteurs/declarations/:id` |
