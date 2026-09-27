@@ -4,7 +4,7 @@
  * qui l'attache au contexte après les données de démonstration.
  */
 import { createPrivateKey } from 'node:crypto';
-import { ConfigurationError, isDemoMode } from '../core/auth.js';
+import { ConfigurationError, isDemoMode, isProduction } from '../core/auth.js';
 import { loadReceiptSigningKey, loadReceiptVerificationKeys } from '../modules/receipts/service.js';
 import { FileAuditAnchor } from './anchor.js';
 import { openPgStore } from './store.js';
@@ -43,6 +43,8 @@ export function assertBootSecrets(env: NodeJS.ProcessEnv = process.env): void {
     if (!env.MOSOLO_AUDIT_HMAC_KEY?.trim()) missing.push('MOSOLO_AUDIT_HMAC_KEY');
     if (!env.MOSOLO_AUDIT_ANCHOR_PATH?.trim()) missing.push('MOSOLO_AUDIT_ANCHOR_PATH');
   }
+  // Production (NODE_ENV=production) : jamais de stockage en mémoire — un redémarrage effacerait paiements et quittances.
+  if (isProduction(env) && !env.DATABASE_URL?.trim()) missing.push('DATABASE_URL');
   if (missing.length) {
     throw new ConfigurationError(`Démarrage refusé hors mode démonstration : ${missing.join(', ')} obligatoire(s) (clés stables — sinon quittances, clôtures ou chaîne d'audit invérifiables après redémarrage). Voir backend/README.md.`);
   }
@@ -92,4 +94,14 @@ export async function preparePersistence(env: NodeJS.ProcessEnv = process.env, l
   });
   setActivePersistence(runtime);
   return runtime;
+}
+
+/**
+ * Point d'entrée SANS persistance (src/server.ts) : réservé à la démonstration et au développement. En production
+ * (NODE_ENV=production), refus explicite — utiliser `npm start -w backend` (persistence/server.ts, PostgreSQL).
+ */
+export function assertMemoryEntryAllowed(env: NodeJS.ProcessEnv = process.env): void {
+  if (isProduction(env)) {
+    throw new ConfigurationError('Démarrage refusé : src/server.ts ne persiste rien (mémoire seule). En production, utilisez `npm start -w backend` (src/persistence/server.ts) avec DATABASE_URL.');
+  }
 }

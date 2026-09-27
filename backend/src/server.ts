@@ -6,7 +6,9 @@
 import { enableDemoFromArgv } from './core/demo-flag.js';
 enableDemoFromArgv();
 const { buildApp } = await import('./app.js');
-const { assertBootSecrets } = await import('./persistence/boot.js');
+const { assertBootSecrets, assertMemoryEntryAllowed } = await import('./persistence/boot.js');
+// Production : ce point d'entrée (mémoire seule) est refusé ; voir src/persistence/server.ts.
+assertMemoryEntryAllowed();
 // Hors démonstration : clés de signature stables exigées (quittances, clôtures) — sinon refus de démarrer.
 assertBootSecrets();
 

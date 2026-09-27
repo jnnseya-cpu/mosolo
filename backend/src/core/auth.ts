@@ -134,7 +134,8 @@ export function registerBearerVerifier(directory: UserDirectory, verifier: Beare
 
 const TRUTHY = ['1', 'true', 'oui', 'yes'];
 const truthy = (v: string | undefined): boolean => TRUTHY.includes((v ?? '').trim().toLowerCase());
-const isProduction = (env: NodeJS.ProcessEnv): boolean => (env.NODE_ENV ?? '').trim().toLowerCase() === 'production';
+/** Production déclarée (NODE_ENV=production) : démonstration interdite, base de données obligatoire. */
+export const isProduction = (env: NodeJS.ProcessEnv): boolean => (env.NODE_ENV ?? '').trim().toLowerCase() === 'production';
 
 /**
  * Mode démonstration : actif UNIQUEMENT si MOSOLO_DEMO_MODE vaut explicitement « true » (sûr par défaut), et jamais

@@ -96,8 +96,10 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
   installRequestCorrelation(app);
   const ctx = createContext(opts);
   const plugins = opts.plugins ?? DEFAULT_PLUGINS;
-  for (const p of plugins) ctx.ext[p.name] = p.create(ctx);
   const seeded = shouldSeed(opts);
+  // Connu des modules dès leur création : hors démonstration, aucun élément fictif de configuration n'est défini.
+  ctx.demoData = seeded;
+  for (const p of plugins) ctx.ext[p.name] = p.create(ctx);
   // Un amorçage réel et des données fictives ne se mélangent jamais.
   const bootstrap = seeded ? undefined : opts.bootstrap ?? (process.env.MOSOLO_BOOTSTRAP_FILE?.trim() ? loadBootstrapFile(process.env.MOSOLO_BOOTSTRAP_FILE.trim()) : undefined);
   if (seeded) {

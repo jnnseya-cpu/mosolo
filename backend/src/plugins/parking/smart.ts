@@ -380,7 +380,8 @@ export class ParkSmart {
       if (!t.types.findOne((x) => x.code === codes.real)) {
         t.defineType({ ...base, code: codes.real, label: d.label, validity: d.validity, supports: d.supports, pricing: { ruleCode: d.rule.real, inputs: d.inputs }, legalAct: { ref: 'Acte réglementaire ParkSmart (à prendre)', status: 'ACTE_REQUIS', note: 'Zonage, redevables et tarifs à fixer par l’acte réglementaire (§ 11A.1).' }, demo: false }, 'parking');
       }
-      if (!t.types.findOne((x) => x.code === codes.demo)) {
+      // Types « DÉMONSTRATION » (règles fictives) : seulement si des données de démonstration sont semées — jamais en production.
+      if (this.ctx.demoData !== false && !t.types.findOne((x) => x.code === codes.demo)) {
         t.defineType({ ...base, code: codes.demo, label: `DÉMONSTRATION — ${d.label}`, validity: d.validity, supports: d.supports, pricing: { ruleCode: d.rule.demo, inputs: d.inputs }, legalAct: { ref: 'Acte FICTIF de démonstration', status: 'DEMONSTRATION', note: 'Règle FICTIVE [EXEMPLE] : aucun titre réel avant l’acte.' }, demo: true }, 'parking');
       }
     }

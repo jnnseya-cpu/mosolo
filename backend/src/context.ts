@@ -235,6 +235,12 @@ export function createContext(opts: AppOptions = {}) {
     assessment, receipts, payments, treasury, drafts, field, appeals, ai, dashboards,
     /** Services des modules d'extension, par nom (voir plugins/). */
     ext: {} as Record<string, unknown>,
+    /**
+     * Données de démonstration semées dans cette application (fixé par `buildApp` avant la création des modules).
+     * `undefined` (contexte construit hors `buildApp`) : comportement historique. `false` : aucun élément fictif,
+     * même de configuration (types de titres « DÉMONSTRATION »), n'est créé — mode production.
+     */
+    demoData: undefined as boolean | undefined,
   };
 }
 
