@@ -79,6 +79,7 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/agents/surveillance', element: lazy(() => import('./parking/AgentMonitoring')), nav: { label: 'Surveillance des constats', short: 'Constats', icon: 'analysis', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R09', 'R22', 'R23', 'R24'] } },
   { path: '/stationnement/regie', element: lazy(() => import('./parking/ParkingRegie')), nav: { label: 'Régie du stationnement', short: 'Zones', icon: 'parking', group: 'operations', roles: ['R06', 'R07'] } },
   { path: '/stationnement/tableau-de-bord', element: lazy(() => import('./parking/ParkingDashboard')), nav: { label: 'Tableau de bord stationnement', short: 'Parking', icon: 'chart', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R09', 'R22', 'R23'] } },
+  { path: '/stationnement/parksmart', element: lazy(() => import('./parking/ParkSmartPilotage')), nav: { label: 'ParkSmart — tarifs, occupation, déploiement', short: 'ParkSmart', icon: 'analysis', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R09', 'R20', 'R21', 'R22', 'R23'] } },
 
   // Publicité (KIN PUB CONTROL)
   { path: '/publicite', element: lazy(() => import('./publicite/AdvertiserSpace')), nav: { label: 'Mes dispositifs publicitaires', short: 'Publicité', icon: 'megaphone', group: 'public', roles: ['R30', 'R31'] } },

@@ -10,6 +10,7 @@ import type { User } from '../../core/auth.js';
 import { EVIDENCE_SLOTS } from './field.js';
 import type { ParkingService } from './service.js';
 import { demoPay, DEMO_INSTRUMENT, DGTK, DGTK_ALIAS, publishDemoRule } from './support.js';
+import { seedParkSmart } from './seed-smart.js';
 
 export const PARKING_DEMO = {
   tariffRule: 'DEMO-PARK-HORAIRE',
@@ -156,4 +157,7 @@ export function seedParking(ctx: AppContext, svc: ParkingService): void {
   svc.setPartnerStatus(regie, p1.id, { status: 'PARTENAIRE', reason: 'Convention de démonstration signée (fictive).' });
   svc.declarePartnerOccupancy(marchand, p1.id, 34);
   svc.createPartner(regie, { name: 'Galerie commerciale du Fleuve (fictive)', kind: 'MARCHAND', commune: 'Gombe', quartier: 'Centre-ville', lat: -4.3040, lon: 15.3150, capacity: 45 }, { demo: true });
+
+  // Chapitre 11A : grilles tarifaires, abonnement lié à la plaque, occupation, affectation, déploiement (seed-smart.ts).
+  seedParkSmart(ctx, svc);
 }

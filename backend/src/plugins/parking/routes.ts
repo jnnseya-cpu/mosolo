@@ -11,6 +11,7 @@ import {
 import { badRequest, forbidden, unprocessable } from '../../core/errors.js';
 import { sha256Hex64 } from './support.js';
 import { AGENT_COMMISSION_PCT, EVIDENCE_SLOTS, PHOTO_WINDOW_MINUTES } from './field.js';
+import { registerParkSmartRoutes } from './routes-smart.js';
 
 /** Consultation des pénalités : dans ce délai après le contrôle de la plaque par l'agent. */
 const PENALTIES_WINDOW_MINUTES = PHOTO_WINDOW_MINUTES;
@@ -49,7 +50,7 @@ export function registerParkingRoutes(app: FastifyInstance, ctx: AppContext, svc
   // Zones
   app.get('/v1/parking/zones', async (req) => {
     authorize(requireUser(req), 'parking:zone.read');
-    return { items: svc.listZones(), overbookingEnabled: false };
+    return { items: svc.listZones(), overbookingEnabled: svc.smart.overbookingActive() };
   });
   app.get<{ Params: { id: string } }>('/v1/parking/zones/:id', async (req) => {
     authorize(requireUser(req), 'parking:zone.read');
@@ -203,4 +204,7 @@ export function registerParkingRoutes(app: FastifyInstance, ctx: AppContext, svc
 
   // Tableau de bord (agrégats)
   app.get('/v1/parking/indicators', async (req) => svc.indicators(requireUser(req)));
+
+  // Chapitre 11A : grilles, occupation, recettes, plaque, surréservation, espaces, affectation, déploiement.
+  registerParkSmartRoutes(app, svc);
 }

@@ -23,6 +23,7 @@ import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../
 import { assertDistinctPerson, assertNotRelated, authorize, evaluate, hasAnyGrant } from '../../core/policy.js';
 import { validityView } from '../../core/validity.js';
 import { distanceToZoneM, ParkingField, PHOTO_WINDOW_MINUTES, presenceOk, type AgentFix } from './field.js';
+import { ParkSmart, type PREMIUM_CATEGORIES } from './smart.js';
 import { sampleForCounterCheck, withOverdue } from '../sanctions/service.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
@@ -73,6 +74,8 @@ export interface ParkingZone {
   maxDurationMinutes: number | null;
   entity: string;
   suspended?: { reason: string; by: string; at: string };
+  /** Zone premium (§ 11A.3) : classement motivé par la régie ; le tarif suit la grille rattachée (règle du registre). */
+  premium?: { category: (typeof PREMIUM_CATEGORIES)[number]; reason: string; by: string; at: string };
   demo: boolean;
   note?: string;
   createdBy: string;
@@ -122,7 +125,8 @@ export interface ControlCheck {
   zoneId: string | null;
   commune: string | null;
   light: Light;
-  title: 'SESSION' | 'RESERVATION' | null;
+  /** TITRE : abonnement, pré-réservation ou titre événement du moteur de titres (§ 19A), lié à la plaque. */
+  title: 'SESSION' | 'RESERVATION' | 'TITRE' | null;
   agentId: string;
   at: string;
   /** Position du terminal de l'agent au contrôle (facultative) et distance à la zone contrôlée. */
@@ -258,9 +262,12 @@ export class ParkingService {
 
   /** Terrain : photos de preuve, pénalités d'un usager, commission des agents (field.ts). */
   readonly field: ParkingField;
+  /** Compléments du chapitre 11A : grilles tarifaires, occupation, surréservation, plaque, affectation, déploiement (smart.ts). */
+  readonly smart: ParkSmart;
 
   constructor(private readonly ctx: AppContext) {
     this.field = new ParkingField(ctx, this);
+    this.smart = new ParkSmart(ctx, this);
   }
 
   now(): Date {
@@ -293,7 +300,7 @@ export class ParkingService {
       ...z,
       ...st,
       occupancy: { active, reserved, capacity: cap, rate: pct(active + reserved, cap), free: Math.max(0, cap - active - reserved) },
-      overbookingEnabled: OVERBOOKING_ENABLED,
+      overbookingEnabled: OVERBOOKING_ENABLED || this.smart.overbookingActive(),
     };
   }
 
@@ -441,9 +448,9 @@ export class ParkingService {
 
   private liquidate(user: User, z: ParkingZone, taxpayerId: string, objectId: string, minutes: number, places: number) {
     const rule = this.openZoneRule(z);
-    const { obligation } = this.ctx.assessment.calculate(user, {
-      ruleId: rule.id, taxpayerId, objectId, inputs: { duree_minutes: String(minutes), places: String(places) }, simulate: false,
-    });
+    // Entrées déduites de la situation et limitées à celles de la formule (heure de pointe lue dans la table de la règle).
+    const inputs = this.smart.tariffInputs(rule, { minutes, places, at: this.now() });
+    const { obligation } = this.ctx.assessment.calculate(user, { ruleId: rule.id, taxpayerId, objectId, inputs, simulate: false });
     return obligation!;
   }
 
@@ -666,8 +673,10 @@ export class ParkingService {
       const start = new Date(r.startAt);
       const end = new Date(r.endAt);
       const used = this.reservedPlaces(z.id, start, end, r.id);
-      // Aucune surréservation : la capacité publiée est une borne stricte (ARB-14).
-      if (!OVERBOOKING_ENABLED && used + r.places > z.capacity.standard) {
+      // Aucune surréservation : la capacité publiée est une borne stricte (ARB-14), sauf surréservation validée
+      // juridiquement ET activée (§ 11A.5), dans la limite du taux fondé sur l'historique réel.
+      const allowance = OVERBOOKING_ENABLED ? Number.POSITIVE_INFINITY : this.smart.overbookingAllowance(z);
+      if (used + r.places > z.capacity.standard + allowance) {
         throw conflict('CAPACITY_EXCEEDED', `Capacité de la zone dépassée sur la période (${used} place(s) déjà réservée(s) sur ${z.capacity.standard}). Surréservation désactivée.`);
       }
       const objectId = this.occupationObject(r.taxpayerId, z);
@@ -738,8 +747,8 @@ export class ParkingService {
   // ---------------------------------------------------------------- Contrôle par plaque
 
   /** Titre valide d'une plaque (session payée ou réservation confirmée) — heure du serveur. */
-  titleFor(plate: string, zoneId: string | null, now: Date): { light: Light; title: ControlCheck['title']; validFrom: string | null; validUntil: string | null; zoneId: string | null } {
-    let best: { light: Light; title: ControlCheck['title']; validFrom: string | null; validUntil: string | null; zoneId: string | null } = { light: 'ROUGE', title: null, validFrom: null, validUntil: null, zoneId };
+  titleFor(plate: string, zoneId: string | null, now: Date): { light: Light; title: ControlCheck['title']; validFrom: string | null; validUntil: string | null; zoneId: string | null; titleNumber?: string } {
+    let best: { light: Light; title: ControlCheck['title']; validFrom: string | null; validUntil: string | null; zoneId: string | null; titleNumber?: string } = { light: 'ROUGE', title: null, validFrom: null, validUntil: null, zoneId };
     for (const s of this.sessions.find((x) => x.plate === plate && (!zoneId || x.zoneId === zoneId))) {
       const d = this.sessionDerived(s, now);
       if (d.status !== 'ACTIVE') continue;
@@ -753,6 +762,13 @@ export class ParkingService {
         if ((pay.state === 'PAYE' || pay.state === 'RAPPROCHE') && new Date(r.startAt) <= now && new Date(r.endAt) > now) {
           best = { light: 'VERT', title: 'RESERVATION', validFrom: r.startAt, validUntil: r.endAt, zoneId: r.zoneId };
         }
+      }
+    }
+    // Abonnement résidentiel ou professionnel, pré-réservation premium, titre événement : titre du moteur § 19A lié à la plaque.
+    if (best.light !== 'VERT') {
+      const t = this.smart.titleCredentialFor(plate, zoneId, now);
+      if (t && (best.light === 'ROUGE' || t.light === 'VERT')) {
+        best = { light: t.light, title: 'TITRE', validFrom: t.validFrom, validUntil: t.validUntil, zoneId: t.zoneId, titleNumber: t.number };
       }
     }
     return best;
@@ -1132,7 +1148,7 @@ export class ParkingService {
       byCommune: [...communes.entries()].map(([commune, items]) => ({ commune, revenue: sumByCurrency(items) })).sort((a, b) => a.commune.localeCompare(b.commune)),
       patrolPriorities: patrol,
       safeguards: {
-        overbookingEnabled: OVERBOOKING_ENABLED,
+        overbookingEnabled: OVERBOOKING_ENABLED || this.smart.overbookingActive(),
         automaticPenalty: false,
         automaticImpoundOrClamp: false,
         cashCollectionByAgents: false,
