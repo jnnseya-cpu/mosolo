@@ -1,6 +1,15 @@
 node_modules
 **/node_modules
 frontend/dist
+frontend/dev-dist
 .git
 docs
 .claude
+# Secrets et fichiers locaux : jamais copiés dans l'image (les secrets passent par l'environnement d'exécution).
+.env
+.env.*
+**/*.pem
+**/*.key
+backend/data
+coverage
+**/*.log
