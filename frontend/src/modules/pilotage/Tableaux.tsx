@@ -12,9 +12,12 @@ import {
   DrillChart, ExportButton, FiltersBar, KpiTiles, LadderChart, qs, ScopeLine, Section, SeriesChart, useFmt,
   type Amounts, type Contested, type DrillResult, type Filters, type Kpi, type LadderLevel, type Scope, type SeriesPoint,
 } from './shared';
+import { OriginsTable, type Origins } from './BaseReference';
+import { INSTR_STATUS } from './Instructions';
 import './pilotage.css';
 
 interface ProfileRef { code: string; label: string; description: string }
+interface InstructionsSummary { total: number; byStatus: { status: string; count: number }[]; overdue: { id: string; number: string; subject: string; entity: string; deadline: string }[]; closedOnTime: number; closedLate: number }
 interface Bucket extends Amounts { code: string; label: string; count: number }
 interface DayTiles { today: string; confirmed: Record<'today' | 'yesterday', Amounts>; settled: Record<'today' | 'yesterday', Amounts>; reconciled: Record<'today' | 'yesterday', Amounts> }
 interface ProfileData {
@@ -34,6 +37,27 @@ interface ProfileData {
   integrity?: { audit: { ok: boolean; length: number; headHash: string; reason?: string }; ledger: { balanced: boolean; entries: number; headHash: string | null } };
   sensitive?: { code: string; label: string; count: number }[];
   exports?: { exportId: string; kind: string; format: string; generatedAt: string; sha256: string; generatedBy: { id: string } }[];
+  // § 8.7 et § 26.2 : ventilation par origine ; cabinet, secrétariat général, juristes, superviseurs, chefs de service
+  origins?: Origins;
+  instructions?: InstructionsSummary | null;
+  decisions?: { note: string; rows: { action: string; count: number }[] };
+  publications?: { period: string; version: number; publishedAt: string; authority: string }[];
+  rules?: { total: number; byStatus: { status: string; count: number }[]; expiring30: { id: string; code: string; effectiveTo?: string }[]; expiring90: number; suspended: number; uncertified: number; conflictsOpen: number | null; note: string };
+  field?: { available: boolean; note: string; missions?: { total: number; overdue: number; byStatus: { status: string; count: number }[] }; findings?: { total: number; byStatus: { status: string; count: number }[] }; agents?: { agentId: string; missions: number; findings: number; validated: number; rejected: number }[] };
+}
+
+function InstructionsBlock({ s }: { s: InstructionsSummary }) {
+  return (
+    <>
+      <div className="pl-figs">
+        <div className="pl-fig"><span>Instructions</span><strong>{s.total}</strong></div>
+        {s.byStatus.map((b) => <div className="pl-fig" key={b.status}><span>{INSTR_STATUS[b.status]?.label ?? b.status}</span><strong>{b.count}</strong></div>)}
+        <div className="pl-fig"><span>En retard</span><strong>{s.overdue.length}</strong></div>
+        <div className="pl-fig"><span>Closes dans / hors délai</span><strong>{s.closedOnTime} / {s.closedLate}</strong></div>
+      </div>
+      {s.overdue.length > 0 && <ul className="small">{s.overdue.map((o) => <li key={o.id}>{o.number} — {o.subject} ({o.entity}, échéance {o.deadline})</li>)}</ul>}
+    </>
+  );
 }
 
 function DayFigures({ t }: { t: DayTiles }) {
@@ -104,6 +128,44 @@ export default function Tableaux() {
             {d.byEntity && <DrillChart className="span-6" drill={d.byEntity} title="Par administration" />}
             {d.byChannel && <DrillChart className="span-6" drill={d.byChannel} title="Par canal de paiement" levels={['confirmed', 'settled', 'reconciled']} />}
             {d.series && <SeriesChart className="span-6" months={d.series} />}
+            {d.origins && <Section title="Ventilation par origine (§ 8.7)" sub={d.origins.basis}><OriginsTable origins={d.origins} /></Section>}
+            {d.instructions !== undefined && (
+              <Section title="Suivi des instructions" sub="Instruction → service désigné → échéance → rapport → clôture" tools={<Link className="btn btn-ghost btn-sm" to="/pilotage/instructions"><Icon name="arrowRight" size={16} /> Ouvrir</Link>}>
+                {d.instructions ? <InstructionsBlock s={d.instructions} /> : <p className="muted">Module de planification non chargé.</p>}
+              </Section>
+            )}
+            {d.decisions && (
+              <Section title="Décisions et mise en œuvre" sub={d.decisions.note}>
+                <DataTable caption="Décisions" rows={d.decisions.rows} rowKey={(r) => r.action} empty={<p className="muted">Aucune décision journalisée.</p>}
+                  columns={[{ key: 'a', label: 'Acte', render: (r) => r.action, primary: true }, { key: 'n', label: 'Nombre', render: (r) => r.count, num: true }]} />
+                {d.publications && d.publications.length > 0 && <p className="small muted">Publications : {d.publications.map((p) => `${p.period} v${p.version}`).join(', ')}</p>}
+              </Section>
+            )}
+            {d.rules && (
+              <Section title="État du référentiel juridique" sub={d.rules.note}>
+                <div className="pl-figs">
+                  <div className="pl-fig"><span>Fiches</span><strong>{d.rules.total}</strong></div>
+                  {d.rules.byStatus.map((b) => <div className="pl-fig" key={b.status}><span>{b.status.replace(/_/g, ' ').toLowerCase()}</span><strong>{b.count}</strong></div>)}
+                  <div className="pl-fig"><span>Expirant sous 90 jours</span><strong>{d.rules.expiring90}</strong></div>
+                  <div className="pl-fig"><span>Actives non certifiées</span><strong>{d.rules.uncertified}</strong></div>
+                  <div className="pl-fig"><span>Suspendues</span><strong>{d.rules.suspended}</strong></div>
+                  <div className="pl-fig"><span>Conflits ouverts</span><strong>{d.rules.conflictsOpen ?? '—'}</strong></div>
+                </div>
+              </Section>
+            )}
+            {d.field && (
+              <Section title="Charge, productivité et qualité du terrain" sub={d.field.note}>
+                {!d.field.available ? <p className="muted">{d.field.note}</p> : (
+                  <DataTable caption="Agents" rows={d.field.agents ?? []} rowKey={(r) => r.agentId} empty={<p className="muted">Aucune activité.</p>}
+                    columns={[
+                      { key: 'a', label: 'Agent', render: (r) => r.agentId, primary: true },
+                      { key: 'm', label: 'Missions', render: (r) => r.missions, num: true },
+                      { key: 'f', label: 'Constats', render: (r) => r.findings, num: true },
+                      { key: 'v', label: 'Validés / rejetés', render: (r) => `${r.validated} / ${r.rejected}`, num: true },
+                    ]} />
+                )}
+              </Section>
+            )}
 
             {d.recovery && (
               <Section title="Recouvrement — obligations en retard" sub={d.recovery.note}><BucketTable rows={d.recovery.buckets} caption="Retards par ancienneté" /></Section>

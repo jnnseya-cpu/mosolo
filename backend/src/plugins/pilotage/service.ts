@@ -13,16 +13,17 @@ import { IdGenerator, InMemoryAppendOnlyRepository } from '../../core/repository
 import { COMMUNES } from '../../reference/kinshasa.js';
 import { ExportSigner, EXPORT_KEY_ID, jsonPayload, toCsv, type CsvCell, type ExportManifest } from './exports.js';
 import { collectFacts, type Facts } from './facts.js';
-import { computeKpis, type KpiInputs, type KpiResult } from './kpis.js';
+import { computeKpis, type KpiExtra, type KpiInputs, type KpiResult } from './kpis.js';
 import {
   computeLadder, contestedIndicator, drill, isConfirmed, kinshasaDay, isReconciled, isSettled, matchesDims, monthlySeries, periodRange, quarterOf,
   selectLevel, selectionTotals, type DrillDimension, type Filters, type LadderContext,
 } from './ladder.js';
 import { CurrencyTotals } from './money.js';
+import { originsSplit, type OriginContext } from './origins.js';
 import {
   buildReductionReport, collectReductions, potentialUnassessed, REDUCTION_ALERT_PARAMS, reductionSignals, type ReductionFilters, type ReductionType,
 } from './reductions.js';
-import { buildTransparency, reidentificationCheck, type ReidentificationCheck, type TransparencyContent } from './transparency.js';
+import { buildTransparency, reidentificationCheck, type FundedProjectsSection, type ReidentificationCheck, type TransparencyContent } from './transparency.js';
 import { buildGraph, buildTrail, resolveDossier } from './trail.js';
 
 export const PROFILES = {
@@ -32,7 +33,25 @@ export const PROFILES = {
   commune: { label: 'Commune', description: 'Recettes attribuées à la commune (fait générateur), couverture, catégories.' },
   audit: { label: 'Audit', description: 'Intégrité des chaînes, opérations sensibles, extractions, pistes par dossier.' },
   ministre: { label: 'Ministre', description: 'Recettes et indicateurs du périmètre légal propre.' },
+  // § 26.2 : tableaux complémentaires (ajoutés, les six tableaux ci-dessus restent inchangés).
+  cabinet: { label: 'Directeur de cabinet', description: 'Coordination et suivi des instructions : émises, en cours, en retard, rapports reçus.' },
+  sg: { label: 'Secrétaire général', description: 'Décisions et mise en œuvre : instructions, décisions humaines journalisées, publications.' },
+  juridique: { label: 'Juristes', description: 'État du référentiel juridique : règles actives, à vérifier, suspendues, expirant, conflits.' },
+  superviseur: { label: 'Superviseurs', description: 'Charge, productivité et qualité des équipes de terrain du périmètre (résultats vérifiables).' },
+  'chef-service': { label: 'Chefs de service', description: 'Performance du service : émissions, rectifications, recouvrement, contentieux, instructions reçues.' },
 } as const;
+
+/**
+ * Points d'extension offerts au module de planification (§ 26.1, § 27, § 38, § 45) : lus s'il est chargé, sinon
+ * les indicateurs concernés restent « non mesurés ». Le pilotage ne dépend jamais de ce module pour fonctionner.
+ */
+export interface PilotagePlanningHooks {
+  /** Fin de la base de référence certifiée en vigueur (AAAA-MM-JJ), sinon null. */
+  referenceDate(): string | null;
+  kpiExtra(f: Filters, asOf: string): Partial<KpiExtra>;
+  fundedProjects(range: { from: string; to: string }): FundedProjectsSection | null;
+  instructionsSummary(entity?: string): unknown;
+}
 export type ProfileCode = keyof typeof PROFILES;
 export const PROFILE_CODES = Object.keys(PROFILES) as ProfileCode[];
 
@@ -124,6 +143,22 @@ export class PilotageService {
   }
 
   private convert = (m: MoneyJSON): MoneyJSON => this.ctx.fx.convert(m, 'CDF').amount;
+
+  private get planning(): PilotagePlanningHooks | undefined {
+    return this.ctx.ext.planification as PilotagePlanningHooks | undefined;
+  }
+
+  /** Ventilation par origine (§ 8.7) du rapproché de la période filtrée. */
+  origins(facts: Facts, f: Filters) {
+    const successorIds = new Set(this.ctx.assessment.obligations.all().map((o) => o.supersededBy).filter((x): x is string => !!x));
+    const ref = this.planning?.referenceDate() ?? null;
+    const c: OriginContext = {
+      facts, filters: f, convert: this.convert, successorIds,
+      objectCreatedAt: new Map(this.ctx.objects.objects.all().map((o) => [o.id, o.createdAt])),
+      referenceDate: ref ?? f.from ?? null, referenceSource: ref ? 'BASE_CERTIFIEE' : f.from ? 'DEBUT_PERIODE' : 'AUCUNE',
+    };
+    return originsSplit(c);
+  }
 
   currentQuarter(): string {
     return quarterOf(this.now().slice(0, 10));
@@ -218,6 +253,7 @@ export class PilotageService {
       rule: 'Les onze niveaux sont emboîtés et ne s’additionnent jamais. Montants par devise légale ; contre-valeur CDF indicative.',
       levels: computeLadder(c),
       contested: contestedIndicator(facts, filters, this.convert),
+      origins: this.origins(facts, filters),
     };
   }
 
@@ -259,6 +295,22 @@ export class PilotageService {
       comms: { attempted: overview.attempted, delivered: overview.delivered, sandboxLogged: overview.sandboxLogged },
       alerts: this.ctx.alerts.alerts.all().filter((a) => a.at <= asOf).map((a) => ({ severity: a.severity, at: a.at })),
       ai: this.ctx.ai.recommendations.all().filter((r) => !r.createdAt || r.createdAt <= asOf).map((r) => ({ status: r.status, createdAt: r.createdAt })),
+      extra: this.kpiExtra(objects, f, asOf),
+    };
+  }
+
+  /** Compléments des indicateurs (§ 39, § 8.6, § 2) lus dans le socle et les modules chargés. */
+  private kpiExtra(objects: { id: string; taxpayerId?: string; lat: number; lon: number }[], f: Filters, asOf: string): KpiExtra {
+    const verified = new Set(this.ctx.taxpayers.taxpayers.all().filter((t) => t.verificationLevel === 'N2' || t.verificationLevel === 'N3').map((t) => t.id));
+    const geolocated = (o: { lat: number; lon: number }) => Number.isFinite(o.lat) && Number.isFinite(o.lon) && !(o.lat === 0 && o.lon === 0) && Math.abs(o.lat) <= 90 && Math.abs(o.lon) <= 180;
+    const recouvrement = this.ctx.ext.recouvrement as { notices?: { all(): { obligationId: string; issuedAt: string; notification: string; kind: string }[] } } | undefined;
+    const acces = this.ctx.ext.acces as { arbitrations?: { all(): { openedAt: string; decision?: { at: string } }[] } } | undefined;
+    const NOTICE_KINDS = ['AVIS_ECHEANCE_DEPASSEE', 'RELANCE', 'AVIS_FORMEL', 'MISE_EN_DEMEURE'];
+    return {
+      objectsQuality: objects.map((o) => ({ id: o.id, verifiedTaxpayer: !!o.taxpayerId && verified.has(o.taxpayerId), geolocated: geolocated(o) })),
+      ...(recouvrement?.notices ? { notices: recouvrement.notices.all().filter((n) => n.notification === 'NOTIFIE' && NOTICE_KINDS.includes(n.kind)).map((n) => ({ obligationId: n.obligationId, issuedAt: n.issuedAt })) } : {}),
+      ...(acces?.arbitrations ? { arbitrations: acces.arbitrations.all().map((a) => ({ openedAt: a.openedAt, ...(a.decision ? { decidedAt: a.decision.at } : {}) })) } : {}),
+      ...(this.planning?.kpiExtra(f, asOf) ?? {}),
     };
   }
 
@@ -320,6 +372,7 @@ export class PilotageService {
       profile: profil, ...PROFILES[profil], generatedAt: facts.asOf, example: false, aggregatesOnly: true, scope, filters,
       rule: 'Agrégats seulement ; les niveaux de l’échelle ne s’additionnent jamais. Contre-valeur CDF indicative (taux du jour).',
       ladder: computeLadder(c), contested: contestedIndicator(facts, filters, this.convert),
+      origins: this.origins(facts, filters),
     };
     this.ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'pilotage.profile.viewed', resourceType: 'dashboard', resourceId: profil, details: { filters } });
 
@@ -357,7 +410,83 @@ export class PilotageService {
         return { ...base, integrity: this.integrity(), sensitive: this.sensitiveOperations(), exports: this.exportsLog.all().slice(-20).reverse(), kpis: pick('ALERTES_CRITIQUES', 'EXCEPTIONS_OUVERTES', 'EXCEPTIONS_ANCIENNES', 'EXACTITUDE_LIQUIDATION', 'REGLES_CERTIFIEES', 'ESPECES_AGENTS', 'ECART_RAPPROCHEMENT_J2') };
       case 'ministre':
         return { ...base, byEntity: drill('entity', c), byCategory: drill('category', c), byCommune: drill('commune', c), series: monthlySeries(c, 12), kpis: pick('PAIEMENT_ECHEANCE', 'RAPPROCHEMENT_J1', 'PART_NUMERIQUE', 'REGLES_CERTIFIEES', 'OBLIGATIONS_CONTESTEES', 'COMMUNES_RECETTE') };
+      case 'cabinet':
+        return {
+          ...base, tiles: this.dayTiles(facts, filters), byCommune: drill('commune', c), byEntity: drill('entity', c),
+          instructions: this.planning?.instructionsSummary() ?? null,
+          kpis: pick('INSTRUCTIONS_DELAIS', 'ECART_ASSIGNATION', 'RANV', 'RAPPROCHEMENT_J1', 'PAIEMENT_ECHEANCE', 'ACCORDS_SERVICE', 'ARBITRAGES_OUVERTS', 'ALERTES_CRITIQUES'),
+        };
+      case 'sg':
+        return {
+          ...base, instructions: this.planning?.instructionsSummary() ?? null, decisions: this.decisionsSummary(),
+          publications: this.publications.all().slice(-8).reverse().map((p) => ({ period: p.period, version: p.version, publishedAt: p.publishedAt, authority: p.authority })),
+          kpis: pick('INSTRUCTIONS_DELAIS', 'ACCORDS_SERVICE', 'ARBITRAGES_OUVERTS', 'REGLES_CERTIFIEES', 'ECART_ASSIGNATION', 'SATISFACTION'),
+        };
+      case 'juridique':
+        return { ...base, rules: this.rulesState(), kpis: pick('REGLES_CERTIFIEES', 'OBLIGATIONS_CONTESTEES', 'RECOURS_FONDES', 'DELAI_RECOURS', 'ARBITRAGES_OUVERTS') };
+      case 'superviseur':
+        return { ...base, field: this.fieldWorkload(filters), kpis: pick('VALIDATION_OBJETS', 'COUVERTURE_SIG', 'TAUX_RATTACHEMENT', 'COUVERTURE_LOCATIVE', 'TAUX_RECENSEMENT') };
+      case 'chef-service':
+        return {
+          ...base, byCategory: drill('category', c), recovery: this.recovery(facts, filters), litigation: this.litigation(facts, filters), performance: this.performance(facts, filters),
+          instructions: this.planning?.instructionsSummary(scope.entity ?? user.entity) ?? null,
+          kpis: pick('EXACTITUDE_LIQUIDATION', 'PAIEMENT_ECHEANCE', 'CONVERSION_AVIS_PAIEMENT', 'ARRIERES_RECOUVRES', 'RENDEMENT_CONTROLE', 'OBLIGATIONS_CONTESTEES', 'INSTRUCTIONS_DELAIS'),
+        };
     }
+  }
+
+  /** Décisions humaines journalisées (journal d'audit chaîné), agrégées par type d'acte (§ 26.2 « Secrétaire »). */
+  private decisionsSummary() {
+    const records = this.ctx.audit.list({ limit: 10_000_000 }).items;
+    const byAction = new Map<string, number>();
+    for (const r of records) {
+      if (r.actor.kind === 'user' && /\.(approved|decided|certified|rejected|refused|promoted|granted|closed)$/.test(r.action)) byAction.set(r.action, (byAction.get(r.action) ?? 0) + 1);
+    }
+    return { note: 'Décisions humaines journalisées, agrégées par type d’acte (aucun nom).', rows: [...byAction.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([action, count]) => ({ action, count })) };
+  }
+
+  /** État du référentiel juridique (§ 26.2 « Juristes ») : statuts, règles expirant sous 30 et 90 jours, suspensions. */
+  private rulesState() {
+    const today = this.now().slice(0, 10);
+    const plus = (d: number) => new Date(Date.parse(`${today}T00:00:00Z`) + d * DAY_MS).toISOString().slice(0, 10);
+    const rules = this.ctx.rules.rules.all();
+    const byStatus = new Map<string, number>();
+    rules.forEach((r) => byStatus.set(r.status, (byStatus.get(r.status) ?? 0) + 1));
+    const active = rules.filter((r) => r.status === 'ACTIVE');
+    const expiring = (d: number) => active.filter((r) => r.effectiveTo && r.effectiveTo >= today && r.effectiveTo <= plus(d));
+    const acces = this.ctx.ext.acces as { arbitrations?: { all(): { status: string }[] } } | undefined;
+    return {
+      total: rules.length, byStatus: [...byStatus.entries()].map(([status, count]) => ({ status, count })),
+      expiring30: expiring(30).map((r) => ({ id: r.id, code: r.code, effectiveTo: r.effectiveTo })),
+      expiring90: expiring(90).length,
+      suspended: rules.filter((r) => !!r.suspension).length,
+      uncertified: active.filter((r) => r.sourceVerification !== 'OFFICIEL_CERTIFIE').length,
+      conflictsOpen: acces?.arbitrations ? acces.arbitrations.all().filter((a) => a.status !== 'DECIDE').length : null,
+      note: 'Aucune règle n’est modifiée depuis ce tableau : le cycle de vie passe par le registre juridique.',
+    };
+  }
+
+  /** Charge, productivité et qualité du terrain (§ 26.2 « Superviseurs ») : résultats vérifiables, jamais de surveillance intrusive. */
+  private fieldWorkload(f: Filters) {
+    type M = { status: string; commune: string; dueDate: string; assignedAgentId?: string };
+    type F = { status: string; commune: string; agentId: string };
+    const terrain = this.ctx.ext.terrain as { missions?: { all(): M[] }; findings?: { all(): F[] } } | undefined;
+    if (!terrain?.missions || !terrain.findings) return { available: false, note: 'Module de terrain non chargé : charge et qualité non mesurées.' };
+    const inScope = (commune: string) => (!f.commune || f.commune === commune) && (!f.communes || f.communes.includes(commune));
+    const today = this.now().slice(0, 10);
+    const missions = terrain.missions.all().filter((m) => inScope(m.commune));
+    const findings = terrain.findings.all().filter((x) => inScope(x.commune));
+    const byStatus = (xs: { status: string }[]) => { const m = new Map<string, number>(); xs.forEach((x) => m.set(x.status, (m.get(x.status) ?? 0) + 1)); return [...m.entries()].map(([status, count]) => ({ status, count })); };
+    const agents = new Map<string, { missions: number; findings: number; validated: number; rejected: number }>();
+    const row = (id: string) => { const a = agents.get(id) ?? { missions: 0, findings: 0, validated: 0, rejected: 0 }; agents.set(id, a); return a; };
+    missions.forEach((m) => { if (m.assignedAgentId) row(m.assignedAgentId).missions++; });
+    findings.forEach((x) => { const a = row(x.agentId); a.findings++; if (x.status === 'VALIDE') a.validated++; if (x.status === 'REJETE') a.rejected++; });
+    return {
+      available: true, note: 'Résultats vérifiables (missions, constats validés ou rejetés à la revue) ; aucune mesure intrusive.',
+      missions: { total: missions.length, overdue: missions.filter((m) => !['TERMINEE', 'ANNULEE'].includes(m.status) && m.dueDate < today).length, byStatus: byStatus(missions) },
+      findings: { total: findings.length, byStatus: byStatus(findings) },
+      agents: [...agents.entries()].map(([agentId, a]) => ({ agentId, ...a })),
+    };
   }
 
   private recovery(facts: Facts, f: Filters) {
@@ -534,7 +663,7 @@ export class PilotageService {
     const range = periodRange(period);
     if (!/-T[1-4]$|-Q[1-4]$/.test(period)) throw badRequest('INVALID_PERIOD', 'La transparence publique est trimestrielle : AAAA-Tn attendu.');
     const norm = period.replace('-Q', '-T');
-    const build = buildTransparency(this.facts(), norm, range);
+    const build = buildTransparency(this.facts(), norm, range, this.planning?.fundedProjects(range) ?? null);
     return { build, check: reidentificationCheck(build, this.personalTokens()) };
   }
 

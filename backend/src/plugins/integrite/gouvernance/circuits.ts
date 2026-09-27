@@ -145,6 +145,21 @@ export const CIRCUITS: Circuit[] = [
     code: 'REGISTRE_SEUILS', label: 'Registre des seuils anti-fraude (confirmation ou modification)',
     proposals: ['integrite.threshold.change_proposed'], approvals: ['integrite.threshold.change_approved'], refusals: ['integrite.threshold.change_rejected'],
   },
+  {
+    code: 'PILOTAGE_BASE_REFERENCE', label: 'Certification de la base de référence ou d’un relevé de coûts (§ 38.1)',
+    proposals: ['pilotage.baseline.imported'], approvals: ['pilotage.baseline.certified'], refusals: ['pilotage.baseline.rejected'],
+    guard: { url: '/v1/pilotage/base-reference/:id/certification', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'PILOTAGE_ASSIGNATIONS', label: 'Certification des assignations budgétaires (§ 26.1)',
+    proposals: ['pilotage.targets.imported'], approvals: ['pilotage.targets.certified'], refusals: ['pilotage.targets.rejected'],
+    guard: { url: '/v1/pilotage/assignations/:id/certification', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'IA_MODELE_MISE_EN_SERVICE', label: 'Mise en service d’une version de modèle d’IA (§ 23.1)',
+    proposals: ['ia.model.promotion_proposed'], approvals: ['ia.model.promoted'], refusals: ['ia.model.promotion_rejected'],
+    key: detail('versionKey'),
+  },
 ];
 
 export interface TwoPersonDecision {

@@ -58,7 +58,15 @@ export interface TransparencyContent {
   totals: PublishedCell[];
   appeals: { decided: string | null; medianDays: string | null; suppressed: boolean };
   fundsUse: { published: false; note: string };
+  /** Projets financés et avancement (§ 27.3) : agrégats par commune, sans aucune donnée personnelle. */
+  fundedProjects?: FundedProjectsSection;
   method: string[];
+}
+
+/** Section « réalisations financées » du tableau public (§ 27.3) : alimentée par le registre des projets publics. */
+export interface FundedProjectsSection {
+  note: string;
+  byCommune: { commune: string; projects: { code: string; title: string; domain: string; status: string; progressPct: string | null; amounts: { currency: CurrencyCode; amount: string }[]; decisionReference: string }[] }[];
 }
 
 interface Stat {
@@ -112,7 +120,7 @@ export interface TransparencyBuild {
   internal: { dimension: string; key: string; currency: CurrencyCode; contributors: number; suppressed: boolean; maxSharePct: string }[];
 }
 
-export function buildTransparency(facts: Facts, period: string, range: { from: string; to: string }): TransparencyBuild {
+export function buildTransparency(facts: Facts, period: string, range: { from: string; to: string }, fundedProjects: FundedProjectsSection | null = null): TransparencyBuild {
   const orders = facts.orders.filter((o) => isReconciled(o) && kinshasaDay(o.reconciledAt!) >= range.from && kinshasaDay(o.reconciledAt!) <= range.to);
   const dims: Record<'commune' | 'category', Map<string, Map<CurrencyCode, Stat>>> = { commune: new Map(), category: new Map() };
   const totals = new Map<CurrencyCode, Stat>();
@@ -172,6 +180,7 @@ export function buildTransparency(facts: Facts, period: string, range: { from: s
         ? { decided: null, medianDays: null, suppressed: true }
         : { decided: band(decided.length), medianDays: String(days[Math.floor(days.length / 2)]), suppressed: false },
       fundsUse: { published: false, note: 'Emploi des fonds par programme : publié lorsque le module d’affectation sera en service (budget voté, § 27).' },
+      ...(fundedProjects && fundedProjects.byCommune.length ? { fundedProjects } : {}),
       method: [
         `Cellule publiée seulement si au moins ${MIN_CONTRIBUTORS} contribuables distincts y contribuent.`,
         `Cellule masquée si un seul contribuable en représente plus de ${DOMINANCE_PCT} %.`,

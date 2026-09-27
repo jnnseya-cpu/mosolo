@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **641 routes** dans 36 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **695 routes** dans 36 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -8,10 +8,10 @@ Généré depuis le code source (`tools/gen_routes.py`) : **641 routes** dans 36
 | extension canaux | 45 |
 | extension chaine | 3 |
 | extension fiscal | 44 |
-| extension ia | 28 |
+| extension ia | 39 |
 | extension integrite | 58 |
 | extension parking | 36 |
-| extension pilotage | 24 |
+| extension pilotage | 67 |
 | extension preuves | 14 |
 | extension publicite | 34 |
 | extension rakapay | 23 |
@@ -227,6 +227,9 @@ Généré depuis le code source (`tools/gen_routes.py`) : **641 routes** dans 36
 | PUT | `/v1/ia/autonomy/:entity` |
 | GET | `/v1/ia/effects` |
 | GET | `/v1/ia/inbox` |
+| GET | `/v1/ia/jeux-donnees` |
+| POST | `/v1/ia/jeux-donnees` |
+| POST | `/v1/ia/jeux-donnees/:id/decision` |
 | GET | `/v1/ia/journal` |
 | GET | `/v1/ia/journal/:id` |
 | GET | `/v1/ia/memory/entities/:entity` |
@@ -243,6 +246,14 @@ Généré depuis le code source (`tools/gen_routes.py`) : **641 routes** dans 36
 | POST | `/v1/ia/memory/purge` |
 | GET | `/v1/ia/memory/register` |
 | GET | `/v1/ia/memory/users/:userId` |
+| GET | `/v1/ia/modeles` |
+| POST | `/v1/ia/modeles/:code/versions` |
+| GET | `/v1/ia/modeles/surveillance` |
+| POST | `/v1/ia/modeles/versions/:id/evaluations` |
+| POST | `/v1/ia/modeles/versions/:id/mise-en-service` |
+| POST | `/v1/ia/modeles/versions/:id/mise-en-service/decision` |
+| POST | `/v1/ia/modeles/versions/:id/retour-arriere` |
+| POST | `/v1/ia/modeles/versions/:id/tests-biais` |
 | GET | `/v1/ia/recommendations/:id` |
 | POST | `/v1/ia/recommendations/:id/actions/:actionId/undo` |
 | POST | `/v1/ia/recommendations/:id/decide` |
@@ -357,13 +368,50 @@ Généré depuis le code source (`tools/gen_routes.py`) : **641 routes** dans 36
 
 | Méthode | Chemin |
 |---|---|
+| GET | `/v1/legal-shares` |
+| POST | `/v1/legal-shares/calculate` |
+| GET | `/v1/legal-shares/calculations/:id` |
+| GET | `/v1/legal-shares/incitations` |
+| POST | `/v1/legal-shares/incitations` |
+| POST | `/v1/legal-shares/incitations/:id/acte` |
+| GET | `/v1/legal-shares/keys` |
+| POST | `/v1/legal-shares::calculate` |
+| GET | `/v1/pilotage/accords-service` |
+| POST | `/v1/pilotage/accords-service` |
+| POST | `/v1/pilotage/accords-service/:id/demandes` |
+| POST | `/v1/pilotage/accords-service/demandes/:id/cloture` |
+| GET | `/v1/pilotage/assignations` |
+| POST | `/v1/pilotage/assignations` |
+| POST | `/v1/pilotage/assignations/:id/certification` |
+| GET | `/v1/pilotage/assignations/ecarts` |
+| GET | `/v1/pilotage/base-reference` |
+| POST | `/v1/pilotage/base-reference` |
+| POST | `/v1/pilotage/base-reference/:id/certification` |
+| GET | `/v1/pilotage/disponibilite` |
+| POST | `/v1/pilotage/disponibilite/sondes` |
 | GET | `/v1/pilotage/drill/:dimension` |
 | GET | `/v1/pilotage/echelle` |
 | GET | `/v1/pilotage/exports/:kind` |
 | POST | `/v1/pilotage/exports/verify` |
 | GET | `/v1/pilotage/indicateurs` |
+| GET | `/v1/pilotage/instructions` |
+| POST | `/v1/pilotage/instructions` |
+| POST | `/v1/pilotage/instructions/:id/accuse` |
+| POST | `/v1/pilotage/instructions/:id/cloture` |
+| POST | `/v1/pilotage/instructions/:id/rapport` |
+| POST | `/v1/pilotage/instructions/:id/reouverture` |
+| GET | `/v1/pilotage/pilote` |
+| POST | `/v1/pilotage/pilote/configuration` |
+| POST | `/v1/pilotage/pilote/revues/:jalon` |
 | GET | `/v1/pilotage/piste-audit` |
 | GET | `/v1/pilotage/piste-audit/:ref` |
+| GET | `/v1/pilotage/projets` |
+| POST | `/v1/pilotage/projets` |
+| POST | `/v1/pilotage/projets/:id/avancement` |
+| POST | `/v1/pilotage/projets/:id/financement` |
+| POST | `/v1/pilotage/projets/recommandations` |
+| POST | `/v1/pilotage/projets/scenarios/:id/decision` |
+| GET | `/v1/pilotage/ranv` |
 | GET | `/v1/pilotage/reductions` |
 | POST | `/v1/pilotage/reductions/detection` |
 | GET | `/v1/pilotage/repartition` |
@@ -373,6 +421,11 @@ Généré depuis le code source (`tools/gen_routes.py`) : **641 routes** dans 36
 | POST | `/v1/pilotage/repartition/cles/:id/activation/decision` |
 | GET | `/v1/pilotage/repartition/distributions` |
 | POST | `/v1/pilotage/repartition/propositions` |
+| GET | `/v1/pilotage/satisfaction` |
+| GET | `/v1/pilotage/scenarios` |
+| GET | `/v1/pilotage/scenarios/hypotheses` |
+| POST | `/v1/pilotage/scenarios/hypotheses` |
+| POST | `/v1/pilotage/scenarios/simulation` |
 | GET | `/v1/pilotage/serie` |
 | GET | `/v1/pilotage/tableaux` |
 | GET | `/v1/pilotage/tableaux/:profil` |
@@ -380,6 +433,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **641 routes** dans 36
 | POST | `/v1/pilotage/transparence/:period/publier` |
 | GET | `/v1/public/transparency` |
 | GET | `/v1/public/transparency/:period` |
+| POST | `/v1/satisfaction` |
 | GET | `/v1/tableaux/:profil` |
 
 ## Extension preuves

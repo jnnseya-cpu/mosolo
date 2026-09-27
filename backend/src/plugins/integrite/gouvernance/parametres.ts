@@ -30,6 +30,7 @@ import { DEFAULT_GPS_TOLERANCE_M, MIN_SAMPLE_RATE } from '../../terrain/model.js
 import { DYNAMIC_GRACE_SECONDS, DYNAMIC_WINDOW_SECONDS } from '../../titres/tokens.js';
 import { EXCEPTION_SLA_HOURS, PROVIDER_SETTLEMENT_DELAY_DAYS, REFUND_EXTRA_APPROVAL_THRESHOLDS, SUSPENSE_MAX_DAYS, SUSPENSE_SLA_DAYS } from '../../tresor/service.js';
 import { DETECTION_PARAMS } from '../service.js';
+import { IA_BIAIS_ECART_POINTS, IA_DECISIONS_MIN, IA_DERIVE_SEUIL_POINTS, IA_FENETRE_JOURS } from '../../ia/modeles.js';
 import {
   REPARTITION_DUREE_ANS, REPARTITION_NOMBRE_FLUX, REPARTITION_PART_AGENTS_PCT, REPARTITION_PART_GOUVERNEMENT_PCT, REPARTITION_PART_NSEYA_PCT,
   REPARTITION_PART_TUTELLE_PCT,
@@ -158,6 +159,11 @@ export const PARAMETRES_CODE: ParamDefinition[] = [
   C('detection.paiements_fractionnes', 'Détection : paiements fractionnés sur une obligation', 'Détection (Intégrité)', DETECTION_PARAMS.splitPaymentCount, 'paiements', code('plugins/integrite/service.ts', 'DETECTION_PARAMS.splitPaymentCount')),
   C('detection.acces_refuses', 'Détection : refus d’accès répétés', 'Détection (Intégrité)', DETECTION_PARAMS.deniedAccessCount, 'refus', code('plugins/integrite/service.ts', 'DETECTION_PARAMS.deniedAccessCount')),
   C('detection.concentration_part_pct', 'Détection : concentration d’actes sensibles sur une personne', 'Détection (Intégrité)', DETECTION_PARAMS.sensitiveConcentrationShare * 100, '%', code('plugins/integrite/service.ts', 'DETECTION_PARAMS.sensitiveConcentrationShare')),
+  // Suivi des modèles d'IA (§ 23.1) : alertes à examiner, jamais d'effet automatique
+  C('ia.derive_points', 'IA : variation du taux d’acceptation signalée comme dérive', 'Suivi des modèles d’IA', IA_DERIVE_SEUIL_POINTS, 'points', code('plugins/ia/modeles.ts', 'IA_DERIVE_SEUIL_POINTS')),
+  C('ia.biais_ecart_points', 'IA : écart d’acceptation entre entités signalé comme biais', 'Suivi des modèles d’IA', IA_BIAIS_ECART_POINTS, 'points', code('plugins/ia/modeles.ts', 'IA_BIAIS_ECART_POINTS')),
+  C('ia.fenetre_jours', 'IA : fenêtre de comparaison du suivi de dérive', 'Suivi des modèles d’IA', IA_FENETRE_JOURS, 'jours', code('plugins/ia/modeles.ts', 'IA_FENETRE_JOURS')),
+  C('ia.decisions_min', 'IA : décisions minimales pour mesurer dérive ou biais', 'Suivi des modèles d’IA', IA_DECISIONS_MIN, 'décisions', code('plugins/ia/modeles.ts', 'IA_DECISIONS_MIN')),
 ];
 
 export const ALL_PARAMETERS: ParamDefinition[] = [...REGISTRE_DEFAUTS, ...PARAMETRES_CODE];

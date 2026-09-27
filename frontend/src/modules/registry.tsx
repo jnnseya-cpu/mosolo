@@ -117,6 +117,16 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/pilotage/reductions', element: lazy(() => import('./pilotage/Reductions')), nav: { label: 'Réductions de recettes', short: 'Réductions', icon: 'analysis', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R22', 'R23', 'R24'] } },
   { path: '/pilotage/piste-audit', element: lazy(() => import('./pilotage/PisteAudit')), nav: { label: 'Piste d’audit par dossier', short: 'Piste', icon: 'history', group: 'operations', roles: ['R22', 'R23', 'R24'] } },
   { path: '/transparence', element: lazy(() => import('./pilotage/Transparence')), nav: { label: 'Transparence publique', short: 'Transparence', icon: 'globe', group: 'public', roles: [] } },
+  // Planification et pilotage stratégique : base de référence et RANV, pilote, scénarios, assignations, instructions, accords, projets, partage légal
+  { path: '/pilotage/base-reference', element: lazy(() => import('./pilotage/BaseReference')), nav: { label: 'Base de référence et RANV', short: 'RANV', icon: 'gauge', group: 'pilotage', roles: [...DASH, 'R15'] } },
+  { path: '/pilotage/pilote', element: lazy(() => import('./pilotage/Pilote')), nav: { label: 'Pilote de 180 jours', short: 'Pilote', icon: 'chart', group: 'pilotage', roles: [...DASH, 'R15', 'R36'] } },
+  { path: '/pilotage/scenarios', element: lazy(() => import('./pilotage/Scenarios')), nav: { label: 'Simulateur de scénarios', short: 'Scénarios', icon: 'analysis', group: 'pilotage', roles: [...DASH, 'R15'] } },
+  { path: '/pilotage/assignations', element: lazy(() => import('./pilotage/Assignations')), nav: { label: 'Assignations et écarts', short: 'Assignations', icon: 'scale', group: 'pilotage', roles: [...DASH, 'R15'] } },
+  { path: '/pilotage/instructions', element: lazy(() => import('./pilotage/Instructions')), nav: { label: 'Instructions et suivi', short: 'Instructions', icon: 'check', group: 'pilotage', roles: [...DASH, 'R09', 'R11', 'R13', 'R14', 'R15', 'R16', 'R20', 'R21'] } },
+  { path: '/pilotage/accords-service', element: lazy(() => import('./pilotage/AccordsService')), nav: { label: 'Accords de service entre entités', short: 'Accords', icon: 'users', group: 'pilotage', roles: [...DASH, 'R15', 'R16'] } },
+  { path: '/pilotage/projets', element: lazy(() => import('./pilotage/Projets')), nav: { label: 'Projets publics et emploi des fonds', short: 'Projets', icon: 'building', group: 'pilotage', roles: [...DASH, 'R15', 'R16'] } },
+  { path: '/pilotage/partage-legal', element: lazy(() => import('./pilotage/PartageLegal')), nav: { label: 'Partage légal des recettes', short: 'Partage', icon: 'scale', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R08', 'R13', 'R14', 'R15', 'R16', 'R17', 'R18', 'R22', 'R23', 'R24'] } },
+  { path: '/satisfaction', element: lazy(() => import('./pilotage/Satisfaction')), nav: { label: 'Donner mon avis', short: 'Avis', icon: 'check', group: 'public', roles: ['R30', 'R31'] } },
 
   // Vision : sept questions par objet et par obligation, chaîne opératoire en treize maillons, maillons sautés (audit)
   { path: '/chaine', element: lazy(() => import('./chaine/Chaine')), nav: { label: 'Sept questions et chaîne', short: 'Chaîne', icon: 'sync', group: 'operations', roles: ['R06', 'R07', 'R11', 'R17', 'R22', 'R23', 'R24', 'R28'] } },
@@ -130,4 +140,5 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/ia/autonomie', element: lazy(() => import('./ia/AutonomyPage')) },
   { path: '/ia/memoire', element: lazy(() => import('./ia/MemoryPage')) },
   { path: '/ia/journal', element: lazy(() => import('./ia/JournalPage')), nav: { label: 'Journal IA', short: 'Journal IA', icon: 'history', group: 'pilotage', roles: ['R22', 'R23', 'R25', 'R29'] } },
+  { path: '/ia/modeles', element: lazy(() => import('./ia/ModelesPage')), nav: { label: 'Registre des modèles d’IA', short: 'Modèles IA', icon: 'analysis', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R22', 'R23', 'R25', 'R26', 'R28', 'R29'] } },
 ];

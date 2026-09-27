@@ -15,7 +15,10 @@ import { integritePlugin } from './integrite/plugin.js';
 import { integriteGouvernancePlugin } from './integrite/gouvernance/plugin.js';
 import { pilotagePlugin } from './pilotage/plugin.js';
 import { repartitionPlugin } from './pilotage/repartition/plugin.js';
+import { planificationPlugin } from './pilotage/planification/plugin.js';
+import { partageLegalPlugin } from './pilotage/partage-legal/plugin.js';
 import { iaPlugin } from './ia/plugin.js';
+import { iaModelesPlugin } from './ia/modeles.js';
 import { preuvesPlugin } from './preuves/plugin.js';
 import { sanctionsPlugin } from './sanctions/plugin.js';
 import { soclePlugin } from './socle/plugin.js';
@@ -42,7 +45,10 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   integriteGouvernancePlugin,
   pilotagePlugin,
   repartitionPlugin,
+  planificationPlugin,
+  partageLegalPlugin,
   iaPlugin,
+  iaModelesPlugin,
   preuvesPlugin,
   sanctionsPlugin,
   chainePlugin,
