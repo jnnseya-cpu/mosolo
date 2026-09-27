@@ -1,7 +1,7 @@
 /**
  * Carnet de développement — Document maître FR 2, ch. 43 : un test par récit utilisateur, de bout en bout par l'API,
  * vérifiant chacun des critères d'acceptation du récit. Titres repris par le référentiel du programme
- * (backend/src/plugins/pilotage/programme/referentiels.ts, RECITS_43) et vérifiés par test/programme.test.ts.
+ * (backend/src/plugins/pilotage/recette-programme/referentiels.ts, RECITS_43) et vérifiés par test/programme.test.ts.
  */
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
@@ -11,7 +11,7 @@ import { fiscalPlugin } from '../src/plugins/fiscal/plugin.js';
 import type { FiscalService } from '../src/plugins/fiscal/service.js';
 import { pilotagePlugin } from '../src/plugins/pilotage/plugin.js';
 import { planificationPlugin } from '../src/plugins/pilotage/planification/plugin.js';
-import { programmePlugin } from '../src/plugins/pilotage/programme/plugin.js';
+import { recetteProgrammePlugin } from '../src/plugins/pilotage/recette-programme/plugin.js';
 import { createSoclePlugin } from '../src/plugins/socle/plugin.js';
 import { DEFAULT_RATE_LIMITS } from '../src/plugins/socle/rate-limit.js';
 import { terrainPlugin } from '../src/plugins/terrain/plugin.js';
@@ -231,7 +231,7 @@ describe('Carnet de développement (ch. 43) — récits de bout en bout', () => 
   });
 
   it('R43-08 — Gouverneur : écart assignation / rapproché par commune, six états distingués, exportation signée vérifiable', async () => {
-    const env = await withPlugins([pilotagePlugin, planificationPlugin, programmePlugin] as MosoloPlugin<unknown>[]);
+    const env = await withPlugins([pilotagePlugin, planificationPlugin, recetteProgrammePlugin] as MosoloPlugin<unknown>[]);
     const { order } = await payDemoObligation(env);
     await env.req('POST', '/v1/settlements/statements', 'u-tresor', { statementId: 'REL-RECIT-8', lines: [{ accountAlias: DEMO.dgipkAlias, amount: order.amount, valueDate: '2026-09-26', paymentReference: order.paymentReference }] });
     const t = (await env.req('POST', '/v1/pilotage/assignations', 'u-validateur-financier', {

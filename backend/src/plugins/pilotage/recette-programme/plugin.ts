@@ -49,8 +49,8 @@ const recordSchema = z.object({ statut: z.enum(['PRISE', 'REFUSEE']), acte: acte
 const validateSchema = z.object({ approve: z.boolean(), motif }).strict();
 const ecartsQuery = z.object({ annee: z.string().regex(/^\d{4}$/).optional() }).strict();
 
-export const programmePlugin = definePlugin<ProgrammeService>({
-  name: 'programme',
+export const recetteProgrammePlugin = definePlugin<ProgrammeService>({
+  name: 'recette-programme',
   create: (ctx) => new ProgrammeService(ctx),
   routes: (app, _ctx, svc) => {
     app.get('/v1/pilotage/programme', async (req) => svc.synthese(requireUser(req)));

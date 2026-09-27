@@ -21,7 +21,7 @@ import { pilotagePlugin } from './pilotage/plugin.js';
 import { repartitionPlugin } from './pilotage/repartition/plugin.js';
 import { planificationPlugin } from './pilotage/planification/plugin.js';
 import { partageLegalPlugin } from './pilotage/partage-legal/plugin.js';
-import { programmePlugin } from './pilotage/programme/plugin.js';
+import { recetteProgrammePlugin } from './pilotage/recette-programme/plugin.js';
 import { iaPlugin } from './ia/plugin.js';
 import { opportunitesPlugin } from './opportunites/plugin.js';
 import { iaModelesPlugin } from './ia/modeles.js';
@@ -61,7 +61,7 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   planificationPlugin,
   partageLegalPlugin,
   // Programme (Document maître FR 2, ch. 41–48) : après planification (circuit des instructions) et pilotage.
-  programmePlugin,
+  recetteProgrammePlugin,
   iaPlugin,
   opportunitesPlugin,
   iaModelesPlugin,

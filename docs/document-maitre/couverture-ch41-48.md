@@ -11,8 +11,8 @@ Chaque phrase ou élément de liste est rattaché au code qui le met en œuvre e
   d'acceptation », route `POST /v1/pilotage/programme/recette/suivis/:code`), jamais simulé.
 
 Les chemins sont relatifs à la racine du dépôt. Les référentiels sont dans
-`backend/src/plugins/pilotage/programme/referentiels.ts` (abrégé **REF**). Le fichier
-`backend/test/programme.test.ts` (abrégé **PT**) vérifie trois choses :
+`backend/src/plugins/pilotage/recette-programme/referentiels.ts` (abrégé **REF**). Le fichier
+`backend/test/recette-programme.test.ts` (abrégé **PT**) vérifie trois choses :
 
 - chaque texte est cité mot pour mot par rapport à la source ;
 - chaque fichier et chaque titre de test cité existent réellement ;
@@ -22,7 +22,7 @@ Les chemins sont relatifs à la racine du dépôt. Les référentiels sont dans
 
 | Élément de la source | Mise en œuvre | Preuve | Statut |
 |---|---|---|---|
-| Le registre (13 risques, probabilité, impact, traitement), repris mot pour mot | REF `RISQUES_41` ; `GET /v1/pilotage/programme/risques` ; écran `/pilotage/risques` (`frontend/src/modules/pilotage/Risques.tsx`) | PT « ch. 41 : 13 risques… » ; PT « carte de chaleur… » ; `frontend/test/programme.test.tsx` | CONSTRUIT-ICI |
+| Le registre (13 risques, probabilité, impact, traitement), repris mot pour mot | REF `RISQUES_41` ; `GET /v1/pilotage/programme/risques` ; écran `/pilotage/risques` (`frontend/src/modules/pilotage/Risques.tsx`) | PT « ch. 41 : 13 risques… » ; PT « carte de chaleur… » ; `frontend/test/recette-programme.test.tsx` | CONSTRUIT-ICI |
 | Échelle probabilité / impact | REF `PROBABILITES`, `IMPACTS`, `zoneDe` ; carte de chaleur 4 × 4 (rangs et zones : par défaut, à confirmer) | PT « carte de chaleur… » | CONSTRUIT-ICI |
 | Propriétaire (rôle) et date de revue par risque | REF `proprietaire` (par défaut, à confirmer) ; `designateOwner` (supervision, motivé, journalisé) ; `prochaineRevue` = dernière revue + 90 j (par défaut) | PT « carte de chaleur… » | CONSTRUIT-ICI |
 | Revue périodique par une personne ; revue en retard signalée ; audit | `ProgrammeService.reviewRisk` (propriétaire ou supervision, commentaire obligatoire) ; `revueEnRetard` ; actions d'audit `programme.risque.reviewed` et `programme.risque.owner_designated` | PT « carte de chaleur… » | CONSTRUIT-ICI |
@@ -125,7 +125,7 @@ Les 10 récits sont repris au référentiel `RECITS_43`. Le fichier `backend/tes
 | V2.0 extension — Nouvelles communes, grands redevables, publicité, antennes, domaine public | `planification`, `verticales`, `publicite` | idem | idem |
 | V2.5 intelligence — Agents IA de priorisation, prévision, détection de fraude | `ia`, `opportunites`, `planification`, `integrite`, `integrite-detecteurs` | idem | idem |
 | V3.0 généralisation — 24 communes, affectation et transparence publique | `pilotage`, `planification`, `repartition` | idem | idem |
-| État de mise en service de chaque version | Décision d'une personne, procès-verbal (référence et empreinte) exigé pour « en service » ; écran `/pilotage/versions` | PT ; `frontend/test/programme.test.tsx` | CONSTRUIT-ICI |
+| État de mise en service de chaque version | Décision d'une personne, procès-verbal (référence et empreinte) exigé pour « en service » ; écran `/pilotage/versions` | PT ; `frontend/test/recette-programme.test.tsx` | CONSTRUIT-ICI |
 
 ## Ch. 45 — Stratégie de tests
 
@@ -137,7 +137,7 @@ Les 10 récits sont repris au référentiel `RECITS_43`. Le fichier `backend/tes
 | Tests de charge calés sur les pics de campagne de fin janvier. | `tools/charge/pic-fin-janvier.mjs` (Node seul, contre un serveur local, jamais en intégration continue) ; `tools/charge/pic-fevrier.k6.js` (existant) | CONSTRUIT-ICI (script Node) ; exécution cible EXTERNE | `CHARGE_PIC_FIN_JANVIER` |
 | Tests hors ligne : journée complète sans réseau, perte d'appareil, conflit de synchronisation. | `frontend/test/recette-hors-ligne.test.ts` ; `recette-criteres.test.ts` C42-06 ; `field-appeals.test.ts` (terminal révoqué, conflit) | CONSTRUIT (+ journée complète : CONSTRUIT-ICI) | — |
 | Tests de sécurité : intrusion externe, élévation de privilèges, tentative d'altération du journal d'audit, exfiltration massive. | `recette-criteres.test.ts` S45-6 et C42-04 ; `acces.test.ts` AC-INV-02 ; `securite-acces-audit.test.ts` (DLP, trois visas) | CONSTRUIT ; intrusion externe EXTERNE | `TEST_INTRUSION_TIERS` |
-| Tests d'accessibilité et d'usage sur terminaux d'entrée de gamme et connexions lentes. | `frontend/test/programme.test.tsx` « accessibilité : … » ; `autosave-status.test.tsx` | Contrôles automatiques CONSTRUIT-ICI ; terminaux réels EXTERNE | `ACCESSIBILITE_TERMINAUX` |
+| Tests d'accessibilité et d'usage sur terminaux d'entrée de gamme et connexions lentes. | `frontend/test/recette-programme.test.tsx` « accessibilité : … » ; `autosave-status.test.tsx` | Contrôles automatiques CONSTRUIT-ICI ; terminaux réels EXTERNE | `ACCESSIBILITE_TERMINAUX` |
 | Recette utilisateur avec agents réels dans une commune, avant toute mise en production. | — | EXTERNE | `RECETTE_UTILISATEUR_AGENTS` |
 | Répétition de la reprise après sinistre avec restauration complète et vérification d'intégrité. | `persistence/backup.ts`, `backup-cli.ts` (`npm run db:backup` / `db:restore` / `db:verify`) ; `socle.test.ts` « sauvegarde signée… restauration… » | CONSTRUIT ; répétition sur l'infrastructure réelle EXTERNE | `REPETITION_REPRISE_SINISTRE` |
 
@@ -160,7 +160,7 @@ Les 10 récits sont repris au référentiel `RECITS_43`. Le fichier `backend/tes
 
 | Période (actions citées, responsable) | Mise en œuvre | Preuve | Statut |
 |---|---|---|---|
-| 1 à 15 — Décision provinciale, nomination du directeur de programme et du comité de pilotage, lettre de mission — Gouverneur et ministre provincial des Finances | REF `PLAN_100_JOURS_47` ; `GET /v1/pilotage/programme/cent-jours` ; jour 1 fixé par une personne ; suivi par action (état, note, preuve) ; instruction de suivi par le circuit existant des instructions (`PlanificationService.issueInstruction`) ; écran `/pilotage/cent-jours` | PT « 100 premiers jours… » ; `frontend/test/programme.test.tsx` | CONSTRUIT-ICI |
+| 1 à 15 — Décision provinciale, nomination du directeur de programme et du comité de pilotage, lettre de mission — Gouverneur et ministre provincial des Finances | REF `PLAN_100_JOURS_47` ; `GET /v1/pilotage/programme/cent-jours` ; jour 1 fixé par une personne ; suivi par action (état, note, preuve) ; instruction de suivi par le circuit existant des instructions (`PlanificationService.issueInstruction`) ; écran `/pilotage/cent-jours` | PT « 100 premiers jours… » ; `frontend/test/recette-programme.test.tsx` | CONSTRUIT-ICI |
 | 16 à 30 — Relevé juridique certifié… ; inventaire des systèmes… ; base de référence des recettes — Services juridiques, régies, programme | idem ; liens : registre juridique, base de référence (§ 38.1) | idem | CONSTRUIT-ICI |
 | 31 à 45 — Signature des protocoles… ; sélection des communes pilotes ; cadrage de l'architecture et de la sécurité — Comité de pilotage | idem | idem | CONSTRUIT-ICI |
 | 46 à 60 — Paramétrage des premières fiches… ; conventions avec les prestataires… ; recrutement des agents — Programme et régies | idem | idem | CONSTRUIT-ICI |
@@ -183,7 +183,7 @@ Les phases de la feuille de route, les plans datés à 30, 90 et 180 jours et à
 | 8. Étendre l'exigence du quitus fiscal numérique… | `QUITUS_CONDITIONNE` (J6) | PT | idem |
 | 9. Interdire toute manipulation d'espèces par les agents et fixer le régime des primes | `ESPECES_AGENTS_ZERO` ; `COMMISSIONS_VERSEMENT` (J10) | PT | idem |
 | 10. Retenir un modèle contractuel hybride, sans pourcentage automatique sur les recettes publiques… | **Contradiction signalée au maître d'ouvrage — arbitrage attendu** : le modèle du § 37A (10 % promoteur après acte) n'est pas modifié ; `CLE_37A_ACTE_REQUIS` affiché « inchangé » | PT | CONSTRUIT-ICI (signalement) |
-| Statut A_PRENDRE / PRISE / REFUSEE ; acte (référence, date, empreinte SHA-256) ; enregistrement par une personne et validation par une autre (second facteur) ; audit | `ProgrammeService.recordDecision` / `validateDecision` ; circuit `DECISION_GOUVERNEMENT` (`circuits.ts`) ; écran `/pilotage/decisions-gouvernement` | PT ; `frontend/test/programme.test.tsx` | CONSTRUIT-ICI |
+| Statut A_PRENDRE / PRISE / REFUSEE ; acte (référence, date, empreinte SHA-256) ; enregistrement par une personne et validation par une autre (second facteur) ; audit | `ProgrammeService.recordDecision` / `validateDecision` ; circuit `DECISION_GOUVERNEMENT` (`circuits.ts`) ; écran `/pilotage/decisions-gouvernement` | PT ; `frontend/test/recette-programme.test.tsx` | CONSTRUIT-ICI |
 | 48.2 Synthèse finale (7 lignes) et devise | REF `SYNTHESE_48_2`, `DEVISE_FR2` ; affichées à l'écran des décisions | PT « ch. 47, 48 et annexes… » | CONSTRUIT-ICI |
 
 ## Annexe A — Sources consultées et niveau de fiabilité

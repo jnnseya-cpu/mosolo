@@ -1,7 +1,7 @@
 /**
  * Recette (Document maître FR 2, ch. 42, critère 6 ; ch. 45, tests hors ligne) : l'application terrain fonctionne
  * sans réseau pendant une journée complète de mission et synchronise sans perte. Titre repris par le référentiel du
- * programme (backend/src/plugins/pilotage/programme/referentiels.ts) — ne pas le renommer sans le mettre à jour.
+ * programme (backend/src/plugins/pilotage/recette-programme/referentiels.ts) — ne pas le renommer sans le mettre à jour.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { __resetOfflineQueuesForTests, flushOfflineQueues, OFFLINE_MISSION_TTL_HOURS, queueKey, readQueue, updateQueue } from '../src/lib/offlineQueue';

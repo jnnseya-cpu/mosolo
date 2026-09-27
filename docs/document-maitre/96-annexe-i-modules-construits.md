@@ -843,11 +843,11 @@ le circuit des instructions sans le modifier. Aucune action financière, aucune 
 
 Tests :
 
-- `backend/test/programme.test.ts` : textes cités mot pour mot, existence de chaque preuve citée, parcours complets ;
+- `backend/test/recette-programme.test.ts` : textes cités mot pour mot, existence de chaque preuve citée, parcours complets ;
 - `backend/test/recette-criteres.test.ts` : un test par critère du ch. 42, plus les tests de paiement de bout en bout et
   d'élévation de privilèges ;
 - `backend/test/carnet-recits.test.ts` : un test par récit du ch. 43 ;
-- `frontend/test/programme.test.tsx` : pages, accessibilité et navigation ;
+- `frontend/test/recette-programme.test.tsx` : pages, accessibilité et navigation ;
 - `frontend/test/recette-hors-ligne.test.ts` : journée complète hors réseau.
 
 Script de charge : `tools/charge/pic-fin-janvier.mjs`, Node seul, jamais lancé en intégration continue. La matrice de

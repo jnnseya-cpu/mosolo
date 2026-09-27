@@ -20,7 +20,7 @@ import { PILOT_COMMUNES_46, PILOT_CRITERIA_46, PILOT_SEQUENCE_46 } from '../src/
 import {
   CONTRADICTION_SIGNALEE, CRITERES_42, DECISIONS_48, DEVISE_FR2, FICHIER_POSTES_DECISION, IMPACTS, PLAN_100_JOURS_47, PROBABILITES, RECITS_43, RISQUES_41, STRATEGIE_45,
   SUIVIS_EXTERNES, SYNTHESE_48_2, VERSIONS_44, type PreuveCode, type PreuveTest,
-} from '../src/plugins/pilotage/programme/referentiels.js';
+} from '../src/plugins/pilotage/recette-programme/referentiels.js';
 import { KPI_CATALOGUE } from '../src/plugins/pilotage/kpis.js';
 import { DEMO, publishCertifiedRule, type TestEnv } from './helpers.js';
 
