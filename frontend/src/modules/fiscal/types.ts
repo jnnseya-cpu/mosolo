@@ -69,11 +69,15 @@ export interface QueueResponse {
 
 export interface PrefilledField { name: string; label: string; value: string | null; source: string; probativeStatus: string | null; editable: boolean }
 
+/** Calcul affiché (Document maître FR 2, ch. 43) : taux, retenue et arrêté lus dans la fiche de règle. */
+export interface CalculAffiche { formule: string; base: string; taux: string | null; tauxRetenue: string | null; bareme: Record<string, string>; arretes: { id: string; titre: string; statut: string }[]; mention: string }
+
 export interface Prefill {
   objectId: string; igf: string | null; kind: string; kindLabel: string; period: string; localityRank: number;
   rule: { id: string; code: string; version: number; label: string; status: string; executable: boolean; reason?: string; demo: boolean };
   fields: PrefilledField[];
   notice: string;
+  calcul?: CalculAffiche;
 }
 
 export interface Trace {
@@ -90,6 +94,8 @@ export interface Declaration {
   acknowledgement: { number: string; receivedAt: string; contentHash: string };
   filedBy: string; filedByRole: string;
   liquidation: { mode: string; obligationId?: string; trace?: Trace; message: string };
+  calcul?: CalculAffiche;
+  piece?: { name: string; mediaType: string; sha256: string; sizeBytes?: number };
   correctionReason?: string;
   instruction?: { decision: string; reason: string; decidedBy: string; at: string; rectifiedObligationId?: string };
 }

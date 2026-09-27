@@ -54,6 +54,23 @@ export interface PrefilledField {
   editable: boolean;
 }
 
+/**
+ * Calcul affiché au déclarant (Document maître FR 2, ch. 43, récit du bailleur) : taux, retenue et référence de
+ * l'arrêté, lus dans la fiche de règle du registre — jamais saisis ni inventés ; statut de l'arrêté affiché tel quel.
+ */
+export interface CalculAffiche {
+  formule: string;
+  base: string;
+  taux: string | null;
+  tauxRetenue: string | null;
+  bareme: Record<string, string>;
+  arretes: { id: string; titre: string; statut: string }[];
+  mention: string;
+}
+
+/** Pièce justificative facultative, conservée par empreinte (le fichier relève du service documentaire). */
+export interface PieceJustificative { name: string; mediaType: string; sha256: string; sizeBytes?: number }
+
 export interface Prefill {
   objectId: string;
   igf: string | null;
@@ -64,6 +81,7 @@ export interface Prefill {
   localityRank: number;
   fields: PrefilledField[];
   notice: string;
+  calcul: CalculAffiche;
 }
 
 export type LiquidationMode = 'OPPOSABLE' | 'SIMULATION_NON_OPPOSABLE' | 'DEJA_LIQUIDEE' | 'EN_INSTRUCTION' | 'AUCUNE';
@@ -89,6 +107,10 @@ export interface Declaration {
   filedBy: string;
   filedByRole: 'CONTRIBUABLE' | 'MANDATAIRE' | 'GUICHET';
   liquidation: { mode: LiquidationMode; obligationId?: string; trace?: AssessmentTrace; message: string };
+  /** Calcul affiché au dépôt (taux, retenue, arrêté) — absent des déclarations antérieures à cet ajout. */
+  calcul?: CalculAffiche;
+  /** Pièce justificative facultative (empreinte). */
+  piece?: PieceJustificative;
   correctionReason?: string;
   instruction?: { decision: 'ACCEPTEE' | 'REJETEE'; reason: string; decidedBy: string; at: string; rectifiedObligationId?: string; approvers?: string[] };
   /** Première validation d'une correction à la baisse soumise aux quatre yeux (en attente de la seconde). */
@@ -167,6 +189,22 @@ export class DeclarationService {
     return { total, leases: used, skipped };
   }
 
+  /** Taux, retenue et arrêté de la fiche de règle retenue (lecture du registre). */
+  private calculOf(rule: RuleRecord): CalculAffiche {
+    const arretes = rule.legalInstrumentIds.filter((id) => id.startsWith('arrete-')).map((id) => {
+      const i = this.d.ctx.rules.instrument(id);
+      return { id, titre: i?.title ?? id, statut: i?.status ?? 'ABSENT' };
+    });
+    const certifie = arretes.length > 0 && arretes.every((a) => a.statut === 'EN_VIGUEUR' || a.statut === 'MODIFIE');
+    return {
+      formule: rule.formula, base: rule.baseDefinition,
+      taux: rule.rateTable.taux ?? null, tauxRetenue: rule.rateTable.taux_retenue ?? null, bareme: { ...rule.rateTable }, arretes,
+      mention: certifie
+        ? `Taux et retenue fixés par ${arretes.map((a) => a.titre).join(' ; ')}.`
+        : `Taux et retenue de la fiche ${rule.code} v${rule.version} (${rule.status}) ; arrêté ${arretes.length ? `au statut ${arretes.map((a) => a.statut).join(', ')}` : 'non cité'} — à vérifier.`,
+    };
+  }
+
   /**
    * Pré-remplissage. `'systeme'` : lot de pré-remplissage d'une campagne approuvée (§ 8, § 45) — aucun dépôt, aucune
    * liquidation ; le contribuable confirme ou corrige ensuite lui-même.
@@ -208,6 +246,7 @@ export class DeclarationService {
       },
       localityRank: obj.localityRank,
       fields,
+      calcul: this.calculOf(rule),
       notice: exec.ok
         ? 'Règle ACTIVE du registre : le dépôt produit une obligation expliquée.'
         : `Règle non exécutable (${exec.reason}) : le dépôt est enregistré mais le calcul reste une SIMULATION NON OPPOSABLE, sans obligation.`,
@@ -220,7 +259,7 @@ export class DeclarationService {
     return this.d.ctx.assessment.obligations.findOne((o) => o.objectId === obj.id && o.ruleCode === rule.code && o.status !== 'ANNULEE' && !o.supersededBy && o.createdAt.startsWith(period))?.id;
   }
 
-  file(user: User, input: { objectId: string; kind: DeclarationKind; period: string; inputs: Record<string, string>; attest: boolean }, supersedes?: Declaration, reason?: string): Declaration {
+  file(user: User, input: { objectId: string; kind: DeclarationKind; period: string; inputs: Record<string, string>; attest: boolean; piece?: PieceJustificative }, supersedes?: Declaration, reason?: string): Declaration {
     if (!input.attest) throw badRequest('ATTESTATION_REQUIRED', 'Le déclarant doit attester l’exactitude de sa déclaration.');
     const pre = this.prefill(user, input);
     const obj = this.d.ctx.objects.get(input.objectId);
@@ -259,11 +298,13 @@ export class DeclarationService {
       acknowledgement: { number: ackNumber, receivedAt: now, contentHash: sha256Hex(canonicalJson(content)) },
       filedBy: user.id, filedByRole,
       liquidation: { mode: 'AUCUNE', message: 'En attente de liquidation.' },
+      calcul: pre.calcul,
+      ...(input.piece ? { piece: { name: input.piece.name, mediaType: input.piece.mediaType, sha256: input.piece.sha256.toLowerCase(), ...(input.piece.sizeBytes !== undefined ? { sizeBytes: input.piece.sizeBytes } : {}) } } : {}),
       ...(reason ? { correctionReason: reason } : {}),
     });
     this.d.ctx.audit.append({
       actor: actorOf(user), action: supersedes ? 'declaration.corrected' : 'declaration.submitted', resourceType: 'declaration', resourceId: id,
-      details: { objectId: obj.id, kind: input.kind, period: input.period, ack: ackNumber, changes: changes.length, verificationRequired, supersedes: supersedes?.id ?? null },
+      details: { objectId: obj.id, kind: input.kind, period: input.period, ack: ackNumber, changes: changes.length, verificationRequired, supersedes: supersedes?.id ?? null, pieceSha256: input.piece?.sha256.toLowerCase() ?? null },
     });
     this.d.ctx.comms.publish('declaration.submitted', [taxpayerRecipient(this.d.ctx.taxpayers.get(holder))], { reference: ackNumber }, { entity: rule.administeringEntity });
 

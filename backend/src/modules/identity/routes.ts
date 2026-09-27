@@ -7,6 +7,7 @@ import { parse } from '../../core/http.js';
 import { authorize } from '../../core/policy.js';
 import { obligationSummary } from '../assessment/views.js';
 import { maskPhone } from './service.js';
+import { motifConsultation } from '../../core/consultation.js';
 
 const registrationSchema = z.object({
   phone: z.string().regex(/^\+?[0-9 -]{9,20}$/, 'numéro de téléphone invalide'),
@@ -34,7 +35,7 @@ export function registerIdentityRoutes(app: FastifyInstance, ctx: AppContext): v
       communes: objects.map((o) => o.commune),
     });
     const isSelf = user.taxpayerId === tp.id;
-    ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'taxpayer.viewed', resourceType: 'taxpayer', resourceId: tp.id, details: { access } });
+    ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'taxpayer.viewed', resourceType: 'taxpayer', resourceId: tp.id, details: { access, ...motifConsultation(req.headers, user, isSelf || (user.mandants ?? []).includes(tp.id)) } });
     const profile = {
       id: tp.id, iuc: tp.iuc, fullName: tp.fullName, phone: isSelf ? tp.phone : maskPhone(tp.phone), language: tp.language,
       situation: tp.situation, verificationLevel: tp.verificationLevel, createdAt: tp.createdAt,

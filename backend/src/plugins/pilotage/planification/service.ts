@@ -24,7 +24,7 @@ import type { PilotagePlanningHooks, PilotageService, Query } from '../service.j
 import { MIN_CONTRIBUTORS, type FundedProjectsSection } from '../transparency.js';
 import {
   addDays, amountsOf, BASELINE_METRICS, dayCount, HYPOTHESIS_VARIABLES, INSTRUCTION_ORIGINS, MATURITY, meetsThreshold, moneyOfMinor, parseEntriesCsv,
-  pickHypothesis, PILOT_COMMUNES, PILOT_CRITERIA, PILOT_MILESTONES, PROCUREMENT, PROJECT_DOMAINS, prorate, RANV_COMPONENTS, SCENARIO_CODES, SCENARIOS,
+  pickHypothesis, PILOT_COMMUNES, PILOT_COMMUNES_46, PILOT_CRITERIA, PILOT_CRITERIA_46, PILOT_MILESTONES, PILOT_SEQUENCE_46, PROCUREMENT, PROJECT_DOMAINS, prorate, RANV_COMPONENTS, SCENARIO_CODES, SCENARIOS,
   selectEntries, SLA_KINDS, tenths, validateEntry,
   type BaselineEntry, type BaselineSet, type FundScenario, type FundScenarioItem, type Hypothesis, type HypothesisVariable, type Instruction, type InstructionOrigin,
   type Maturity, type Milestone, type Procurement, type ProjectDomain, type PublicProject, type RanvComponent, type ScenarioCode, type SetKind, type SlaAgreement,
@@ -314,7 +314,8 @@ export class PlanificationService implements PilotagePlanningHooks {
     const val = (ks: KpiResult[] | null, code: string | null) => (ks && code ? ks.find((k) => k.code === code) ?? null : null);
     const growthP = this.groupGrowth(cfg.communes, facts, range);
     const growthC = cfg.controls.length ? this.groupGrowth(cfg.controls, facts, range) : { value: null, note: 'Aucune commune témoin désignée.' };
-    const criteria = PILOT_CRITERIA.map((c) => {
+    // Type élargi : la branche « sans indicateur » reste disponible pour tout critère futur non mesurable.
+    const criteria = (PILOT_CRITERIA as readonly { code: string; label: string; threshold: string; kpi: string | null; op: string; value: string }[]).map((c) => {
       if (c.code === 'PROGRESSION_RECETTES') {
         const gap = growthP.value !== null && growthC.value !== null ? (Number(growthP.value) - Number(growthC.value)).toFixed(1) : null;
         return { code: c.code, label: c.label, threshold: c.threshold, pilot: { value: growthP.value, unit: '%', met: null, note: growthP.note }, controls: { value: growthC.value, unit: '%', note: growthC.note }, gapPoints: gap,
@@ -328,14 +329,27 @@ export class PlanificationService implements PilotagePlanningHooks {
         status: pv === null ? 'NON_MESURE' : met ? 'ATTEINT' : 'NON_ATTEINT', note: p?.status === 'NON_MESURE' ? `Source non disponible (${p.source}).` : '' };
     });
     const day = start ? Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / DAY_MS) : null;
+    // Document maître FR 2, ch. 46 : texte du critère et indicateurs du § 40, communes pilotes comparées aux témoins.
+    const ind40 = (code: string) => {
+      const p = val(pk, code); const k = val(ck, code);
+      const pv = p && p.status !== 'NON_MESURE' ? p.value : null; const kv = k && k.status !== 'NON_MESURE' ? k.value : null;
+      return { code, label: p?.label ?? code, unit: p?.unit ?? '', targetLabel: p?.targetLabel ?? null, pilot: pv, controls: kv, pilotStatus: p?.status ?? 'NON_MESURE', gapPoints: pv !== null && kv !== null ? (Number(pv) - Number(kv)).toFixed(1) : null };
+    };
+    const criteria46 = criteria.map((c) => ({ ...c, texte46: PILOT_CRITERIA_46[c.code as keyof typeof PILOT_CRITERIA_46].texte, indicateurs40: PILOT_CRITERIA_46[c.code as keyof typeof PILOT_CRITERIA_46].indicateurs40.map(ind40) }));
+    const week = day !== null && day >= 0 ? Math.floor(day / 7) + 1 : null;
     return {
-      generatedAt: this.now(), reference: '§ 45.1, § 45.3, § 45.5', config: cfg, day, period: range,
+      generatedAt: this.now(), reference: '§ 45.1, § 45.3, § 45.5 ; Document maître FR 2, ch. 46', config: cfg, day, period: range,
+      chapitre46: {
+        communes: PILOT_COMMUNES_46, sequence: PILOT_SEQUENCE_46.map((s) => ({ ...s, enCours: week !== null && week >= s.semaines[0] && week <= s.semaines[1] })), semaine: week,
+        temoins: cfg.controls.length ? cfg.controls : null,
+        note: 'Comparaison avec les communes témoins désignées par une personne (configuration du protocole) ; la décision d’extension reste humaine.',
+      },
       milestones: Object.entries(PILOT_MILESTONES).map(([m, n]) => {
         const due = start ? addDays(start, n) : null;
         const snap = this.snapshots.findOne((s) => s.milestone === m);
         return { milestone: m, days: n, dueDate: due, reached: !!due && due <= today, signed: snap ? { id: snap.id, takenAt: snap.takenAt, sha256: snap.sha256 } : null };
       }),
-      criteria,
+      criteria: criteria46,
       protocol: 'Base de référence auditée avant démarrage ; communes pilotes comparées aux communes témoins ; revues signées à chaque jalon ; décision de généralisation sur résultats vérifiés de façon indépendante.',
       baseline: this.certifiedBase() ? { id: this.certifiedBase()!.id, period: this.certifiedBase()!.period } : null,
     };

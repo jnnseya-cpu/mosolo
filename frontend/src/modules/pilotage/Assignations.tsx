@@ -3,7 +3,7 @@
  * personne) et carte des écarts assignation / rapproché. Niveau 11 « disponible pour affectation » : non mesuré tant
  * que le budget voté et les règles de trésorerie ne sont pas intégrés.
  */
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import type { MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
@@ -12,6 +12,8 @@ import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/StatusBadge';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { api } from '../../lib/api';
+import { COMMUNE_GRID } from '../../demo/governor';
+import { SEQ_NAVY } from '../../lib/palette';
 import { Section } from './shared';
 import { Area, Callout, CertBadge, certifyGuard, Field, hasRole, moneysText, moneyText, Notice, pctText, useRunner } from './planif';
 import './pilotage.css';
@@ -32,12 +34,52 @@ export function parseTargets(text: string) {
   });
 }
 
+/**
+ * Carte schématique des 24 communes (même disposition que la carte du Gouverneur) : couleur selon la réalisation de
+ * l'assignation (rapproché / assigné), doublée du pourcentage écrit ; commune sans assignation : « — ».
+ */
+export function GapCartogram({ g }: { g: GapMap }) {
+  const by = new Map(g.byCommune.map((c) => [c.commune, c.ratePctCdf]));
+  return (
+    <>
+      <ul className="heat-grid" aria-label="Carte schématique des écarts par commune">
+        {Object.entries(COMMUNE_GRID).map(([name, pos]) => {
+          const v = by.get(name) ?? null;
+          const step = v === null ? 0 : Math.min(SEQ_NAVY.length - 1, Math.floor(Math.min(100, Number(v)) / (100 / SEQ_NAVY.length)));
+          return (
+            <li key={name} className="heat-tile" title={`${name} — ${v === null ? 'sans assignation' : `${v} %`}`}
+              style={{ background: v === null ? 'transparent' : SEQ_NAVY[step], color: v !== null && step >= 3 ? '#fff' : undefined, border: v === null ? '1px dashed var(--line, #ccc)' : undefined, '--gc': pos[0], '--gr': pos[1] } as CSSProperties}>
+              <span className="heat-name">{name}</span><span className="heat-val">{v === null ? '—' : `${Math.round(Number(v))} %`}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="small muted">Carte schématique (disposition indicative des communes) ; les valeurs exactes figurent dans le tableau ci-dessous.</p>
+    </>
+  );
+}
+
+/** Exportation signée de la carte des écarts (avec les six états par commune), vérifiable publiquement. */
+export function ExportEcarts({ annee }: { annee: string }) {
+  const [res, setRes] = useState<{ exportId: string; sha256: string; signature: string } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <div className="btn-row">
+      <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setErr(null); api<{ exportId: string; sha256: string; signature: string }>(`/v1/pilotage/assignations/ecarts/export?annee=${annee}`).then(setRes, (e: unknown) => setErr(e instanceof Error ? e.message : 'Export refusé')); }}>Exporter (signé)</button>
+      {res && <span className="small">Export {res.exportId} · SHA-256 <code className="hash">{res.sha256.slice(0, 16)}…</code> · vérifiable par l’outil de vérification des exports</span>}
+      {err && <span className="small" role="alert">{err}</span>}
+    </div>
+  );
+}
+
 export function GapView({ g }: { g: GapMap }) {
   if (!g.certified) return <Callout tone="warn"><strong>Écart non mesuré.</strong> {g.note}</Callout>;
   const tone = (p: string | null) => (p === null ? 'neutral' : Number(p) >= 100 ? 'good' : Number(p) >= 50 ? 'warning' : 'critical') as 'neutral' | 'good' | 'warning' | 'critical';
   return (
     <>
       <div className="pl-figs"><div className="pl-fig"><span>Réalisation de l’exercice {g.year}</span><strong>{pctText(g.totals?.ratePct)}</strong><span>{moneyText(g.totals?.realisedCdf)} rapprochés pour {moneyText(g.totals?.targetCdf)} assignés (contre-valeur indicative)</span></div></div>
+      <GapCartogram g={g} />
+      <ExportEcarts annee={g.year} />
       <DataTable caption="Carte des écarts par commune" rows={g.byCommune} rowKey={(r) => r.commune} columns={[
         { key: 'c', label: 'Commune', primary: true, render: (r) => (r.commune === '*' ? 'Toute la province' : r.commune) },
         { key: 't', label: 'Assignation', num: true, render: (r) => moneysText(r.target) },

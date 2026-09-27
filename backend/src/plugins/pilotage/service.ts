@@ -3,7 +3,7 @@
  * transparence publique, piste d'audit par dossier et exports signés — calculés sur les données RÉELLES du socle.
  * Lecture seule sur le socle ; aucun acte financier ni juridique (C1-267). Agrégats seulement dans les tableaux.
  */
-import type { MoneyJSON, RoleCode } from '@mosolo/shared';
+import { SIX_ETATS, type MoneyJSON, type RoleCode } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
 import { DAY_MS, kinshasaDate } from '../../core/clock.js';
@@ -248,10 +248,16 @@ export class PilotageService {
     const facts = this.facts();
     const c = this.ladderContext(facts, filters);
     this.viewed(user, 'echelle', filters);
+    const levels = computeLadder(c);
     return {
       generatedAt: facts.asOf, example: false, scope, filters, currency: 'CDF',
       rule: 'Les onze niveaux sont emboîtés et ne s’additionnent jamais. Montants par devise légale ; contre-valeur CDF indicative.',
-      levels: computeLadder(c),
+      levels,
+      // Document maître FR 2, ch. 42 (critère 10) : les six états distingués explicitement (niveaux de l'échelle, jamais additionnés).
+      sixEtats: SIX_ETATS.map((s) => {
+        const l = levels.find((x) => x.level === s.niveau)!;
+        return { etat: s.code, libelle: s.libelle, niveau: s.niveau, rang: l.rank, mesure: l.measured, montants: l.amounts, contreValeurCdf: l.consolidatedCdf, note: l.note ?? null };
+      }),
       contested: contestedIndicator(facts, filters, this.convert),
       origins: this.origins(facts, filters),
     };

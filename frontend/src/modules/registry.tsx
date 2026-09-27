@@ -12,6 +12,8 @@ export interface ModuleRoute {
   nav?: { label: string; short?: string; icon: string; group: 'public' | 'pilotage' | 'operations'; roles: string[] };
 }
 
+/** Lecteurs des écrans du programme (politique programme:read). */
+const PROGRAMME = ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R08', 'R13', 'R14', 'R15', 'R16', 'R17', 'R18', 'R22', 'R23', 'R24', 'R25', 'R26', 'R27', 'R28'];
 const DASH = ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R08', 'R17', 'R18', 'R22', 'R23', 'R24'];
 
 export const MODULE_ROUTES: ModuleRoute[] = [
@@ -159,6 +161,12 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/pilotage/accords-service', element: lazy(() => import('./pilotage/AccordsService')), nav: { label: 'Accords de service entre entités', short: 'Accords', icon: 'users', group: 'pilotage', roles: [...DASH, 'R15', 'R16'] } },
   { path: '/pilotage/projets', element: lazy(() => import('./pilotage/Projets')), nav: { label: 'Projets publics et emploi des fonds', short: 'Projets', icon: 'building', group: 'pilotage', roles: [...DASH, 'R15', 'R16'] } },
   { path: '/pilotage/partage-legal', element: lazy(() => import('./pilotage/PartageLegal')), nav: { label: 'Partage légal des recettes', short: 'Partage', icon: 'scale', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R08', 'R13', 'R14', 'R15', 'R16', 'R17', 'R18', 'R22', 'R23', 'R24'] } },
+  // Programme (Document maître FR 2, ch. 41–48) : risques, recette, versions, 100 premiers jours, décisions du Gouvernement.
+  { path: '/pilotage/risques', element: lazy(() => import('./pilotage/Risques')), nav: { label: 'Registre des risques', short: 'Risques', icon: 'alert', group: 'pilotage', roles: PROGRAMME } },
+  { path: '/pilotage/recette', element: lazy(() => import('./pilotage/Recette')), nav: { label: 'Recette — critères d’acceptation', short: 'Recette', icon: 'check', group: 'pilotage', roles: PROGRAMME } },
+  { path: '/pilotage/versions', element: lazy(() => import('./pilotage/Versions')), nav: { label: 'Plan de livraison par versions', short: 'Versions', icon: 'table', group: 'pilotage', roles: PROGRAMME } },
+  { path: '/pilotage/cent-jours', element: lazy(() => import('./pilotage/CentJours')), nav: { label: 'Plan des 100 premiers jours', short: '100 jours', icon: 'clock', group: 'pilotage', roles: PROGRAMME } },
+  { path: '/pilotage/decisions-gouvernement', element: lazy(() => import('./pilotage/Decisions')), nav: { label: 'Décisions du Gouvernement provincial', short: 'Décisions', icon: 'scale', group: 'pilotage', roles: PROGRAMME } },
   { path: '/satisfaction', element: lazy(() => import('./pilotage/Satisfaction')), nav: { label: 'Donner mon avis', short: 'Avis', icon: 'check', group: 'public', roles: ['R30', 'R31'] } },
 
   // Vision : sept questions par objet et par obligation, chaîne opératoire en treize maillons, maillons sautés (audit)

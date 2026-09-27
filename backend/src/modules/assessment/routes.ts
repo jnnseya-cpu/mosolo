@@ -6,6 +6,7 @@ import { forbidden } from '../../core/errors.js';
 import { decimalString, parse } from '../../core/http.js';
 import { authorize, evaluate, hasAnyGrant } from '../../core/policy.js';
 import { obligationDetail, obligationSummary } from './views.js';
+import { motifConsultation } from '../../core/consultation.js';
 
 const calculateSchema = z.object({
   ruleId: z.string(),
@@ -79,7 +80,7 @@ export function registerAssessmentRoutes(app: FastifyInstance, ctx: AppContext):
     const obj = ctx.objects.objects.get(o.objectId);
     const access = authorize(user, 'obligation.read', { taxpayerId: o.taxpayerId, entity: o.entity, communes: obj ? [obj.commune] : [] });
     if (access === 'minimal') return obligationSummary(o, 'minimal');
-    ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'obligation.viewed', resourceType: 'obligation', resourceId: o.id });
+    ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'obligation.viewed', resourceType: 'obligation', resourceId: o.id, details: motifConsultation(req.headers, user, user.taxpayerId === o.taxpayerId || (user.mandants ?? []).includes(o.taxpayerId)) });
     return {
       ...obligationDetail(o),
       paymentOrders: ctx.payments.byObligation(o.id).map((p) => ({ paymentOrderId: p.id, paymentReference: p.paymentReference, status: p.status, createdAt: p.createdAt, expiresAt: p.expiresAt })),

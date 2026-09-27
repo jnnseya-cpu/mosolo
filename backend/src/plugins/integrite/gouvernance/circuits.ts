@@ -267,6 +267,12 @@ export const CIRCUITS: Circuit[] = [
     proposals: ['calcu.budget_line.declared'], approvals: ['calcu.budget_line.validated'], refusals: [],
     guard: { url: '/v1/verticales/calcu/lignes-budgetaires/:id/validation', key: (p) => p.id! },
   },
+  // Document maître FR 2, ch. 48 : décisions du Gouvernement provincial (enregistrement → validation par une autre personne).
+  {
+    code: 'DECISION_GOUVERNEMENT', label: 'Décision du Gouvernement provincial enregistrée sur acte (ch. 48)',
+    proposals: ['programme.decision.recorded'], approvals: ['programme.decision.validated'], refusals: ['programme.decision.rejected'],
+    guard: { url: '/v1/pilotage/programme/decisions/:numero/validation', key: (p) => `D${p.numero ?? ''}`, refusal: approveFalse },
+  },
 ];
 
 export interface TwoPersonDecision {

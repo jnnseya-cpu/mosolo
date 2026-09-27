@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1008 routes** dans 40 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -14,7 +14,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | extension juridique | 11 |
 | extension opportunites | 29 |
 | extension parking | 64 |
-| extension pilotage | 67 |
+| extension pilotage | 83 |
 | extension preuves | 14 |
 | extension publicite | 52 |
 | extension rakapay | 41 |
@@ -541,6 +541,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | POST | `/v1/pilotage/assignations` |
 | POST | `/v1/pilotage/assignations/:id/certification` |
 | GET | `/v1/pilotage/assignations/ecarts` |
+| GET | `/v1/pilotage/assignations/ecarts/export` |
 | GET | `/v1/pilotage/base-reference` |
 | POST | `/v1/pilotage/base-reference` |
 | POST | `/v1/pilotage/base-reference/:id/certification` |
@@ -562,6 +563,21 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | POST | `/v1/pilotage/pilote/revues/:jalon` |
 | GET | `/v1/pilotage/piste-audit` |
 | GET | `/v1/pilotage/piste-audit/:ref` |
+| GET | `/v1/pilotage/programme` |
+| GET | `/v1/pilotage/programme/cent-jours` |
+| POST | `/v1/pilotage/programme/cent-jours/actions/:id/etat` |
+| POST | `/v1/pilotage/programme/cent-jours/actions/:id/instruction` |
+| POST | `/v1/pilotage/programme/cent-jours/demarrage` |
+| GET | `/v1/pilotage/programme/decisions` |
+| POST | `/v1/pilotage/programme/decisions/:numero/enregistrement` |
+| POST | `/v1/pilotage/programme/decisions/:numero/validation` |
+| GET | `/v1/pilotage/programme/recette` |
+| POST | `/v1/pilotage/programme/recette/suivis/:code` |
+| GET | `/v1/pilotage/programme/risques` |
+| POST | `/v1/pilotage/programme/risques/:code/proprietaire` |
+| POST | `/v1/pilotage/programme/risques/:code/revues` |
+| GET | `/v1/pilotage/programme/versions` |
+| POST | `/v1/pilotage/programme/versions/:code/etat` |
 | GET | `/v1/pilotage/projets` |
 | POST | `/v1/pilotage/projets` |
 | POST | `/v1/pilotage/projets/:id/avancement` |

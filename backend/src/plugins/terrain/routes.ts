@@ -8,6 +8,7 @@ import type { AppContext } from '../../context.js';
 import { requireUser } from '../../core/auth.js';
 import { ApiError } from '../../core/errors.js';
 import { isoDateString, moneySchema, parse } from '../../core/http.js';
+import { OBJECT_CATEGORIES } from '../../modules/objects/service.js';
 import { TERRAIN_MODULES } from './model.js';
 import type { TerrainService } from './service.js';
 
@@ -61,6 +62,8 @@ const finding = z.object({
   outcome: z.enum(['CONSTATE', 'ABSENT', 'REFUS', 'OBJET_NON_ENREGISTRE']), observations: z.string().max(2000),
   gps, photoSha256: sha256.optional(), capturedAt: z.string().datetime({ offset: true }), deviceId: z.string().max(100).optional(),
   justification: z.string().trim().max(1000).optional(),
+  // Catégorie de l'objet non enregistré (Document maître FR 2, ch. 43 : « objet provisoire avec GPS, photo, catégorie »).
+  category: z.enum(OBJECT_CATEGORIES).optional(),
 }).strict();
 const review = z.object({ decision: z.enum(['VALIDE', 'REJETE']), reason: z.string().trim().min(5).max(2000) }).strict();
 const sample = z.object({

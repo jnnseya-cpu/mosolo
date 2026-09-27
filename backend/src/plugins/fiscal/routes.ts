@@ -40,6 +40,11 @@ const declarationSchema = z.object({
   period: z.string().regex(/^\d{4}$/),
   inputs: z.record(decimal).default({}),
   attest: z.boolean(),
+  // Pièce justificative FACULTATIVE (Document maître FR 2, ch. 43) : empreinte, nom et type ; jamais exigée.
+  piece: z.object({
+    name: z.string().trim().min(1).max(200), mediaType: z.string().trim().min(3).max(100),
+    sha256: z.string().regex(/^[0-9a-fA-F]{64}$/, 'empreinte SHA-256 attendue'), sizeBytes: z.number().int().nonnegative().max(50_000_000).optional(),
+  }).strict().optional(),
 }).strict();
 
 const legalBasisSchema = z.object({ instrumentId: z.string().min(1), article: z.string().trim().min(1).max(200) }).strict();

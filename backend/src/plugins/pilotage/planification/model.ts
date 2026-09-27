@@ -176,9 +176,38 @@ export const PILOT_CRITERIA = [
   { code: 'ESPECES_AGENTS', label: 'Encaissement d’espèces par un agent', threshold: 'aucun', kpi: 'ESPECES_AGENTS', op: '=', value: '0' },
   { code: 'ECART_RAPPROCHEMENT', label: 'Écart de rapprochement', threshold: '< 1 %', kpi: 'ECART_RAPPROCHEMENT_J2', op: '<', value: '1' },
   { code: 'DELAI_QUITTANCE', label: 'Délai moyen de quittance', threshold: '< 1 minute', kpi: 'DELAI_QUITTANCE', op: '<', value: '60' },
-  { code: 'CONTESTATIONS_DELAI', label: 'Contestations traitées dans le délai légal', threshold: '> 90 %', kpi: null, op: '>', value: '90' },
+  // Harmonisé avec le § 40 (FR 2) : mesuré par l'indicateur RECOURS_DANS_DELAI (délai légal de conception, à vérifier).
+  { code: 'CONTESTATIONS_DELAI', label: 'Contestations traitées dans le délai légal', threshold: '> 90 %', kpi: 'RECOURS_DANS_DELAI', op: '>', value: '90' },
   { code: 'PROGRESSION_RECETTES', label: 'Progression des recettes pilotes vs communes témoins', threshold: 'significativement supérieure', kpi: null, op: '>', value: '0' },
 ] as const;
+
+/**
+ * Document maître FR 2, ch. 46 (nouvelle numérotation de l'ancien § 45) — ajouts, cités mot pour mot : raisons du
+ * choix et objets prioritaires des communes (46.1), séquence en cinq étapes (46.2), critères de succès (46.3) et
+ * indicateurs du § 40 qui les mesurent (la comparaison aux communes témoins est calculée pour chacun).
+ */
+export const PILOT_COMMUNES_46 = [
+  { commune: 'Gombe', raison: 'Localité de premier rang, bureaux, forte valeur locative, publicité, point fluvial', objets: 'IRL, IF, publicité, embarquement' },
+  { commune: 'Limete', raison: 'Tissu industriel et logistique, entrepôts, poids lourds', objets: 'IF, patente, véhicules, domaine public' },
+  { commune: 'Kalamu', raison: 'Commerce dense de Matonge, habitat locatif compact', objets: 'IRL, patente, débits de boissons' },
+  { commune: 'Ngaliema', raison: 'Habitat résidentiel de valeur élevée, bailleurs institutionnels', objets: 'IRL, IF' },
+] as const;
+export const PILOT_SEQUENCE_46 = [
+  { etape: 1, semaines: [1, 4], texte: 'Semaines 1 à 4 : paramétrage du référentiel des recettes pilotes, conventions de données, recrutement et certification des agents.' },
+  { etape: 2, semaines: [5, 12], texte: 'Semaines 5 à 12 : recensement locatif et commercial, création des objets, plaques QR sur les commerces et panneaux.' },
+  { etape: 3, semaines: [13, 16], texte: 'Semaines 13 à 16 : ouverture des paiements électroniques, quittance vérifiable, assistance en centres communaux.' },
+  { etape: 4, semaines: [17, 22], texte: 'Semaines 17 à 22 : campagne de déclaration pré-remplie calée sur l’échéance de début février, relances graduées.' },
+  { etape: 5, semaines: [23, 26], texte: 'Semaines 23 à 26 : évaluation indépendante, comparaison avec les communes non pilotes, décision d’extension.' },
+] as const;
+export const PILOT_CRITERIA_46: Record<(typeof PILOT_CRITERIA)[number]['code'], { texte: string; indicateurs40: string[] }> = {
+  COUVERTURE_OBJETS: { texte: 'Couverture des objets prioritaires supérieure à 80 % dans les zones traitées', indicateurs40: ['COUVERTURE_RECENSEMENT'] },
+  PART_ELECTRONIQUE: { texte: 'part électronique des encaissements supérieure à 90 % sur le périmètre', indicateurs40: ['PART_ELECTRONIQUE_RECETTES'] },
+  ESPECES_AGENTS: { texte: 'aucun encaissement d’espèces par un agent', indicateurs40: ['ESPECES_AGENTS'] },
+  ECART_RAPPROCHEMENT: { texte: 'écart de rapprochement inférieur à 1 %', indicateurs40: ['ECART_RAPPROCHEMENT_J2', 'DELAI_PAIEMENT_RAPPROCHEMENT'] },
+  DELAI_QUITTANCE: { texte: 'délai moyen de quittance inférieur à une minute', indicateurs40: ['DELAI_PAIEMENT_QUITTANCE'] },
+  CONTESTATIONS_DELAI: { texte: 'taux de contestation traité dans le délai légal supérieur à 90 %', indicateurs40: ['RECOURS_DANS_DELAI'] },
+  PROGRESSION_RECETTES: { texte: 'progression des recettes des communes pilotes significativement supérieure à celle des communes témoins', indicateurs40: ['BAUX_ENREGISTRES'] },
+};
 
 export function meetsThreshold(op: string, value: string, v: string | null): boolean | null {
   if (v === null) return null;
