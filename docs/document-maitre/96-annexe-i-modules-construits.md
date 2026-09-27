@@ -995,3 +995,20 @@ par des propriétés facultatives) :
 | Galerie | `/visualisation/galerie` (rôles internes) | Données réelles, sinon `[EXEMPLE]` |
 
 Tests : `aggregate`, `viz` (frontend). Captures : `docs/captures/visualisation/`.
+## I.25 Kit de déploiement : Google Cloud, VPS, Vercel / Firebase (27/09/2026)
+
+Instruction du maître d'ouvrage : publier sur un VPS ou sur Google Cloud (Vercel / Firebase cités), **sans réduire la
+plateforme** — la même image (tous les modules, API + application web) est publiée partout ; la production ne démarre
+jamais en `--demo`. Kit prêt et répété localement (Docker Compose, PostgreSQL 16 réels) ; exécution sur le cloud et
+sur un vrai serveur **EXTERNE / NON TESTÉE** (`docs/production-readiness.md`, § 19). Ajouts, sans rien retirer :
+
+| Ajout | Emplacement | Règle |
+|---|---|---|
+| Google Cloud (transitoire) : Cloud Run une instance à CPU toujours alloué, Cloud SQL PostgreSQL 16 à IP privée (sauvegardes, restauration à un instant donné), Secret Manager, tâches de migration et de sauvegarde signée, Cloud Scheduler, domaine, retour arrière, restauration ; démonstration séparée (remplace Render) | `infra/gcp/` | Secrets générés une fois, jamais affichés ni remplacés ; moindre privilège par compte de service ; coûts donnés comme **estimation** ; hébergement national préféré (souveraineté) |
+| VPS / centre de données national : application, PostgreSQL 16, HTTPS automatique, sauvegarde quotidienne signée, pare-feu, fail2ban, mises à jour de sécurité | `infra/vps/` | Retour automatique à l'image précédente si la santé échoue ; restauration par un opérateur distinct du rôle applicatif, retour arrière seulement sur décision écrite |
+| Application web seule sur Vercel / Firebase, API réécrite vers le backend | `infra/static/` | Le backend n'y tourne pas (tâches planifiées, chaîne d'audit, processus permanent) ; `sw.js` et `index.html` jamais en cache |
+| Migrations rejouables (journal, `IF NOT EXISTS`, verrou consultatif), tâche `npm run db:migrate`, rôle applicatif à droits minimaux | `backend/src/persistence/` | Aucune migration ne recrée un objet existant (contrôle automatique) |
+| Bail de l'instance active (migration 004) | `backend/db/migrations/004_instance_lease.sql` | Une instance supplantée n'écrit plus jamais (503, alerte `INSTANCE_SUPPLANTEE`) : pas d'écrasement lors d'une mise à jour |
+
+Tests : `deploiement` (backend) ; validation hors ligne `infra/valider.sh` (scripts, simulations `DRY_RUN=1`,
+YAML / JSON, Compose), exécutée en intégration continue.

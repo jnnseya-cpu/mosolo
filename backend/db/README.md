@@ -86,10 +86,39 @@ depuis l'état en cours, **sans les secrets d'authentification** (empreintes de 
 clés des terminaux, empreintes de codes et de jetons ; liste dans le champ `redacted`). La sauvegarde intégrale passe
 par `db:backup`, serveur arrêté, sous un rôle d'exploitation distinct.
 
+## Tâche de migration, rôles et bail de l'instance active (kit de déploiement, 27/09/2026)
+
+```bash
+cd backend
+# Rôle de MIGRATION (propriétaire) ; rejouable : une deuxième exécution n'applique rien.
+DATABASE_URL=… [MOSOLO_DB_APP_ROLE=mosolo_app MOSOLO_DB_APP_PASSWORD=…] [MOSOLO_DB_RESTORE_ROLE=mosolo_migration] npm run db:migrate
+DATABASE_URL=… npm run db:migrate -- --check     # migrations en attente, sans rien appliquer (code 3 s'il en reste)
+```
+
+- **Idempotence** : journal `schema_migrations` (un fichier appliqué ne l'est plus jamais), fichiers eux-mêmes
+  rejouables (`IF NOT EXISTS`, `CREATE OR REPLACE`, `DROP … IF EXISTS`, blocs `DO` gardés, aucun type énuméré), verrou
+  consultatif PostgreSQL pendant la migration (deux démarrages simultanés ne jouent jamais un fichier deux fois).
+  Contrôlé par `test/deploiement.test.ts` (pg-mem ; PostgreSQL réel avec `MOSOLO_TEST_PG_URL`), qui refuse aussi toute
+  future migration non rejouable.
+- **Rôles** (`src/persistence/db-roles.ts`, appliqués par `db:migrate`, jamais par le serveur) : rôle applicatif
+  créé s'il manque, mot de passe reposé, droits minimaux — `SELECT, INSERT` sur `append_only_journal`,
+  `SELECT, INSERT, UPDATE` sur `repository_snapshot` et `instance_lease`, `SELECT` sur `schema_migrations` ;
+  `UPDATE, DELETE, TRUNCATE` du journal et `DELETE, TRUNCATE` de l'instantané retirés. `MOSOLO_DB_RESTORE_ROLE`
+  reçoit `mosolo_restore` (jamais le rôle applicatif). Mot de passe jamais journalisé.
+- **Bail de l'instance active** (migration `004_instance_lease.sql`) : chaque démarrage du serveur incrémente la
+  génération **avant** de charger l'instantané ; chaque lot d'écriture vérifie dans sa transaction (`FOR SHARE`) que sa
+  génération est la dernière. Une instance supplantée (ancienne révision Cloud Run encore en service, double démarrage
+  par erreur) n'écrit plus jamais : écritures refusées (503), `/health` « degraded », alerte `INSTANCE_SUPPLANTEE`.
+  Les outils (`db:backup`, `db:verify`, `db:migrate`) ne prennent pas le bail ; `db:restore` le prend (le serveur en
+  service cesse d'écrire avant la purge).
+
 ## Limites connues
 
 - État non encore persisté : magasin d'idempotence, versions de brouillons, lots terrain, annuaire des utilisateurs de
   démonstration (recréé au démarrage), boîtes de réception in-app. À migrer vers des dépôts (changement de socle).
+- Une seule instance écrit à la fois (bail) : pas de montée en charge horizontale tant que l'état reste en mémoire ;
+  lors d'un chevauchement de révisions, le dernier lot différé de l'ancienne instance (25 ms) peut avoir été acquitté
+  sans être persisté — mettre à jour en heure creuse.
 - Écriture différée : une coupure brutale peut perdre les dernières 25 ms d'écritures ; la cible transactionnelle
   (écriture synchrone dans la transaction métier, outbox) viendra avec le schéma relationnel.
 - Secrets TOTP stockés en clair dans `repository_snapshot` : chiffrement par le coffre de secrets (KMS/HSM) [À RACCORDER].

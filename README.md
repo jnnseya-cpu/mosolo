@@ -58,6 +58,25 @@ données réelles ; le mode démonstration ouvre les rôles de démonstration à
 - **Docker** (tout hébergeur) : `docker build -t mosolo-demo . && docker run -p 8080:8080 mosolo-demo` → http://localhost:8080.
 - **Sans Docker** : `npm ci && VITE_API_URL= npm run build -w frontend && MOSOLO_DEMO_MODE=true MOSOLO_STATIC_DIR=frontend/dist npx tsx backend/src/server.ts --demo`.
 
+## Déploiement
+
+Trois kits dans [`infra/`](infra/), une seule image (`Dockerfile` : tous les modules, API + application web). La
+production ne démarre **jamais** en `--demo` : `NODE_ENV=production`, PostgreSQL et clés réelles obligatoires (démarrage
+refusé sinon, variable manquante nommée). État : **kits prêts et validés hors ligne ; exécution réelle EXTERNE / NON
+TESTÉE** (aucun compte cloud utilisé) — voir [`docs/production-readiness.md`](docs/production-readiness.md), § 19.
+
+| Cible | Commande | Détail |
+|---|---|---|
+| **Google Cloud** (principal) : Cloud Run (1 instance, CPU toujours alloué), Cloud SQL PostgreSQL 16 (IP privée, sauvegardes, PITR), Secret Manager, migrations et sauvegardes en tâches, Cloud Scheduler, domaine | `PROJECT_ID=<projet> REGION=africa-south1 [DOMAIN=…] ./infra/gcp/deploy.sh` | [`infra/gcp/README.md`](infra/gcp/README.md) (coûts estimés, souveraineté, `rollback.sh`, `status.sh`, `restaurer.sh`) |
+| **Démonstration** sur Google Cloud (remplace Render, trop petit pour la construction) | `PROJECT_ID=<projet> DEMO=true ./infra/gcp/deploy.sh` | service séparé `mosolo-demo`, `--demo`, mémoire |
+| **VPS / centre de données national** (préféré par le Cahier) : Docker Compose, PostgreSQL 16, Caddy HTTPS, sauvegarde quotidienne, retour automatique | `sudo ./infra/vps/install.sh` puis `./infra/vps/deploy.sh secrets` et `./infra/vps/deploy.sh` | [`infra/vps/README.md`](infra/vps/README.md) (restauration) |
+| **Vercel / Firebase** : application web seule, `/v1/*` réécrit vers le backend | `./infra/static/preparer.sh vercel\|firebase` | [`infra/static/README.md`](infra/static/README.md) (pourquoi le backend n'y tourne pas) |
+
+Tous les scripts acceptent `DRY_RUN=1` (commandes affichées, rien d'exécuté, aucun secret généré). Validation hors
+ligne : `./infra/valider.sh`. Image : `docker run … mosolo production` (production), `mosolo` sans argument ou `demo`
+(démonstration, comportement historique), `migrate`, `backup-once`, `restore` ; tas Node de construction réglable
+(`--build-arg MOSOLO_BUILD_HEAP_MB=3072`). Migrations rejouables : `DATABASE_URL=… npm run db:migrate -w backend`.
+
 ## Tests de charge et contrôles de sécurité (non bloquants)
 
 Cahier § 44 : « tests de charge calés sur les pics de campagne de fin janvier ». Le scénario k6

@@ -45,6 +45,11 @@ if (cmd === 'backup') {
     const operator = flags.find((f) => f.startsWith('--operator='))?.slice('--operator='.length);
     const store = await openPgStore(process.env.DATABASE_URL ?? fail('DATABASE_URL obligatoire.'));
     try {
+      // Bail de l'instance active (migration 004) : une instance encore en service (Cloud Run) est supplantée et
+      // n'écrira plus rien ; le prochain démarrage relira la base restaurée.
+      await store.acquireLease(`restauration:${operator ?? 'inconnu'}`, new Date())
+        .then((g) => console.info(`Bail pris pour la restauration (génération ${g}) : toute instance en service cesse d'écrire.`))
+        .catch((e: unknown) => console.warn(`Bail non pris (${e instanceof Error ? e.message : String(e)}) : arrêter l'application avant de restaurer.`));
       const r = await restoreStore(store, doc, key, auditKey, new Date(), {
         ...(anchorPath ? { anchor: new FileAuditAnchor(anchorPath, auditKey) } : {}),
         confirmRollback: flags.includes('--confirm-rollback'),
