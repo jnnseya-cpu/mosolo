@@ -77,6 +77,11 @@ export class FieldService {
   readonly conflicts = new InMemoryRepository<FieldConflict>();
   private readonly batches = new Map<string, { fingerprint: string; result: BatchResult }>();
   private readonly ids = new IdGenerator();
+  /**
+   * Gardes additionnelles de synchronisation (gestion des équipements, module 58 : terminal en quarantaine pour
+   * modification détectée, données expirées) : chacune lève une erreur pour refuser le lot, sans rien effacer.
+   */
+  readonly syncGuards: ((device: Device, user: User) => void)[] = [];
 
   constructor(
     private readonly clock: Clock,
@@ -120,6 +125,7 @@ export class FieldService {
       throw forbidden('DEVICE_REVOKED', 'Terminal révoqué : synchronisation refusée.');
     }
     if (device.agentUserId !== user.id) throw forbidden('DEVICE_USER_MISMATCH', 'Ce terminal n’est pas affecté à cet agent.');
+    for (const guard of this.syncGuards) guard(device, user);
     if (!signature || !safeEqualHex(hmacSha256Hex(device.key, rawBody), signature.replace(/^sha256=/, '').toLowerCase())) {
       this.alerts.raise({ type: 'INVALID_DEVICE_SIGNATURE', severity: 'HIGH', source: 'terrain', detail: `Signature de lot invalide (${device.id}).`, context: { batchId: batch.batchId }, actor });
       throw unauthorized('INVALID_DEVICE_SIGNATURE', 'Signature du lot invalide.');

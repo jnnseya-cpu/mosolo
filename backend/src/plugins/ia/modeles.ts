@@ -215,6 +215,8 @@ export class ModelRegistryService {
         modelVersion: ver, registered: registered.has(ver), recommendations: recs.filter((r) => r.modelVersion === ver).length, decisions: mine.length,
         acceptancePct: rate(mine), window: { days: IA_FENETRE_JOURS, recentPct: rRecent, previousPct: rBefore, driftPoints: drift, driftAlert: drift !== null && Math.abs(drift) >= IA_DERIVE_SEUIL_POINTS },
         bias: { dimension: 'ENTITE', groups, gapPoints: biasGap, alert: biasGap !== null && biasGap >= IA_BIAIS_ECART_POINTS },
+        /** Dérive sur une version en service qui en remplace une autre : retour arrière PROPOSÉ (décision humaine). */
+        rollbackSuggested: drift !== null && Math.abs(drift) >= IA_DERIVE_SEUIL_POINTS && this.versions.all().some((v) => v.version === ver && v.status === 'EN_SERVICE' && !!v.replaces),
         humanDecisionLatencyMedianMs: latencies.length ? latencies.sort((a, b) => a - b)[Math.floor(latencies.length / 2)]! : null,
       };
     });
@@ -234,13 +236,57 @@ export class ModelRegistryService {
     };
   }
 
+  /**
+   * Registre des prompts (module 49) : la « version de prompt » d'un agent est l'empreinte de sa fiche de contrôle
+   * (mission, données, autonomie, actions, interdits) — toute modification de la fiche crée une nouvelle version.
+   * Pour chaque agent : version courante, fiche, versions inscrites dans les versions de modèle, versions observées au
+   * journal (recommandations, décisions, taux d'acceptation). Une version observée non inscrite lève une alerte.
+   */
+  prompts(raise = true) {
+    const recs = this.ia?.recommendations.all() ?? [];
+    const registered = new Set(this.versions.all().flatMap((v) => v.promptVersions));
+    const rate = (xs: { status: string }[]) => (xs.length ? ((xs.filter((r) => r.status === 'ACCEPTEE').length * 100) / xs.length).toFixed(1) : null);
+    return Object.values(AGENTS).map((sheet) => {
+      const current = promptVersion(sheet);
+      const mine = recs.filter((r) => r.agentCode === sheet.code);
+      const versions = [...new Set([current, ...mine.map((r) => r.promptVersion)])].map((pv) => {
+        const xs = mine.filter((r) => r.promptVersion === pv);
+        const decided = xs.filter((r) => r.decidedAt && r.status !== 'EMISE');
+        const inModels = this.versions.find((v) => v.promptVersions.includes(pv)).map((v) => ({ id: v.id, status: v.status }));
+        if (raise && xs.length && !registered.has(pv)) this.ctx.alerts.raiseOnce(`ia-prompt-non-enregistre:${pv}`, { type: 'IA_PROMPT_NON_ENREGISTRE', severity: 'MEDIUM', source: 'ia:modeles', detail: `Version de prompt ${pv} (${sheet.name}) observée au journal sans inscription dans une version de modèle.`, context: { promptVersion: pv }, notifyRoles: ['R29', 'R22'] });
+        return { promptVersion: pv, current: pv === current, registered: registered.has(pv), inModels, recommendations: xs.length, decisions: decided.length, acceptancePct: rate(decided) };
+      });
+      return {
+        agent: sheet.code, name: sheet.name, sheetVersion: sheet.version, current,
+        sheet: { mission: sheet.mission, allowedData: sheet.allowedData, autonomy: sheet.autonomy, allowedActions: sheet.allowedActions, never: sheet.never, humanValidation: sheet.humanValidation },
+        versions,
+      };
+    });
+  }
+
+  /** Indicateurs du module 49 : dérive détectée ; taux d'acceptation des recommandations (décisions humaines). */
+  indicators(mon = this.monitoring(false)) {
+    const recs = (this.ia?.recommendations.all() ?? []).filter((r) => r.decidedAt && r.status !== 'EMISE');
+    const accepted = recs.filter((r) => r.status === 'ACCEPTEE').length;
+    const drift = mon.rows.filter((r) => r.window.driftAlert);
+    return [
+      { code: 'DERIVE_DETECTEE', label: 'Dérive détectée (versions de modèle en alerte)', measured: mon.rows.some((r) => r.window.driftPoints !== null), value: String(drift.length), unit: 'versions', ...(mon.rows.some((r) => r.window.driftPoints !== null) ? {} : { reason: `Moins de ${IA_DECISIONS_MIN} décisions par fenêtre de ${IA_FENETRE_JOURS} jours : dérive non calculable.` }), versions: drift.map((r) => r.modelVersion) },
+      recs.length
+        ? { code: 'TAUX_ACCEPTATION', label: 'Taux d’acceptation des recommandations', measured: true, value: ((accepted * 100) / recs.length).toFixed(1), unit: '%', basis: { accepted, decided: recs.length } }
+        : { code: 'TAUX_ACCEPTATION', label: 'Taux d’acceptation des recommandations', measured: false, value: null, unit: '%', reason: 'Aucune recommandation décidée par une personne.' },
+    ];
+  }
+
   view(user: User) {
     authorize(user, 'ia:models.read');
+    const monitoring = this.monitoring();
     return {
+      prompts: this.prompts(),
+      indicators: this.indicators(monitoring),
       kinds: MODEL_KINDS,
       models: this.models.all().map((m) => ({ ...m, versions: this.versions.find((v) => v.modelCode === m.code) })),
       datasets: this.datasets.all(),
-      monitoring: this.monitoring(),
+      monitoring,
       governance: [
         'Jeux d’entraînement approuvés, datés et documentés ; aucune donnée sensible non autorisée.',
         'Versionnage, validation humaine à deux personnes avant mise en service, tests de biais, suivi de dérive, explicabilité, retour arrière.',
@@ -276,6 +322,7 @@ export const iaModelesPlugin = definePlugin<ModelRegistryService>({
     app.post<{ Params: { id: string } }>('/v1/ia/modeles/versions/:id/mise-en-service/decision', async (req) => svc.decidePromotion(requireUser(req), req.params.id, parse(decisionSchema, req.body)));
     app.post<{ Params: { id: string } }>('/v1/ia/modeles/versions/:id/retour-arriere', async (req) => svc.rollback(requireUser(req), req.params.id, parse(z.object({ motif }).strict(), req.body).motif));
     app.get('/v1/ia/modeles/surveillance', async (req) => { authorize(requireUser(req), 'ia:models.read'); return svc.monitoring(); });
+    app.get('/v1/ia/prompts', async (req) => { authorize(requireUser(req), 'ia:models.read'); return { items: svc.prompts(), indicators: svc.indicators() }; });
     app.get('/v1/ia/jeux-donnees', async (req) => { authorize(requireUser(req), 'ia:models.read'); return { items: svc.datasets.all() }; });
     app.post('/v1/ia/jeux-donnees', async (req, reply) => reply.code(201).send(svc.proposeDataset(requireUser(req), parse(datasetSchema, req.body))));
     app.post<{ Params: { id: string } }>('/v1/ia/jeux-donnees/:id/decision', async (req) => svc.decideDataset(requireUser(req), req.params.id, parse(decisionSchema, req.body)));

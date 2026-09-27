@@ -186,9 +186,20 @@ export function requireAcr(user: User, minimum: AcrValue): void {
   }
 }
 
+/**
+ * Préfixes des jetons MACHINE (clients partenaires OAuth2 « client credentials », module 52) : ils ne désignent aucune
+ * personne ; la résolution des utilisateurs les ignore et chaque interface partenaire les vérifie elle-même.
+ */
+const machineTokenPrefixes = new Set<string>();
+export function registerMachineTokenPrefix(prefix: string): void {
+  machineTokenPrefixes.add(prefix);
+}
+
 export function resolveDemoUser(req: FastifyRequest, directory: UserDirectory): User | undefined {
   const authz = req.headers.authorization;
   const verifier = bearerVerifiers.get(directory);
+  const machine = typeof authz === 'string' ? /^Bearer\s+(\S+)$/i.exec(authz.trim())?.[1] : undefined;
+  if (machine && [...machineTokenPrefixes].some((p) => machine.startsWith(p))) return undefined;
   // Sans fournisseur d'identité chargé, l'en-tête Authorization est ignoré (comportement historique).
   if (verifier && typeof authz === 'string' && authz.trim() !== '') {
     const m = /^Bearer\s+(\S+)$/i.exec(authz.trim());

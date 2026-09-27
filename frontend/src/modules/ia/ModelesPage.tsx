@@ -13,12 +13,14 @@ import { api } from '../../lib/api';
 import { Section } from '../pilotage/shared';
 import { Field, hasRole, Notice, useRunner } from '../pilotage/planif';
 import '../pilotage/pilotage.css';
+import { Indicateurs, type Indicator } from '../decision/commun';
 
 interface Version { id: string; version: string; status: string; datasetIds: string[]; evaluations: unknown[]; biasTests: { passed: boolean }[]; registeredBy: string; builtin?: boolean; promotion?: { proposedBy: string }; replaces?: string }
 interface Model { code: string; label: string; kind: string; purpose: string; versions: Version[] }
 interface Dataset { id: string; code: string; label: string; source: string; legalBasis: string; status: string; sensitive: boolean; proposedBy: string }
 interface Row { modelVersion: string; registered: boolean; decisions: number; acceptancePct: number | null; window: { recentPct: number | null; previousPct: number | null; driftPoints: number | null; driftAlert: boolean }; bias: { gapPoints: number | null; alert: boolean } }
-export interface RegistryView { kinds: Record<string, string>; models: Model[]; datasets: Dataset[]; governance: string[]; monitoring: { params: { derivePoints: number; biasPoints: number; windowDays: number; minDecisions: number; status: string }; rows: Row[]; note: string } }
+interface PromptRow { agent: string; name: string; current: string; sheet: { mission: string; never: string; autonomy: string; allowedActions: string[] }; versions: { promptVersion: string; current: boolean; registered: boolean; inModels: { id: string; status: string }[]; recommendations: number; decisions: number; acceptancePct: string | null }[] }
+export interface RegistryView { prompts?: PromptRow[]; indicators?: Indicator[]; kinds: Record<string, string>; models: Model[]; datasets: Dataset[]; governance: string[]; monitoring: { params: { derivePoints: number; biasPoints: number; windowDays: number; minDecisions: number; status: string }; rows: Row[]; note: string } }
 
 export const VERSION_STATUS: Record<string, { label: string; tone: Tone }> = {
   ENREGISTREE: { label: 'Enregistrée', tone: 'info' }, MISE_EN_SERVICE_PROPOSEE: { label: 'Mise en service proposée', tone: 'warning' }, EN_SERVICE: { label: 'En service', tone: 'good' }, RETIREE: { label: 'Retirée', tone: 'neutral' },
@@ -58,6 +60,18 @@ export default function ModelesPage() {
             ))}
             <Field label="Motif (10 caractères minimum)" value={motif} onChange={setMotif} />
           </Section>
+          {d.indicators && <Section title="Indicateurs (module 49)"><Indicateurs items={d.indicators} /></Section>}
+          {d.prompts && (
+            <Section title="Registre des prompts (versions)" sub="La version de prompt est l’empreinte de la fiche de contrôle de l’agent : toute modification crée une nouvelle version ; une version observée non inscrite est signalée. Coupe-circuit : écran des agents d’IA.">
+              <DataTable caption="Prompts" rows={d.prompts.flatMap((a) => a.versions.map((v) => ({ ...v, agent: a.name, never: a.sheet.never })))} rowKey={(x) => `${x.agent}-${x.promptVersion}`} columns={[
+                { key: 'a', label: 'Agent', primary: true, render: (x) => <><strong>{x.agent}</strong><span className="small muted" style={{ display: 'block' }}>Interdits : {x.never}</span></> },
+                { key: 'v', label: 'Version de prompt', render: (x) => <><span className="mono">{x.promptVersion}</span> {x.current && <StatusBadge tone="info" label="Courante" />} {!x.registered && <StatusBadge tone="critical" label="Non inscrite" />}</> },
+                { key: 'm', label: 'Versions de modèle', render: (x) => x.inModels.map((m) => `${m.id} (${m.status})`).join(', ') || '—' },
+                { key: 'd', label: 'Recommandations / décisions', num: true, render: (x) => `${x.recommendations} / ${x.decisions}` },
+                { key: 't', label: 'Acceptation', num: true, render: (x) => (x.acceptancePct === null ? '—' : `${x.acceptancePct} %`) },
+              ]} />
+            </Section>
+          )}
           <Section title="Suivi de dérive et de biais" sub={`${d.monitoring.note} Seuils : ${d.monitoring.params.derivePoints} points (dérive), ${d.monitoring.params.biasPoints} points (biais), ${d.monitoring.params.minDecisions} décisions minimum — ${d.monitoring.params.status}.`}>
             <DataTable caption="Suivi" rows={d.monitoring.rows} rowKey={(x) => x.modelVersion} columns={[
               { key: 'v', label: 'Version observée', primary: true, render: (x) => <>{x.modelVersion} {!x.registered && <StatusBadge tone="critical" label="Non enregistrée" />}</> },

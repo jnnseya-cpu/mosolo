@@ -97,7 +97,7 @@ export class ApprentissageService {
     if (this.contenus.findOne((c) => c.type === input.type && c.cle === input.cle)) throw conflict('CLE_DEJA_UTILISEE', `Un contenu « ${input.cle} » existe déjà : créez-en une nouvelle version.`);
     this.validerModule(input.type, input);
     const c = this.contenus.insert({
-      id: opts.id ?? this.ids.next(input.type === 'FICHE' ? 'FICHE' : 'MOD', 4), type: input.type, cle: input.cle, publics: [...new Set(input.publics)],
+      id: opts.id ?? this.ids.next(input.type === 'FICHE' ? 'FICHE' : input.type === 'PROCEDURE' ? 'PROC' : 'MOD', 4), type: input.type, cle: input.cle, publics: [...new Set(input.publics)],
       versions: [this.version(u, 1, input)], ...(opts.demo ? { demo: true } : {}),
     });
     this.audit(u, 'apprentissage.contenu.cree', 'apprentissage_contenu', c.id, { cle: c.cle, type: c.type });
@@ -169,6 +169,27 @@ export class ApprentissageService {
   listeContenus(u: User) {
     if (!evaluate(u, A.contenuWrite) && !evaluate(u, A.certificationRead)) authorize(u, A.contenuWrite);
     return this.contenus.all();
+  }
+
+  /**
+   * Base de procédures VERSIONNÉE (module 50) : chaque procédure garde toutes ses versions (auteur, date, statut,
+   * décision de publication à quatre yeux) ; l'agent lit la version publiée de son public, jamais un brouillon.
+   */
+  procedures(u: User) {
+    authorize(u, A.espaceRead);
+    const gestion = !!evaluate(u, A.contenuWrite) || !!evaluate(u, A.certificationRead);
+    const profils = profilsDe(u.roles);
+    return {
+      items: this.contenus.all().filter((c) => c.type === 'PROCEDURE' && (gestion || c.publics.some((p) => profils.includes(p)))).map((c) => {
+        const pub = this.publiee(c);
+        return {
+          id: c.id, cle: c.cle, publics: c.publics, demo: !!c.demo,
+          publiee: pub ? { version: pub.version, titre: pub.titre, corps: pub.corps, ...(pub.lingala ? { lingala: pub.lingala } : {}), publieeLe: pub.decision?.le ?? null } : null,
+          historique: c.versions.map((v) => ({ version: v.version, titre: v.titre, statut: v.statut, auteur: v.auteur, creeLe: v.creeLe, ...(v.decision ? { decision: { par: v.decision.par, le: v.decision.le, approuve: v.decision.approuve, motif: v.decision.motif } } : {}) })),
+          ...(gestion ? {} : { note: 'Seule la version publiée est opposable ; l’historique reste consultable.' }),
+        };
+      }),
+    };
   }
 
   // ─────────────────────────────────────────── espace de l'apprenant ───────────────────────────────────────────
@@ -422,7 +443,17 @@ export class ApprentissageService {
         echeanceSous30j: derniers.filter((c) => c.statut === 'DELIVRE' && c.valableJusquau >= today && c.valableJusquau <= this.plusJours(30)).length,
       };
     });
+    // Indicateurs du module 50 : agents certifiés (certificat en vigueur, tous publics) ; taux de réussite des épreuves.
+    const certifies = new Set(this.certificats.find((c) => c.statut === 'DELIVRE' && c.valableJusquau >= today).map((c) => c.userId));
+    const epreuves = this.epreuves.all();
+    const reussies = epreuves.filter((e) => e.reussie).length;
     return {
+      indicators: [
+        { code: 'AGENTS_CERTIFIES', label: 'Agents certifiés (certificat en vigueur)', measured: true, value: String(certifies.size), unit: 'agents' },
+        epreuves.length
+          ? { code: 'TAUX_REUSSITE', label: 'Taux de réussite des épreuves', measured: true, value: ((reussies * 100) / epreuves.length).toFixed(1), unit: '%', basis: { reussies, total: epreuves.length } }
+          : { code: 'TAUX_REUSSITE', label: 'Taux de réussite des épreuves', measured: false, value: null, unit: '%', reason: 'Aucune épreuve passée.' },
+      ],
       comprehension: this.comprehension(), couverture, confidentialite: CONFIDENTIALITE,
       publics: PROFILS.map((p) => ({ profil: p, nom: PROFIL_LIBELLE[p], ...MODE_VALIDATION[p] })),
     };
