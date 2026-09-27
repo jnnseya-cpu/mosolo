@@ -42,10 +42,49 @@ export default function AdRegie() {
           <button key={k} type="button" role="tab" aria-pressed={tab === k} aria-selected={tab === k} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
+      {tab === 'requests' && <PendingLiquidations tick={tick} onChange={refresh} />}
       {tab === 'requests' && <Requests tick={tick} onChange={refresh} />}
       {tab === 'cases' && <Cases tick={tick} onChange={refresh} />}
       {tab === 'accreditations' && <Accreditations tick={tick} onChange={refresh} />}
     </div>
+  );
+}
+
+/**
+ * Autorisations accordées sous « acte requis » dont le barème est désormais actif : droits à liquider en quatre yeux
+ * (proposition par un instructeur, approbation par une autre personne habilitée).
+ */
+function PendingLiquidations({ tick, onChange }: { tick: number; onChange: () => void }) {
+  const { fmtDate, user } = useApp();
+  const list = useApi(() => api<{ items: AuthRequest[] }>('/v1/publicite/liquidations/pending').then((r) => r.items), [tick, user?.id]);
+  if (list.loading && !list.data) return null;
+  if (list.error) return <ErrorState error={list.error} onRetry={list.reload} />;
+  const items = list.data ?? [];
+  if (items.length === 0) return null;
+  const canPropose = hasRole(user?.roles, 'R07');
+  return (
+    <section className="panel" style={{ marginBottom: 16 }}>
+      <header className="panel-head"><div><h2 className="panel-title"><Icon name="scale" size={18} /> Liquidations en attente</h2><p className="panel-sub">Autorisations accordées avant la publication du barème, désormais actif. Proposition et approbation : deux personnes distinctes.</p></div></header>
+      <div className="pk-cards pk-cards-2">
+        {items.map((r) => (
+          <article key={r.id} className="pk-card">
+            <div className="pk-card-head"><div className="min0"><p className="pk-row-title">{r.reference}</p><p className="pk-sub">{r.device ? `${r.device.reference} · ${AD_TYPE[r.device.type]} · ${r.device.surfaceM2.replace('.', ',')} m² × ${r.device.faces} · ${r.device.commune}` : ''}</p></div>
+              <StatusBadge tone={r.liquidationProposal ? 'warning' : 'neutral'} label={r.liquidationProposal ? 'Proposée' : 'À proposer'} /></div>
+            {r.liquidation?.note && <p className="small muted">{r.liquidation.note}</p>}
+            {r.liquidationProposal ? (
+              <>
+                <p className="small"><strong>Proposition ({r.liquidationProposal.by}, {fmtDate(r.liquidationProposal.at, true)}) :</strong> {r.liquidationProposal.note} — règle {r.liquidationProposal.ruleCode} v{r.liquidationProposal.ruleVersion}</p>
+                {r.liquidationProposal.by === user?.id ? <p className="small muted">Vous avez proposé cette liquidation : l’approbation revient à une autre personne.</p> : (
+                  <ReasonForm confirmLabel="Approuver la liquidation" placeholder="Motif de l’approbation" onSubmit={(reason) => api(`/v1/publicite/authorizations/${r.id}/liquidation/approve`, { method: 'POST', body: { reason } }).then(onChange)} />
+                )}
+              </>
+            ) : canPropose ? (
+              <ReasonForm confirmLabel="Proposer la liquidation" placeholder="Note de proposition (base, période)" onSubmit={(note) => api(`/v1/publicite/authorizations/${r.id}/liquidation/propose`, { method: 'POST', body: { note } }).then(onChange)} />
+            ) : <p className="small muted">En attente de proposition par un instructeur.</p>}
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -132,7 +171,10 @@ function Cases({ tick, onChange }: { tick: number; onChange: () => void }) {
 
 function CaseDecision({ c, onChange }: { c: Case; onChange: () => void }) {
   const [owner, setOwner] = useState('');
-  const [liquidate, setLiquidate] = useState(false);
+  // Décision explicite sur les droits (jamais laissée au défaut du serveur) : cochée d'office pour un support non
+  // déclaré dont l'exploitant est identifié.
+  const [liquidate, setLiquidate] = useState(c.finding === 'NON_DECLARE' && !!c.device?.ownerIdentified);
+  const liquidateDues = c.finding !== 'RETIRE' && liquidate;
   return (
     <article className="pk-card">
       <div className="pk-card-head"><div className="min0"><p className="pk-row-title">{FINDING[c.finding]} · {c.device?.reference}</p><p className="pk-sub">{c.reference} · {c.device?.address} ({c.commune})</p></div>
@@ -141,11 +183,11 @@ function CaseDecision({ c, onChange }: { c: Case; onChange: () => void }) {
       {c.inspection && <div className="pk-evidence"><span><Icon name="camera" size={14} /> {c.inspection.photos.length} photo(s) scellée(s)</span><span>{c.inspection.observations}</span>{c.inspection.presumedOperator && <span>Exploitant présumé : {c.inspection.presumedOperator}</span>}</div>}
       {c.contests.length > 0 && <div className="pk-evidence"><strong>Observations de l’exploitant</strong>{c.contests.map((x) => <span key={x.id}>« {x.grounds} »</span>)}</div>}
       <ReasonForm confirmLabel="Retenir le constat"
-        onSubmit={(reason) => api(`/v1/publicite/cases/${c.id}/decide`, { method: 'POST', body: { outcome: 'RETENU', reason, ...(owner.trim() ? { ownerTaxpayerId: owner.trim() } : {}), ...(liquidate ? { liquidateDues: true } : {}) } }).then(onChange)}>
+        onSubmit={(reason) => api(`/v1/publicite/cases/${c.id}/decide`, { method: 'POST', body: { outcome: 'RETENU', reason, ...(owner.trim() ? { ownerTaxpayerId: owner.trim() } : {}), liquidateDues } }).then(onChange)}>
         {!c.device?.ownerIdentified && <label className="field"><span className="label">Identifiant de l’exploitant (si identifié)</span><input value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="ex. TP-PUB-0001 (fictif)" /></label>}
         {c.finding !== 'RETIRE' && <label className="check"><input type="checkbox" checked={liquidate} onChange={(e) => setLiquidate(e.target.checked)} /> Liquider les droits dus selon la règle publiée</label>}
       </ReasonForm>
-      <ReasonForm confirmLabel="Classer sans suite" danger onSubmit={(reason) => api(`/v1/publicite/cases/${c.id}/decide`, { method: 'POST', body: { outcome: 'CLASSE', reason } }).then(onChange)} />
+      <ReasonForm confirmLabel="Classer sans suite" danger onSubmit={(reason) => api(`/v1/publicite/cases/${c.id}/decide`, { method: 'POST', body: { outcome: 'CLASSE', reason, liquidateDues: false } }).then(onChange)} />
     </article>
   );
 }

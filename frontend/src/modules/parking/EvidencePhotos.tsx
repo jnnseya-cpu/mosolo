@@ -57,13 +57,13 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
   );
 }
 
-export function EvidencePhotos({ photos }: { photos: EvidencePhotoMeta[] }) {
+export function EvidencePhotos({ photos, caption }: { photos: EvidencePhotoMeta[]; caption?: string }) {
   const [open, setOpen] = useState<string | null>(null);
   const closeBox = useCallback(() => setOpen(null), []);
   if (!photos.length) return null;
   return (
     <div className="ev-photos">
-      <p className="small muted"><Icon name="camera" size={14} /> {photos.length} photo(s) horodatée(s) et géolocalisée(s) · lieu : {photos[0]!.place} · agent : {photos[0]!.agentName}</p>
+      <p className="small muted"><Icon name="camera" size={14} /> {caption ?? `${photos.length} photo(s) horodatée(s) et géolocalisée(s) · lieu : ${photos[0]!.place} · agent : ${photos[0]!.agentName}`}</p>
       <div className="ev-grid">{photos.map((p) => <Thumb key={p.id} p={p} onOpen={setOpen} />)}</div>
       {open && <Lightbox src={open} onClose={closeBox} />}
     </div>

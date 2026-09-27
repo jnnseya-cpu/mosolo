@@ -156,3 +156,14 @@ export function metersBetween(a: { lat: number; lon: number }, b: { lat: number;
   const h = Math.sin(r(b.lat - a.lat) / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lon - a.lon) / 2) ** 2;
   return 2 * 6_371_008.8 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
+
+/**
+ * Présence du terminal jointe à un contrôle (plaque, scan) : `lat`, `lon`, `accuracyM` ajoutés à l'URL, seulement
+ * pour un relevé GPS MESURÉ (jamais une position ajustée à la main ou de repli). Sans relevé, le contrôle part sans
+ * position : il reste valable mais n'ouvre aucune commission (présence non vérifiée par le serveur).
+ */
+export function withPresence(path: string, fix: Pick<PreciseFix, 'lat' | 'lon' | 'accuracy' | 'source'> | null | undefined): string {
+  if (!fix || fix.source !== 'GPS' || fix.accuracy === null || !Number.isFinite(fix.lat) || !Number.isFinite(fix.lon)) return path;
+  const q = new URLSearchParams({ lat: fix.lat.toFixed(6), lon: fix.lon.toFixed(6), accuracyM: String(Math.round(fix.accuracy * 10) / 10) });
+  return `${path}${path.includes('?') ? '&' : '?'}${q.toString()}`;
+}

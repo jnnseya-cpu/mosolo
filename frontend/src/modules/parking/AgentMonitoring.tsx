@@ -12,13 +12,17 @@ import { Icon } from '../../components/Icon';
 import { StatusBadge } from '../../components/StatusBadge';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
-import { Kpis, pctText } from './shared';
+import { hasRole, Kpis, pctText, ReasonForm } from './shared';
 import './parking.css';
 
 interface Stats { controls: number; defects: number; constats: number; rejected: number; retained: number; dismissed: number; contested: number; annulled: number; weakEvidence: number }
 interface ModuleStats extends Stats { module: string; moduleLabel: string }
 interface Signal { code: string; module: string; level: 'A_EXAMINER' | 'INFO'; text: string }
 interface Row { agentId: string; agentName: string; modules: ModuleStats[]; totals: Stats; constatRatePct: string | null; penaltyCommissionSharePct: string | null; signals: Signal[] }
+interface CounterCheck {
+  id: string; module: 'STATIONNEMENT' | 'PUBLICITE'; caseId: string; reference: string; agentId: string; commune: string; involved: string[];
+  sampledAt: string; status: 'A_CONTRE_VERIFIER' | 'CONFIRME' | 'INFIRME'; outcome?: { by: string; at: string; note: string };
+}
 interface Report { generatedAt: string; thresholds: Record<string, number>; rows: Row[]; notice: string }
 
 const COLS: { k: keyof Stats; label: string; title: string }[] = [
@@ -94,9 +98,66 @@ export default function AgentMonitoringPage() {
               </div>
             )}
           </section>
+          {hasRole(user?.roles, 'R09', 'R22', 'R24') && <CounterChecks />}
           <p className="small muted">Seuils actuels (à valider par l’inspection des services) : au moins {d.thresholds.minControls} contrôles ; taux de constats supérieur à {d.thresholds.constatRateVsMedian} × la médiane des pairs ; écartés ≥ {d.thresholds.rejectionPct} % ; classés ≥ {d.thresholds.dismissalPct} % ; contestés ou annulés ≥ {d.thresholds.contestPct} % ; preuves faibles ≥ {d.thresholds.weakEvidencePct} % ; pénalités ≥ {d.thresholds.penaltySharePct} % de la commission (information).</p>
         </>
       )}
     </div>
+  );
+}
+
+const CC_MODULE: Record<CounterCheck['module'], string> = { STATIONNEMENT: 'Stationnement', PUBLICITE: 'Publicité' };
+const CC_STATUS: Record<CounterCheck['status'], { tone: 'warning' | 'good' | 'serious'; label: string }> = {
+  A_CONTRE_VERIFIER: { tone: 'warning', label: 'À contre-vérifier' }, CONFIRME: { tone: 'good', label: 'Confirmé' }, INFIRME: { tone: 'serious', label: 'Infirmé' },
+};
+
+/**
+ * Contre-vérifications : échantillon tiré au sort des constats retenus, revu sur place par une personne qui n'est pas
+ * intervenue sur le dossier. Un constat infirmé ouvre une alerte (examen humain), sans mesure automatique.
+ */
+function CounterChecks() {
+  const { user, fmtDate } = useApp();
+  const [tick, setTick] = useState(0);
+  const list = useApi(() => api<{ items: CounterCheck[] }>('/v1/agents/counter-checks').then((r) => r.items), [user?.id, tick]);
+  const reload = () => setTick((n) => n + 1);
+  const items = list.data ?? [];
+  const todo = items.filter((c) => c.status === 'A_CONTRE_VERIFIER');
+  const done = items.filter((c) => c.status !== 'A_CONTRE_VERIFIER');
+  const record = (id: string, outcome: 'CONFIRME' | 'INFIRME', note: string) => api(`/v1/agents/counter-checks/${encodeURIComponent(id)}/record`, { method: 'POST', body: { outcome, note } }).then(reload);
+  return (
+    <section className="panel" aria-labelledby="cc-title">
+      <header className="panel-head"><div><h2 className="panel-title" id="cc-title"><Icon name="shieldCheck" size={18} /> Contre-vérifications</h2>
+        <p className="panel-sub">Constats retenus tirés au sort : vérifiez-les sur place. Vous ne pouvez pas contre-vérifier un dossier sur lequel vous êtes intervenu.</p></div></header>
+      {list.loading && !list.data ? <Loading /> : list.error ? <ErrorState error={list.error} onRetry={list.reload} /> : items.length === 0 ? <p className="muted small">Aucune contre-vérification dans votre périmètre.</p> : (
+        <div className="stack">
+          {todo.length > 0 && (
+            <div className="pk-cards pk-cards-2">
+              {todo.map((c) => (
+                <article key={c.id} className="pk-card">
+                  <div className="pk-card-head"><div className="min0"><p className="pk-row-title">{CC_MODULE[c.module]} · <span className="mono">{c.reference}</span></p><p className="pk-sub">{c.commune} · agent {c.agentId} · tiré le {fmtDate(c.sampledAt, true)}</p></div>
+                    <StatusBadge tone={CC_STATUS[c.status].tone} label={CC_STATUS[c.status].label} /></div>
+                  {user && c.involved.includes(user.id) ? <p className="small muted">Vous êtes intervenu sur ce dossier : la contre-vérification revient à une autre personne.</p> : (
+                    <div className="pk-grid pk-grid-even">
+                      <ReasonForm confirmLabel="Constat confirmé" placeholder="Ce qui a été vérifié sur place" onSubmit={(note) => record(c.id, 'CONFIRME', note)} />
+                      <ReasonForm confirmLabel="Constat infirmé" danger placeholder="Écart constaté (ouvre un examen humain)" onSubmit={(note) => record(c.id, 'INFIRME', note)} />
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+          {done.length > 0 && (
+            <ul className="list-rows">
+              {done.map((c) => (
+                <li key={c.id} className="list-row">
+                  <div className="min0"><p className="pk-row-title">{CC_MODULE[c.module]} · <span className="mono">{c.reference}</span></p><p className="pk-sub">agent {c.agentId} · {c.outcome ? `${c.outcome.by}, ${fmtDate(c.outcome.at, true)} — ${c.outcome.note}` : ''}</p></div>
+                  <div className="row-side"><StatusBadge tone={CC_STATUS[c.status].tone} label={CC_STATUS[c.status].label} /></div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

@@ -14,6 +14,8 @@ import { DataTable } from '../../components/DataTable';
 import { Drawer } from '../../components/Drawer';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { api, describeError } from '../../lib/api';
+import { GpsQualityLine } from '../../components/GpsQuality';
+import { usePreciseLocation, withPresence } from '../../lib/geo';
 import { CASE_TONE, fetchCatalogue, OBLIGATION_LABEL, TITLE_LABEL, TITLE_TONE, verifyPath, type AviaDeclaration, type CaseView, type VObligation } from '../../verticals/catalogue';
 import './verticales.css';
 
@@ -214,6 +216,14 @@ function PlatesTab() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const report = useApi(() => api<{ totals: { platesIssued: number; scans: number }; agents: { agentId: string; agentName: string; platesIssued: number; scans: number; communes: string[] }[] }>(`/v1/verticales/plates-report/daily?date=${date}`), [date, user?.id]);
   const isCounter = !!user?.roles.includes('R12');
+  // Présence de l'agent au scan : relevé GPS précis joint (le serveur compare à la position de l'objet). Sans relevé
+  // récent, le scan reste valable mais n'ouvre aucune commission. Inutile au guichet.
+  const gps = usePreciseLocation({ targetM: 20, maxWaitMs: 20_000, auto: !isCounter });
+  const scanPath = (c: string) => {
+    const fix = gps.fix && Date.now() - Date.parse(gps.fix.at) <= 2 * 60_000 ? gps.fix : null;
+    if (gps.status !== 'searching') gps.start();
+    return withPresence(`/v1/verticales/plates/${encodeURIComponent(c)}/scan`, fix);
+  };
   return (
     <div className="vxc-grid2">
       <div className="stack">
@@ -222,9 +232,16 @@ function PlatesTab() {
           <p className="small muted">NFIU pour les parcelles et bâtiments ; plaques d’étal, de site, d’embarcation ou de chantier. Dans votre territoire seulement.</p>
           <div className="input-row"><input value={objectId} onChange={(e) => setObjectId(e.target.value)} placeholder="Identifiant de l’objet (ex. OBJ-DEMO-PARCELLE-01)" aria-label="Identifiant de l’objet" /><button type="submit" className="btn btn-primary" disabled={a.busy || !objectId.trim()}>Poser</button></div>
         </form>
-        <form className="panel form" onSubmit={(e) => { e.preventDefault(); void a.run(async () => { setCounter(null); setScan(isCounter ? null : await api<ScanResult>(`/v1/verticales/plates/${encodeURIComponent(code.trim())}/scan`)); if (isCounter) setCounter(await api(`/v1/verticales/plates/${encodeURIComponent(code.trim())}/counter`)); report.reload(); }); }}>
+        <form className="panel form" onSubmit={(e) => { e.preventDefault(); void a.run(async () => { setCounter(null); setScan(isCounter ? null : await api<ScanResult>(scanPath(code.trim()))); if (isCounter) setCounter(await api(`/v1/verticales/plates/${encodeURIComponent(code.trim())}/counter`)); report.reload(); }); }}>
           <h2 className="panel-title"><Icon name="qr" size={18} /> {isCounter ? 'Paiement au guichet par plaque' : 'Scanner une plaque'}</h2>
           <div className="input-row"><input className="mono" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="Code de la plaque" aria-label="Code de la plaque" /><button type="submit" className="btn btn-secondary" disabled={a.busy || !code.trim()}>{isCounter ? 'Rechercher' : 'Scanner'}</button></div>
+          {!isCounter && (
+            <>
+              <GpsQualityLine fix={gps.fix} status={gps.status} targetM={gps.targetM} />
+              {gps.status !== 'searching' && <button type="button" className="btn btn-ghost btn-sm" onClick={gps.start}><Icon name="gps" size={16} /> {gps.fix ? 'Actualiser la position' : 'Localiser l’appareil'}</button>}
+              <p className="hint">Position jointe au scan : sans présence vérifiée près du bien, le scan n’ouvre aucune commission.</p>
+            </>
+          )}
         </form>
         <Feedback a={a} />
         {scan && (

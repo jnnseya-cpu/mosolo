@@ -10,6 +10,7 @@ import { api, describeError, serverNow } from '../../lib/api';
 import { Icon } from '../../components/Icon';
 import { PreciseLocation } from '../../components/PreciseLocation';
 import type { PreciseFix } from '../../lib/geo';
+import { encode, kinTime, sha256Hex, stamp, toBase64 } from '../../lib/evidenceJpeg';
 
 export const SLOTS = [
   { id: 'ABORDS_AVANT', label: 'Abords — devant', hint: 'Reculez : montrez ce qui est devant le véhicule (rue, marquage, panneau)' },
@@ -23,43 +24,7 @@ type SlotId = (typeof SLOTS)[number]['id'];
 export interface Fix { lat: number; lon: number; accuracy: number | null; source: 'GPS' | 'MANUEL' | 'ZONE' }
 interface Taken { id: string; preview: string; sha256: string }
 
-const kin = (t: number) => new Date(t).toLocaleString('fr-FR', { timeZone: 'Africa/Kinshasa', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-async function sha256Hex(buf: ArrayBuffer): Promise<string> {
-  const d = await crypto.subtle.digest('SHA-256', buf);
-  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-function toBase64(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf); let s = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
-}
-
-/** Dessine l'image puis le bandeau d'horodatage incrusté (lisible, non détachable de l'image). */
-function stamp(canvas: HTMLCanvasElement, source: CanvasImageSource, sw: number, sh: number, lines: string[]) {
-  const scale = Math.min(1, 1280 / Math.max(sw, sh));
-  const w = Math.round(sw * scale); const h = Math.round(sh * scale);
-  const fs = Math.max(14, Math.round(w / 48));
-  const band = lines.length * (fs + 6) + 12;
-  canvas.width = w; canvas.height = h + band;
-  const ctx = canvas.getContext('2d')!;
-  ctx.drawImage(source, 0, 0, w, h);
-  ctx.fillStyle = '#10163a'; ctx.fillRect(0, h, w, band);
-  ctx.fillStyle = '#F7D618'; ctx.fillRect(0, h, w, 3);
-  ctx.fillStyle = '#ffffff'; ctx.font = `600 ${fs}px system-ui, Arial, sans-serif`; ctx.textBaseline = 'top';
-  lines.forEach((l, i) => ctx.fillText(l, 10, h + 8 + i * (fs + 6), w - 20));
-  // Filigrane discret dans l'image : l'heure et la plaque restent visibles même si le bandeau est recadré.
-  ctx.save(); ctx.globalAlpha = 0.35; ctx.font = `700 ${Math.round(fs * 0.9)}px system-ui, Arial`; ctx.fillStyle = '#ffffff';
-  ctx.fillText(lines[1] ?? '', 10, 10, w - 20); ctx.restore();
-}
-
-async function encode(canvas: HTMLCanvasElement): Promise<ArrayBuffer> {
-  for (const q of [0.82, 0.7, 0.58, 0.45]) {
-    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', q));
-    if (blob && blob.size <= 880_000) return blob.arrayBuffer();
-  }
-  throw new Error('Photo trop lourde.');
-}
+const kin = kinTime;
 
 export function EvidenceCamera({ checkId, plate, zone, agent, onDone, onCancel }: {
   checkId: string; plate: string; zone: { id: string; name: string; center: { lat: number; lon: number } };
