@@ -13,6 +13,8 @@
 .pk-kpis > div:nth-child(odd) { border-right: 1px solid var(--line-soft); }
 .pk-kpis dt { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-3); font-weight: 600; }
 .pk-kpis dd { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin-top: 4px; overflow-wrap: anywhere; }
+/* Tuile étroite (360 px) : un montant long peut passer à la ligne plutôt que déborder de l’écran. */
+.pk-kpis dd .nowrap { white-space: normal; }
 .pk-kpis dd small { display: block; font-size: 12px; font-weight: 400; letter-spacing: 0; color: var(--ink-3); margin-top: 2px; }
 @media (min-width: 1000px) {
   .pk-kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }

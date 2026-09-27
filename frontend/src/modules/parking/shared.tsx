@@ -134,7 +134,8 @@ export function Money({ items, empty = '—' }: { items: MoneyJSON[] | MoneyJSON
   const { lang } = useApp();
   const list = !items ? [] : Array.isArray(items) ? items : [items];
   if (list.length === 0) return <span className="muted">{empty}</span>;
-  return <span className="num nowrap">{list.map((m) => formatMoney(m, { locale: lang === 'en' ? 'en' : 'fr' })).join(' · ')}</span>;
+  // Chaque montant reste insécable ; le passage à la ligne se fait ENTRE devises (écran de 360 px sans défilement horizontal).
+  return <span className="num">{list.map((m, i) => <span key={i}>{i > 0 && ' · '}<span className="nowrap">{formatMoney(m, { locale: lang === 'en' ? 'en' : 'fr' })}</span></span>)}</span>;
 }
 
 export function DemoTag({ show = true, label = 'Démonstration' }: { show?: boolean; label?: string }) {
