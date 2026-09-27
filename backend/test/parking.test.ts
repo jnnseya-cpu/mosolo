@@ -36,7 +36,6 @@ async function pay(env: TestEnv, user: string, obligationId: string) {
   return cb.json();
 }
 
-const photo = sha256Hex('photo-test');
 
 describe('ParkSmart — zones et statut d’acte', () => {
   it('les zones proposées restent ACTE_REQUIS ; seules les zones liées à une règle ACTIVE sont ouvertes', async () => {
@@ -177,14 +176,36 @@ describe('ParkSmart — contrôle par plaque et constat humain (RW1)', () => {
     const red = (await env.req('GET', `/v1/parking/control/KN-0888-DM?zoneId=${PARKING_DEMO.zoneGombe}`, 'pk-controleur')).json();
     expect(red.light).toBe('ROUGE');
     expect(env.app.ctx.assessment.obligations.count()).toBe(obligations);
-    const base = { zoneId: PARKING_DEMO.zoneGombe, plate: 'KN-0888-DM', nature: 'NON_PAIEMENT', lat: -4.3, lon: 15.3, observations: 'Test de constat' };
-    expect((await env.req('POST', '/v1/parking/violations', 'pk-controleur', { ...base, photoSha256: [] })).statusCode).toBe(400);
-    expect((await env.req('POST', '/v1/parking/violations', 'pk-controleur', { ...base, plate: PARKING_DEMO.plateOwner, photoSha256: [photo] })).json().code).toBe('VALID_TITLE_EXISTS');
-    expect((await env.req('POST', '/v1/parking/violations', 'u-agent-terrain', { ...base, photoSha256: [photo] })).statusCode).toBe(403);
-    const ok = await env.req('POST', '/v1/parking/violations', 'pk-controleur', { ...base, checkId: red.checkId, photoSha256: [photo] });
-    expect(ok.statusCode).toBe(201);
-    expect(ok.json()).toMatchObject({ status: 'CONSTATE', lightAtCheck: 'ROUGE', holderIdentified: false });
+    // Photo prise par la caméra de preuve, rattachée au contrôle rouge (image conservée au serveur).
+    const img = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7), Buffer.from('photo-test-abords'), Buffer.from([0xff, 0xd9])]);
+    const photo = sha256Hex(img);
+    const up = await env.req('POST', '/v1/parking/evidence-photos', 'pk-controleur', {
+      checkId: red.checkId, slot: 'ABORDS_AVANT', imageBase64: img.toString('base64'), sha256: photo,
+      lat: -4.3, lon: 15.3, accuracyM: 6, gpsSource: 'GPS', place: 'Secteur de test', stampedAt: env.clock.now().toISOString(),
+    });
+    expect(up.statusCode, up.body).toBe(201);
+    const base = { zoneId: PARKING_DEMO.zoneGombe, plate: 'KN-0888-DM', nature: 'NON_PAIEMENT', checkId: red.checkId, lat: -4.3, lon: 15.3, observations: 'Test de constat' };
+    // Sans photo de la caméra, sans contrôle, ou avec de simples empreintes déclarées : refusé.
+    expect((await env.req('POST', '/v1/parking/violations', 'pk-controleur', { ...base, photoIds: [] })).statusCode).toBe(400);
+    expect((await env.req('POST', '/v1/parking/violations', 'pk-controleur', { ...base, checkId: undefined, photoIds: [up.json().id] })).statusCode).toBe(400);
+    expect((await env.req('POST', '/v1/parking/violations', 'pk-controleur', { ...base, photoSha256: [photo] })).statusCode).toBe(400);
+    // Contrôle vert (titre valide) : aucun constat possible.
+    const green = (await env.req('GET', `/v1/parking/control/${PARKING_DEMO.plateOwner}?zoneId=${PARKING_DEMO.zoneGombe}`, 'pk-controleur')).json();
+    expect((await env.req('POST', '/v1/parking/violations', 'pk-controleur', { ...base, plate: PARKING_DEMO.plateOwner, checkId: green.checkId, photoIds: [up.json().id] })).json().code).toBe('CHECK_NOT_RED');
+    // Contrôle d'un autre agent, autre zone, contrôle trop ancien : refusés.
+    expect((await env.req('POST', '/v1/parking/violations', 'u-agent-terrain', { ...base, photoIds: [up.json().id] })).statusCode).toBe(403);
+    env.app.ctx.users.add({ id: 'pk-controleur-2', name: 'Second contrôleur (test)', roles: ['R11'], entity: 'DGTK', territory: ['Gombe'] });
+    expect((await env.req('POST', '/v1/parking/violations', 'pk-controleur-2', { ...base, photoIds: [up.json().id] })).json().code).toBe('NOT_CHECK_AGENT');
+    expect((await env.req('POST', '/v1/parking/violations', 'pk-controleur', { ...base, zoneId: PARKING_DEMO.zoneLimete, photoIds: [up.json().id] })).json().code).toBe('CHECK_ZONE_MISMATCH');
+    const ok = await env.req('POST', '/v1/parking/violations', 'pk-controleur', { ...base, photoIds: [up.json().id] });
+    expect(ok.statusCode, ok.body).toBe(201);
+    expect(ok.json()).toMatchObject({ status: 'CONSTATE', lightAtCheck: 'ROUGE', holderIdentified: false, checkId: red.checkId });
     expect(ok.json().evidence.photoSha256).toEqual([photo]);
+    // Un seul constat par contrôle.
+    expect((await env.req('POST', '/v1/parking/violations', 'pk-controleur', { ...base, photoIds: [up.json().id] })).json().code).toBe('CHECK_ALREADY_USED');
+    const late = (await env.req('GET', `/v1/parking/control/KN-0889-DM?zoneId=${PARKING_DEMO.zoneGombe}`, 'pk-controleur')).json();
+    env.clock.advance(31 * 60_000);
+    expect((await env.req('POST', '/v1/parking/violations', 'pk-controleur', { ...base, plate: 'KN-0889-DM', checkId: late.checkId, photoIds: ['PKP-X'] })).json().code).toBe('CHECK_TOO_OLD');
     expect(env.app.ctx.assessment.obligations.count()).toBe(obligations);
     // Aucune route de fourrière, de blocage ni de modification d'un constat.
     expect((await env.req('POST', `/v1/parking/violations/${ok.json().id}/impound`, 'pk-autorite', {})).statusCode).toBe(404);

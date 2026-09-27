@@ -8,8 +8,12 @@ import { authorize } from '../../core/policy.js';
 import {
   PARTNER_KINDS, RESERVATION_PURPOSES, VIOLATION_NATURES, ZONE_KINDS, type ParkingService,
 } from './service.js';
+import { badRequest, forbidden, unprocessable } from '../../core/errors.js';
 import { sha256Hex64 } from './support.js';
-import { AGENT_COMMISSION_PCT, EVIDENCE_SLOTS } from './field.js';
+import { AGENT_COMMISSION_PCT, EVIDENCE_SLOTS, PHOTO_WINDOW_MINUTES } from './field.js';
+
+/** Consultation des pénalités : dans ce délai après le contrôle de la plaque par l'agent. */
+const PENALTIES_WINDOW_MINUTES = PHOTO_WINDOW_MINUTES;
 
 const lonLat = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]);
 const reason = z.string().trim().min(5).max(2000);
@@ -93,12 +97,12 @@ export function registerParkingRoutes(app: FastifyInstance, ctx: AppContext, svc
   // Constats (RW1)
   app.post('/v1/parking/violations', async (req, reply) => {
     const body = parse(z.object({
-      zoneId: z.string().min(1), plate, nature: z.enum(VIOLATION_NATURES), checkId: z.string().optional(),
-      photoSha256: z.array(z.string().regex(sha256Hex64, 'empreinte SHA-256 hexadécimale attendue')).min(1).max(6).optional(),
-      photoIds: z.array(z.string().min(1).max(40)).min(1).max(5).optional(), place: z.string().trim().min(3).max(200).optional(),
+      // Constat rattaché au contrôle rouge de l'agent, preuves prises par la caméra de preuve (images conservées au serveur).
+      zoneId: z.string().min(1), plate, nature: z.enum(VIOLATION_NATURES), checkId: z.string().min(1).max(40),
+      photoIds: z.array(z.string().min(1).max(40)).min(1).max(5), place: z.string().trim().min(3).max(200).optional(),
       lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180), gpsAccuracyM: z.number().min(0).max(10_000).optional(),
       deviceId: z.string().max(64).optional(), observations: z.string().trim().min(3).max(2000),
-    }).strict().refine((b) => (b.photoSha256?.length ?? 0) > 0 || (b.photoIds?.length ?? 0) > 0, 'Au moins une photographie (photoIds ou photoSha256).'), req.body);
+    }).strict(), req.body);
     return reply.code(201).send(svc.recordViolation(requireUser(req), body));
   });
 
@@ -117,13 +121,18 @@ export function registerParkingRoutes(app: FastifyInstance, ctx: AppContext, svc
     return reply.type(p.mime).header('cache-control', 'private, no-store').header('x-mosolo-sha256', p.sha256).send(p.data);
   });
 
-  // Pénalités d'un usager (agents du module) et commission des agents.
-  app.get<{ Querystring: { plate?: string } }>('/v1/parking/penalties', async (req) => {
+  // Pénalités d'un usager (agents du module), seulement à la suite d'un contrôle RÉEL et récent de l'agent sur la plaque.
+  app.get<{ Querystring: { plate?: string; checkId?: string } }>('/v1/parking/penalties', async (req) => {
     const user = requireUser(req);
     authorize(user, 'parking:control', { communes: user.territory ?? [] });
-    const plateQ = parse(plate, req.query.plate ?? '');
-    const holder = svc.vehicles.findOne((v) => v.plate === svc.plate(plateQ));
-    ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'parking.penalties.viewed', resourceType: 'plate', resourceId: svc.plate(plateQ), details: {} });
+    const plateQ = svc.plate(parse(plate, req.query.plate ?? ''));
+    const check = req.query.checkId ? svc.checks.get(req.query.checkId) : undefined;
+    if (!req.query.checkId) throw badRequest('CHECK_REQUIRED', 'Pénalités visibles seulement à la suite d’un contrôle de la plaque : checkId requis.');
+    if (!check || check.plate !== plateQ) throw unprocessable('CHECK_MISMATCH', 'Le contrôle cité ne porte pas sur cette plaque.');
+    if (check.agentId !== user.id) throw forbidden('NOT_CHECK_AGENT', 'Seul l’agent qui a effectué le contrôle peut en consulter les pénalités.');
+    if (svc.now().getTime() - Date.parse(check.at) > PENALTIES_WINDOW_MINUTES * 60_000) throw unprocessable('CHECK_TOO_OLD', `Contrôle de plus de ${PENALTIES_WINDOW_MINUTES} minutes : refaites un contrôle.`);
+    const holder = svc.vehicles.findOne((v) => v.plate === plateQ);
+    ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'parking.penalties.viewed', resourceType: 'plate', resourceId: plateQ, details: { checkId: check.id } });
     return { items: svc.field.penaltiesFor({ plate: plateQ, taxpayerId: holder?.taxpayerId ?? null }) };
   });
   app.get('/v1/parking/agents/me/earnings', async (req) => {
@@ -136,8 +145,7 @@ export function registerParkingRoutes(app: FastifyInstance, ctx: AppContext, svc
   app.get('/v1/parking/agents/earnings', async (req) => {
     const user = requireUser(req);
     authorize(user, 'parking:indicators', { entity: 'DGTK' });
-    const agents = [...new Set([...svc.checks.all().map((c) => c.agentId), ...svc.violations.all().map((v) => v.agentId)])];
-    return { items: agents.map((a) => { const e = svc.field.earningsSummary(a); return { agentId: a, agentName: ctx.users.get(a)?.name ?? a, totals: e.totals, counts: e.counts }; }), ratePct: AGENT_COMMISSION_PCT };
+    return { items: svc.field.earningsByAgent().map((e) => ({ ...e, agentName: ctx.users.get(e.agentId)?.name ?? e.agentId })), ratePct: AGENT_COMMISSION_PCT };
   });
   app.get<{ Querystring: { status?: string } }>('/v1/parking/violations', async (req) => ({ items: svc.listViolations(requireUser(req), req.query.status) }));
   app.get('/v1/parking/violations/mine', async (req) => ({ items: svc.myViolations(requireUser(req)) }));

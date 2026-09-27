@@ -112,8 +112,10 @@ export function registerRakaPayRoutes(app: FastifyInstance, ctx: AppContext, svc
     const user = requireUser(req);
     const body = parse(controlSchema, req.body);
     const view = svc.control(user, body);
-    // Plaque lue (même si la moto n'est pas enregistrée) : le registre des pénalités la recherche aussi.
-    return reply.code(201).send(withOverdue(ctx, user, view, { plate: view.plate ?? body.plate ?? null }, 'RAKAPAY', view.controlId));
+    // Plaque lue (même si la moto n'est pas enregistrée) : le registre des pénalités la recherche aussi — mais seulement
+    // si le contrôle a réellement porté sur cette plaque (jamais une plaque jointe à un contrôle par gilet ou autocollant).
+    const plate = view.plate ?? (view.method === 'PLAQUE' ? body.plate ?? null : null);
+    return reply.code(201).send(withOverdue(ctx, user, view, { plate }, 'RAKAPAY', view.controlId));
   });
 
   // Vérification par le passager (publique, minimale).

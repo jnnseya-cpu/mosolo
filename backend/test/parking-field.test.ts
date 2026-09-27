@@ -95,8 +95,10 @@ describe('ParkSmart — caméra de preuve (plaque rouge) : 5 photos des abords, 
     expect(v.json().photos).toHaveLength(5);
     expect(v.json().evidence).toMatchObject({ place: GPS.place });
     expect(v.json().evidence.photoIds).toEqual(expect.arrayContaining(ids));
-    // Photo déjà jointe : ni réutilisable ni remplaçable.
-    expect((await e.req('POST', '/v1/parking/violations', 'pk-controleur', { zoneId: PARKING_DEMO.zoneGombe, plate, nature: 'NON_PAIEMENT', checkId: red.checkId, photoIds: [ids[0]], lat: 0, lon: 0, observations: 'double' })).json().code).toBe('PHOTO_ALREADY_USED');
+    // Un seul constat par contrôle ; photo déjà jointe : ni réutilisable ni remplaçable.
+    expect((await e.req('POST', '/v1/parking/violations', 'pk-controleur', { zoneId: PARKING_DEMO.zoneGombe, plate, nature: 'NON_PAIEMENT', checkId: red.checkId, photoIds: [ids[0]], lat: 0, lon: 0, observations: 'double' })).json().code).toBe('CHECK_ALREADY_USED');
+    const red2 = (await e.req('GET', `/v1/parking/control/${plate}?zoneId=${PARKING_DEMO.zoneGombe}`, 'pk-controleur')).json();
+    expect((await e.req('POST', '/v1/parking/violations', 'pk-controleur', { zoneId: PARKING_DEMO.zoneGombe, plate, nature: 'NON_PAIEMENT', checkId: red2.checkId, photoIds: [ids[0]], lat: 0, lon: 0, observations: 'double' })).json().code).toBe('PHOTO_MISMATCH');
     expect((await up('ABORDS_AVANT')).json().code).toBe('PHOTO_LOCKED');
 
     const raw = await e.req('GET', `/v1/parking/evidence-photos/${ids[0]}`, 'pk-superviseur');
@@ -104,7 +106,7 @@ describe('ParkSmart — caméra de preuve (plaque rouge) : 5 photos des abords, 
     expect(raw.headers['content-type']).toBe('image/jpeg');
     expect(sha256Hex(raw.rawPayload)).toBe(raw.headers['x-mosolo-sha256']);
     expect((await e.req('GET', `/v1/parking/evidence-photos/${ids[0]}`, 'u-contribuable')).statusCode).toBe(403);
-    expect(e.app.ctx.audit.list({ action: 'parking.evidence.photo.received' }).total).toBe(8);
+    expect(e.app.ctx.audit.list({ action: 'parking.evidence.photo.received', limit: 1000 }).items.filter((a) => (a.details as { checkId?: string }).checkId === red.checkId)).toHaveLength(8);
   });
 
   it('photos à prendre dans les 30 minutes du contrôle', async () => {
@@ -126,9 +128,14 @@ describe('Pénalités visibles : module stationnement, puis tous modules après 
     const ctl = (await e.req('GET', `/v1/parking/control/${PARKING_DEMO.plateTenant}?zoneId=${PARKING_DEMO.zoneGombe}`, 'pk-controleur')).json();
     expect(ctl.penaltiesUnpaid).toBe(1);
     expect(ctl.penalties[0]).toMatchObject({ reference: v.reference, unpaid: true, amount: { amount: '20000.00', currency: 'CDF' }, module: 'STATIONNEMENT' });
-    const list = (await e.req('GET', `/v1/parking/penalties?plate=${PARKING_DEMO.plateTenant}`, 'pk-superviseur')).json().items;
+    // Liste des pénalités : seulement à la suite d'un contrôle réel, récent, de l'agent lui-même sur cette plaque.
+    const penalties = (user: string, q: string) => e.req('GET', `/v1/parking/penalties?plate=${PARKING_DEMO.plateTenant}${q}`, user);
+    const list = (await penalties('pk-controleur', `&checkId=${ctl.checkId}`)).json().items;
     expect(list).toHaveLength(1);
-    expect((await e.req('GET', `/v1/parking/penalties?plate=${PARKING_DEMO.plateTenant}`, 'u-contribuable')).statusCode).toBe(403);
+    expect((await penalties('pk-controleur', '')).json().code).toBe('CHECK_REQUIRED');
+    expect((await penalties('pk-superviseur', `&checkId=${ctl.checkId}`)).json().code).toBe('NOT_CHECK_AGENT');
+    expect((await e.req('GET', `/v1/parking/penalties?plate=KN-0999-ZZ&checkId=${ctl.checkId}`, 'pk-controleur')).json().code).toBe('CHECK_MISMATCH');
+    expect((await penalties('u-contribuable', `&checkId=${ctl.checkId}`)).statusCode).toBe(403);
 
     // Même module (stationnement) : visible dès la décision, avec le montant ; autre module : seulement après 30 jours.
     const sanctions = e.app.ctx.ext.sanctions as { afterControl(u: unknown, s: unknown, m: string, r: string): { lines: { sameModule: boolean; amount: unknown }[] } | null };
@@ -239,9 +246,19 @@ describe('Commission de 10 % : tous les agents, quel que soit leur module', () =
     const plate = vx.plates.all().find((p) => agents.some((a) => a.territory!.includes(p.commune)) && open(p.objectId).length > 0)!;
     expect(plate).toBeDefined();
     const scanner = agents.find((a) => a.territory!.includes(plate.commune))!.id;
+    const ob = open(plate.objectId)[0]!;
+    const svc = (e.app.ctx.ext.sanctions as { commissions: { lines(a?: string): { obligationId: string; agentId: string }[] } }).commissions;
+    // Scan avant l'échéance (situation non rouge) : aucun défaut révélé, rien d'attribuable à ce scan.
+    const dueMs = Date.parse(`${ob.dueDate}T00:00:00.000Z`);
+    if (e.clock.now().getTime() < dueMs) {
+      const early = (await e.req('GET', `/v1/verticales/plates/${plate.code}/scan`, scanner)).json();
+      expect(early.situation.color).not.toBe('red');
+      e.clock.set(new Date(dueMs + 86_400_000).toISOString());
+    }
+    // Scan après l'échéance : situation ROUGE conservée sur le scan.
     const scan = await e.req('GET', `/v1/verticales/plates/${plate.code}/scan`, scanner);
     expect(scan.statusCode, scan.body).toBe(200);
-    const ob = open(plate.objectId)[0]!;
+    expect(scan.json().situation.color).toBe('red');
     e.clock.advance(2 * 3_600_000);
     const owner = e.app.ctx.users.all().find((u: { taxpayerId?: string }) => u.taxpayerId === ob.taxpayerId);
     await pay(e, owner!.id, ob.id);
@@ -249,9 +266,10 @@ describe('Commission de 10 % : tous les agents, quel que soit leur module', () =
     const line = s.lines.find((l: { obligationId: string }) => l.obligationId === ob.id);
     expect(line).toMatchObject({ module: 'VERTICALES', source: 'PAIEMENT', state: 'CONFIRMEE' });
     expect(s.modules.some((m: { module: string }) => m.module === 'VERTICALES')).toBe(true);
-    // Au-delà de 72 h, rien n'est attribué.
-    const svc = (e.app.ctx.ext.sanctions as { commissions: { lines(a?: string): { obligationId: string; agentId: string }[] } }).commissions;
+    // Une seule attribution, au scan rouge (pas au scan antérieur non rouge).
     expect(svc.lines().filter((l) => l.obligationId === ob.id)).toHaveLength(1);
+    const scans = (e.app.ctx.ext.verticales as { scans: { all(): { situation?: string; at: string }[] } }).scans.all();
+    expect(scans.at(-1)!.situation).toBe('red');
   });
 });
 

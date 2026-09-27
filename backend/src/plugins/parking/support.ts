@@ -11,6 +11,7 @@ import type { AuditActor } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { hmacSha256Hex } from '../../core/crypto.js';
 import { dec, decDiv, decToString } from '../../core/decimal.js';
+import type { PaymentOrder } from '../../modules/payments/service.js';
 import type { RuleInput, RuleRecord } from '../../modules/rules/service.js';
 
 export const PAID_STATUSES = ['CONFIRME', 'REGLE', 'RAPPROCHE'] as const;
@@ -40,28 +41,71 @@ export function latestRule(ctx: AppContext, code: string | null | undefined): Ru
 }
 
 export interface PaymentState {
-  state: 'AUCUNE_REFERENCE' | 'REFERENCE_EMISE' | 'PAYE' | 'RAPPROCHE';
+  /** PARTIEL : une ou plusieurs échéances payées, solde restant dû (jamais présenté comme payé). */
+  state: 'AUCUNE_REFERENCE' | 'REFERENCE_EMISE' | 'PARTIEL' | 'PAYE' | 'RAPPROCHE';
   paymentReference?: string;
   confirmedAt?: string;
+  /** Montant payé (somme des ordres confirmés, réglés ou rapprochés). */
   amount?: MoneyJSON;
+  /** Solde restant dû (paiement partiel). */
+  remaining?: MoneyJSON;
+}
+
+const isPaid = (o: PaymentOrder) => (PAID_STATUSES as readonly string[]).includes(o.status);
+
+/** Ordres de paiement indexés par obligation (une seule lecture pour un calcul d'ensemble). */
+export function ordersByObligation(ctx: AppContext): Map<string, PaymentOrder[]> {
+  const idx = new Map<string, PaymentOrder[]>();
+  for (const o of ctx.payments.orders.all()) {
+    const l = idx.get(o.obligationId);
+    if (l) l.push(o); else idx.set(o.obligationId, [o]);
+  }
+  return idx;
+}
+
+export interface PaidOrder { id: string; amount: MoneyJSON; at: string; reconciled: boolean }
+
+/** Ordres payés d'une obligation (échéance par échéance), du plus ancien au plus récent. */
+export function paidOrders(ctx: AppContext, obligationId: string, index?: Map<string, PaymentOrder[]>): PaidOrder[] {
+  const orders = index ? index.get(obligationId) ?? [] : ctx.payments.byObligation(obligationId);
+  return orders.filter(isPaid)
+    .map((o) => ({ id: o.id, amount: o.amount, at: o.confirmedAt ?? o.createdAt, reconciled: o.status === 'RAPPROCHE' }))
+    .sort((a, b) => a.at.localeCompare(b.at));
 }
 
 /** État de paiement d'une obligation, lu dans le circuit commun (ordres de paiement + confirmations signées). */
 export function paymentState(ctx: AppContext, obligationId: string | undefined): PaymentState {
   if (!obligationId) return { state: 'AUCUNE_REFERENCE' };
   const orders = ctx.payments.byObligation(obligationId);
-  const paid = orders.find((o) => (PAID_STATUSES as readonly string[]).includes(o.status));
-  if (paid) {
-    return {
-      state: paid.status === 'RAPPROCHE' ? 'RAPPROCHE' : 'PAYE',
-      paymentReference: paid.paymentReference,
-      ...(paid.confirmedAt ? { confirmedAt: paid.confirmedAt } : {}),
-      amount: paid.amount,
-    };
-  }
   const now = ctx.clock.now();
   const open = orders.find((o) => o.status === 'INITIE' && new Date(o.expiresAt) > now);
+  const paid = orders.filter(isPaid).sort((a, b) => (a.confirmedAt ?? a.createdAt).localeCompare(b.confirmedAt ?? b.createdAt));
+  if (paid.length) {
+    const last = paid[paid.length - 1]!;
+    const total = paid.slice(1).reduce((m, o) => m.add(Money.fromJSON(o.amount)), Money.fromJSON(paid[0]!.amount));
+    // Paiement par échéances : tant qu'un solde reste dû, l'obligation n'est pas payée.
+    const ob = ctx.assessment.obligations.get(obligationId);
+    const remaining = ob && ob.status !== 'SOLDEE' ? Money.fromJSON(ob.amount).subtract(total) : null;
+    if (remaining && remaining.compare(Money.zero(remaining.currency)) > 0) {
+      return {
+        state: 'PARTIEL', paymentReference: open?.paymentReference ?? last.paymentReference, ...(last.confirmedAt ? { confirmedAt: last.confirmedAt } : {}),
+        amount: total.toJSON(), remaining: remaining.toJSON(),
+      };
+    }
+    return {
+      state: paid.every((o) => o.status === 'RAPPROCHE') ? 'RAPPROCHE' : 'PAYE',
+      paymentReference: last.paymentReference,
+      ...(last.confirmedAt ? { confirmedAt: last.confirmedAt } : {}),
+      amount: total.toJSON(),
+    };
+  }
   return open ? { state: 'REFERENCE_EMISE', paymentReference: open.paymentReference } : { state: 'AUCUNE_REFERENCE' };
+}
+
+/** Mois civil « AAAA-MM » à Kinshasa (UTC+1), pour les totaux « ce mois ». */
+export function kinshasaMonth(d: Date | string): string {
+  const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Kinshasa', year: 'numeric', month: '2-digit' }).formatToParts(new Date(d));
+  return `${p.find((x) => x.type === 'year')!.value}-${p.find((x) => x.type === 'month')!.value}`;
 }
 
 /** Somme par devise (jamais d'addition de devises différentes). */

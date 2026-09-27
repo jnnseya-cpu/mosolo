@@ -21,7 +21,8 @@ import { checkChar, randomCode } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, authorize, evaluate, hasAnyGrant } from '../../core/policy.js';
 import { validityView } from '../../core/validity.js';
-import { ParkingField } from './field.js';
+import { ParkingField, PHOTO_WINDOW_MINUTES } from './field.js';
+import { withOverdue } from '../sanctions/service.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
 import { isCommune } from '../../reference/kinshasa.js';
@@ -773,33 +774,39 @@ export class ParkingService {
     const holder = this.vehicles.findOne((v) => v.plate === plate);
     const penalties = this.field.penaltiesFor({ plate, taxpayerId: holder?.taxpayerId ?? null });
     if (penalties.length) this.ctx.audit.append({ actor: actorOf(user), action: 'parking.penalties.viewed', resourceType: 'plate', resourceId: plate, details: { checkId: check.id, count: penalties.length } });
-    return {
+    const result = {
       penalties, penaltiesUnpaid: penalties.filter((p) => p.unpaid).length,
       checkId: check.id, plate, zone: z ? { id: z.id, code: z.code, name: z.name } : null, light: t.light, title: t.title,
       validFrom: t.validFrom, validUntil: t.validUntil, validity: t.validUntil ? validityView(t.validFrom, t.validUntil, now) : null, checkedAt: check.at, guidance: guidance[t.light],
     };
+    // Pénalités des AUTRES modules impayées depuis plus de 30 jours (registre transversal) : `penalitesImpayees`.
+    // Celles du stationnement figurent déjà dans `penalties`.
+    return withOverdue(this.ctx, user, result, { plate, taxpayerId: holder?.taxpayerId ?? null }, 'STATIONNEMENT', check.id, { otherModulesOnly: true });
   }
 
   // ---------------------------------------------------------------- Constats (circuit RW1)
 
   recordViolation(user: User, input: {
-    zoneId: string; plate: string; nature: ParkingViolation['nature']; checkId?: string; photoSha256?: string[]; photoIds?: string[]; place?: string;
+    zoneId: string; plate: string; nature: ParkingViolation['nature']; checkId: string; photoIds: string[]; place?: string;
     lat: number; lon: number; gpsAccuracyM?: number; deviceId?: string; observations: string;
   }) {
     const z = this.getZone(input.zoneId);
     authorize(user, 'parking:violation.record', { communes: [z.commune] });
     const plate = this.plate(input.plate);
-    // Photos de la caméra de preuve (images conservées au serveur) : leurs empreintes remplacent la liste déclarée.
-    const photos = input.photoIds?.length ? this.field.claimForViolation(user, input.photoIds, input.checkId, plate) : [];
-    if (photos.length) input = { ...input, photoSha256: photos.map((p) => p.sha256) };
-    input.photoSha256 ??= [];
-    if (input.photoSha256.length === 0) throw badRequest('PHOTO_REQUIRED', 'Constat photographique : au moins une photographie (empreinte SHA-256) est exigée.');
-    let lightAtCheck: Light | null = null;
-    if (input.checkId) {
-      const c = this.checks.get(input.checkId);
-      if (!c || c.plate !== plate) throw unprocessable('CHECK_MISMATCH', 'Le contrôle cité ne porte pas sur cette plaque.');
-      lightAtCheck = c.light;
-    }
+    // Le constat découle d'un contrôle ROUGE de l'agent lui-même, dans la zone, récent, et non déjà constaté.
+    if (!input.checkId) throw badRequest('CHECK_REQUIRED', 'Un constat se rattache au contrôle rouge de l’agent : checkId requis.');
+    const c = this.checks.get(input.checkId);
+    if (!c || c.plate !== plate) throw unprocessable('CHECK_MISMATCH', 'Le contrôle cité ne porte pas sur cette plaque.');
+    if (c.agentId !== user.id) throw forbidden('NOT_CHECK_AGENT', 'Seul l’agent qui a effectué le contrôle peut en établir le constat.');
+    if (c.zoneId !== z.id) throw unprocessable('CHECK_ZONE_MISMATCH', 'Le contrôle cité porte sur une autre zone.');
+    if (c.light !== 'ROUGE') throw unprocessable('CHECK_NOT_RED', 'Constat réservé à un contrôle ROUGE (aucun titre valide).');
+    if (this.now().getTime() - Date.parse(c.at) > PHOTO_WINDOW_MINUTES * 60_000) throw unprocessable('CHECK_TOO_OLD', `Constat à établir dans les ${PHOTO_WINDOW_MINUTES} minutes du contrôle : refaites un contrôle.`);
+    if (this.violations.findOne((v) => v.checkId === c.id)) throw conflict('CHECK_ALREADY_USED', 'Un constat a déjà été établi pour ce contrôle.');
+    // Photos de la caméra de preuve (images conservées au serveur) : seules leurs empreintes fondent le constat.
+    if (!input.photoIds?.length) throw badRequest('PHOTO_REQUIRED', 'Constat photographique : au moins une photographie de la caméra de preuve est exigée.');
+    const photos = this.field.claimForViolation(user, input.photoIds, c.id, plate);
+    const photoSha256 = photos.map((p) => p.sha256);
+    const lightAtCheck: Light = c.light;
     const now = this.now();
     const current = this.titleFor(plate, z.id, now);
     if ((input.nature === 'NON_PAIEMENT' || input.nature === 'DEPASSEMENT') && current.light !== 'ROUGE') {
@@ -807,20 +814,20 @@ export class ParkingService {
     }
     const id = this.ids.next('PKV');
     const ev = this.evidence.append({
-      id: this.ids.next('PKE'), violationId: id, photoSha256: input.photoSha256, lat: input.lat, lon: input.lon,
+      id: this.ids.next('PKE'), violationId: id, photoSha256, lat: input.lat, lon: input.lon,
       gpsAccuracyM: input.gpsAccuracyM ?? null, observedAt: now.toISOString(), deviceId: input.deviceId ?? null, agentId: user.id, observations: input.observations,
-      ...(photos.length ? { photoIds: photos.map((p) => p.id) } : {}), ...(input.place ? { place: input.place } : {}),
+      photoIds: photos.map((p) => p.id), ...(input.place ? { place: input.place } : {}),
     });
     const holder = this.vehicles.findOne((v) => v.plate === plate);
     const v = this.violations.insert({
       id, reference: this.ids.next(`CST-PK-${now.getUTCFullYear()}`), zoneId: z.id, commune: z.commune, plate, nature: input.nature,
-      lightAtCheck, checkId: input.checkId ?? null, evidenceId: ev.id, agentId: user.id, createdAt: now.toISOString(),
+      lightAtCheck, checkId: c.id, evidenceId: ev.id, agentId: user.id, createdAt: now.toISOString(),
       holderTaxpayerId: holder?.taxpayerId ?? null, status: 'CONSTATE', contests: [],
     });
-    if (photos.length) this.field.link(photos, v.id);
+    this.field.link(photos, v.id);
     this.ctx.audit.append({
       actor: actorOf(user), action: 'parking.violation.recorded', resourceType: 'parking_violation', resourceId: v.id,
-      details: { plate, zoneId: z.id, nature: v.nature, evidenceId: ev.id, photos: input.photoSha256.length, holderIdentified: holder !== undefined },
+      details: { plate, zoneId: z.id, nature: v.nature, evidenceId: ev.id, checkId: c.id, photos: photoSha256.length, holderIdentified: holder !== undefined },
     });
     // Notification de l'usager identifié (SMS / application) : constat, sans montant tant qu'aucune décision.
     if (holder) this.ctx.comms.publish('parking.violation.recorded', [taxpayerRecipient(this.ctx.taxpayers.get(holder.taxpayerId))], { reference: v.reference }, { entity: DGTK });
@@ -1041,7 +1048,8 @@ export class ParkingService {
       const byKind: Record<string, MoneyJSON[]> = { SESSION: [], RESERVATION: [], PENALITE: [] };
       for (const o of obligations) {
         const p = paymentState(this.ctx, o.obligationId);
-        if (p.state === 'PAYE' || p.state === 'RAPPROCHE') {
+        // Échéances déjà payées comprises (paiement partiel) : recette encaissée au compte public.
+        if (p.state === 'PAYE' || p.state === 'RAPPROCHE' || p.state === 'PARTIEL') {
           paid.push(p.amount!);
           byKind[o.kind]!.push(p.amount!);
           if (p.state === 'RAPPROCHE') reconciled.push(p.amount!);

@@ -36,7 +36,7 @@ export const sanctionsPlugin = definePlugin<SanctionsService>({
       const user = requireUser(req);
       if (!user.roles.some((r) => MONITOR.has(r))) throw forbidden('FORBIDDEN', 'Surveillance réservée aux superviseurs, aux régies, au pilotage, à l’audit et à l’anti-fraude.');
       ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'agents.monitoring.viewed', resourceType: 'agents', resourceId: 'tous' });
-      return svc.monitoring.report();
+      return svc.monitoring.report(user);
     });
   },
 });

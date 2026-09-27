@@ -16,11 +16,11 @@ import type { User } from '../../core/auth.js';
 import { forbidden, unprocessable } from '../../core/errors.js';
 import { authorize, evaluate } from '../../core/policy.js';
 import type { AppContext } from '../../context.js';
-import { estimateCommune } from '../fiscal/nearby.js';
+import { NEARBY_NAMED_ROLES } from '../fiscal/nearby.js';
 import { distanceM } from '../terrain/geo.js';
 import type { VerticalesService } from '../verticales/service.js';
-import { actorOf } from '../parking/support.js';
-import { normalizeAdPlate, type AdDevice, type PubliciteService } from './service.js';
+import { actorOf, DGTK } from '../parking/support.js';
+import { adCommuneAt, normalizeAdPlate, type AdDevice, type PubliciteService } from './service.js';
 
 export const AD_NEARBY_MAX_ACCURACY_M = 100;
 export const AD_NEARBY_MAX_RADIUS_M = 1000;
@@ -57,7 +57,8 @@ function itemOf(svc: PubliciteService, d: AdDevice, dist: number | null) {
 
 /** Supports publicitaires fixes proches + commerces enregistrés sans enseigne déclarée (à vérifier). */
 export function adNearby(ctx: AppContext, svc: PubliciteService, user: User, q: { lat: number; lon: number; accuracyM: number; radiusM?: number }) {
-  if (!evaluate(user, 'publicite:nearby', { communes: user.territory ?? [] })) {
+  // La régie (R06, R07) est habilitée par son entité : l'entité DGTK accompagne toujours la demande.
+  if (!evaluate(user, 'publicite:nearby', { communes: user.territory ?? [], entity: DGTK })) {
     throw forbidden('NEARBY_FORBIDDEN', 'Vue « Autour de moi » de la publicité réservée aux inspecteurs, superviseurs et à la régie.');
   }
   if (!(q.accuracyM > 0) || q.accuracyM > AD_NEARBY_MAX_ACCURACY_M) {
@@ -66,9 +67,11 @@ export function adNearby(ctx: AppContext, svc: PubliciteService, user: User, q: 
   const radius = Math.min(AD_NEARBY_MAX_RADIUS_M, Math.max(50, Math.round(q.radiusM ?? 300)));
   const here = { lat: q.lat, lon: q.lon };
   const fixed = svc.devices.all().filter((d) => d.placement !== 'VEHICULE' && d.registration !== 'RETIRE');
-  const { commune, basis } = estimateCommune([...fixed, ...ctx.objects.objects.all().filter((o) => o.category !== 'VEHICULE')], here);
+  const { commune, basis } = adCommuneAt(ctx, svc, here);
   const inArea = !user.territory?.length || user.territory.includes(commune);
-  const allowed = (c: string) => !!evaluate(user, 'publicite:nearby', { communes: [c] });
+  const allowed = (c: string) => !!evaluate(user, 'publicite:nearby', { communes: [c], entity: DGTK });
+  // Accès minimal (inspecteurs, superviseurs) : type du commerce seulement, jamais son nom ni sa raison sociale.
+  const named = user.roles.some((r) => NEARBY_NAMED_ROLES.has(r));
 
   const items = inArea
     ? fixed.map((d) => ({ d, m: distanceM(here, d) })).filter(({ d, m }) => m <= radius && allowed(d.commune)).sort((a, b) => a.m - b.m).map(({ d, m }) => itemOf(svc, d, m))
@@ -81,7 +84,7 @@ export function adNearby(ctx: AppContext, svc: PubliciteService, user: User, q: 
       .filter((o) => o.category === 'ACTIVITE' && !withSign.has(o.id) && allowed(o.commune))
       .map((o) => ({ o, m: distanceM(here, o) })).filter(({ m }) => m <= radius).sort((a, b) => a.m - b.m)
       .map(({ o, m }) => ({
-        objectId: o.id, label: vx?.describeObject(o).label ?? 'Établissement', reference: o.igf?.code ?? o.id, commune: o.commune, quartier: o.quartier, avenue: o.avenue ?? null,
+        objectId: o.id, label: vx?.describeObject(o, { withName: named }).label ?? 'Établissement', reference: o.igf?.code ?? o.id, commune: o.commune, quartier: o.quartier, avenue: o.avenue ?? null,
         lat: o.lat, lon: o.lon, distanceM: m, reason: 'Commerce enregistré sans enseigne ni publicité déclarée : vérifier la façade, la porte et les abords.',
       }))
     : [];
@@ -102,7 +105,7 @@ export function adNearby(ctx: AppContext, svc: PubliciteService, user: User, q: 
 
 /** Publicité mobile : contrôle par la plaque du véhicule, où qu'il se trouve dans la ville. */
 export function adVehicleCheck(ctx: AppContext, svc: PubliciteService, user: User, rawPlate: string) {
-  authorize(user, 'publicite:nearby', { communes: user.territory ?? [] });
+  authorize(user, 'publicite:nearby', { communes: user.territory ?? [], entity: DGTK });
   const plate = normalizeAdPlate(rawPlate);
   if (plate.length < 4) throw unprocessable('INVALID_PLATE', 'Plaque illisible : au moins 4 caractères.');
   const devices = svc.devices.all().filter((d) => d.placement === 'VEHICULE' && d.vehiclePlate === plate && d.registration !== 'RETIRE');
