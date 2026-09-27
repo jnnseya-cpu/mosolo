@@ -12,7 +12,7 @@
  */
 import { createPrivateKey, createPublicKey, type KeyObject } from 'node:crypto';
 import type { AppContext } from '../../../context.js';
-import { isDemoMode } from '../../../core/auth.js';
+import { ConfigurationError, isDemoMode } from '../../../core/auth.js';
 import { sha256Hex } from '../../../core/crypto.js';
 
 export type KeyKind = 'HMAC' | 'ED25519' | 'SYMETRIQUE' | 'CHEMIN';
@@ -183,4 +183,69 @@ export function keyHealth(ctx: AppContext, opts: { env?: NodeJS.ProcessEnv; minL
     summary: { total: keys.length, configured: keys.filter((k) => k.configured).length, critical: all.filter((w) => w.severity === 'CRITIQUE').length, attention: all.filter((w) => w.severity === 'ATTENTION').length },
     note: 'Aucune valeur secrète n’est exposée : seule une empreinte courte (SHA-256, 8 caractères) permet de vérifier qu’une clé a changé. Production : clés en HSM, détenues par la Ville.',
   };
+}
+
+/* ================================================================ */
+/* Contrôle au démarrage                                             */
+/* ================================================================ */
+
+/** Clés dont une valeur éphémère (générée au démarrage) interdit le démarrage hors démonstration. */
+const EPHEMERAL_BLOCKING = new Set(['audit-hmac', 'quittances', 'jetons', 'clotures']);
+
+export interface BootKeyFinding { id: string; env: string; code: KeyWarningCode; severity: KeyWarning['severity']; message: string }
+
+/**
+ * Tri des avertissements pour le démarrage : BLOQUANTS (avertissement critique — clé absente, illisible, valeur de
+ * démonstration, trop courte, même clé réutilisée pour deux usages, clé éphémère pour l'audit, les quittances, les
+ * clôtures ou les jetons) et SIGNALÉS (âge dépassé, repli, autre clé éphémère : journal et alerte seulement).
+ */
+export function classifyBootKeyHealth(h: KeyHealth): { blocking: BootKeyFinding[]; reported: BootKeyFinding[] } {
+  const blocking: BootKeyFinding[] = [];
+  const reported: BootKeyFinding[] = [];
+  for (const k of h.keys) {
+    for (const w of k.warnings) {
+      if (w.severity === 'INFO') continue;
+      const f = { id: k.id, env: k.env, code: w.code, severity: w.severity, message: w.message };
+      const blocks = w.severity === 'CRITIQUE' && (w.code !== 'EPHEMERE' || EPHEMERAL_BLOCKING.has(k.id));
+      (blocks ? blocking : reported).push(f);
+    }
+  }
+  return { blocking, reported };
+}
+
+export interface BootKeyLog { info(msg: string): void; warn(msg: string): void }
+
+const consoleKeyLog: BootKeyLog = { info: (m) => console.info(`[clés] ${m}`), warn: (m) => console.warn(`[clés] ${m}`) };
+
+/**
+ * Contrôle de santé des clés AU DÉMARRAGE (points d'entrée `server.ts` et `persistence/server.ts`, après `buildApp`) :
+ *  - en démonstration : aucun contrôle bloquant ;
+ *  - hors démonstration : refus de démarrer (ConfigurationError, message en français, sans aucune valeur secrète) sur
+ *    tout avertissement bloquant ; les autres avertissements sont journalisés et lèvent une alerte (aucun blocage).
+ * Seuils : ceux du registre anti-fraude s'il est chargé (`cles.longueur_min`, `cles.age_max_jours`), sinon 32 / 365.
+ */
+export function assertKeyHealthAtBoot(ctx: AppContext, env: NodeJS.ProcessEnv = process.env, log: BootKeyLog = consoleKeyLog): KeyHealth | null {
+  if (isDemoMode(env)) return null;
+  const reg = ctx.ext['integrite-gouvernance'] as { value?(id: string): unknown } | undefined;
+  const num = (id: string, d: number) => { const v = Number(reg?.value?.(id)); return Number.isFinite(v) && v > 0 ? v : d; };
+  const h = keyHealth(ctx, { env, minLength: num('cles.longueur_min', 32), maxAgeDays: num('cles.age_max_jours', 365) });
+  const { blocking, reported } = classifyBootKeyHealth(h);
+  ctx.audit.append({
+    actor: { kind: 'system', id: 'integrite:cles' }, action: 'integrite.keys.boot_checked', resourceType: 'key_health', resourceId: '*',
+    outcome: blocking.length ? 'DENIED' : 'SUCCESS',
+    details: { blocking: blocking.map((b) => `${b.env}:${b.code}`), reported: reported.map((r) => `${r.env}:${r.code}`) },
+  });
+  if (blocking.length) {
+    const lines = blocking.map((b) => `  - ${b.env} (${b.code}) : ${b.message}`).join('\n');
+    throw new ConfigurationError(`Démarrage refusé hors mode démonstration : santé des clés critique.\n${lines}\nFournissez des clés stables, propres à chaque usage (une clé = un usage), jamais des valeurs de démonstration. Voir backend/README.md.`);
+  }
+  for (const r of reported) {
+    log.warn(`${r.env} (${r.code}) : ${r.message}`);
+    ctx.alerts.raiseOnce(`CLES:DEMARRAGE:${r.id}:${r.code}`, {
+      type: `CLE_${r.code}`, severity: 'MEDIUM', source: 'integrite:cles', detail: `${r.env} — ${r.message}`,
+      context: { key: r.id, env: r.env, code: r.code, automaticEffect: 'AUCUN' }, notifyRoles: ['R26', 'R28'],
+    });
+  }
+  log.info(`Santé des clés contrôlée : ${h.summary.configured}/${h.summary.total} configurée(s), ${reported.length} avertissement(s) signalé(s), aucun bloquant.`);
+  return h;
 }

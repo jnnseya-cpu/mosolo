@@ -222,45 +222,81 @@ export class PaymentPointService {
   }
 
   /**
-   * Rétablissement à QUATRE YEUX (comme l'activation) : le premier appel (R17 ou R18) enregistre la demande motivée ;
-   * seul un R17 DISTINCT du demandeur (et de celui qui a suspendu) la décide. Un R17 seul ne rend jamais la signature.
+   * Rétablissement à QUATRE YEUX, en deux actes distincts (comme l'activation) :
+   *  1. `requestReinstatement` : un membre du Trésor (R17 ou R18) enregistre la demande motivée ;
+   *  2. `decideReinstatement` : un R17 DISTINCT du demandeur (et de celui qui a suspendu) approuve ou refuse.
+   * La décision a sa propre route (garde de rotation de la paire demandeur → décideur). Un R17 seul ne rend jamais la
+   * signature.
    */
-  reinstate(user: User, id: string, motif: string): PaymentPoint {
+  requestReinstatement(user: User, id: string, motif: string): PaymentPoint {
+    authorize(user, 'canaux:point.decision.request');
     const p = this.get(id);
     if (p.status !== 'SUSPENDU') throw conflict('POINT_NOT_SUSPENDED', 'Seul un point suspendu peut être rétabli.');
+    if (p.reinstatementRequest) throw conflict('REINSTATEMENT_ALREADY_REQUESTED', `Une demande de rétablissement (${p.reinstatementRequest.by}) attend déjà la décision d’une seconde personne (route de décision dédiée).`);
     const now = this.clock().toISOString();
-    if (!p.reinstatementRequest) {
-      authorize(user, 'canaux:point.decision.request');
-      const updated = this.points.update({ ...p, reinstatementRequest: { by: user.id, at: now, motif }, history: [...p.history, { at: now, by: user.id, action: 'DEMANDE_RETABLISSEMENT', motif }] });
-      this.ctx.audit.append({ actor: this.actor(user), action: 'canaux.point.reinstatement_requested', resourceType: 'payment_point', resourceId: id, details: { motif, decision: 'EN_ATTENTE_SECONDE_PERSONNE' } });
-      return updated;
-    }
-    authorize(user, 'canaux:point.suspend');
-    assertDistinctPerson(user.id, [p.reinstatementRequest.by, ...(p.suspension ? [p.suspension.by] : [])], 'Quatre yeux : le rétablissement est décidé par une personne distincte du demandeur et de celle qui a suspendu.');
-    const { suspension: _s, reinstatementRequest: req, ...rest } = p;
-    const updated = this.points.update({ ...rest, status: 'ACTIF', history: [...p.history, { at: now, by: user.id, action: 'RETABLISSEMENT', motif }] });
-    this.habilitate(updated);
-    this.ctx.audit.append({ actor: this.actor(user), action: 'canaux.point.reinstated', resourceType: 'payment_point', resourceId: id, details: { motif, requestedBy: req.by, requestMotif: req.motif } });
+    const updated = this.points.update({ ...p, reinstatementRequest: { by: user.id, at: now, motif }, history: [...p.history, { at: now, by: user.id, action: 'DEMANDE_RETABLISSEMENT', motif }] });
+    this.ctx.audit.append({ actor: this.actor(user), action: 'canaux.point.reinstatement_requested', resourceType: 'payment_point', resourceId: id, details: { motif, decision: 'EN_ATTENTE_SECONDE_PERSONNE' } });
     return updated;
   }
 
-  /** Écartement d'une proposition de suspension à QUATRE YEUX : demande (R17/R18), puis décision par un R17 distinct. */
-  dismissProposal(user: User, proposalId: string, motif: string): SuspensionProposal {
+  decideReinstatement(user: User, id: string, input: { approve: boolean; motif: string }): PaymentPoint {
+    authorize(user, 'canaux:point.suspend');
+    const p = this.get(id);
+    if (p.status !== 'SUSPENDU') throw conflict('POINT_NOT_SUSPENDED', 'Seul un point suspendu peut être rétabli.');
+    const req = p.reinstatementRequest;
+    if (!req) throw conflict('NO_REINSTATEMENT_REQUEST', 'Aucune demande de rétablissement en attente : une demande motivée précède toute décision.');
+    assertDistinctPerson(user.id, [req.by, ...(p.suspension ? [p.suspension.by] : [])], 'Quatre yeux : le rétablissement est décidé par une personne distincte du demandeur et de celle qui a suspendu.');
+    const now = this.clock().toISOString();
+    if (!input.approve) {
+      const { reinstatementRequest: _r, ...kept } = p;
+      const updated = this.points.update({ ...kept, history: [...p.history, { at: now, by: user.id, action: 'REFUS_RETABLISSEMENT', motif: input.motif }] });
+      this.ctx.audit.append({ actor: this.actor(user), action: 'canaux.point.reinstatement_rejected', resourceType: 'payment_point', resourceId: id, details: { motif: input.motif, requestedBy: req.by, requestMotif: req.motif } });
+      return updated;
+    }
+    const { suspension: _s, reinstatementRequest: _r, ...rest } = p;
+    const updated = this.points.update({ ...rest, status: 'ACTIF', history: [...p.history, { at: now, by: user.id, action: 'RETABLISSEMENT', motif: input.motif }] });
+    this.habilitate(updated);
+    this.ctx.audit.append({ actor: this.actor(user), action: 'canaux.point.reinstated', resourceType: 'payment_point', resourceId: id, details: { motif: input.motif, requestedBy: req.by, requestMotif: req.motif } });
+    return updated;
+  }
+
+  /**
+   * Écartement d'une proposition de suspension à QUATRE YEUX, en deux actes : demande motivée (R17/R18), puis
+   * décision (approbation ou refus) par un R17 distinct du demandeur, sur sa propre route.
+   */
+  requestDismissal(user: User, proposalId: string, motif: string): SuspensionProposal {
+    authorize(user, 'canaux:point.decision.request');
+    const prop = this.pendingProposal(proposalId);
+    if (prop.dismissalRequest) throw conflict('DISMISSAL_ALREADY_REQUESTED', `Une demande d’écartement (${prop.dismissalRequest.by}) attend déjà la décision d’une seconde personne (route de décision dédiée).`);
+    const now = this.clock().toISOString();
+    const updated = this.proposals.update({ ...prop, dismissalRequest: { by: user.id, at: now, motif } });
+    this.ctx.audit.append({ actor: this.actor(user), action: 'canaux.point.suspension_dismissal_requested', resourceType: 'payment_point', resourceId: prop.pointId, details: { proposalId, motif, decision: 'EN_ATTENTE_SECONDE_PERSONNE' } });
+    return updated;
+  }
+
+  decideDismissal(user: User, proposalId: string, input: { approve: boolean; motif: string }): SuspensionProposal {
+    authorize(user, 'canaux:point.suspend');
+    const prop = this.pendingProposal(proposalId);
+    const req = prop.dismissalRequest;
+    if (!req) throw conflict('NO_DISMISSAL_REQUEST', 'Aucune demande d’écartement en attente : une demande motivée précède toute décision.');
+    assertDistinctPerson(user.id, [req.by], 'Quatre yeux : la proposition est écartée par une personne distincte du demandeur.');
+    const now = this.clock().toISOString();
+    if (!input.approve) {
+      const { dismissalRequest: _d, ...kept } = prop;
+      const updated = this.proposals.update(kept);
+      this.ctx.audit.append({ actor: this.actor(user), action: 'canaux.point.suspension_dismissal_rejected', resourceType: 'payment_point', resourceId: prop.pointId, details: { proposalId, motif: input.motif, requestedBy: req.by } });
+      return updated;
+    }
+    const updated = this.proposals.update({ ...prop, status: 'ECARTEE', decidedBy: user.id, decidedAt: now, motif: input.motif });
+    this.ctx.audit.append({ actor: this.actor(user), action: 'canaux.point.suspension_dismissed', resourceType: 'payment_point', resourceId: prop.pointId, details: { proposalId, motif: input.motif, requestedBy: req.by } });
+    return updated;
+  }
+
+  private pendingProposal(proposalId: string): SuspensionProposal {
     const prop = this.proposals.get(proposalId);
     if (!prop) throw notFound('PROPOSAL_NOT_FOUND', `Proposition inconnue : ${proposalId}`);
     if (prop.status !== 'PROPOSEE') throw conflict('PROPOSAL_ALREADY_DECIDED', 'Proposition déjà traitée.');
-    const now = this.clock().toISOString();
-    if (!prop.dismissalRequest) {
-      authorize(user, 'canaux:point.decision.request');
-      const updated = this.proposals.update({ ...prop, dismissalRequest: { by: user.id, at: now, motif } });
-      this.ctx.audit.append({ actor: this.actor(user), action: 'canaux.point.suspension_dismissal_requested', resourceType: 'payment_point', resourceId: prop.pointId, details: { proposalId, motif, decision: 'EN_ATTENTE_SECONDE_PERSONNE' } });
-      return updated;
-    }
-    authorize(user, 'canaux:point.suspend');
-    assertDistinctPerson(user.id, [prop.dismissalRequest.by], 'Quatre yeux : la proposition est écartée par une personne distincte du demandeur.');
-    const updated = this.proposals.update({ ...prop, status: 'ECARTEE', decidedBy: user.id, decidedAt: now, motif });
-    this.ctx.audit.append({ actor: this.actor(user), action: 'canaux.point.suspension_dismissed', resourceType: 'payment_point', resourceId: prop.pointId, details: { proposalId, motif, requestedBy: prop.dismissalRequest.by } });
-    return updated;
+    return prop;
   }
 
   /** Liste publique (portail, SVI, USSD, avis imprimé) : jamais d'identité d'opérateur ni de plafond. */

@@ -16,6 +16,16 @@ const runtime = await preparePersistence();
 // Le plugin « socle » (qui attache la persistance) est ajouté s'il ne figure pas déjà dans DEFAULT_PLUGINS.
 const plugins = DEFAULT_PLUGINS.some((p) => p.name === 'socle') ? DEFAULT_PLUGINS : [...DEFAULT_PLUGINS, soclePlugin];
 const app = buildApp({ logger: true, plugins });
+const { assertKeyHealthAtBoot } = await import('../plugins/integrite/gouvernance/cles.js');
+// Hors démonstration : santé des clés contrôlée au démarrage — refus sur avertissement critique (clé absente, éphémère,
+// de démonstration, réutilisée pour deux usages…) ; les autres avertissements (âge) sont journalisés et alertés.
+try {
+  assertKeyHealthAtBoot(app.ctx);
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err));
+  await runtime?.close();
+  process.exit(1);
+}
 if (runtime && !runtime.attached) {
   app.log.warn('Persistance préparée mais non attachée.');
 }

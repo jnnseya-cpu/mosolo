@@ -15,6 +15,7 @@ import type { CanauxService } from './service.js';
 const startSchema = z.object({ msisdn: z.string().regex(/^\+?\d{9,15}$/, 'numéro appelant attendu'), lang: z.string().max(5).optional() }).strict();
 const inputSchema = z.object({ input: z.string().max(40) }).strict();
 const motifSchema = z.object({ motif: z.string().trim().min(10, 'motif d’au moins 10 caractères').max(500) }).strict();
+const decisionSchema = z.object({ approve: z.boolean(), motif: z.string().trim().min(10, 'motif d’au moins 10 caractères').max(500) }).strict();
 const suspendSchema = z.object({ motif: z.string().trim().min(10, 'motif d’au moins 10 caractères').max(500), proposalId: z.string().optional() }).strict();
 const reviewSchema = z.object({ decision: z.enum(['DISTINCT', 'DOUBLON']), motif: z.string().trim().min(10).max(500) }).strict();
 const blockSchema = z.object({ reason: z.string().trim().min(3).max(200) }).strict();
@@ -152,15 +153,19 @@ export function registerCanauxRoutes(app: FastifyInstance, ctx: AppContext, svc:
     const body = parse(suspendSchema, req.body);
     return svc.points.suspend(requireUser(req), req.params.id, body.motif, body.proposalId);
   });
-  // Rétablissement / écartement à quatre yeux : le premier appel enregistre la demande, un R17 distinct décide.
-  app.post<{ Params: { id: string } }>('/v1/payment-points/:id/reinstate', async (req) => {
-    const body = parse(motifSchema, req.body);
-    return svc.points.reinstate(requireUser(req), req.params.id, body.motif);
-  });
-  app.post<{ Params: { id: string } }>('/v1/payment-point-proposals/:id/dismiss', async (req) => {
-    const body = parse(motifSchema, req.body);
-    return svc.points.dismissProposal(requireUser(req), req.params.id, body.motif);
-  });
+  // Rétablissement / écartement à quatre yeux, en DEUX routes : la demande (R17/R18), puis la décision d'un R17 distinct
+  // (approbation ou refus) — route de décision soumise à la garde de rotation de l'intégrité.
+  app.post<{ Params: { id: string } }>('/v1/payment-points/:id/reinstatement-request', async (req, reply) =>
+    reply.code(201).send(svc.points.requestReinstatement(requireUser(req), req.params.id, parse(motifSchema, req.body).motif)));
+  app.post<{ Params: { id: string } }>('/v1/payment-points/:id/reinstatement-request/decision', async (req) =>
+    svc.points.decideReinstatement(requireUser(req), req.params.id, parse(decisionSchema, req.body)));
+  app.post<{ Params: { id: string } }>('/v1/payment-point-proposals/:id/dismissal-request', async (req, reply) =>
+    reply.code(201).send(svc.points.requestDismissal(requireUser(req), req.params.id, parse(motifSchema, req.body).motif)));
+  app.post<{ Params: { id: string } }>('/v1/payment-point-proposals/:id/dismissal-request/decision', async (req) =>
+    svc.points.decideDismissal(requireUser(req), req.params.id, parse(decisionSchema, req.body)));
+  // Anciennes routes (compatibilité) : DEMANDE seulement — la décision ne passe plus que par la route dédiée.
+  app.post<{ Params: { id: string } }>('/v1/payment-points/:id/reinstate', async (req) => svc.points.requestReinstatement(requireUser(req), req.params.id, parse(motifSchema, req.body).motif));
+  app.post<{ Params: { id: string } }>('/v1/payment-point-proposals/:id/dismiss', async (req) => svc.points.requestDismissal(requireUser(req), req.params.id, parse(motifSchema, req.body).motif));
 
   // ---------- Paiement numérique assisté par l'agent (jamais d'espèces) ----------
   app.get<{ Querystring: { objectId?: string; obligationIds?: string } }>('/v1/agents/assist/payables', async (req) => {

@@ -70,12 +70,14 @@ export const CIRCUITS: Circuit[] = [
   },
   {
     code: 'CANAUX_RETABLISSEMENT', label: 'Rétablissement d’un point de paiement suspendu',
-    proposals: ['canaux.point.reinstatement_requested'], approvals: ['canaux.point.reinstated'], refusals: [],
+    proposals: ['canaux.point.reinstatement_requested'], approvals: ['canaux.point.reinstated'], refusals: ['canaux.point.reinstatement_rejected'],
+    guard: { url: '/v1/payment-points/:id/reinstatement-request/decision', key: (p) => p.id!, refusal: approveFalse },
   },
   {
     code: 'CANAUX_ECARTEMENT_SUSPENSION', label: 'Écartement d’une proposition de suspension de point',
-    proposals: ['canaux.point.suspension_dismissal_requested'], approvals: ['canaux.point.suspension_dismissed'], refusals: [],
+    proposals: ['canaux.point.suspension_dismissal_requested'], approvals: ['canaux.point.suspension_dismissed'], refusals: ['canaux.point.suspension_dismissal_rejected'],
     key: detail('proposalId'),
+    guard: { url: '/v1/payment-point-proposals/:id/dismissal-request/decision', key: (p) => p.id!, refusal: approveFalse },
   },
   {
     code: 'BASE_DEROGATION', label: 'Dérogation à la base de liquidation',
@@ -128,6 +130,11 @@ export const CIRCUITS: Circuit[] = [
     code: 'COFFRE_BENEFICIAIRE', label: 'Changement de compte bénéficiaire (coffre)',
     proposals: ['beneficiary.change.proposed'], approvals: ['beneficiary.change.approved'], refusals: ['beneficiary.change.vetoed'],
     guard: { url: '/v1/beneficiary-accounts/change-requests/:id/approve', key: (p) => p.id! },
+  },
+  {
+    code: 'COMMISSION_VALIDATION', label: 'Validation d’une commission d’agent avant versement',
+    proposals: ['agents.commission.validation_requested'], approvals: ['agents.commission.validated'], refusals: ['agents.commission.validation_refused'],
+    guard: { url: '/v1/agents/commission-validations/:id/decision', key: (p) => p.id!, refusal: approveFalse },
   },
   {
     code: 'REGISTRE_SEUILS', label: 'Registre des seuils anti-fraude (confirmation ou modification)',

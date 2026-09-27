@@ -79,6 +79,24 @@ export function hasRole(roles: string[] | undefined, ...wanted: string[]): boole
   return !!roles && roles.some((r) => wanted.includes(r));
 }
 
+/** Demande en attente d'une décision à quatre yeux (rétablissement d'un point, écartement d'une proposition). */
+export interface FourEyesRequest { by: string; at: string; motif: string }
+
+/**
+ * Garde d'affichage d'un circuit à quatre yeux du Trésor, en deux actes : DEMANDE motivée (R17 ou R18), puis
+ * DÉCISION (approbation ou refus) par un R17 distinct du demandeur et des personnes exclues (ex. celle qui a suspendu).
+ * Le serveur reste seul juge (séparation des tâches, garde de rotation) ; l'écran n'offre que les gestes possibles.
+ */
+export function pointDecisionGuard(request: FourEyesRequest | undefined, user: { id: string; roles: string[] } | null | undefined, excluded: string[] = []): { canRequest: boolean; canDecide: boolean; block: string | null } {
+  if (!user) return { canRequest: false, canDecide: false, block: null };
+  if (!request) return { canRequest: hasRole(user.roles, 'R17', 'R18'), canDecide: false, block: null };
+  let block: string | null = null;
+  if (!hasRole(user.roles, 'R17')) block = 'Décision réservée à un comptable public du Trésor (R17).';
+  else if (user.id === request.by) block = 'Vous avez fait la demande : une autre personne du Trésor décide.';
+  else if (excluded.includes(user.id)) block = 'Vous avez suspendu ce point : une autre personne du Trésor décide.';
+  return { canRequest: false, canDecide: block === null, block };
+}
+
 /** URL de vérification publique d'une carte (cible du QR). */
 export function cardVerifyUrl(token: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';

@@ -1,11 +1,11 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **624 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
 | extension acces | 63 |
-| extension canaux | 41 |
+| extension canaux | 45 |
 | extension fiscal | 44 |
 | extension ia | 28 |
 | extension integrite | 58 |
@@ -15,7 +15,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **624 routes** dans 35
 | extension publicite | 34 |
 | extension rakapay | 23 |
 | extension recouvrement | 37 |
-| extension sanctions | 5 |
+| extension sanctions | 8 |
 | extension socle | 14 |
 | extension terrain | 47 |
 | extension titres | 20 |
@@ -130,6 +130,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **624 routes** dans 35
 | GET | `/v1/mosolo-cards/reissue-requests` |
 | POST | `/v1/mosolo-cards/reissue-requests/:id/approve` |
 | POST | `/v1/payment-point-proposals/:id/dismiss` |
+| POST | `/v1/payment-point-proposals/:id/dismissal-request` |
+| POST | `/v1/payment-point-proposals/:id/dismissal-request/decision` |
 | GET | `/v1/payment-points` |
 | POST | `/v1/payment-points` |
 | POST | `/v1/payment-points/:id/activate` |
@@ -144,6 +146,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **624 routes** dans 35
 | POST | `/v1/payment-points/:id/collections/:cid/print` |
 | GET | `/v1/payment-points/:id/references/:reference` |
 | POST | `/v1/payment-points/:id/reinstate` |
+| POST | `/v1/payment-points/:id/reinstatement-request` |
+| POST | `/v1/payment-points/:id/reinstatement-request/decision` |
 | POST | `/v1/payment-points/:id/suspend` |
 | GET | `/v1/payment-points/mine` |
 | GET | `/v1/pictogram-notices/:taxpayerId` |
@@ -494,9 +498,12 @@ Généré depuis le code source (`tools/gen_routes.py`) : **624 routes** dans 35
 
 | Méthode | Chemin |
 |---|---|
+| GET | `/v1/agents/commission-validations` |
+| POST | `/v1/agents/commission-validations/:id/decision` |
 | GET | `/v1/agents/counter-checks` |
 | POST | `/v1/agents/counter-checks/:id/record` |
 | GET | `/v1/agents/earnings` |
+| POST | `/v1/agents/me/commission-validations` |
 | GET | `/v1/agents/me/earnings` |
 | GET | `/v1/agents/monitoring` |
 

@@ -13,6 +13,15 @@ assertBootSecrets();
 const port = Number.parseInt(process.env.PORT ?? '8080', 10);
 const host = process.env.HOST ?? '0.0.0.0';
 const app = buildApp({ logger: true });
+const { assertKeyHealthAtBoot } = await import('./plugins/integrite/gouvernance/cles.js');
+// Hors démonstration : santé des clés contrôlée au démarrage — refus sur avertissement critique (clé absente, éphémère,
+// de démonstration, réutilisée pour deux usages…) ; les autres avertissements (âge) sont journalisés et alertés.
+try {
+  assertKeyHealthAtBoot(app.ctx);
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+}
 
 app.listen({ port, host }).catch((err: unknown) => {
   app.log.error(err);
