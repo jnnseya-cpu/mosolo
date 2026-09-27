@@ -25,3 +25,22 @@ données de démonstration.
   parenthèses (ex. « Stationnement intelligent (ParkSmart) », « Centre de commandement (Command Centre) »).
 - Avant de livrer : `npm run typecheck && npm run lint && npm test && npm run build -w frontend`, et
   `python3 tools/gen_routes.py` si des routes changent.
+
+## Décisions du maître d'ouvrage (27/09/2026, suite à la spécification fonctionnelle)
+
+- **Réserve des agents (§ 37A.5, module 67)** : les 10 % des agents et sous-traitants forment une réserve par module,
+  répartie au prorata de points de résultats vérifiés × note de qualité, jamais selon le montant liquidé ; l'écran
+  actuel de la commission de 10 % est conservé et harmonisé avec cette réserve.
+- **Exécution automatique après acte** : une fois l'acte juridique et la convention enregistrés, les deux flux du § 37A
+  sont exécutés automatiquement (piste d'audit complète) et la facturation des écarts AVIA est automatique ; avant
+  l'acte, simulation / proposition seulement.
+- **Point de paiement en retard (module 66)** : suspension conservatoire automatique au dépassement du délai
+  contractuel ; levée et pénalité décidées par une personne.
+- **ParkSmart (module 75)** : tarification automatique à l'intérieur de fourchettes fixées par l'acte, pour maintenir
+  15 à 25 % de places libres.
+- **Liquidation « automatique »** des modules qui la prévoient (antennes, concessions, carrières) : automatique sur règle
+  ACTIVE ; les sanctions restent décidées par une personne.
+- **IRL** : 22 % à tous les rangs, retenue 20 % (rang 1) / 15 % (rangs 2 à 4) — § 16.2 ; statut « à vérifier ».
+- **Plaque NFIU** : l'agent habilité voit la situation complète (§ 16.7) ; scan public minimal.
+- **Module 4** : application Android **et iOS**.
+
