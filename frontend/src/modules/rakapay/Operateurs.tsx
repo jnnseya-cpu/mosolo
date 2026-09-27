@@ -18,6 +18,7 @@ import { COMMUNES } from '../../verticals/catalogue';
 import '../referentiel/referentiel.css';
 import './rakapay.css';
 import { OperatorTools } from './Billetterie';
+import { CircuitPriveVisuel, SupervisionOperateursVisuel } from './visuels';
 
 interface Operator { id: string; code: string; name: string; kind: string; commune: string; status: string }
 interface Offer { id: string; operatorId: string; commercialName: string; family: string; duration: { unit: string; value: number }; publicRevenue: boolean; price?: MoneyJSON; typeCode?: string; status: string; place: { commune: string; label: string } }
@@ -110,6 +111,7 @@ function OperatorSpace({ id }: { id: string }) {
         </form>
       )}
       {d.agents.length > 0 && <p className="small">Agents : {d.agents.map((a) => `${a.name}${a.status === 'RETIRE' ? ' (retiré)' : ''}`).join(', ')}</p>}
+      {d.privateCircuit && <CircuitPriveVisuel circuit={d.privateCircuit} />}
       {d.privateCircuit && (
         <div className="callout callout-info"><Icon name="lock" size={18} /><div>
           <p><strong>Circuit privé</strong> — {d.privateCircuit.sales} vente(s) · <Amounts list={d.privateCircuit.amounts} /> · {d.privateCircuit.cancellations} annulation(s)</p>
@@ -128,7 +130,9 @@ function Supervision() {
   const roles = user?.roles ?? [];
   const ops = useApi(() => api<Operator[]>('/v1/rakapay/operateurs'), [user?.id]);
   const offers = useApi(() => api<{ items: Offer[] }>('/v1/rakapay/offres'), [user?.id]);
-  const circ = useApi(() => api<Circuits>('/v1/rakapay/circuits'), [user?.id]);
+  // Deux circuits (rakapay:operator.supervise) : R01, R02, R05, R22, R23, R24 ; R06/R07 de l'entité DGTK seulement.
+  const canCircuits = roles.some((r) => ['R01', 'R02', 'R05', 'R22', 'R23', 'R24'].includes(r)) || (user?.entity === 'DGTK' && roles.some((r) => r === 'R06' || r === 'R07'));
+  const circ = useApi(canCircuits ? () => api<Circuits>('/v1/rakapay/circuits') : null, [user?.id]);
   const reviews = useApi(roles.some((r) => r === 'R07' || r === 'R24') ? () => api<{ items: Review[] }>('/v1/rakapay/revues-ventes') : null, [user?.id]);
   const reload = () => { ops.reload(); offers.reload(); circ.reload(); reviews.reload(); };
   const { err, run } = useAction(reload);
@@ -142,6 +146,7 @@ function Supervision() {
   return (
     <div className="stack">
       {err && <p className="notice notice-err" role="alert">{err}</p>}
+      {ops.data && <SupervisionOperateursVisuel operators={ops.data} offers={offers.data?.items ?? []} circuits={circ.data} reviews={reviews.data?.items ?? null} />}
       <section className="panel">
         <div className="panel-head"><h2 className="panel-title"><Icon name="users" size={18} /> Agrément des opérateurs</h2><span className="count">{candidates.length}</span></div>
         {!candidates.length ? <EmptyState title="Aucune candidature en attente" icon="check" /> : (

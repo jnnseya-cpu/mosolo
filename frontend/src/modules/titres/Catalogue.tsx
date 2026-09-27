@@ -17,6 +17,7 @@ import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import type { MoneyJSON } from '@mosolo/shared';
+import { CatalogueVisuel, IndicateursTitresVisuel } from './visuels';
 
 interface TypeView {
   code: string; module: string; moduleLabel: string; label: string; prefix: string; plateBound: boolean; supports: string[]; demo: boolean;
@@ -60,6 +61,7 @@ function IndicatorsPanel() {
         <Kpi label="Réutilisations détectées" value={d.controls.reuseAttempts} sub="usage unique présenté de nouveau" />
         {d.controls.withoutRegisteredTerminal !== undefined && <Kpi label="Contrôles sans terminal enregistré" value={d.controls.withoutRegisteredTerminal} sub={`${d.controls.withRegisteredTerminal ?? 0} depuis un terminal enregistré`} />}
       </div>
+      <IndicateursTitresVisuel d={d} />
       <p className="small muted">Statuts : {Object.entries(d.credentials.byStatus).map(([k, n]) => `${k.replace(/_/g, ' ').toLowerCase()} ${n}`).join(' · ') || 'aucun titre'}. Constats : {d.constats.open} ouvert(s), {d.constats.classified} classé(s), {d.constats.transmitted} transmis — aucune pénalité automatique à l’expiration.</p>
     </section>
   );
@@ -77,6 +79,7 @@ export default function TitresCatalogue() {
       {canIndicators && <IndicatorsPanel />}
       {q.loading && <Loading />}
       {!!q.error && <ErrorState error={q.error} onRetry={q.reload} />}
+      {q.data && <CatalogueVisuel types={q.data} />}
       {q.data && (
         <DataTable rows={rows} rowKey={(t) => t.code}
           columns={[

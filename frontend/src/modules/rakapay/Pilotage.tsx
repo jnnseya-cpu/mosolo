@@ -13,6 +13,7 @@ import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
+import { PilotageVisuel } from './visuels';
 import './rakapay.css';
 import { ConstatsPanel, GracePanel } from './Billetterie';
 
@@ -45,7 +46,9 @@ function Meter({ label, value, max, text }: { label: string; value: number; max:
 
 function Complaints() {
   const { user, fmtDate } = useApp();
-  const list = useApi(() => api<Complaint[]>('/v1/rakapay/signalements'), [user?.id]);
+  // Lecture des signalements (rakapay:complaint.read) : R01, R02, R07, R22, R24 — pas d'appel voué au refus pour les autres rôles.
+  const canRead = !!user?.roles.some((r) => ['R01', 'R02', 'R07', 'R22', 'R24'].includes(r));
+  const list = useApi(canRead ? () => api<Complaint[]>('/v1/rakapay/signalements') : null, [user?.id]);
   const [err, setErr] = useState<string | null>(null);
   const canHandle = !!user?.roles.some((r) => r === 'R24' || r === 'R07');
   async function handle(id: string, status: string, confirmed?: boolean) {
@@ -55,6 +58,7 @@ function Complaints() {
     try { await api(`/v1/rakapay/signalements/${id}/traitement`, { method: 'POST', body: { status, motif, ...(confirmed !== undefined ? { confirmed } : {}) } }); list.reload(); }
     catch (ex) { setErr(describeError(ex).message); }
   }
+  if (!canRead) return null;
   if (list.loading) return <Loading />;
   if (list.error) return null;
   return (
@@ -107,6 +111,7 @@ export default function Pilotage() {
             <div className="kpi"><p className="kpi-label">Plaintes ouvertes</p><p className="kpi-value">{d.complaints.open}</p><div className="kpi-foot"><span className="kpi-sub">{d.complaints.total} reçues · {d.complaints.averageHandlingHours ? `délai moyen ${d.complaints.averageHandlingHours} h` : 'aucune close'}</span></div></div>
           </div>
 
+          <PilotageVisuel d={d} />
           <div className="rkx-grid">
             <section className="panel" aria-labelledby="rkp-cov">
               <div className="panel-head"><div><h2 className="panel-title" id="rkp-cov"><Icon name="pin" size={18} /> Couverture par station</h2><p className="panel-sub">Motos enregistrées / motos estimées [EXEMPLE — à établir par le recensement]</p></div></div>

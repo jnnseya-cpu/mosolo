@@ -10,6 +10,7 @@ import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components
 import { StatusBadge } from '../../components/StatusBadge';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
+import { ConstatsVisuel, ControleurTuiles, constatLabel } from './visuels';
 import { normalizePlate, readValidity } from '@mosolo/shared';
 import { ValidityCountdown } from '../../components/ValidityCountdown';
 import { api, describeError, safeGet, safeSet } from '../../lib/api';
@@ -266,6 +267,7 @@ export default function Controle() {
       <ExampleNotice text="Démonstration : titres, plaques et gilets fictifs. Le contrôleur constate ; il n’encaisse jamais et n’inflige aucune amende." />
       {!isController && <div className="callout callout-info"><Icon name="info" size={18} /><p>Écran réservé aux contrôleurs habilités (agents de terrain, contrôleurs). Choisissez « Contrôleur RakaPay Kalamu–Lemba (démo) » dans l’en-tête.</p></div>}
 
+      <ControleurTuiles queued={queue.length} plates={pack ? pack.plates.plates.length : null} revocations={pack ? pack.revocations.entries.length : null} constats={constats.data ?? null} />
       <div className="tt-ctl-grid">
         <div className="stack">
           <section className="panel" aria-labelledby="tt-ctl">
@@ -365,12 +367,13 @@ export default function Controle() {
                     <div className="min0"><p className="row-title">{k.id}</p><p className="small muted">{k.reason} · {k.place.label ?? '—'} · {fmtDate(k.at, true)}</p></div>
                     <div className="row-side">
                       {k.duringGrace && <StatusBadge tone="info" label="Période de grâce" />}
-                      <StatusBadge tone={k.status === 'OUVERT' ? 'warning' : 'neutral'} label={k.status === 'OUVERT' ? 'À instruire' : k.status === 'CLASSE' ? 'Classé' : 'Transmis'} />
+                      <StatusBadge tone={k.status === 'OUVERT' ? 'warning' : 'neutral'} label={constatLabel(k.status)} />
                     </div>
                   </li>
                 ))}
               </ul>
             )}
+            {!!constats.data?.length && <ConstatsVisuel constats={constats.data} title="Mes constats" />}
             <p className="small muted" style={{ marginTop: 8 }}>Un constat n’est ni une amende ni une dette : une personne habilitée décide, avec motif, et l’usager peut contester.</p>
           </section>
         </aside>
