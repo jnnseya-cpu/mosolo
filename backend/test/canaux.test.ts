@@ -627,10 +627,12 @@ describe('canaux — points de paiement agréés (R32)', () => {
     const order = ctx.payments.byReference(ref.paymentReference)!;
     const before = (await c.env.req('GET', '/v1/payment-points/PA-LIMETE-MM01/cash-days/2026-09-26', 'canaux-op-limete')).json();
     ctx.assessment.setStatus(order.obligationId, 'ANNULEE');
+    // L'annulation ferme la référence active (closeOrdersForObligation) : refus dès la consultation.
+    expect(ctx.payments.byReference(ref.paymentReference)).toMatchObject({ status: 'ECHOUE', closedReason: 'OBLIGATION_NON_PAYABLE' });
     const look = await c.env.req('GET', `/v1/payment-points/PA-LIMETE-MM01/references/${ref.paymentReference}`, 'canaux-op-limete');
-    expect(look.json().code).toBe('OBLIGATION_NOT_PAYABLE');
+    expect(look.json().code).toBe('REFERENCE_NOT_PAYABLE');
     const cash = await collect(c, ref.paymentReference);
-    expect(cash.json().code).toBe('OBLIGATION_NOT_PAYABLE');
+    expect(cash.json().code).toBe('REFERENCE_NOT_PAYABLE');
     // Course : confirmation signée du point arrivée malgré tout ⇒ non affecté ; les espèces restent dues par le point.
     const secret = ctx.secrets.providerSecrets['point-agree-pa-limete-mm01']!;
     const raw = JSON.stringify({ providerTxnId: 'PA-LIMETE-MM01-TX-COURSE', paymentReference: order.paymentReference, amount: order.amount, status: 'SUCCESS', completedAt: ctx.clock.now().toISOString() });

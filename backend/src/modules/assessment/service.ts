@@ -171,10 +171,15 @@ export interface CalculateInput {
 
 export const PAYABLE_STATUSES: ObligationStatus[] = ['EMISE', 'EXIGIBLE', 'EN_RETARD', 'PARTIELLEMENT_PAYEE'];
 
+/** Statuts qui ferment les références de paiement actives (soldée, annulée ou réduite à zéro, admise en non-valeur). */
+export const ORDER_CLOSING_STATUSES: ObligationStatus[] = ['SOLDEE', 'ANNULEE', 'ADMISE_EN_NON_VALEUR'];
+
 /** Services rendus par le module paiements à la liquidation (sans dépendance circulaire). */
 export interface ObligationPaymentHooks {
   paidOn(obligationId: string): Money;
   onSuperseded(originalId: string, rectifiedId: string): void;
+  /** Obligation devenue non payable : ses références INITIE sont fermées (paiement tardif ⇒ non affecté). */
+  onClosed?(obligationId: string, status: ObligationStatus): void;
 }
 
 /** Garde appelée avant toute liquidation réelle ; lève une erreur pour l'empêcher. */
@@ -519,10 +524,16 @@ export class AssessmentService {
     return this.obligations.find((o) => o.taxpayerId === taxpayerId);
   }
 
-  /** Changement d'état d'une obligation (jamais de suppression). */
+  /**
+   * Changement d'état d'une obligation (jamais de suppression). Passage à un statut non payable (SOLDEE, ANNULEE,
+   * ADMISE_EN_NON_VALEUR) : point unique de fermeture des références actives, quel que soit l'appelant (dégrèvement,
+   * rectification à zéro, admission en non-valeur, annulation de commande, rapprochement soldant).
+   */
   setStatus(id: string, status: ObligationStatus): Obligation {
     const o = this.get(id);
-    return this.obligations.update({ ...o, status });
+    const updated = this.obligations.update({ ...o, status });
+    if (status !== o.status && ORDER_CLOSING_STATUSES.includes(status)) this.paymentHooks?.onClosed?.(id, status);
+    return updated;
   }
 
   /**

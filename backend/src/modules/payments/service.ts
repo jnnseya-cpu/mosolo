@@ -314,7 +314,10 @@ export class PaymentService {
     private readonly providerKeyRings: Record<string, ProviderKey[]> = {},
   ) {
     // La liquidation connaît le cumul payé (rectification, décision sur réclamation) sans dépendre de ce module.
-    assessment.setPaymentHooks({ paidOn: (id) => this.paidOn(id), onSuperseded: (from, to) => this.onSuperseded(from, to) });
+    assessment.setPaymentHooks({
+      paidOn: (id) => this.paidOn(id), onSuperseded: (from, to) => this.onSuperseded(from, to),
+      onClosed: (id, status) => { this.closeOrdersForObligation(id, `Obligation ${status}`); },
+    });
   }
 
   private newReference(): string {
@@ -512,12 +515,25 @@ export class PaymentService {
     return this.orders.update({ ...o, ...extra, status: to });
   }
 
+  /**
+   * Fermeture des références actives (INITIE) d'une obligation soldée, admise en non-valeur, annulée ou réduite à
+   * zéro : INITIE → ECHOUE, motif OBLIGATION_NON_PAYABLE (REFERENCE_EXPIREE si déjà échue), intention prestataire
+   * annulée, une entrée d'audit par référence avec la cause. Un paiement reçu ensuite sur l'une d'elles n'est jamais
+   * crédité : il part en compte d'attente (non affecté) pour remboursement. Appelé par la liquidation à chaque
+   * changement de statut non payable ; idempotent.
+   */
+  closeOrdersForObligation(obligationId: string, reason: string, actor: AuditActor = { kind: 'system', id: 'paiements' }): PaymentOrder[] {
+    const now = this.clock.now();
+    return this.orders.find((x) => x.obligationId === obligationId && x.status === 'INITIE').map((o) =>
+      this.closeOrder(o, new Date(o.expiresAt) <= now ? 'REFERENCE_EXPIREE' : 'OBLIGATION_NON_PAYABLE', actor, reason));
+  }
+
   /** Ferme une référence non payée (INITIE → ECHOUE, motif daté) et annule l'intention prestataire liée. */
-  private closeOrder(o: PaymentOrder, reason: OrderClosedReason, actor: AuditActor): PaymentOrder {
+  private closeOrder(o: PaymentOrder, reason: OrderClosedReason, actor: AuditActor, cause?: string): PaymentOrder {
     const closed = this.transition(o, 'ECHOUE', { closedReason: reason, closedAt: this.clock.now().toISOString() });
     this.audit.append({
       actor, action: 'payment.reference.closed', resourceType: 'payment_order', resourceId: o.id,
-      details: { paymentReference: o.paymentReference, reason, expiresAt: o.expiresAt, providerIntentId: o.providerIntentId ?? null },
+      details: { paymentReference: o.paymentReference, reason, expiresAt: o.expiresAt, providerIntentId: o.providerIntentId ?? null, ...(cause ? { cause, obligationId: o.obligationId } : {}) },
     });
     // Une intention déclarée échouée par le prestataire lui-même n'a pas à être annulée.
     if (o.provider && o.providerIntentId && reason !== 'ECHEC_PRESTATAIRE') this.cancelProviderIntent(o.provider, o.providerIntentId, o.id, reason);
