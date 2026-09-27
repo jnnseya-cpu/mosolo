@@ -6,7 +6,7 @@
  * contribuable et décidé par l'autorité (jamais d'office), voie de recours suivante indiquée dans la décision,
  * suivi du dépassement du délai de réponse (`appeal.sla_breach`).
  */
-import { Money, type MoneyJSON } from '@mosolo/shared';
+import { Money, type MoneyJSON, type ObligationStatus } from '@mosolo/shared';
 import type { AuditLog } from '../../core/audit.js';
 import type { User, UserDirectory } from '../../core/auth.js';
 import { DAY_MS, isoDate, type Clock } from '../../core/clock.js';
@@ -300,7 +300,12 @@ export class AppealService {
     let rectifiedAmount: MoneyJSON | undefined;
 
     if (input.decision === 'REJETEE') {
-      this.assessment.setStatus(obligation.id, 'EMISE');
+      // L'obligation reprend l'état que justifient les paiements (jamais « EMISE » d'office sur une obligation payée).
+      const paid = this.assessment.paidAmount(obligation.id);
+      const restored: ObligationStatus = paid.compare(Money.fromJSON(obligation.amount)) >= 0 && !paid.isZero() ? 'SOLDEE'
+        : !paid.isZero() ? 'PARTIELLEMENT_PAYEE'
+          : (appeal.previousObligationStatus as ObligationStatus);
+      this.assessment.setStatus(obligation.id, restored === 'CONTESTEE' ? 'EMISE' : restored);
     } else {
       const original = Money.fromJSON(obligation.amount);
       let amount: Money;

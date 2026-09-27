@@ -503,14 +503,29 @@ describe('Pénalités et remises : règle ACTIVE et décision humaine uniquement
     const motivation = 'Situation sociale difficile documentée';
     expect((await env.req('POST', '/v1/recouvrement/remises', 'u-locataire', { obligationId: obl, basisRuleId: 'rule-irl-kin-r1-v1', requestedAmount: { amount: '30.00', currency: 'USD' }, motivation })).json().code).toBe('ACTE_REQUIS');
     expect((await env.req('POST', '/v1/recouvrement/remises', 'u-locataire', { obligationId: obl, basisRuleId: demoRule.id, requestedAmount: { amount: '30.00', currency: 'USD' }, motivation })).json().code).toBe('REMISSION_BASIS_NOT_DECLARED');
-    const basis = await publishCertifiedRule(env, { code: 'TEST-REMISE', exemptions: [{ basis: 'Art. 3 (fictif) — remise gracieuse', proof: 'Attestation sociale' }] });
+    const exemptions = [{ basis: 'Art. 3 (fictif) — remise gracieuse', proof: 'Attestation sociale' }];
+    // La base de remise doit être la règle même de l'obligation (une autre recette ne fonde rien).
+    const other = await publishCertifiedRule(env, { code: 'TEST-REMISE', exemptions });
+    expect((await env.req('POST', '/v1/recouvrement/remises', 'u-locataire', { obligationId: obl, basisRuleId: other.id, requestedAmount: { amount: '30.00', currency: 'USD' }, motivation })).json().code).toBe('REMISSION_BASIS_RULE_MISMATCH');
+    // Nouvelle version de la règle de l'obligation, en vigueur dès aujourd'hui (aucune rétroactivité).
+    const basis = await publishCertifiedRule(env, { code: demoRule.code, exemptions, effectiveFrom: env.clock.now().toISOString().slice(0, 10) });
     const r = await env.req('POST', '/v1/recouvrement/remises', 'u-locataire', { obligationId: obl, basisRuleId: basis.id, requestedAmount: { amount: '30.00', currency: 'USD' }, motivation });
     expect(r.json().status).toBe('DEMANDEE');
+    // Une seule demande en attente par obligation.
+    expect((await env.req('POST', '/v1/recouvrement/remises', 'u-locataire', { obligationId: obl, basisRuleId: basis.id, requestedAmount: { amount: '20.00', currency: 'USD' }, motivation })).json().code).toBe('REMISSION_ALREADY_PENDING');
     expect((await env.req('POST', `/v1/recouvrement/remises/${r.json().id}/decision`, 'u-contentieux', { granted: true, motivation: 'Sans habilitation de décision' })).statusCode).toBe(403);
     const d = await env.req('POST', `/v1/recouvrement/remises/${r.json().id}/decision`, 'u-decideur', { granted: true, motivation: 'Remise conforme à l’article 3 fictif' });
     expect(d.json().status).toBe('ACCORDEE');
     expect(env.app.ctx.assessment.get(obl)).toMatchObject({ status: 'ANNULEE', supersededBy: d.json().rectifyingObligationId });
     expect(env.app.ctx.assessment.get(d.json().rectifyingObligationId).amount).toEqual({ amount: '30.00', currency: 'USD' });
+    // Contrôles rejoués à la décision : une demande sur une obligation soldée entre-temps est sans objet.
+    const rect = d.json().rectifyingObligationId as string;
+    const again = await env.req('POST', '/v1/recouvrement/remises', 'u-locataire', { obligationId: rect, basisRuleId: basis.id, requestedAmount: { amount: '20.00', currency: 'USD' }, motivation });
+    expect(again.json().status).toBe('DEMANDEE');
+    env.app.ctx.assessment.setStatus(rect, 'SOLDEE');
+    const late = await env.req('POST', `/v1/recouvrement/remises/${again.json().id}/decision`, 'u-decideur', { granted: true, motivation: 'Remise conforme à l’article 3 fictif' });
+    expect(late.json().code).toBe('OBLIGATION_NOT_PAYABLE');
+    expect(env.app.ctx.assessment.get(rect).supersededBy).toBeUndefined();
   });
 });
 

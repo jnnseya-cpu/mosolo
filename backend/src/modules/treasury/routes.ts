@@ -39,13 +39,22 @@ export function registerTreasuryRoutes(app: FastifyInstance, ctx: AppContext): v
     return ctx.ledger.balance();
   });
 
-  // Correction : uniquement par contre-écriture liée à l'original.
+  // Correction : uniquement par contre-écriture liée à l'original, décidée à QUATRE YEUX. Cette route ne passe plus
+  // l'écriture : elle PROPOSE une opération CONTRE_ECRITURE au circuit de double validation du Trésor (202), qu'une
+  // autre personne habilitée valide (POST /v1/tresor/operations/:id/approve). Sans ce circuit : refus.
   app.post<{ Params: { id: string } }>('/v1/ledger/entries/:id/reversals', async (req, reply) => {
     const user = requireUser(req);
     authorize(user, 'ledger.reverse');
     requireAcr(user, ACR.MFA); // DG-09
     const { reason } = parse(reversalSchema, req.body);
-    return reply.code(201).send(ctx.ledger.reverse(req.params.id, reason, { kind: 'user', id: user.id, roles: user.roles }));
+    const tresor = ctx.ext.tresor as { propose(u: typeof user, input: { kind: 'CONTRE_ECRITURE'; ledgerEntryId: string; reason: string }): unknown } | undefined;
+    if (!tresor) {
+      throw new ApiError(422, 'FOUR_EYES_REQUIRED', 'Contre-écriture impossible sans le circuit de double validation du Trésor (module « tresor »).');
+    }
+    const operation = tresor.propose(user, { kind: 'CONTRE_ECRITURE', ledgerEntryId: req.params.id, reason });
+    return reply.code(202).send({
+      operation, notice: 'Contre-écriture proposée : elle ne sera passée qu’après validation par une autre personne habilitée (quatre yeux).',
+    });
   });
 
   // Grand livre en ajout seul : aucune modification ni suppression, quel que soit le rôle.

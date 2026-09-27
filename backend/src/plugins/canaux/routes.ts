@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../../context.js';
 import { requireUser } from '../../core/auth.js';
+import { ApiError } from '../../core/errors.js';
 import { IdempotencyStore } from '../../core/idempotency.js';
 import { header, isoDateString, moneySchema, parse } from '../../core/http.js';
 import { authorize } from '../../core/policy.js';
@@ -36,10 +37,13 @@ const pointSchema = z.object({
   settlementDelayHours: z.number().int().min(1).max(72), guichetId: z.string().optional(), operatorUserIds: z.array(z.string()).min(1).max(20),
 }).strict();
 
-/** Clé du limiteur : adresse du client (derrière un mandataire : première adresse transmise). */
+/**
+ * Clé du limiteur : adresse réseau vue par le serveur (`req.ip`, qui ne tient compte d'un mandataire que s'il est
+ * déclaré de confiance). Jamais un en-tête X-Forwarded-For fourni par le client : il suffirait de le changer à
+ * chaque requête pour contourner la limitation et énumérer les codes.
+ */
 function clientKey(req: FastifyRequest): string {
-  const fwd = header(req, 'x-forwarded-for');
-  return `ip:${(fwd ? fwd.split(',')[0]!.trim() : req.ip) || 'inconnu'}`;
+  return `ip:${req.ip || 'inconnu'}`;
 }
 
 export function registerCanauxRoutes(app: FastifyInstance, ctx: AppContext, svc: CanauxService): void {
@@ -66,9 +70,15 @@ export function registerCanauxRoutes(app: FastifyInstance, ctx: AppContext, svc:
     notice: 'Seuls les points référencés et actifs peuvent encaisser et produire une preuve valable. Aucun agent public ne reçoit d’argent.',
   }));
   app.get('/v1/public/pictograms', async () => PICTOGRAMS);
-  app.get<{ Params: { code: string } }>('/v1/public/short-codes/:code', async (req) => ({
-    ...svc.verify(req.params.code, clientKey(req), 'WEB'), verifiedAt: ctx.clock.now().toISOString(),
-  }));
+  app.get<{ Params: { code: string } }>('/v1/public/short-codes/:code', async (req, reply) => {
+    // Même garde anti-énumération que la vérification publique des quittances (volume et échecs par client).
+    const gate = ctx.receipts.admit(clientKey(req));
+    if (!gate.allowed) {
+      void reply.header('retry-after', String(gate.retryAfter ?? 60));
+      throw new ApiError(429, 'VERIFICATION_RATE_LIMITED', 'Trop de vérifications depuis ce poste : réessayez plus tard (protection contre l’énumération).', { retryAfter: gate.retryAfter });
+    }
+    return { ...svc.verify(req.params.code, clientKey(req), 'WEB'), verifiedAt: ctx.clock.now().toISOString() };
+  });
   app.get<{ Querystring: { t?: string } }>('/v1/public/mosolo-cards/verify', async (req) => {
     svc.limiter.admit(clientKey(req), 'WEB-CARTE');
     const r = svc.cards.verifyToken(req.query.t ?? '');

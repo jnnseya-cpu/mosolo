@@ -4,6 +4,7 @@
  * points de paiement, carte perdue, langue. Aucune donnée sensible complète à l'écran (AC-INC-03) : ni nom, ni
  * historique détaillé ; montants seulement après code secret. Journal de session : la saisie du code est masquée.
  */
+import { randomBytes } from 'node:crypto';
 import { isLanguageCode, LANGUAGES, Money, type LanguageCode, type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import { hmacSha256Hex, randomSecret } from '../../core/crypto.js';
@@ -82,8 +83,10 @@ export class ChannelEngine {
     const msisdn = msisdnRaw.replace(/[\s-]/g, '');
     const now = this.ctx.clock.now().toISOString();
     const tp = this.ctx.taxpayers.taxpayers.findOne((t) => t.phone === msisdn);
+    // Identifiant aléatoire non devinable (128 bits) : la route de saisie n'est pas authentifiée, l'identifiant de
+    // session est le seul lien avec l'appelant — un numéro séquentiel permettrait de reprendre la session d'autrui.
     const session = this.sessions.insert({
-      id: this.ids.next(channel === 'USSD' ? 'USSD' : 'SVI', 8), channel, msisdnHash: hmacSha256Hex(this.pepper, msisdn).slice(0, 32),
+      id: `${channel === 'USSD' ? 'USSD' : 'SVI'}-${randomBytes(16).toString('base64url')}`, channel, msisdnHash: hmacSha256Hex(this.pepper, msisdn).slice(0, 32),
       msisdnMasked: maskMsisdn(msisdn), lang: lang && isLanguageCode(lang) ? lang : (tp?.language ?? 'fr'), node: 'MAIN', data: {},
       ...(tp ? { taxpayerId: tp.id } : {}), authenticated: false, status: 'ACTIVE', startedAt: now, lastActivityAt: now, steps: 0,
     });
@@ -299,11 +302,13 @@ export class ChannelEngine {
   private onPaySelect(s: ChannelSession, input: string): Screen {
     const obligationId = s.data[`o${input}`];
     if (!obligationId) return this.invalid(this.goIntent(s, 'PAY'));
-    const o = this.ctx.assessment.get(obligationId);
+    // Montant annoncé = montant de l'ordre qui sera émis (solde restant ou référence active), jamais le total initial.
+    const due = this.points.payableObligations(s.taxpayerId!).find((d) => d.obligationId === obligationId);
+    if (!due) return { node: 'BALANCE', title: 'Cette obligation n’est plus à payer.', options: BACK };
     this.sessions.update({ ...s, data: { ...s.data, selected: obligationId } });
     return {
-      node: 'PAY_CONFIRM', title: `Payer ${ussdAmount(o.amount)} (${o.ruleCode}) ?`,
-      voiceLines: [`Vous allez obtenir une référence pour payer ${moneyToFrenchWords(o.amount)}.`],
+      node: 'PAY_CONFIRM', title: `Payer ${ussdAmount(due.amount)} (${due.revenue}) ?`,
+      voiceLines: [`Vous allez obtenir une référence pour payer ${moneyToFrenchWords(due.amount)}.`],
       options: [{ key: '1', label: 'Confirmer', voice: 'confirmer' }, { key: '2', label: 'Annuler', voice: 'annuler' }],
     };
   }

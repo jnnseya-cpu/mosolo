@@ -72,6 +72,7 @@ export const TYPE_LABEL: Record<string, string> = {
   ORPHAN_CREDIT: 'Crédit orphelin', CREDIT_WITHOUT_CONFIRMATION: 'Crédit sans confirmation', DUPLICATE_CREDIT: 'Crédit en double',
   WRONG_ACCOUNT: 'Mauvais compte', UNKNOWN_ACCOUNT: 'Compte inconnu du coffre', AMOUNT_MISMATCH: 'Écart de montant',
   MISSING_SETTLEMENT: 'Règlement manquant (J+1)', PROVIDER_AMBIGUOUS: 'Résultat opérateur inconnu',
+  UNAPPLIED_PAYMENT: 'Paiement non affecté (doublon, référence expirée ou obligation soldée) — remboursement au payeur en double validation',
 };
 
 export const OP_LABEL: Record<OperationKind, string> = {

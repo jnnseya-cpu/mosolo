@@ -190,6 +190,10 @@ describe('Moteur de titres — émission adossée au paiement confirmé', () => 
     const b = s.svc.purchase(u, { payerTaxpayerId: DEMO.taxpayerId, channel: 'MOBILE_MONEY', items: [{ typeCode: 'TST-JOUR', subject: { plate: 'AA2' }, place: SERVICE_PLACE }] });
     await pay(s.env, b.payments[0]!.paymentReference, 'FAILED');
     s.svc.sync();
+    // Tentative échouée (rappel générique) : non terminale tant que la référence est valable, le payeur peut réessayer.
+    expect(s.svc.issuance(b.id).status).toBe('EN_ATTENTE_PAIEMENT');
+    s.clock.advanceHours(49);
+    s.svc.sync();
     expect(s.svc.issuance(b.id).status).toBe('EXPIREE');
     expect(s.svc.credentials.count()).toBe(0);
     // Double commande en attente pour la même plaque : refus.

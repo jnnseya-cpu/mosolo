@@ -3,7 +3,7 @@
  * vérification publique minimale. Une quittance n'est émise QUE sur confirmation prestataire vérifiée
  * (appel interne du module paiements) — aucune route ne permet d'en émettre sur preuve visuelle (AC-PAY-03).
  */
-import { createPublicKey, generateKeyPairSync, sign, verify, type KeyObject } from 'node:crypto';
+import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify, type KeyObject } from 'node:crypto';
 import { type MoneyJSON, type PublicReceiptCheck, type ReceiptStatus } from '@mosolo/shared';
 import type { AuditLog } from '../../core/audit.js';
 import type { Clock } from '../../core/clock.js';
@@ -129,6 +129,26 @@ export interface VerifiedProviderConfirmation {
   timestampInWindow: true | 'NON_APPLICABLE';
 }
 
+/**
+ * Clé privée Ed25519 de signature des quittances fournie par l'environnement (MOSOLO_RECEIPT_SIGNING_KEY) : PEM
+ * PKCS#8 ou DER PKCS#8 en base64. Absente ⇒ undefined (clé éphémère générée au démarrage : démonstration, tests).
+ * Une clé fournie mais illisible ou d'un autre algorithme empêche le démarrage (jamais de repli silencieux).
+ */
+export function loadReceiptSigningKey(raw: string | undefined): KeyObject | undefined {
+  const value = raw?.trim();
+  if (!value) return undefined;
+  let key: KeyObject;
+  try {
+    key = value.includes('-----BEGIN')
+      ? createPrivateKey(value.replace(/\\n/g, '\n'))
+      : createPrivateKey({ key: Buffer.from(value, 'base64'), format: 'der', type: 'pkcs8' });
+  } catch {
+    throw new Error('MOSOLO_RECEIPT_SIGNING_KEY illisible : clé privée Ed25519 PKCS#8 attendue (PEM ou base64 DER).');
+  }
+  if (key.asymmetricKeyType !== 'ed25519') throw new Error(`MOSOLO_RECEIPT_SIGNING_KEY : clé Ed25519 attendue (reçu ${key.asymmetricKeyType ?? 'inconnu'}).`);
+  return key;
+}
+
 /** Quatre derniers caractères alphanumériques de la référence du contribuable (§ 19.2). */
 export function refSuffix(ref: string): string {
   return ref.replace(/[^0-9A-Za-z]/g, '').slice(-4);
@@ -199,6 +219,8 @@ export class ReceiptService {
   private readonly privateKey: KeyObject;
   readonly publicKey: KeyObject;
   private seq = 0;
+  /** Nombre de quittances au dernier calage du compteur (un écart signale une restauration à reprendre). */
+  private seqSyncedAt = 0;
   /** Limitation de débit des vérifications publiques par client (anti-énumération, § 18A.6). */
   readonly gate: VerificationGate;
   private readonly stats = new Map<string, { total: number; byStatus: VerificationDayStats['byStatus']; clients: Set<string> }>();
@@ -227,12 +249,28 @@ export class ReceiptService {
     });
   }
 
-  /** Numérotation exclusive du système (numéro long + code court, chiffre de contrôle de Luhn). */
+  /**
+   * Numérotation exclusive du système (numéro long + code court, chiffre de contrôle de Luhn). Le compteur repart
+   * TOUJOURS au-delà du plus grand numéro connu (quittances restaurées depuis la persistance) et un numéro déjà
+   * attribué n'est jamais réémis.
+   */
   private nextNumber(): { number: string; code: string } {
+    if (this.receipts.count() !== this.seqSyncedAt) {
+      for (const r of this.receipts.all()) {
+        const m = /^Q-\d{4}-KIN-(\d{9})-\d$/.exec(r.number);
+        if (m) this.seq = Math.max(this.seq, Number(m[1]));
+      }
+    }
     const year = this.clock.now().getUTCFullYear();
-    const n = String(++this.seq).padStart(9, '0');
-    const check = luhnDigit(`${year}${n}`);
-    return { number: `Q-${year}-KIN-${n}-${check}`, code: `Q${String(year).slice(2)}KIN${n}${check}` };
+    for (;;) {
+      const n = String(++this.seq).padStart(9, '0');
+      const check = luhnDigit(`${year}${n}`);
+      const out = { number: `Q-${year}-KIN-${n}-${check}`, code: `Q${String(year).slice(2)}KIN${n}${check}` };
+      if (!this.receipts.findOne((r) => r.number === out.number || r.code === out.code)) {
+        this.seqSyncedAt = this.receipts.count() + 1;
+        return out;
+      }
+    }
   }
 
   private sign(base: Parameters<ReceiptService['signedPayload']>[0]): string {
