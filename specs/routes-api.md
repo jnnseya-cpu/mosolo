@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1076 routes** dans 41 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -25,6 +25,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | extension terrain | 50 |
 | extension titres | 20 |
 | extension tresor | 39 |
+| extension vehicules-controle | 84 |
 | extension verticales | 102 |
 | module ai | 3 |
 | module alerts | 1 |
@@ -958,6 +959,95 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | GET | `/v1/tresor/receipts/:ref/pdf` |
 | GET | `/v1/tresor/suspense` |
 | GET | `/v1/tresor/verification-journal` |
+
+## Extension vehicules-controle
+
+| Méthode | Chemin |
+|---|---|
+| GET | `/v1/centres-agrees` |
+| POST | `/v1/centres-agrees/:id/decision` |
+| POST | `/v1/centres-agrees/:id/diligences` |
+| POST | `/v1/centres-agrees/:id/dossier` |
+| POST | `/v1/centres-agrees/:id/enrolements` |
+| POST | `/v1/centres-agrees/:id/habilitation` |
+| POST | `/v1/centres-agrees/:id/proposition` |
+| POST | `/v1/centres-agrees/:id/retablissement-decision` |
+| POST | `/v1/centres-agrees/:id/retablissement-demande` |
+| POST | `/v1/centres-agrees/:id/suspension` |
+| GET | `/v1/centres-agrees/analytique` |
+| POST | `/v1/centres-agrees/analytique/alertes` |
+| POST | `/v1/centres-agrees/enrolements/:id/code` |
+| POST | `/v1/centres-agrees/invitations` |
+| POST | `/v1/fourrieres/alertes/garde` |
+| POST | `/v1/fourrieres/constats` |
+| GET | `/v1/fourrieres/dossiers` |
+| GET | `/v1/fourrieres/dossiers/:id` |
+| POST | `/v1/fourrieres/dossiers/:id/contestation` |
+| POST | `/v1/fourrieres/dossiers/:id/contestation/decision` |
+| POST | `/v1/fourrieres/dossiers/:id/decision-enlevement` |
+| POST | `/v1/fourrieres/dossiers/:id/destination-legale` |
+| POST | `/v1/fourrieres/dossiers/:id/destination-legale/validation` |
+| POST | `/v1/fourrieres/dossiers/:id/ecritures-contraires` |
+| POST | `/v1/fourrieres/dossiers/:id/ecritures-contraires/:cid/decision` |
+| POST | `/v1/fourrieres/dossiers/:id/encaissement` |
+| POST | `/v1/fourrieres/dossiers/:id/entree` |
+| POST | `/v1/fourrieres/dossiers/:id/liquidation` |
+| POST | `/v1/fourrieres/dossiers/:id/mainlevee` |
+| POST | `/v1/fourrieres/dossiers/:id/sortie` |
+| GET | `/v1/fourrieres/indicateurs` |
+| GET | `/v1/fourrieres/priorisation` |
+| GET | `/v1/fourrieres/rapprochement` |
+| GET | `/v1/fourrieres/sites` |
+| POST | `/v1/fourrieres/sites` |
+| GET | `/v1/public/centres-agrees/:code` |
+| GET | `/v1/public/vehicules/domaine-officiel` |
+| GET | `/v1/public/vehicules/vignettes/:numero` |
+| GET | `/v1/public/vehicules/vignettes/verifier` |
+| GET | `/v1/rfck/chiffres-publies` |
+| POST | `/v1/rfck/chiffres-publies/:code/decision` |
+| POST | `/v1/rfck/conventions` |
+| POST | `/v1/rfck/conventions/:id/conformite` |
+| GET | `/v1/rfck/domaine` |
+| POST | `/v1/rfck/domaine/anciens` |
+| GET | `/v1/rfck/domaine/exigences` |
+| POST | `/v1/rfck/domaine/proposition` |
+| POST | `/v1/rfck/domaine/surveillance` |
+| POST | `/v1/rfck/domaine/surveillance/:id/suite` |
+| POST | `/v1/rfck/domaine/validation` |
+| GET | `/v1/rfck/entite` |
+| POST | `/v1/rfck/entite/contacts` |
+| GET | `/v1/rfck/flux` |
+| POST | `/v1/rfck/flux/:flux/echanges` |
+| GET | `/v1/rfck/integration` |
+| POST | `/v1/rfck/integration/:etape/validation` |
+| POST | `/v1/rfck/integration/fermeture-especes` |
+| POST | `/v1/rfck/rapprochement-registre` |
+| GET | `/v1/rfck/reprises` |
+| POST | `/v1/rfck/reprises` |
+| POST | `/v1/rfck/reprises/:id/controle` |
+| GET | `/v1/vehicules/:plaque/controle-technique` |
+| GET | `/v1/vehicules/:plaque/lignes-de-recettes` |
+| GET | `/v1/vehicules/controles-techniques` |
+| POST | `/v1/vehicules/controles-techniques` |
+| POST | `/v1/vehicules/controles-techniques/rappels` |
+| GET | `/v1/vehicules/courtoisie` |
+| POST | `/v1/vehicules/courtoisie` |
+| POST | `/v1/vehicules/courtoisie/:id/fin` |
+| GET | `/v1/vehicules/hors-ligne/paquet` |
+| GET | `/v1/vehicules/indicateurs` |
+| GET | `/v1/vehicules/mes-vehicules` |
+| GET | `/v1/vehicules/referentiel` |
+| GET | `/v1/vehicules/rendez-vous` |
+| POST | `/v1/vehicules/rendez-vous` |
+| POST | `/v1/vehicules/rendez-vous/:id/confirmation` |
+| POST | `/v1/vehicules/scan` |
+| POST | `/v1/vehicules/scans/:id/decision` |
+| GET | `/v1/vehicules/vignettes-securisees` |
+| POST | `/v1/vehicules/vignettes-securisees/:numero/annulation` |
+| POST | `/v1/vehicules/vignettes-securisees/:numero/attribution` |
+| POST | `/v1/vehicules/vignettes-securisees/:numero/revocation` |
+| POST | `/v1/vehicules/vignettes-securisees/lots` |
+| GET | `/v1/vehicules/vignettes-securisees/revocations` |
 
 ## Extension verticales
 

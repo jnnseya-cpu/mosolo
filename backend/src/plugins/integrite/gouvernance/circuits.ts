@@ -267,6 +267,26 @@ export const CIRCUITS: Circuit[] = [
     proposals: ['calcu.budget_line.declared'], approvals: ['calcu.budget_line.validated'], refusals: [],
     guard: { url: '/v1/verticales/calcu/lignes-budgetaires/:id/validation', key: (p) => p.id! },
   },
+  // Chaîne véhicule (modules 82 à 84 — n° 59–61 dans le catalogue du maître d'ouvrage du 27/09/2026).
+  {
+    code: 'CENTRE_AGREMENT', label: 'Agrément d’un centre agréé ou d’un tiers de confiance (RFCK)',
+    proposals: ['centres.agrement.proposed'], approvals: ['centres.agrement.approved'], refusals: ['centres.agrement.rejected'],
+    guard: { url: '/v1/centres-agrees/:id/decision', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'CENTRE_RETABLISSEMENT', label: 'Rétablissement d’un centre agréé suspendu (RFCK)',
+    proposals: ['centres.reinstatement.requested'], approvals: ['centres.reinstated'], refusals: ['centres.reinstatement.rejected'],
+    guard: { url: '/v1/centres-agrees/:id/retablissement-decision', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'FOURRIERE_ECRITURE_CONTRAIRE', label: 'Écriture contraire sur un horodatage de fourrière (compteur de jours)',
+    proposals: ['fourriere.correction.proposed'], approvals: ['fourriere.correction.approved'], refusals: ['fourriere.correction.rejected'],
+    guard: { url: '/v1/fourrieres/dossiers/:id/ecritures-contraires/:cid/decision', key: (p) => p.cid!, refusal: approveFalse },
+  },
+  {
+    code: 'DOMAINE_OFFICIEL_VERIFICATION', label: 'Domaine officiel de vérification (QR des vignettes)',
+    proposals: ['domaine.official.proposed'], approvals: ['domaine.official.validated'], refusals: ['domaine.official.rejected'],
+  },
 ];
 
 export interface TwoPersonDecision {

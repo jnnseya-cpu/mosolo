@@ -156,6 +156,11 @@ export class TitresService {
   private readonly deviceSyncedAt = new Map<string, number>();
   /** Période de grâce (J28) par module : les constats y sont marqués « pédagogiques ». */
   readonly gracePeriods = new Map<string, string>();
+  /**
+   * Suspensions de constats déclarées par d'autres modules (ex. mode courtoisie de la chaîne véhicule) : un motif
+   * renvoyé ⇒ le contrôle est journalisé mais AUCUN constat n'est créé.
+   */
+  readonly constatSuspensions: ((q: { module?: string; plate?: string; commune?: string; at: string }) => string | null)[] = [];
   /** Écouteurs des modules clients (ex. RakaPay) appelés à chaque émission de titre. */
   private readonly issuedListeners: ((c: Credential) => void)[] = [];
 
@@ -759,7 +764,14 @@ export class TitresService {
       this.ctx.audit.append({ actor: this.actor(user), action: 'titres.credential.use_consumed', resourceType: 'credential', resourceId: c.id, details: { controlId: event.id, usesLeft: c.usesLeft } });
     }
     let constat: Constat | undefined;
-    if (result !== 'VALIDE') {
+    const suspendedBy = result !== 'VALIDE'
+      ? this.constatSuspensions.map((f) => f({
+        ...(c?.module ?? input.module ? { module: c?.module ?? input.module } : {}),
+        ...(c?.subject.plate ?? (input.method === 'PLAQUE' ? input.presented : undefined) ? { plate: c?.subject.plate ?? input.presented } : {}),
+        ...(input.place.commune ? { commune: input.place.commune } : {}), at,
+      })).find((x) => !!x) ?? null
+      : null;
+    if (result !== 'VALIDE' && !suspendedBy) {
       const module = c?.module ?? input.module ?? 'inconnu';
       const graceUntil = this.gracePeriods.get(module);
       constat = this.constats.insert({
@@ -772,7 +784,7 @@ export class TitresService {
     this.ctx.audit.append({
       actor: this.actor(user), action: input.offline ? 'titres.control.offline_reconciled' : 'titres.control.recorded', resourceType: 'credential_control', resourceId: event.id,
       outcome: result === 'VALIDE' ? 'SUCCESS' : 'FAILURE',
-      details: { credentialId: c?.id ?? null, method: input.method, result, place: input.place, deviceId: input.deviceId ?? null, constatId: constat?.id ?? null, consumedUse: consumed },
+      details: { credentialId: c?.id ?? null, method: input.method, result, place: input.place, deviceId: input.deviceId ?? null, constatId: constat?.id ?? null, consumedUse: consumed, ...(suspendedBy ? { constatSuspendu: suspendedBy } : {}) },
     });
     // Statut présenté = état AU MOMENT du contrôle (avant consommation d'un usage).
     return { event, ...(status ? { status } : {}), ...(constat ? { constat } : {}) };
