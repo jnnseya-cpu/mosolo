@@ -60,6 +60,7 @@ export function FiscalTabs() {
     { to: '/fiscal/biens', label: isTaxpayer ? 'Mes biens' : 'Biens et relations', icon: 'building', show: true },
     { to: '/fiscal/declarations', label: 'Déclarations', icon: 'file', show: isTaxpayer || has('R06', 'R07', 'R11', 'R12') },
     { to: '/fiscal/exonerations', label: 'Exonérations', icon: 'scale', show: isTaxpayer || has('R06', 'R07', 'R11', 'R12', 'R13', 'R14', 'R22', 'R24') },
+    { to: '/fiscal/corrections', label: 'Corrections', icon: 'replace', show: has('R06', 'R07', 'R11') },
     { to: '/fiscal/quitus', label: 'Quitus', icon: 'shieldCheck', show: true },
     { to: '/fiscal/baux', label: 'Attestations de bail', icon: 'ticket', show: isTaxpayer },
     { to: '/fiscal/carte', label: 'Carte', icon: 'pin', show: true },

@@ -20,6 +20,9 @@
 .rc-timeline li > div { min-width: 0; }
 .rc-inline-form { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
 .rc-decision textarea { min-height: 64px; }
+/* Remises et non-valeurs : formulaire de demande au-dessus de la file, onglets espacés. */
+.rc-page > form.panel { margin-bottom: 16px; display: grid; gap: 12px; }
+.rc-page > .seg { margin-bottom: 12px; }
 
 .rc-countdown { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; font-size: 13.5px; color: var(--ink-2); }
 .rc-countdown-num { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--navy); }
