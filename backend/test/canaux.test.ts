@@ -315,7 +315,14 @@ describe('canaux — carte MOSOLO', () => {
     const v = await c.env.req('GET', `/v1/public/mosolo-cards/verify?t=${encodeURIComponent(card.qrToken)}`);
     expect(v.json().status).toBe('CARTE_VALIDE');
     expect(JSON.stringify(v.json())).not.toMatch(/Nsimba|Kiese|TP-|KIN-/);
-    const forged = await c.env.req('GET', `/v1/public/mosolo-cards/verify?t=${encodeURIComponent(card.qrToken.slice(0, -3) + 'AAA')}`);
+    // Falsification déterministe : un octet de la signature décodée inversé puis réencodé (remplacer les derniers
+    // caractères base64url pouvait redonner les mêmes octets — bits de bourrage ignorés — donc une signature valide).
+    const cut = card.qrToken.lastIndexOf('.');
+    const sig = Buffer.from(card.qrToken.slice(cut + 1), 'base64url');
+    sig[0]! ^= 0xff;
+    const forgedToken = `${card.qrToken.slice(0, cut + 1)}${sig.toString('base64url')}`;
+    expect(forgedToken).not.toBe(card.qrToken);
+    const forged = await c.env.req('GET', `/v1/public/mosolo-cards/verify?t=${encodeURIComponent(forgedToken)}`);
     expect(forged.json().status).toBe('INVALIDE');
     const req = await c.env.req('POST', `/v1/mosolo-cards/${card.number}/reissue-requests`, 'canaux-guichetier', { motif: 'Carte perdue, déclarée au guichet' });
     expect(req.statusCode).toBe(201);
