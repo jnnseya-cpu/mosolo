@@ -29,6 +29,7 @@ import { isCommune } from '../../reference/kinshasa.js';
 import { actorOf, activeRule, DGTK, latestRule, paymentState, perUnit, sumByCurrency } from '../parking/support.js';
 import { pct } from '../../core/percent.js';
 import { estimateCommune, isFixedObject } from '../fiscal/nearby.js';
+import { PubComplements } from './complements.js';
 
 export const AD_TYPES = ['PANNEAU', 'ENSEIGNE', 'ECRAN_NUMERIQUE', 'BACHE', 'BANDEROLE', 'KAKEMONO', 'CHEVALET', 'AFFICHE_MURALE', 'HABILLAGE_VEHICULE', 'AUTRE'] as const;
 /**
@@ -113,6 +114,8 @@ export interface AuthorizationRequest {
   liquidationProposal?: { by: string; at: string; note: string; ruleCode: string; ruleVersion: number };
   expiryNoticeAt?: string;
   expiredNoticeAt?: string;
+  /** Renouvellement en ligne (§ 11B.5) : demande précédente reprise. */
+  renewsId?: string;
   submittedBy: string;
   submittedAt: string;
 }
@@ -237,7 +240,12 @@ export class PubliciteService {
   readonly photos = new InMemoryRepository<AdEvidencePhoto>();
   private readonly ids = new IdGenerator();
 
-  constructor(private readonly ctx: AppContext) {}
+  /** Compléments § 11B.2 / § 11B.5 : couches de carte, renouvellement, contrats, portail citoyen, pilote, analyse d'image. */
+  readonly complements: PubComplements;
+
+  constructor(private readonly ctx: AppContext) {
+    this.complements = new PubComplements(ctx, this);
+  }
 
   private now(): Date {
     return this.ctx.clock.now();

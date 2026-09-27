@@ -25,6 +25,7 @@ import { ext } from '../types.js';
 import type { Credential, CredentialPlace, CredentialType } from '../titres/model.js';
 import { normalizePlate, type ControlInput, type MinimalControlView, type TitresService } from '../titres/service.js';
 import { statusAt } from '../titres/validity.js';
+import { OperateursRakaPay } from './operateurs.js';
 
 definePolicy('rakapay:register', { R10: GRANTS.inTerritory('full'), R09: GRANTS.inTerritory('full'), R07: GRANTS.always, R30: GRANTS.ownTaxpayer });
 definePolicy('rakapay:coop.manage', { R30: GRANTS.ownTaxpayer, R07: GRANTS.sameEntity, R06: GRANTS.sameEntity });
@@ -63,7 +64,8 @@ export interface Operator {
   kind: 'PUBLIC' | 'COOPERATIVE' | 'PRIVE';
   entity: string;
   commune: string;
-  status: 'INVITE' | 'ACCREDITE' | 'SUSPENDU';
+  /** CANDIDAT et REFUSE : circuit d'agrément des opérateurs (operateurs.ts, § 11D.2). */
+  status: 'INVITE' | 'ACCREDITE' | 'SUSPENDU' | 'CANDIDAT' | 'REFUSE';
   /** Coopérative : compte unique MOSOLO de la structure (payeur des paiements groupés). */
   taxpayerId?: string;
   stationIds: string[];
@@ -190,8 +192,12 @@ export class RakaPayService {
   readonly complaints = new InMemoryRepository<Complaint>();
   private readonly ids = new IdGenerator();
 
+  /** Multi-opérateurs (§ 11D) : agrément, offres, agents exclusifs, circuit privé séparé, revue des ventes atypiques. */
+  readonly operateurs: OperateursRakaPay;
+
   constructor(private readonly ctx: AppContext) {
     this.defineTypes();
+    this.operateurs = new OperateursRakaPay(ctx, this);
   }
 
   get titres(): TitresService {
@@ -285,14 +291,19 @@ export class RakaPayService {
     if (p.serviceType !== 'BUS') throw unprocessable('USE_WEWA_PASS_ROUTE', 'Le pass wewa s’achète depuis l’espace wewa (moto et conducteur).');
     const op = this.operator(p.operatorId);
     if (op.status !== 'ACCREDITE') throw unprocessable('OPERATOR_NOT_ACCREDITED', `Opérateur ${op.name} non accrédité : vente impossible.`);
+    // Circuits séparés (AC-TKT-01) : un ticket d'opérateur privé ne passe jamais par le compte public.
+    if (op.kind === 'PRIVE' || !p.publicRevenue) throw unprocessable('PRIVATE_OPERATOR_SEPARATE_CIRCUIT', 'Ticket d’un opérateur privé : circuit privé séparé, hors compte public.');
     const station = this.station(input.departureStationId);
     const line = p.lineId ? this.lines.get(p.lineId) : undefined;
     if (line && !line.stationIds.includes(station.id)) throw unprocessable('STATION_NOT_ON_LINE', 'La station de départ n’est pas desservie par cette ligne.');
     if (!user.taxpayerId) throw forbidden('TAXPAYER_ACCOUNT_REQUIRED', 'Achat réservé à un compte contribuable (ou au guichet pour son compte).');
-    return this.titres.purchase(user, {
+    const iss = this.titres.purchase(user, {
       payerTaxpayerId: user.taxpayerId, channel: input.channel, context: 'BILLETTERIE',
       items: [{ typeCode: p.typeCode, holderTaxpayerId: user.taxpayerId, subject: { label: line ? `${line.code} — ${line.name}` : p.commercialName }, place: this.stationPlace(station) }],
     });
+    // Rattachement de la commande à l'opérateur (tableau de l'opérateur, circuit public).
+    this.operateurs.productSales.append({ id: iss.id, issuanceId: iss.id, productId: p.id, operatorId: op.id, at: this.ctx.clock.now().toISOString() });
+    return iss;
   }
 
   myTickets(taxpayerId: string) {

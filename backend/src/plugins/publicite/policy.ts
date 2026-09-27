@@ -30,4 +30,12 @@ export function declarePublicitePolicies(): void {
     R01: always, R02: always, R05: always, R06: sameEntity, R07: sameEntity, R09: sameEntity, R22: always, R23: always,
   });
   definePolicy('publicite:reminders.run', { R06: sameEntity, R07: sameEntity });
+  // Compléments § 11B.2 / 11B.5 : zones et espaces décidés par l'autorité ; tri des signalements citoyens ; pilote ;
+  // analyse d'image demandée par l'inspecteur, propositions vérifiées par une personne.
+  definePolicy('publicite:zone.manage', { R06: sameEntity, R07: sameEntity });
+  definePolicy('publicite:space.manage', { R06: sameEntity, R07: sameEntity });
+  definePolicy('publicite:pilot.manage', { R06: sameEntity, R07: sameEntity });
+  definePolicy('publicite:report.triage', { R09: inTerritory('full'), R11: inTerritory('full'), R07: sameEntity });
+  definePolicy('publicite:ia.analyse', { R11: inTerritory('full'), R09: inTerritory('full') });
+  definePolicy('publicite:ia.verify', { R09: inTerritory('full'), R11: inTerritory('full'), R07: sameEntity });
 }

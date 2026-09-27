@@ -14,6 +14,7 @@ import { PAYMENT_CHANNELS } from '../../modules/payments/service.js';
 import { placeSchema } from '../titres/service.js';
 import { WEWA_DURATIONS, type RakaPayService } from './service.js';
 import { withOverdue } from '../sanctions/service.js';
+import { registerOperateursRoutes } from './operateurs-routes.js';
 
 const channel = z.enum(PAYMENT_CHANNELS);
 const ticketSchema = z.object({ productId: z.string().min(1).max(64), departureStationId: z.string().min(1).max(64), channel }).strict();
@@ -146,6 +147,9 @@ export function registerRakaPayRoutes(app: FastifyInstance, ctx: AppContext, svc
     return svc.complaints.all().map((c) => ({ ...c, reporterUserId: undefined })).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
   });
   app.post<{ Params: { id: string } }>('/v1/rakapay/signalements/:id/traitement', async (req) => svc.handleComplaint(requireUser(req), req.params.id, parse(complaintDecision, req.body)));
+
+  // Multi-opérateurs (§ 11D) : agrément, offres, agents exclusifs, circuit privé séparé, tableaux, revue des ventes.
+  registerOperateursRoutes(app, svc);
 
   // Tableau de pilotage (agrégats).
   app.get('/v1/rakapay/indicateurs', async (req) => {

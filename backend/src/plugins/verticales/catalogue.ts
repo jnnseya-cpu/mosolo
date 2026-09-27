@@ -42,7 +42,8 @@ export type ProcedureEffect =
   | { kind: 'CESSATION' }
   | { kind: 'ASSIGN_STALL' };
 
-export type CertificateKind = 'AUTORISATION_EVENEMENT' | 'PERMIS_OCCUPER_VOIE' | 'QUITUS_CHANTIER' | 'AUTORISATION_OCCUPATION' | 'AUTORISATION_ACTIVITE' | 'AUTORISATION_TRANSPORT';
+export type CertificateKind = 'AUTORISATION_EVENEMENT' | 'PERMIS_OCCUPER_VOIE' | 'QUITUS_CHANTIER' | 'AUTORISATION_OCCUPATION' | 'AUTORISATION_ACTIVITE' | 'AUTORISATION_TRANSPORT'
+  | 'AUTORISATION_OCCUPATION_PERMANENTE';
 
 export const CERTIFICATE_LABEL: Record<CertificateKind, string> = {
   AUTORISATION_EVENEMENT: 'Autorisation d’événement',
@@ -51,6 +52,7 @@ export const CERTIFICATE_LABEL: Record<CertificateKind, string> = {
   AUTORISATION_OCCUPATION: 'Autorisation d’occupation du domaine public',
   AUTORISATION_ACTIVITE: 'Autorisation d’exploitation',
   AUTORISATION_TRANSPORT: 'Autorisation de transport',
+  AUTORISATION_OCCUPATION_PERMANENTE: 'Autorisation d’occupation permanente du domaine public',
 };
 
 export interface ProcedureDef {
@@ -199,8 +201,12 @@ export const VERTICALS: VerticalDef[] = [
     procedures: [
       { code: 'DEMANDE_AUTORISATION_TRANSPORT', label: 'Demander une autorisation de transport', hint: 'Taxi, bus, minibus : instruite par un agent', kind: 'AUTORISATION', requiresObject: true, visit: 'SANS', documents: ['Carte grise', 'Permis de conduire'], fields: [{ key: 'service', label: 'Type de service', type: 'select', required: true, options: [{ value: 'TAXI', label: 'Taxi' }, { value: 'BUS', label: 'Bus' }, { value: 'MINIBUS', label: 'Minibus' }, { value: 'POIDS_LOURD', label: 'Poids lourd' }] }, { key: 'itineraire', label: 'Ligne ou zone', type: 'text' }], effect: { kind: 'CERTIFICATE', certificate: 'AUTORISATION_TRANSPORT' } },
       cessation('Déclarer une vente ou une mise hors service', 'Fin des obligations à la date prouvée'),
+      // Module 11 : mutation d'un véhicule (instruite par un agent ; le rattachement au nouveau propriétaire suit la décision).
+      { code: 'DECLARATION_MUTATION', label: 'Déclarer une mutation de véhicule', hint: 'Cession à un nouveau propriétaire, sur pièces', kind: 'DECLARATION', requiresObject: true, visit: 'SANS', documents: ['Acte de cession', 'Carte grise'],
+        fields: [{ key: 'nouveauProprietaire', label: 'Nouveau propriétaire (nom ou NIF)', type: 'text', required: true }, { key: 'dateMutation', label: 'Date de la mutation', type: 'date', required: true }], effect: { kind: 'NONE' } },
     ],
-    pendingLevies: [{ label: 'Taxe journalière des transports', basis: 'ACTE REQUIS — titre journalier via RakaPay (J28)' }, { label: 'Péage provincial', basis: 'ACTE REQUIS (J1)' }],
+    pendingLevies: [{ label: 'Taxe journalière des transports', basis: 'ACTE REQUIS — titre journalier via RakaPay (J28)' }, { label: 'Péage provincial', basis: 'ACTE REQUIS (J1)' },
+      { label: 'Vignette et taxe spéciale de circulation (titres VIG et TSC)', basis: 'ACTE REQUIS — types de titres amorcés au catalogue § 19A.4, non activables' }],
     rights: RIGHTS_COMMON,
   },
   {
@@ -258,6 +264,30 @@ export const VERTICALS: VerticalDef[] = [
     pendingLevies: [], rights: RIGHTS_COMMON,
   },
   {
+    // 17e verticale (Cahier § 11.1, modules 19 et 20) : emprises et occupations temporaires et permanentes, sur le socle commun.
+    // Harmonisation : la verticale Marchés conserve sa démarche d'occupation ; celle-ci porte le domaine public hors marchés.
+    slug: 'domaine-public', name: 'Domaine public (MOSOLO Public Domain)', short: 'Domaine public', icon: 'pin', accent: '#1E8C3A', modules: [19, 20],
+    legal: 'BASE_A_CERTIFIER', prerequisites: ['J1, J3 — base légale et tarifs du domaine public', 'J22 — compétences province, communes, gestionnaires'],
+    entity: 'DGTK', entityName: ENTITY_NAMES.DGTK!, tutelle: 'Infrastructures et urbanisme [À VÉRIFIER]', release: 'R2',
+    audience: 'Occupants du domaine public : terrasses, kiosques, étals hors marché, emprises de réseaux, installations permanentes',
+    promise: 'Vos emprises géoréférencées, autorisées en ligne, avec un certificat QR vérifiable et un suivi jusqu’à leur libération.',
+    vigilance: 'Occupation constatée ≠ occupation autorisée : aucune redevance sans règle ACTIVE, aucune démolition ni expulsion décidée par un algorithme.',
+    objectsTitle: 'Mes emprises', objectCategories: [],
+    procedures: [
+      { code: 'DEMANDE_OCCUPATION_TEMPORAIRE', label: 'Demander une occupation temporaire', hint: 'Terrasse, étal, emprise de chantier, installation provisoire', kind: 'AUTORISATION', requiresObject: false, visit: 'OPTIONNELLE', documents: ['Plan ou photo de l’emprise'],
+        fields: [{ key: 'usage', label: 'Usage', type: 'text', required: true }, { key: 'surface_m2', label: 'Surface (m²)', type: 'number', required: true }, { key: 'debut', label: 'Début', type: 'date', required: true }, { key: 'fin', label: 'Fin', type: 'date', required: true }, { key: 'adresse', label: 'Avenue et repère', type: 'text' }, ...COMMUNE_FIELDS],
+        effect: { kind: 'CREATE_OBJECT', category: 'AUTRE', objectType: 'EMPRISE_TEMPORAIRE', certificate: 'AUTORISATION_OCCUPATION' } },
+      { code: 'DEMANDE_OCCUPATION_PERMANENTE', label: 'Demander une occupation permanente', hint: 'Kiosque fixe, emprise de réseau, installation durable : visite sur place', kind: 'AUTORISATION', requiresObject: false, visit: 'OBLIGATOIRE', documents: ['Plan de l’emprise', 'Titre ou accord du gestionnaire de la voie'],
+        fields: [{ key: 'usage', label: 'Usage', type: 'text', required: true }, { key: 'surface_m2', label: 'Surface (m²)', type: 'number', required: true }, { key: 'debut', label: 'Début', type: 'date', required: true }, { key: 'adresse', label: 'Avenue et repère', type: 'text' }, ...COMMUNE_FIELDS],
+        effect: { kind: 'CREATE_OBJECT', category: 'AUTRE', objectType: 'EMPRISE_PERMANENTE', certificate: 'AUTORISATION_OCCUPATION_PERMANENTE' } },
+      { code: 'DECLARATION_EMPRISE_EXISTANTE', label: 'Régulariser une emprise existante', hint: 'Occupation déjà en place : déclaration, visite, décision motivée', kind: 'DECLARATION', requiresObject: false, visit: 'OBLIGATOIRE', documents: ['Photo datée de l’emprise'],
+        fields: [{ key: 'usage', label: 'Usage', type: 'text', required: true }, { key: 'surface_m2', label: 'Surface (m²)', type: 'number', required: true }, { key: 'depuis', label: 'Occupée depuis', type: 'date' }, ...COMMUNE_FIELDS],
+        effect: { kind: 'CREATE_OBJECT', category: 'AUTRE', objectType: 'EMPRISE_PERMANENTE' } },
+      cessation('Libérer une emprise', 'Fin de l’occupation à la date prouvée'),
+    ],
+    pendingLevies: [{ label: 'Redevance d’occupation du domaine public', basis: 'Règle à certifier (J1, J3) — aucun montant avant règle ACTIVE' }], rights: RIGHTS_COMMON,
+  },
+  {
     slug: 'environnement', name: 'MOSOLO Environment', short: 'Environnement', icon: 'leaf', accent: '#1E8C3A', modules: [18, 19, 92],
     legal: 'BASE_PARTIELLE', prerequisites: ['J15, J16 — contribution plastique (acte requis) ; voie REP recommandée (§ 8.5)'],
     entity: 'DGTK', entityName: ENTITY_NAMES.DGTK!, tutelle: 'Environnement [À VÉRIFIER]', release: 'R3 (assainissement) ; R4 après acte (plastique)',
@@ -269,6 +299,10 @@ export const VERTICALS: VerticalDef[] = [
       { code: 'DECLARATION_METTEUR_EN_MARCHE', label: 'S’inscrire au registre des metteurs en marché', hint: 'Registre seulement : aucun montant sans acte', kind: 'DECLARATION', requiresObject: false, visit: 'SANS', documents: ['RCCM'],
         fields: [{ key: 'raisonSociale', label: 'Raison sociale', type: 'text', required: true }, { key: 'categorie', label: 'Catégorie', type: 'select', required: true, options: [{ value: 'PRODUCTEUR', label: 'Producteur' }, { value: 'IMPORTATEUR', label: 'Importateur' }, { value: 'DISTRIBUTEUR', label: 'Distributeur' }] }, ...COMMUNE_FIELDS],
         effect: { kind: 'CREATE_OBJECT', category: 'AUTRE', objectType: 'METTEUR_EN_MARCHE' } },
+      // Module 23 : concession forestière (superficie du titre) ; les produits non ligneux se déclarent aux points de contrôle.
+      { code: 'DECLARATION_CONCESSION_FORESTIERE', label: 'Déclarer une concession forestière', hint: 'Référence du titre et superficie', kind: 'DECLARATION', requiresObject: false, visit: 'OPTIONNELLE', documents: ['Titre de concession'],
+        fields: [{ key: 'reference', label: 'Référence du titre', type: 'text', required: true }, { key: 'superficie_ha', label: 'Superficie (ha)', type: 'number', required: true }, ...COMMUNE_FIELDS],
+        effect: { kind: 'CREATE_OBJECT', category: 'AUTRE', objectType: 'CONCESSION_FORESTIERE' } },
       { code: 'SIGNALEMENT_DEPOT_SAUVAGE', label: 'Signaler un dépôt sauvage', hint: 'Photo et position, sans sanction automatique', kind: 'SIGNALEMENT', requiresObject: false, visit: 'OPTIONNELLE', documents: ['Photo datée'], fields: [...COMMUNE_FIELDS, { key: 'description', label: 'Description', type: 'textarea', required: true }], effect: { kind: 'NONE' } },
     ],
     pendingLevies: [{ label: 'Contribution plastique', basis: 'ACTE REQUIS (J15, J16) — module 18 désactivé' }], rights: RIGHTS_COMMON,
@@ -304,6 +338,9 @@ export const VERTICALS: VerticalDef[] = [
         fields: [{ key: 'nom', label: 'Nom de l’événement', type: 'text', required: true }, { key: 'lieu', label: 'Lieu', type: 'text', required: true }, { key: 'dateDebut', label: 'Date de début', type: 'date', required: true }, { key: 'dateFin', label: 'Date de fin', type: 'date', required: true }, { key: 'jauge', label: 'Jauge déclarée', type: 'number', required: true }, ...COMMUNE_FIELDS],
         effect: { kind: 'CREATE_OBJECT', category: 'AUTRE', objectType: 'EVENEMENT', certificate: 'AUTORISATION_EVENEMENT' } },
       cessation('Déclarer une annulation', 'Arrêt des obligations liées à l’événement'),
+      // Module 21 : déclaration de billetterie en ligne (enregistrée aussi comme déclaration de billetterie de l'événement).
+      { code: 'DECLARATION_BILLETTERIE', label: 'Déclarer la billetterie', hint: 'Billets vendus et recette brute déclarés, rapprochés du contrôle sur place', kind: 'DECLARATION', requiresObject: true, visit: 'SANS', documents: ['Relevé de billetterie (facultatif)'],
+        fields: [{ key: 'billetsVendus', label: 'Billets vendus', type: 'number', required: true }, { key: 'recetteBrute', label: 'Recette brute déclarée (FC)', type: 'number' }], effect: { kind: 'NONE' } },
     ],
     pendingLevies: [], rights: RIGHTS_COMMON,
   },
@@ -321,6 +358,10 @@ export const VERTICALS: VerticalDef[] = [
         effect: { kind: 'CREATE_OBJECT', category: 'AUTRE', objectType: 'CHANTIER', certificate: 'PERMIS_OCCUPER_VOIE' } },
       { code: 'DEMANDE_QUITUS_CHANTIER', label: 'Demander le quitus de chantier', hint: 'Après visite de conformité et droits réglés', kind: 'QUITUS', requiresObject: true, visit: 'OBLIGATOIRE', documents: ['Procès-verbal de fin de travaux'], fields: [], effect: { kind: 'CERTIFICATE', certificate: 'QUITUS_CHANTIER' } },
       cessation('Déclarer la fin du chantier', 'Libération de la voie à la date indiquée'),
+      // Module 22 : site de carrière géoréférencé (sorties de camions comptées et rapprochées des déclarations).
+      { code: 'DECLARATION_SITE_CARRIERE', label: 'Déclarer un site de carrière', hint: 'Site d’extraction, superficie, substance', kind: 'DECLARATION', requiresObject: false, visit: 'OPTIONNELLE', documents: ['Titre ou autorisation d’exploitation'],
+        fields: [{ key: 'nom', label: 'Nom du site', type: 'text', required: true }, { key: 'superficie_ha', label: 'Superficie (ha)', type: 'number', required: true }, { key: 'substance', label: 'Substance extraite', type: 'text', required: true }, ...COMMUNE_FIELDS],
+        effect: { kind: 'CREATE_OBJECT', category: 'AUTRE', objectType: 'CARRIERE' } },
     ],
     pendingLevies: [{ label: 'Bons de sortie des carrières', basis: 'Base légale des carrières à certifier (J1)' }], rights: RIGHTS_COMMON,
   },
@@ -375,6 +416,7 @@ export function findVertical(slug: string): VerticalDef | undefined {
 export const OBJECT_TYPE_VERTICAL: Record<string, string> = {
   ETABLISSEMENT: 'entreprises', ETAL: 'marches', EMPRISE: 'marches', SITE_TELECOM: 'telecom', METTEUR_EN_MARCHE: 'environnement',
   POINT_COLLECTE: 'environnement', EMBARCATION: 'ports', EVENEMENT: 'evenements', CHANTIER: 'construction', AERONEF: 'avia',
+  EMPRISE_TEMPORAIRE: 'domaine-public', EMPRISE_PERMANENTE: 'domaine-public', CARRIERE: 'construction', CONCESSION_FORESTIERE: 'environnement',
 };
 
 /** Position indicative (centre approximatif) de chaque commune — à préciser sur le terrain. */

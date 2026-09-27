@@ -9,6 +9,7 @@ import { decimalString, isoDateString, moneySchema, parse } from '../../core/htt
 import { VERTICALS } from './catalogue.js';
 import { ACCOUNT_TYPES, DOCUMENT_TYPES } from './calcu.js';
 import { type VerticalesService } from './service.js';
+import { registerSecteursRoutes } from './secteurs-routes.js';
 import { withOverdue } from '../sanctions/service.js';
 import { kinshasaDate } from '../../core/clock.js';
 
@@ -164,6 +165,9 @@ export function registerVerticalRoutes(app: FastifyInstance, ctx: AppContext, sv
     if (!user.roles.some((r) => /^R(0[1-9]|1\d|2[0-9])$/.test(r))) throw forbidden('AGENTS_ONLY', 'Indicateurs réservés aux agents publics.');
     return svc.indicators();
   });
+
+  // ---------------------------------------------------------------- modules sectoriels « acte requis » et domaine public
+  registerSecteursRoutes(app, svc);
 
   // ---------------------------------------------------------------- AVIA
   app.get<{ Querystring: { taxpayerId?: string } }>('/v1/verticales/avia/declarations', async (req) => svc.avia.list(requireUser(req), req.query.taxpayerId));

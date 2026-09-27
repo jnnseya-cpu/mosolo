@@ -32,6 +32,7 @@ import { AviaService } from './avia.js';
 import { AviaRrhService } from './avia-rrh.js';
 import { AviaCadreService } from './avia-cadre.js';
 import { CalcuService } from './calcu.js';
+import { SecteursService } from './secteurs.js';
 import { P } from './policies.js';
 import { distanceM, presenceOk } from '../parking/field.js';
 
@@ -95,11 +96,12 @@ export interface Certificate {
   signature: string;
 }
 
-export type PlateKind = 'NFIU' | 'ETAL' | 'SITE_TELECOM' | 'EMBARCATION' | 'CHANTIER';
+export type PlateKind = 'NFIU' | 'ETAL' | 'SITE_TELECOM' | 'EMBARCATION' | 'CHANTIER' | 'EMPRISE' | 'CARRIERE';
 export const PLATE_LABEL: Record<PlateKind, string> = {
   NFIU: 'Plaque fiscale immobilière (NFIU)', ETAL: 'Plaque d’étal', SITE_TELECOM: 'Plaque de site télécom', EMBARCATION: 'Plaque d’embarcation', CHANTIER: 'Panneau de chantier',
+  EMPRISE: 'Plaque d’emprise du domaine public', CARRIERE: 'Plaque de site de carrière',
 };
-const PLATE_PREFIX: Record<PlateKind, string> = { NFIU: 'KIN', ETAL: 'MCH', SITE_TELECOM: 'TEL', EMBARCATION: 'EMB', CHANTIER: 'CHT' };
+const PLATE_PREFIX: Record<PlateKind, string> = { NFIU: 'KIN', ETAL: 'MCH', SITE_TELECOM: 'TEL', EMBARCATION: 'EMB', CHANTIER: 'CHT', EMPRISE: 'DPB', CARRIERE: 'CRR' };
 
 export interface Plate {
   id: string;
@@ -207,12 +209,15 @@ export class VerticalesService {
   /** Arrêté, coordination, mesures décidées par l'autorité, clé alternative 65/35 (simulation) — § 11C. */
   readonly aviaCadre: AviaCadreService;
   readonly calcu: CalcuService;
+  /** Modules sectoriels « acte requis » (11, 13, 16, 17, 21, 22, 23, 24, 25, 56) sur le socle commun. */
+  readonly secteurs: SecteursService;
 
   constructor(readonly ctx: AppContext) {
     this.avia = new AviaService(ctx);
     this.aviaRrh = new AviaRrhService(ctx, this.avia);
     this.aviaCadre = new AviaCadreService(ctx, this.aviaRrh);
     this.calcu = new CalcuService(ctx);
+    this.secteurs = new SecteursService(ctx, this);
   }
 
   // ------------------------------------------------------------------ utilitaires
@@ -256,6 +261,7 @@ export class VerticalesService {
     const typeLabels: Record<string, string> = {
       ETABLISSEMENT: 'Établissement', ETAL: 'Étal', EMPRISE: 'Emprise du domaine public', SITE_TELECOM: 'Site télécom', METTEUR_EN_MARCHE: 'Metteur en marché',
       POINT_COLLECTE: 'Point de collecte', EMBARCATION: 'Embarcation', EVENEMENT: 'Événement', CHANTIER: 'Chantier', AERONEF: 'Aéronef',
+      EMPRISE_TEMPORAIRE: 'Emprise temporaire du domaine public', EMPRISE_PERMANENTE: 'Emprise permanente du domaine public', CARRIERE: 'Site de carrière', CONCESSION_FORESTIERE: 'Concession forestière',
     };
     const base = (type && typeLabels[type]) ?? labels[o.category] ?? 'Objet';
     const name = opts.withName === false ? undefined : s('nom') ?? s('raisonSociale') ?? s('nature') ?? s('usage') ?? s('description');
@@ -494,6 +500,10 @@ export class VerticalesService {
       if (stall.holderTaxpayerId) throw conflict('STALL_TAKEN', `L’étal ${stall.id} est déjà attribué.`);
       commune = this.markets.get(stall.marketId)?.commune ?? null;
     }
+    // Module 21 : la déclaration de billetterie en ligne alimente aussi la déclaration de billetterie de l'événement.
+    if (proc.code === 'DECLARATION_BILLETTERIE') {
+      this.declareTicketing(user, input.objectId!, { ticketsSold: Number.parseInt(details.billetsVendus ?? '0', 10) || 0, source: 'DECLARATION_MANUELLE' });
+    }
     const at = this.now().toISOString();
     const entity = proc.protectedReport ? 'AUDIT' : v.entity;
     const c = this.cases.insert({
@@ -680,6 +690,8 @@ export class VerticalesService {
     switch (kind) {
       case 'AUTORISATION_EVENEMENT': return { from: c.details.dateDebut ?? today, until: c.details.dateFin ?? addDays(1) };
       case 'AUTORISATION_OCCUPATION': return { from: c.details.debut ?? today, until: c.details.fin ?? addDays(30) };
+      // Occupation permanente : sans échéance, jusqu'à révocation ou libération décidée.
+      case 'AUTORISATION_OCCUPATION_PERMANENTE': return { from: c.details.debut ?? today };
       case 'PERMIS_OCCUPER_VOIE': return { from: today, until: addDays(30 * Math.max(1, Number.parseInt(c.details.dureeMois ?? '1', 10) || 1)) };
       case 'QUITUS_CHANTIER': return { from: today, until: addDays(90) };
       default: return { from: today, until: `${this.now().getUTCFullYear()}-12-31` };
@@ -689,6 +701,7 @@ export class VerticalesService {
   issueCertificate(user: User, c: VxCase, v: VerticalDef, kind: CertificateKind, objectId?: string): Certificate {
     const prefix: Record<CertificateKind, string> = {
       AUTORISATION_EVENEMENT: 'EVT', PERMIS_OCCUPER_VOIE: 'POV', QUITUS_CHANTIER: 'QTC', AUTORISATION_OCCUPATION: 'OCC', AUTORISATION_ACTIVITE: 'AUT', AUTORISATION_TRANSPORT: 'TRP',
+      AUTORISATION_OCCUPATION_PERMANENTE: 'OCP',
     };
     const seq = this.ids.next(`CRT-${prefix[kind]}`, 5).split('-').pop()!;
     const body = `${prefix[kind]}${this.now().getUTCFullYear()}${seq}`;
@@ -735,6 +748,8 @@ export class VerticalesService {
     if (t === 'SITE_TELECOM') return 'SITE_TELECOM';
     if (t === 'EMBARCATION') return 'EMBARCATION';
     if (t === 'CHANTIER') return 'CHANTIER';
+    if (t === 'EMPRISE' || t === 'EMPRISE_TEMPORAIRE' || t === 'EMPRISE_PERMANENTE') return 'EMPRISE';
+    if (t === 'CARRIERE') return 'CARRIERE';
     throw unprocessable('PLATE_NOT_APPLICABLE', `Aucune plaque n’est prévue pour cet objet (${o.category}${typeof t === 'string' ? ` / ${t}` : ''}).`);
   }
 

@@ -34,6 +34,7 @@ import {
   REPARTITION_DUREE_ANS, REPARTITION_NOMBRE_FLUX, REPARTITION_PART_AGENTS_PCT, REPARTITION_PART_GOUVERNEMENT_PCT, REPARTITION_PART_NSEYA_PCT,
   REPARTITION_PART_TUTELLE_PCT,
 } from '../../pilotage/repartition/model.js';
+import { ATYPICAL_CANCELLATIONS_MIN, ATYPICAL_SALES_FACTOR, ATYPICAL_SALES_MIN } from '../../rakapay/operateurs.js';
 
 export type ParamValue = number | boolean;
 export type ParamOwner = 'CODE' | 'REGISTRE';
@@ -158,6 +159,10 @@ export const PARAMETRES_CODE: ParamDefinition[] = [
   C('detection.paiements_fractionnes', 'Détection : paiements fractionnés sur une obligation', 'Détection (Intégrité)', DETECTION_PARAMS.splitPaymentCount, 'paiements', code('plugins/integrite/service.ts', 'DETECTION_PARAMS.splitPaymentCount')),
   C('detection.acces_refuses', 'Détection : refus d’accès répétés', 'Détection (Intégrité)', DETECTION_PARAMS.deniedAccessCount, 'refus', code('plugins/integrite/service.ts', 'DETECTION_PARAMS.deniedAccessCount')),
   C('detection.concentration_part_pct', 'Détection : concentration d’actes sensibles sur une personne', 'Détection (Intégrité)', DETECTION_PARAMS.sensitiveConcentrationShare * 100, '%', code('plugins/integrite/service.ts', 'DETECTION_PARAMS.sensitiveConcentrationShare')),
+  // Billetterie RakaPay multi-opérateurs : revue des ventes atypiques (signal examiné par une personne, jamais une sanction).
+  C('rakapay.ventes_atypiques_facteur', 'RakaPay : ventes d’un agent au-delà de … fois la médiane des autres agents de l’opérateur', 'Détection (Intégrité)', ATYPICAL_SALES_FACTOR, 'fois', code('plugins/rakapay/operateurs.ts', 'ATYPICAL_SALES_FACTOR')),
+  C('rakapay.ventes_atypiques_min', 'RakaPay : nombre minimal de ventes journalières d’un agent avant signal', 'Détection (Intégrité)', ATYPICAL_SALES_MIN, 'ventes', code('plugins/rakapay/operateurs.ts', 'ATYPICAL_SALES_MIN')),
+  C('rakapay.annulations_repetees_min', 'RakaPay : annulations journalières d’un agent avant signal', 'Détection (Intégrité)', ATYPICAL_CANCELLATIONS_MIN, 'annulations', code('plugins/rakapay/operateurs.ts', 'ATYPICAL_CANCELLATIONS_MIN')),
 ];
 
 export const ALL_PARAMETERS: ParamDefinition[] = [...REGISTRE_DEFAUTS, ...PARAMETRES_CODE];

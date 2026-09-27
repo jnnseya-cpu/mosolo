@@ -142,6 +142,19 @@ export const CIRCUITS: Circuit[] = [
     guard: { url: '/v1/pilotage/repartition/cles/:id/activation/decision', key: (p) => p.id!, refusal: approveFalse },
   },
   {
+    code: 'RAKAPAY_AGREMENT_OPERATEUR', label: 'Agrément d’un opérateur de billetterie RakaPay',
+    proposals: ['rakapay.operator.approval_proposed'], approvals: ['rakapay.operator.approved'], refusals: ['rakapay.operator.refused'],
+  },
+  {
+    code: 'RAKAPAY_OFFRE', label: 'Approbation d’une offre proposée par un opérateur RakaPay',
+    proposals: ['rakapay.offer.proposed'], approvals: ['rakapay.offer.approved'], refusals: ['rakapay.offer.refused'],
+  },
+  {
+    code: 'SECTEURS_RAPPROCHEMENT', label: 'Déclaration sectorielle rapprochée puis décidée (volumes, carrières, produits forestiers)',
+    proposals: ['verticales.sector.reconciled'], approvals: ['verticales.sector.decided'], refusals: [],
+    outcome: decisionIn(['VALIDER']),
+  },
+  {
     code: 'REGISTRE_SEUILS', label: 'Registre des seuils anti-fraude (confirmation ou modification)',
     proposals: ['integrite.threshold.change_proposed'], approvals: ['integrite.threshold.change_approved'], refusals: ['integrite.threshold.change_rejected'],
   },

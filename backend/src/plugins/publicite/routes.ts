@@ -7,6 +7,7 @@ import { sha256Hex64 } from '../parking/support.js';
 import { AD_TYPES, FINDINGS, LIGHTING, PIECE_KINDS, PLACEMENTS, VEHICLE_KINDS, type PubliciteService } from './service.js';
 import { adNearby, adVehicleCheck } from './terrain.js';
 import { withOverdue } from '../sanctions/service.js';
+import { registerComplementsRoutes } from './complements-routes.js';
 
 const decimal = z.string().regex(/^\d{1,4}(\.\d{1,2})?$/, 'dimension en mètres, ex. "4.00"');
 const sha = z.string().regex(sha256Hex64, 'empreinte SHA-256 hexadécimale attendue');
@@ -113,6 +114,9 @@ export function registerPubliciteRoutes(app: FastifyInstance, ctx: AppContext, s
   // Vérifications publiques (sans authentification, sans donnée nominative de l'exploitant)
   app.get<{ Params: { token: string } }>('/v1/publicite/public/devices/:token', async (req) => svc.publicCheck(req.params.token));
   app.get<{ Params: { userId: string } }>('/v1/publicite/public/badges/:userId', async (req) => svc.publicBadge(req.params.userId));
+
+  // Compléments § 11B.2 / § 11B.5 : couches, zones, espaces, renouvellement, contrats, portail citoyen, pilote, analyse d'image.
+  registerComplementsRoutes(app, svc);
 
   // Échéances et tableau de bord
   app.post('/v1/publicite/reminders/run', async (req) => svc.runReminders(requireUser(req)));
