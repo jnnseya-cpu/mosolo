@@ -16,6 +16,7 @@ import {
   BandeauHorsLigne, Bloc, ChiffreView, FicheCard, Illustrations, MenuPoste, PhoneFrame, Reperes, ReglesEcrans, SixEtats, usePosteApi, useTempsRendu,
   type Chiffre, type Commun, type Fiche, type Illustration,
 } from './common';
+import { SixEtatsRecettes, VignetteCommunes, VilleAujourdhui } from './visuels';
 
 type Accueil = Commun & Record<string, unknown>;
 interface Alerte { id: string; type: string; gravite: string; cause: string; ageJours: number; enjeu: Chiffre | null; lien: string }
@@ -36,7 +37,8 @@ export function PosteGouverneur({ a, onDone }: { a: Accueil; onDone: () => void 
         {b1.fiches.length ? b1.fiches.map((f) => <FicheCard key={f.id} f={f} onDone={onDone} />) : <EmptyState title="Aucune décision en attente" icon="check" />}
       </Bloc>
       <Bloc titre="La Ville aujourd’hui · exercice en cours" id="ps-b2">
-        <div className="ps-grille">{b2.chiffres.map((c) => <ChiffreView key={c.code} c={c} grand />)}</div>
+        <VilleAujourdhui chiffres={b2.chiffres} />
+        <SixEtatsRecettes />
         <Illustrations items={ill.LA_VILLE} />
       </Bloc>
       <Bloc titre="Ce qui ne va pas" id="ps-b3">
@@ -46,9 +48,7 @@ export function PosteGouverneur({ a, onDone }: { a: Accueil; onDone: () => void 
         <Illustrations items={ill.CE_QUI_NE_VA_PAS} />
       </Bloc>
       <Bloc titre="Communes" sous={com.note} id="ps-b4">
-        <Link to="/poste-de-decision/communes" className="ps-vignette" aria-label="Carte des communes, couleur selon l’écart à l’objectif">
-          {com.communes.map((c) => <span key={c.commune} className={`ps-commune c-${c.couleur.toLowerCase()}`} title={`${c.commune} : ${c.tauxPct ?? 'non mesuré'} %`}>{c.commune.slice(0, 3)}</span>)}
-        </Link>
+        <VignetteCommunes com={com} />
         <Illustrations items={ill.COMMUNES} />
       </Bloc>
     </>
@@ -262,6 +262,7 @@ function VueGenerique({ vue, d, onDone }: { vue: string; d: Record<string, unkno
         </Bloc>
       )}
       {vue === 'realisations' && <Bloc titre="Réalisations"><p className="ps-small">{String(d.note)}</p><ul className="ps-liste">{(d.items as { titre: string; statut: string; commune: string }[]).map((r) => <li key={r.titre + r.commune}>{r.titre} — {r.statut} · {r.commune}</li>)}</ul><Link to="/transparence">Tableau public de transparence</Link></Bloc>}
+      {vue === 'recettes' && (d.sixEtats as Chiffre[] | undefined)?.length ? <SixEtatsRecettes six={d.sixEtats as Chiffre[]} /> : null}
       {chiffres.length > 0 && <Bloc titre="Chiffres" sous="état, date, taux et source sur chacun"><div className="ps-grille">{chiffres.map((c) => <ChiffreView key={c.code} c={c} />)}</div></Bloc>}
       {d.historique !== undefined && vue !== 'mes-decisions' && (
         <Bloc titre="Historique de mes décisions">

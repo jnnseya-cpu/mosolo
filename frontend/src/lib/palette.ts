@@ -32,3 +32,44 @@ export function chartTheme(dark: boolean) {
     reference: dark ? '#A7AEC4' : '#4A4F5C',
   };
 }
+
+// ————————————————————————— trousse de visualisation (27/09/2026) —————————————————————————
+// Ajouts : rien de ce qui précède n'est modifié. Validation : docs/document-maitre/charte-visualisation.md.
+
+/**
+ * Rampe séquentielle SÉLECTIONNÉE pour le mode sombre (même teinte marine, OKLCH h 272) : l'ancre s'inverse,
+ * faible = sombre (≥ 2:1 sur la surface #141A33), fort = clair ; validée `--ordinal --mode dark` (ΔL ≥ 0,06). SEQ_NAVY n'est pas réutilisée en sombre (pas d'inversion automatique).
+ */
+export const SEQ_NAVY_DARK = ['#455390', '#5969a7', '#6e7fbf', '#8496d8', '#9badf1', '#b2c5ff', '#cadeff'] as const;
+
+/**
+ * Rampe ORDINALE des six états de la recette (potentiel → disponible) : une teinte, pas de luminance réguliers (ΔL 0,08).
+ * Validée `--ordinal` : clair (surface #FFFFFF, extrémité claire 2,53:1) et sombre (surface #141A33, 2,45:1).
+ * Clair : l'état le plus avancé est le plus foncé ; sombre : le plus clair.
+ */
+export const ORDINAL_LADDER_LIGHT = ['#8a9ff0', '#7386d5', '#5c6eba', '#4757a1', '#324087', '#20296f'] as const;
+export const ORDINAL_LADDER_DARK = ['#44549d', '#596bb7', '#7083d2', '#879cec', '#a0b6ff', '#b8cfff'] as const;
+
+/** Gris de mise en retrait (« Autres », contexte) et fond « non mesuré » (toujours avec libellé et motif). */
+export const DEEMPH = { light: '#A9B0C0', dark: '#5A6385' } as const;
+export const UNMEASURED = { light: '#E6E9F0', dark: '#252D4D' } as const;
+
+export function sequential(dark: boolean): readonly string[] {
+  return dark ? SEQ_NAVY_DARK : SEQ_NAVY;
+}
+export function ordinalLadder(dark: boolean): readonly string[] {
+  return dark ? ORDINAL_LADDER_DARK : ORDINAL_LADDER_LIGHT;
+}
+
+/** Encre lisible (blanc ou encre) sur un aplat, choisie par la luminance relative de l'aplat. */
+export function inkOn(fill: string): string {
+  const h = fill.replace('#', '');
+  if (h.length !== 6) return '#111111';
+  const ch = [0, 2, 4].map((i) => {
+    const c = parseInt(h.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  const lum = 0.2126 * ch[0]! + 0.7152 * ch[1]! + 0.0722 * ch[2]!;
+  // Seuil d'égal contraste entre le blanc et l'encre #111111.
+  return lum > 0.18 ? '#111111' : '#FFFFFF';
+}

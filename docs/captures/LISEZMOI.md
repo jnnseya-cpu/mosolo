@@ -118,3 +118,10 @@ Dans le module KIN PUB CONTROL existant :
 - publicité sur véhicule contrôlée par la plaque : taxi-bus déclaré (barème non publié), véhicule non déclaré et constat pré-rempli.
 
 Régénération : `tools/captures/publicite-terrain.cjs`.
+
+## Trousse de visualisation (`visualisation/`, 27/09/2026)
+
+Poste du Gouverneur (`/poste-de-decision`), tableau du Gouverneur (`/gouverneur`) et galerie des graphiques
+(`/visualisation/galerie`), en 360 × 800 et 1280 × 900, clair et sombre, utilisateur de démonstration `u-gouverneur`
+(serveur `--demo`, données de démonstration non contractuelles ; blocs `[EXEMPLE]` marqués). Nom :
+`<écran>-<largeur>-<thème>.png`. Règles : `docs/document-maitre/charte-visualisation.md`.

@@ -9,18 +9,32 @@ interface Props {
   subtitle?: string;
   example?: boolean;
   table: TableData;
-  height?: number;
+  /** Hauteur du graphique (axe compris) ; « auto » laisse le contenu fixer la hauteur (trousse de visualisation). */
+  height?: number | 'auto';
   actions?: ReactNode;
   legend?: ReactNode;
   children: ReactNode;
   className?: string;
+  /**
+   * Trousse de visualisation (27/09/2026) — ajouts facultatifs, sans effet sur les usages existants :
+   * `placeholder` remplace le graphique (chargement, vide, erreur, non mesuré) et masque la bascule tableau ;
+   * `bodyRole` « group » pour un graphique dont les marques sont focalisables (l'image reste le défaut) ;
+   * `ariaLabel` remplace la description lue ; `footer` s'affiche sous le graphique comme sous le tableau ;
+   * `exampleLabel` précise la mention d'exemple.
+   */
+  placeholder?: ReactNode;
+  bodyRole?: 'img' | 'group';
+  ariaLabel?: string;
+  footer?: ReactNode;
+  exampleLabel?: string;
 }
 
 /** Carte de graphique : titre, sous-titre, bascule « vue tableau » (accessibilité), mention EXEMPLE. */
-export function ChartCard({ title, subtitle, example, table, height = 280, actions, legend, children, className }: Props) {
+export function ChartCard({ title, subtitle, example, table, height = 280, actions, legend, children, className, placeholder, bodyRole = 'img', ariaLabel, footer, exampleLabel }: Props) {
   const { tr } = useApp();
   const [asTable, setAsTable] = useState(false);
   const id = useId();
+  const label = ariaLabel ?? `${title}${subtitle ? ` — ${subtitle}` : ''}. ${tr('chart.tableHint')}`;
   return (
     <section className={`panel chart-card ${className ?? ''}`} aria-labelledby={id}>
       <header className="panel-head">
@@ -29,14 +43,16 @@ export function ChartCard({ title, subtitle, example, table, height = 280, actio
           {subtitle && <p className="panel-sub">{subtitle}</p>}
         </div>
         <div className="panel-tools">
-          {example && <span className="ribbon" title={tr('common.example')}>{tr('common.exampleShort')}</span>}
+          {example && <span className="ribbon" title={exampleLabel ?? tr('common.example')}>{tr('common.exampleShort')}</span>}
           {actions}
-          <button type="button" className="btn btn-ghost btn-sm" aria-pressed={asTable} onClick={() => setAsTable((v) => !v)}>
-            <Icon name={asTable ? 'chart' : 'table'} size={16} /> {asTable ? tr('chart.showChart') : tr('chart.showTable')}
-          </button>
+          {!placeholder && (
+            <button type="button" className="btn btn-ghost btn-sm" aria-pressed={asTable} onClick={() => setAsTable((v) => !v)}>
+              <Icon name={asTable ? 'chart' : 'table'} size={16} /> {asTable ? tr('chart.showChart') : tr('chart.showTable')}
+            </button>
+          )}
         </div>
       </header>
-      {asTable ? (
+      {placeholder ? placeholder : asTable ? (
         <div className="table-scroll">
           <table className="data-table">
             <caption className="sr-only">{title}</caption>
@@ -51,11 +67,12 @@ export function ChartCard({ title, subtitle, example, table, height = 280, actio
       ) : (
         <>
           {legend}
-          <div className="chart-box" style={{ height }} role="img" aria-label={`${title}${subtitle ? ` — ${subtitle}` : ''}. ${tr('chart.tableHint')}`}>
+          <div className="chart-box" style={height === 'auto' ? undefined : { height }} role={bodyRole} aria-label={label}>
             {children}
           </div>
         </>
       )}
+      {footer}
     </section>
   );
 }

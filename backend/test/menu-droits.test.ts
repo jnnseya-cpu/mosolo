@@ -174,6 +174,8 @@ const LECTURES: Record<string, string[]> = {
   '/verticales/environnement': ['/v1/verticales/environnement/registre'],
   '/verticales/fiches': ['/v1/verticales/plastique', '/v1/verticales/fiches/indicateurs'],
   '/verticales/secteurs': ['/v1/verticales/secteurs/declarations', '/v1/verticales/domaine-public/emprises', '/v1/verticales/secteurs'],
+  // Trousse de visualisation (27/09/2026) : la galerie lit l'échelle unifiée, les indicateurs et la ventilation mensuelle.
+  '/visualisation/galerie': ['/v1/pilotage/echelle', '/v1/pilotage/indicateurs', '/v1/pilotage/drill/month'],
 };
 /** Entrées sans lecture principale au chargement (formulaire public, saisie préalable, simulateur, page statique). */
 const SANS_LECTURE = new Set([
