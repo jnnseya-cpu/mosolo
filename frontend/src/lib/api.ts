@@ -58,18 +58,46 @@ export interface RequestOpts {
   raw?: boolean;
 }
 
-/** Ressource binaire authentifiée (photo de preuve…) : mêmes en-têtes que `api`, rendue en Blob. */
-export async function apiBlob(path: string): Promise<Blob> {
+/**
+ * Session réelle (écran Connexion). Sur un appareil partagé, le jeton reste dans le stockage de l'onglet
+ * (sessionStorage, effacé à la fermeture) et n'est jamais écrit dans le stockage durable (localStorage).
+ */
+const SESSION_KEY = 'mosolo.session';
+function sessionStore(): Storage | null {
+  try { return typeof sessionStorage === 'undefined' ? null : sessionStorage; } catch { return null; }
+}
+export function readStoredSession(): string | null {
+  try { const v = sessionStore()?.getItem(SESSION_KEY); if (v) return v; } catch { /* stockage indisponible */ }
+  return safeGet(SESSION_KEY);
+}
+export function writeStoredSession(value: string | null, sharedDevice = false): void {
+  const tab = sessionStore();
+  try {
+    if (value === null || !sharedDevice) tab?.removeItem(SESSION_KEY);
+    else tab?.setItem(SESSION_KEY, value);
+  } catch { /* stockage indisponible */ }
+  safeSet(SESSION_KEY, value !== null && !sharedDevice ? value : null);
+}
+
+/** En-têtes d'authentification communs (langue, utilisateur de démonstration, jeton porteur de la session). */
+export function authHeaders(): Record<string, string> {
   const headers: Record<string, string> = { 'Accept-Language': getApiLang() };
   const user = getDemoUser();
   if (user) headers['x-demo-user'] = user;
-  const sess = safeGet('mosolo.session');
+  // Session réelle (écran Connexion) : le jeton porteur prévaut côté serveur sur le sélecteur de démonstration.
+  const sess = readStoredSession();
   if (sess) {
     try {
       const s = JSON.parse(sess) as { accessToken?: string; session?: { expiresAt?: string } };
       if (s.accessToken && s.session?.expiresAt && new Date(s.session.expiresAt) > new Date()) headers.Authorization = `Bearer ${s.accessToken}`;
-    } catch { /* session illisible */ }
+    } catch { /* session illisible : ignorée */ }
   }
+  return headers;
+}
+
+/** Ressource binaire authentifiée (photo de preuve…) : mêmes en-têtes que `api`, rendue en Blob. */
+export async function apiBlob(path: string): Promise<Blob> {
+  const headers = authHeaders();
   let res: Response;
   try { res = await fetch(API_URL + path, { headers }); } catch { throw new NetworkError(); }
   if (!res.ok) throw new ApiError(res.status, res.statusText || `HTTP ${res.status}`);
@@ -77,17 +105,7 @@ export async function apiBlob(path: string): Promise<Blob> {
 }
 
 export async function api<T>(path: string, opts: RequestOpts = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json', 'Accept-Language': getApiLang(), ...opts.headers };
-  const user = getDemoUser();
-  if (user) headers['x-demo-user'] = user;
-  // Session réelle (écran Connexion) : le jeton porteur prévaut côté serveur sur le sélecteur de démonstration.
-  const sess = safeGet('mosolo.session');
-  if (sess) {
-    try {
-      const s = JSON.parse(sess) as { accessToken?: string; session?: { expiresAt?: string } };
-      if (s.accessToken && s.session?.expiresAt && new Date(s.session.expiresAt) > new Date()) headers.Authorization = `Bearer ${s.accessToken}`;
-    } catch { /* session illisible : ignorée */ }
-  }
+  const headers: Record<string, string> = { Accept: 'application/json', ...authHeaders(), ...opts.headers };
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
   if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
   let res: Response;
@@ -134,6 +152,15 @@ export function asList<T>(v: unknown, ...keys: string[]): T[] {
 export function newIdempotencyKey(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
   return `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * Refus définitif du serveur (4xx hors 408/429) : la requête ne passera pas telle quelle, une nouvelle clé
+ * d'idempotence peut être tirée. Réseau coupé, délai ou 5xx : on garde la même clé pour que la relance soit
+ * reconnue comme la même opération (jamais deux références pour un seul geste).
+ */
+export function isDefinitiveRejection(e: unknown): boolean {
+  return e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 408 && e.status !== 429;
 }
 
 export function describeError(e: unknown): { network: boolean; message: string; code?: string } {

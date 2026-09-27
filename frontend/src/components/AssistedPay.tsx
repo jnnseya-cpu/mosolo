@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { MoneyJSON } from '@mosolo/shared';
-import { api, describeError, newIdempotencyKey } from '../lib/api';
+import { api, describeError, isDefinitiveRejection, newIdempotencyKey } from '../lib/api';
 import { usePreciseLocation, type PreciseFix } from '../lib/geo';
 import { GpsQualityLine } from './GpsQuality';
 import { Icon } from './Icon';
@@ -36,7 +36,9 @@ export function AssistedPay({ objectId, obligationIds, onClose, position, title 
   position?: PreciseFix | null;
 }) {
   const own = usePreciseLocation({ targetM: 15, maxWaitMs: 20_000, auto: !position });
-  const loc = position ? { ...own, fix: position, status: 'ok' as const } : own;
+  // La position fournie sert tant que l'agent n'a pas relancé le GPS ; dès que la recherche propre a démarré
+  // (position fournie inutilisable, relance), c'est le relevé du composant qui compte.
+  const loc = position && own.status === 'idle' ? { ...own, fix: position, status: 'ok' as const } : own;
   const [data, setData] = useState<Payables | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [channel, setChannel] = useState('MOBILE_MONEY');
@@ -76,7 +78,8 @@ export function AssistedPay({ objectId, obligationIds, onClose, position, title 
       setIssued(r);
     } catch (e) {
       setErr(describeError(e).message);
-      key.current = newIdempotencyKey();
+      // Nouvelle clé seulement après un refus définitif (4xx) : réseau coupé ou 5xx = même opération à relancer.
+      if (isDefinitiveRejection(e)) key.current = newIdempotencyKey();
     } finally { setBusy(false); }
   }
 

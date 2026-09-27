@@ -3,7 +3,7 @@
  * l'utilisateur, chacune avec sa vue, son heure incrustée, sa position et son empreinte ; agrandissement au clic.
  * Visibles des agents habilités du périmètre et du titulaire de la plaque (droit de contester).
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiBlob } from '../../lib/api';
 import { Icon } from '../../components/Icon';
 
@@ -39,19 +39,33 @@ function Thumb({ p, onOpen }: { p: EvidencePhotoMeta; onOpen: (src: string) => v
   );
 }
 
+/** Agrandissement modal : focus sur « Fermer » à l'ouverture, Échap ferme, le focus revient à la vignette. */
+function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  const close = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const prev = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    close.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('keydown', onKey); prev?.focus(); };
+  }, [onClose]);
+  return (
+    <div className="ev-lightbox" role="dialog" aria-modal="true" aria-label="Photo de preuve" onClick={onClose}>
+      <img src={src} alt="Photo de preuve agrandie" />
+      <button ref={close} type="button" className="btn btn-secondary" onClick={onClose}><Icon name="close" size={16} /> Fermer</button>
+    </div>
+  );
+}
+
 export function EvidencePhotos({ photos }: { photos: EvidencePhotoMeta[] }) {
   const [open, setOpen] = useState<string | null>(null);
+  const closeBox = useCallback(() => setOpen(null), []);
   if (!photos.length) return null;
   return (
     <div className="ev-photos">
       <p className="small muted"><Icon name="camera" size={14} /> {photos.length} photo(s) horodatée(s) et géolocalisée(s) · lieu : {photos[0]!.place} · agent : {photos[0]!.agentName}</p>
       <div className="ev-grid">{photos.map((p) => <Thumb key={p.id} p={p} onOpen={setOpen} />)}</div>
-      {open && (
-        <div className="ev-lightbox" role="dialog" aria-label="Photo de preuve" onClick={() => setOpen(null)}>
-          <img src={open} alt="Photo de preuve agrandie" />
-          <button type="button" className="btn btn-secondary" onClick={() => setOpen(null)}><Icon name="close" size={16} /> Fermer</button>
-        </div>
-      )}
+      {open && <Lightbox src={open} onClose={closeBox} />}
     </div>
   );
 }

@@ -75,7 +75,13 @@ export function usePreciseLocation(opts: { targetM?: number; maxWaitMs?: number;
       setFix(f);
       if (c.accuracy <= targetM && samples.current.length >= 3) { setStatus('ok'); stop(); }
     };
-    const onErr = (err: GeolocationPositionError) => { setStatus(err.code === err.PERMISSION_DENIED ? 'denied' : 'unavailable'); stop(); };
+    // Erreur passagère (délai, signal perdu) après au moins un relevé : on garde le meilleur relevé au lieu d'abandonner.
+    const onErr = (err: GeolocationPositionError) => {
+      const f = last.current;
+      if (err.code !== err.PERMISSION_DENIED && f) setStatus(f.accuracy !== null && f.accuracy <= targetM ? 'ok' : 'timeout');
+      else setStatus(err.code === err.PERMISSION_DENIED ? 'denied' : 'unavailable');
+      stop();
+    };
     const opts = { enableHighAccuracy: true, maximumAge: 0, timeout: maxWaitMs };
     watch.current = navigator.geolocation.watchPosition(onPos, onErr, opts);
     // Relevé immédiat en plus du suivi : certains navigateurs ne notifient le suivi qu'au premier déplacement.

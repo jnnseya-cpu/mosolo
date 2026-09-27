@@ -8,10 +8,12 @@ import { Icon } from '../../components/Icon';
 import { QrCode } from '../../components/QrCode';
 import { StatusBadge } from '../../components/StatusBadge';
 import { useApp } from '../../context';
-import { api, describeError, safeGet, safeSet } from '../../lib/api';
+import { api, describeError, readStoredSession, safeSet, writeStoredSession } from '../../lib/api';
+import { purgeUserQueues } from '../../lib/offlineQueue';
 import './socle.css';
 
-const SESSION_KEY = 'mosolo.session';
+/** File d'enrôlement assisté (noms, téléphones de tiers) : effacée à la déconnexion. */
+const ENROL_QUEUE = 'mosolo.canaux.enrolQueue';
 
 type Mode = 'contribuable' | 'agent';
 
@@ -61,7 +63,7 @@ const ACR_LABEL: Record<string, string> = {
 };
 
 function loadSession(): StoredSession | null {
-  const raw = safeGet(SESSION_KEY);
+  const raw = readStoredSession();
   if (!raw) return null;
   try {
     const s = JSON.parse(raw) as StoredSession;
@@ -117,7 +119,7 @@ export default function Login() {
     } catch (e) {
       const d = describeError(e);
       if (d.code === 'SESSION_REVOKED' || d.code === 'TOKEN_EXPIRED' || d.code === 'SESSION_EXPIRED') {
-        safeSet(SESSION_KEY, null);
+        writeStoredSession(null);
         setSession(null);
       }
       setSessions(null);
@@ -159,7 +161,8 @@ export default function Login() {
     try {
       const t = await api<TokenResponse>('/v1/auth/otp', { method: 'POST', body: { challengeId: challenge.challengeId, code, sharedDevice } });
       const stored: StoredSession = { ...t, obtainedAt: new Date().toISOString() };
-      safeSet(SESSION_KEY, JSON.stringify(stored));
+      // Appareil partagé : jeton gardé pour l'onglet seulement (sessionStorage), jamais dans localStorage.
+      writeStoredSession(JSON.stringify(stored), sharedDevice || t.session.sharedDevice);
       setSession(stored);
       setChallenge(null); setCode(''); setPassword('');
     } catch (err) {
@@ -177,7 +180,9 @@ export default function Login() {
     try {
       await api('/v1/auth/logout', { method: 'POST', headers: bearer(session) });
     } catch { /* session déjà close côté serveur */ }
-    safeSet(SESSION_KEY, null);
+    writeStoredSession(null);
+    purgeUserQueues(session.user.id, [ENROL_QUEUE]);
+    safeSet(ENROL_QUEUE, null); // ancienne file non rattachée à un utilisateur
     setSession(null);
     setBusy(false);
   }
@@ -186,7 +191,7 @@ export default function Login() {
     if (!session) return;
     try {
       await api(`/v1/auth/sessions/${encodeURIComponent(id)}/revoke`, { method: 'POST', headers: bearer(session), body: { reason: 'Révocation par l’utilisateur' } });
-      if (id === session.session.id) { safeSet(SESSION_KEY, null); setSession(null); } else void refreshSessions(session);
+      if (id === session.session.id) { writeStoredSession(null); setSession(null); } else void refreshSessions(session);
     } catch (err) {
       setError(describeError(err).message);
     }

@@ -4,7 +4,7 @@
  * synchronisation des constats scellés (idempotente) et, pour les attributs observés, lot signé par le terminal.
  * L'agent n'encaisse jamais d'argent ; un constat ne crée jamais de dette.
  */
-import { useState, type ChangeEvent } from 'react';
+import { useEffect, useState, type ChangeEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context';
 import { useAutosave } from '../hooks/useAutosave';
@@ -18,6 +18,7 @@ import { Icon } from '../components/Icon';
 import { GpsQualityLine, MapCheck } from '../components/GpsQuality';
 import { usePreciseGps, type PreciseFix } from '../lib/geo';
 import { api, describeError, safeGet, safeSet } from '../lib/api';
+import { queueKey, readQueue, updateQueue } from '../lib/offlineQueue';
 import { hmacSha256Hex, sha256Hex, uid } from '../lib/crypto';
 import type { UIKey } from '../lib/i18n';
 import type { FieldSyncResult } from '../lib/types';
@@ -32,15 +33,16 @@ const NEW_OBJECT = '__nouvel_objet__';
 interface Capture {
   outcome: FindingOutcome | '';
   lat: string; lon: string; accuracy: string; gpsAt: string;
+  /** Origine de la position : mesurée (GPS), ajustée à la main sur la carte (MANUEL) ou repli (ZONE). */
+  gpsSource?: PreciseFix['source'];
   photoHash: string; photoName: string; photoSize: number;
   observations: string; occupancy: string; justification: string;
 }
 const EMPTY: Capture = { outcome: '', lat: '', lon: '', accuracy: '', gpsAt: '', photoHash: '', photoName: '', photoSize: 0, observations: '', occupancy: '', justification: '' };
 
 type QState = 'pending' | 'synced' | 'flagged' | 'rejected' | 'conflict';
-interface Queued { id: string; missionId?: string; objectId: string | null; observedAt: string; data: Capture; state: QState; note?: string }
+interface Queued { id: string; ownerId: string; missionId?: string; objectId: string | null; observedAt: string; data: Capture; state: QState; note?: string }
 const QUEUE_KEY = 'mosolo.fieldQueue.v2';
-const readQueue = (): Queued[] => { try { return JSON.parse(safeGet(QUEUE_KEY) ?? '[]') as Queued[]; } catch { return []; } };
 const STATE: Record<QState, { tone: Tone; label: string }> = {
   pending: { tone: 'warning', label: 'En attente' }, synced: { tone: 'good', label: 'Transmis' }, flagged: { tone: 'serious', label: 'Transmis — à vérifier' },
   rejected: { tone: 'critical', label: 'Refusé' }, conflict: { tone: 'serious', label: 'Conflit' },
@@ -51,14 +53,15 @@ function useGps() {
   const { tr } = useApp();
   const g = usePreciseGps({ targetM: 10 });
   const err = g.status === 'denied' ? tr('field.gpsDenied') : g.status === 'unavailable' ? (typeof navigator !== 'undefined' && !navigator.geolocation ? tr('field.gpsUnsupported') : tr('field.gpsFailed')) : null;
+  // Point ajusté à la main : précision prudente de 25 m transmise avec la source MANUEL (jamais présentée comme un relevé GPS).
   const toP = (f: PreciseFix) => ({ lat: f.lat.toFixed(6), lon: f.lon.toFixed(6), accuracy: String(f.accuracy !== null ? Math.max(1, Math.round(f.accuracy)) : 25), at: f.at, source: f.source });
   function locate(cb: (p: ReturnType<typeof toP>) => void) { g.locate((f) => cb(toP(f))); }
   function pick(lat: number, lon: number, cb: (p: ReturnType<typeof toP>) => void) { g.pick(lat, lon, (f) => cb(toP(f))); }
-  return { busy: g.busy, err, locate, pick, fix: g.fix, status: g.status, targetM: g.targetM };
+  return { busy: g.busy, err, locate, pick, toP, fix: g.fix, status: g.status, targetM: g.targetM };
 }
 
 function CaptureForm({ mission, objectId, onSaved }: { mission: Mission; objectId: string | null; onSaved: () => void }) {
-  const { tr } = useApp();
+  const { tr, user } = useApp();
   const draft = useAutosave<Capture>(`field-capture-${mission.id}-${objectId ?? 'nouveau'}`, { ...EMPTY, outcome: objectId ? 'CONSTATE' : 'OBJET_NON_ENREGISTRE' });
   const v = draft.value;
   const gps = useGps();
@@ -74,14 +77,15 @@ function CaptureForm({ mission, objectId, onSaved }: { mission: Mission; objectI
     } finally { setHashing(false); }
   }
   function saveCapture() {
-    const q = readQueue();
-    q.unshift({ id: uid('CST'), missionId: mission.id, objectId, observedAt: v.gpsAt || new Date().toISOString(), data: v, state: 'pending' });
-    safeSet(QUEUE_KEY, JSON.stringify(q));
+    if (!user) return;
+    updateQueue<Queued>(queueKey(QUEUE_KEY, user.id), (q) => [{ id: uid('CST'), ownerId: user.id, missionId: mission.id, objectId, observedAt: v.gpsAt || new Date().toISOString(), data: v, state: 'pending' }, ...q]);
     draft.reset();
     onSaved();
   }
   const acc = Number(v.accuracy);
-  const canSave = !!v.outcome && !!v.lat;
+  const canSave = !!v.outcome && !!v.lat && !!user;
+  const manual = !!v.gpsSource && v.gpsSource !== 'GPS';
+  const setPos = (p: ReturnType<typeof gps.toP>) => draft.setValue((d) => ({ ...d, lat: p.lat, lon: p.lon, accuracy: p.accuracy, gpsAt: p.at, gpsSource: p.source }));
   return (
     <div className="form">
       <div className="field">
@@ -93,20 +97,21 @@ function CaptureForm({ mission, objectId, onSaved }: { mission: Mission; objectI
       <div className="field">
         <span className="label">{tr('field.gps')}</span>
         <div className="row-actions">
-          <button type="button" className="btn btn-secondary" onClick={() => gps.locate((p) => draft.setValue((d) => ({ ...d, lat: p.lat, lon: p.lon, accuracy: p.accuracy, gpsAt: p.at })))} disabled={gps.busy}>
+          <button type="button" className="btn btn-secondary" onClick={() => gps.locate(setPos)} disabled={gps.busy}>
             <Icon name="gps" size={18} /> {gps.busy ? tr('field.locating') : tr('field.locate')}
           </button>
           {v.lat && <span className="mono small">{v.lat}, {v.lon}</span>}
         </div>
-        {v.accuracy && (
+        {manual && <p className="small"><StatusBadge tone="warning" label="Position ajustée à la main — signalée au vérificateur" /></p>}
+        {v.accuracy && !manual && (
           <p className="small">
             {tr('field.accuracy', { m: v.accuracy })}{' '}
             {acc > mission.toleranceM ? <StatusBadge tone="warning" label={`Au-delà de la tolérance de ${mission.toleranceM} m`} /> : <StatusBadge tone="good" label={tr('field.accuracyOk')} />}
           </p>
         )}
         <GpsQualityLine fix={gps.fix} status={gps.status} targetM={gps.targetM} />
-        <MapCheck lat={v.lat ? Number(v.lat) : null} lon={v.lon ? Number(v.lon) : null} accuracy={v.accuracy ? Number(v.accuracy) : null}
-          onPick={(y, x) => gps.pick(y, x, (p) => draft.setValue((d) => ({ ...d, lat: p.lat, lon: p.lon, accuracy: p.accuracy, gpsAt: p.at })))} />
+        <MapCheck lat={v.lat ? Number(v.lat) : null} lon={v.lon ? Number(v.lon) : null} accuracy={v.accuracy && !manual ? Number(v.accuracy) : null}
+          onPick={(y, x) => gps.pick(y, x, setPos)} />
         {gps.err && <p className="err">{gps.err}</p>}
         <span className="hint">Position obligatoire. Un écart au point enregistré est signalé pour vérification, jamais rejeté automatiquement.</span>
       </div>
@@ -143,15 +148,17 @@ function CaptureForm({ mission, objectId, onSaved }: { mission: Mission; objectI
 
 function CounterVisitItem({ cv, onDone }: { cv: CounterVisit; onDone: () => void }) {
   const gps = useGps();
-  const [pos, setPos] = useState<{ lat: string; lon: string; accuracy: string } | null>(null);
+  const [pos, setPos] = useState<{ lat: string; lon: string; accuracy: string; source: PreciseFix['source'] } | null>(null);
   const [notes, setNotes] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
   async function send(result: 'CONFORME' | 'NON_CONFORME') {
-    if (!pos) return;
+    if (!pos || sending) return;
+    setSending(true); setMsg(null);
     try {
-      await api(`/v1/terrain/counter-visits/${cv.id}/result`, { method: 'POST', body: { result, notes: notes.trim(), gps: { lat: Number(pos.lat), lon: Number(pos.lon), accuracyM: Number(pos.accuracy) } } });
+      await api(`/v1/terrain/counter-visits/${cv.id}/result`, { method: 'POST', body: { result, notes: notes.trim(), gps: { lat: Number(pos.lat), lon: Number(pos.lon), accuracyM: Number(pos.accuracy), source: pos.source } } });
       onDone();
-    } catch (e) { const d = describeError(e); setMsg(d.message); }
+    } catch (e) { const d = describeError(e); setMsg(d.message); } finally { setSending(false); }
   }
   return (
     <li className="list-row list-row-stack">
@@ -161,7 +168,7 @@ function CounterVisitItem({ cv, onDone }: { cv: CounterVisit; onDone: () => void
         <div className="tr-inline-form">
           <div className="row-actions">
             <button type="button" className="btn btn-sm btn-secondary" disabled={gps.busy} onClick={() => gps.locate((p) => setPos(p))}><Icon name="gps" size={16} /> Position</button>
-            {pos && <span className="mono small">{pos.lat}, {pos.lon} (± {pos.accuracy} m)</span>}
+            {pos && <span className="mono small">{pos.lat}, {pos.lon} {pos.source === 'GPS' ? `(± ${pos.accuracy} m)` : '(ajustée à la main)'}</span>}
           </div>
           <GpsQualityLine fix={gps.fix} status={gps.status} targetM={gps.targetM} />
           {gps.err && <p className="err">{gps.err}</p>}
@@ -169,8 +176,8 @@ function CounterVisitItem({ cv, onDone }: { cv: CounterVisit; onDone: () => void
           <textarea id={`cv-${cv.id}`} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
           {msg && <p className="notice notice-err">{msg}</p>}
           <div className="row-actions">
-            <button type="button" className="btn btn-sm btn-primary" disabled={!pos || notes.trim().length < 3} onClick={() => void send('CONFORME')}>Conforme</button>
-            <button type="button" className="btn btn-sm btn-secondary" disabled={!pos || notes.trim().length < 3} onClick={() => void send('NON_CONFORME')}>Non conforme</button>
+            <button type="button" className="btn btn-sm btn-primary" disabled={!pos || sending || notes.trim().length < 3} onClick={() => void send('CONFORME')}>Conforme</button>
+            <button type="button" className="btn btn-sm btn-secondary" disabled={!pos || sending || notes.trim().length < 3} onClick={() => void send('NON_CONFORME')}>Non conforme</button>
           </div>
         </div>
       ) : <StatusBadge tone="good" label="Réalisée" />}
@@ -183,21 +190,29 @@ export default function Field() {
   const online = useOnline();
   const me = useApi(() => (user?.roles.includes('R10') ? api<MeResponse>('/v1/terrain/me') : Promise.resolve(null)), [user?.id]);
   const [sel, setSel] = useState<{ missionId: string; objectId: string | null } | null>(null);
-  const [queue, setQueue] = useState<Queued[]>(readQueue);
+  // File propre à l'agent connecté : un autre utilisateur du terminal ne voit ni ne synchronise ses constats.
+  const qKey = queueKey(QUEUE_KEY, user?.id);
+  const [queue, setQueue] = useState<Queued[]>(() => readQueue<Queued>(qKey));
+  useEffect(() => { setQueue(readQueue<Queued>(qKey)); }, [qKey]);
   const [device, setDevice] = useState(() => ({ id: safeGet('mosolo.deviceId') ?? 'dev-terrain-001', key: safeGet('mosolo.deviceKey') ?? 'demo-device-key-001' }));
   const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const pending = queue.filter((q) => q.state === 'pending');
+  const pending = queue.filter((q) => q.state === 'pending' && q.ownerId === user?.id);
   const missions = me.data?.missions ?? [];
   const mission = missions.find((m) => m.id === sel?.missionId);
   const open = (m: Mission) => m.status === 'AFFECTEE' || m.status === 'EN_COURS';
 
   const saveDevice = (d: typeof device) => { setDevice(d); safeSet('mosolo.deviceId', d.id); safeSet('mosolo.deviceKey', d.key); };
-  const persist = (next: Queued[]) => { setQueue(next); safeSet(QUEUE_KEY, JSON.stringify(next)); };
+  // Relit la file stockée avant d'écrire : un constat enregistré pendant la synchronisation n'est jamais écrasé.
+  const persist = (fn: (q: Queued[]) => Queued[]) => setQueue(updateQueue<Queued>(qKey, fn));
+  const patchQueue = (patch: Map<string, Partial<Queued>>) => persist((q) => q.map((x) => (patch.has(x.id) ? { ...x, ...patch.get(x.id) } : x)));
 
   async function sync() {
+    if (busy || !user) return;
+    // Seuls les constats de l'agent connecté, relus au moment de l'envoi.
+    const pending = readQueue<Queued>(qKey).filter((q) => q.state === 'pending' && q.ownerId === user.id);
     setBusy(true); setSyncMsg(null);
-    let next = [...queue];
+    const patch = new Map<string, Partial<Queued>>();
     let sent = 0; let flagged = 0; let refused = 0;
     try {
       // 1. Constats scellés liés à la mission (idempotents : la référence locale sert de clé).
@@ -209,22 +224,22 @@ export default function Field() {
             method: 'POST',
             body: {
               clientRef: c.id, ...(c.objectId ? { objectId: c.objectId } : {}), outcome: d.outcome || 'CONSTATE', observations: d.observations,
-              gps: { lat: Number(d.lat), lon: Number(d.lon), accuracyM: Number(d.accuracy || 0) }, ...(d.photoHash ? { photoSha256: d.photoHash } : {}),
+              gps: { lat: Number(d.lat), lon: Number(d.lon), accuracyM: Number(d.accuracy || 25), source: d.gpsSource ?? 'GPS' }, ...(d.photoHash ? { photoSha256: d.photoHash } : {}),
               capturedAt: c.observedAt, ...(device.id ? { deviceId: device.id } : {}), ...(d.justification.trim() ? { justification: d.justification.trim() } : {}),
             },
           });
           const f = r.finding;
           const isFlag = f.flags.some((x) => x === 'DISTANCE' || x === 'HORS_ZONE');
           if (isFlag) flagged++; else sent++;
-          next = next.map((q) => (q.id === c.id ? { ...q, state: isFlag ? 'flagged' : 'synced', note: f.flagMessage ?? (f.flags.length ? f.flags.map((x) => FLAG_LABEL[x] ?? x).join(', ') : undefined) } : q));
+          patch.set(c.id, { state: isFlag ? 'flagged' : 'synced', note: f.flagMessage ?? (f.flags.length ? f.flags.map((x) => FLAG_LABEL[x] ?? x).join(', ') : undefined) });
         } catch (e) {
           const de = describeError(e);
           if (de.network) throw e;
           refused++;
-          next = next.map((q) => (q.id === c.id ? { ...q, state: 'rejected', note: de.message + (de.code ? ` (${de.code})` : '') } : q));
+          patch.set(c.id, { state: 'rejected', note: de.message + (de.code ? ` (${de.code})` : '') });
         }
       }
-      persist(next);
+      patchQueue(patch);
       // 2. Attributs observés des objets existants : lot signé par le terminal (conflits conservés, jamais « dernier écrit gagne »).
       const operations = pending.filter((c) => c.objectId).flatMap((c) => {
         const ops: { opId: string; objectId: string; field: string; value: string; observedAt: string }[] = [];
@@ -237,14 +252,15 @@ export default function Field() {
           const signature = await hmacSha256Hex(device.key, JSON.stringify(batch));
           const r = await api<FieldSyncResult>('/v1/field-sync/batches', { method: 'POST', body: batch, headers: { 'x-device-signature': signature } });
           const conflicted = new Set((r.conflicts ?? []).map((x) => x.objectId));
-          if (conflicted.size) persist(next.map((q) => (q.objectId && conflicted.has(q.objectId) && q.state !== 'rejected' ? { ...q, state: 'conflict', note: tr('field.conflictNote') } : q)));
+          const sentIds = new Set(pending.map((c) => c.id));
+          if (conflicted.size) persist((q) => q.map((x) => (sentIds.has(x.id) && x.objectId && conflicted.has(x.objectId) && x.state !== 'rejected' ? { ...x, state: 'conflict', note: tr('field.conflictNote') } : x)));
         } catch (e) { const de = describeError(e); if (de.network) throw e; }
       }
       setSyncMsg({ ok: refused === 0, text: `${sent} constat(s) transmis, ${flagged} signalé(s) pour vérification, ${refused} refusé(s).` });
       me.reload();
     } catch (e) {
       const d = describeError(e);
-      persist(next);
+      patchQueue(patch);
       setSyncMsg({ ok: false, text: d.network ? tr('field.syncOffline') : d.message + (d.code ? ` (${d.code})` : '') });
     } finally { setBusy(false); }
   }
@@ -314,7 +330,7 @@ export default function Field() {
           {mission && sel ? (
             <>
               <p className="small"><strong>{sel.objectId ?? 'Objet non enregistré'}</strong> · mission <span className="mono">{mission.id}</span> · tolérance GPS {mission.toleranceM} m</p>
-              <CaptureForm key={`${mission.id}-${sel.objectId ?? 'n'}`} mission={mission} objectId={sel.objectId} onSaved={() => setQueue(readQueue())} />
+              <CaptureForm key={`${mission.id}-${sel.objectId ?? 'n'}`} mission={mission} objectId={sel.objectId} onSaved={() => setQueue(readQueue<Queued>(qKey))} />
             </>
           ) : <EmptyState title={tr('field.pickObject')} icon="pin" />}
         </section>

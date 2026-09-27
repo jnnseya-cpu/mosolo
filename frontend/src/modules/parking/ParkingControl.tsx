@@ -4,7 +4,7 @@
  * vérification par une personne distincte. Aucune sanction, aucun encaissement sur le terrain.
  */
 import { AssistedPay } from '../../components/AssistedPay';
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import type { MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { PageHead } from '../../components/Shell';
@@ -12,7 +12,7 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { StatusBadge } from '../../components/StatusBadge';
 import { useApi } from '../../hooks/useApi';
-import { api } from '../../lib/api';
+import { api, isDefinitiveRejection, newIdempotencyKey } from '../../lib/api';
 import {
   DemoTag, ErrorLine, hasRole, LIGHT_VIEW, Money, NATURE, ReasonForm, useAction, VIOLATION_STATUS,
   type Light, type Violation, type Zone,
@@ -143,6 +143,8 @@ function ConstatForm({ zone, plate, checkId, evidence, onDone }: { zone: Zone; p
   const [obs, setObs] = useState('');
   const [done, setDone] = useState<Violation | null>(null);
   const act = useAction();
+  // Une clé par constat : une relance après coupure réseau ou double appui ne crée jamais deux constats.
+  const idem = useRef(newIdempotencyKey());
   if (done) {
     return (
       <div className="result-card" role="status">
@@ -155,10 +157,11 @@ function ConstatForm({ zone, plate, checkId, evidence, onDone }: { zone: Zone; p
   }
   function submit(e: FormEvent) {
     e.preventDefault();
+    if (act.busy) return;
     void act.run(() => api<Violation>('/v1/parking/violations', {
-      method: 'POST',
+      method: 'POST', idempotencyKey: idem.current,
       body: { zoneId: zone.id, plate, nature, checkId, photoIds: evidence.photoIds, place: evidence.place, lat: evidence.lat, lon: evidence.lon, ...(evidence.accuracy !== null ? { gpsAccuracyM: evidence.accuracy } : {}), observations: obs || 'Constat sur place.' },
-    }), setDone);
+    }).catch((err: unknown) => { if (isDefinitiveRejection(err)) idem.current = newIdempotencyKey(); throw err; }), setDone);
   }
   return (
     <form className="form panel" onSubmit={submit} aria-label="Constat">
