@@ -93,5 +93,4 @@
 
 /* Visuels du périmètre pilotage et décision (trousse de visualisation, 27/09/2026) */
 .pl-visuels .viz-grid { margin-bottom: 0; }
-.pl-meters { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 700px) { .pl-meters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pl-meters { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }

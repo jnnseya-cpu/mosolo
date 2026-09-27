@@ -15,6 +15,29 @@ import { Section } from './shared';
 import { Area, Callout, Choice, Field, hasRole, Notice, useRunner } from './planif';
 import type { ActionPlan, CentJoursPlan } from './programme-types';
 import './pilotage.css';
+import { fmtNombre, KpiTile, StackedBarViz, StatusDistribution } from '../../components/viz';
+import { ETATS_ACTION, etatsDe, Tuiles, Visuels } from './visuels';
+
+/** Visuels du plan des 100 jours : jour courant, actions par état, avancement par période. */
+export function VisuelsCentJours({ p }: { p: CentJoursPlan }) {
+  const actions = p.periodes.flatMap((x) => x.actions);
+  const etats = Object.keys(ETATS_ACTION);
+  return (
+    <>
+      <Tuiles label="Plan des 100 jours — synthèse" max={3}>
+        <KpiTile hero label="Jour du plan" value={p.jour} format={(v) => fmtNombre(v, 0)} unit="/ 100" sub="Plan des cent premiers jours (ch. 47)" reason="Jour 1 non fixé." state={{ label: p.demarrage ? `Démarré le ${p.demarrage.debut}` : 'Non démarré', tone: p.demarrage ? 'info' : 'neutral' }} />
+        <KpiTile label="Actions faites" value={p.synthese.faites} format={(v) => fmtNombre(v, 0)} unit={`/ ${p.synthese.actions}`} target={{ value: p.synthese.actions, label: 'toutes les actions', max: p.synthese.actions }} state={{ label: 'Suivi humain', tone: 'good' }} />
+        <KpiTile label="Actions en retard" value={p.synthese.enRetard} format={(v) => fmtNombre(v, 0)} state={{ label: p.synthese.enRetard > 0 ? 'Échéance dépassée' : 'Aucun retard', tone: p.synthese.enRetard > 0 ? 'critical' : 'good' }} />
+      </Tuiles>
+      <Visuels label="Plan des 100 jours en graphiques">
+        <StatusDistribution title="Actions par état" unitLabel="actions" items={etatsDe(actions, (a) => a.etat, ETATS_ACTION)} />
+        <StackedBarViz className="viz-span-2" title="Avancement par période" subtitle="Actions par état, période par période" mode="absolute" orientation="horizontal" format={(v) => fmtNombre(v, 0)}
+          series={etats.map((e) => ({ key: e, label: ETATS_ACTION[e]!.label }))}
+          rows={p.periodes.map((x) => ({ key: x.code, label: `Jours ${x.jours}`, values: Object.fromEntries(etats.map((e) => [e, x.actions.filter((a) => a.etat === e).length])) }))} />
+      </Visuels>
+    </>
+  );
+}
 
 const TONE: Record<string, 'good' | 'warning' | 'critical' | 'neutral'> = { A_FAIRE: 'neutral', EN_COURS: 'warning', FAITE: 'good', BLOQUEE: 'critical' };
 
@@ -48,6 +71,7 @@ export function CentJoursView({ p, onDone }: { p: CentJoursPlan; onDone: () => v
   const sel = all.find((a) => a.id === edit) ?? null;
   return (
     <div className="dash-grid">
+      <VisuelsCentJours p={p} />
       <Section title="Jour 1" sub={p.demarrage ? `Fixé au ${p.demarrage.debut} — jour ${p.jour}` : 'Non fixé'}>
         <p className="small">{p.synthese.faites} action(s) faite(s) sur {p.synthese.actions} · {p.synthese.enRetard} en retard.</p>
         {!p.demarrage && <Callout tone="warn">Le jour 1 est fixé par la décision provinciale : aucune action n’est suivie avant.</Callout>}

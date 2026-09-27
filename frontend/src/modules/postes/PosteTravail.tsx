@@ -10,6 +10,7 @@ import { PageHead } from '../../components/Shell';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { StatusBadge } from '../../components/StatusBadge';
 import { BandeauHorsLigne, Bloc, usePosteApi } from './common';
+import { VisuelsFile } from './visuels';
 
 export interface Travail {
   famille: string; question: string; enAttente: number;
@@ -30,6 +31,9 @@ export function TravailVue({ t }: { t: Travail }) {
           <nav className="ps-menu" aria-label={`Écrans : ${p.utilisateur}`}>{p.liens.map((l) => <Link key={l.chemin} to={l.chemin}>{l.libelle}</Link>)}</nav>
         </Bloc>
       ))}
+      <Bloc titre="File de travail — en graphiques" sous="Éléments à traiter, retards et échéances">
+        <VisuelsFile file={t.file} enAttente={t.enAttente} />
+      </Bloc>
       <Bloc titre="File de travail" sous={`${t.enAttente} élément(s) à traiter`}>
         {t.file.length ? (
           <ul className="ps-liste">{t.file.map((w) => (

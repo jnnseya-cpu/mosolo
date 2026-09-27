@@ -45,7 +45,7 @@ export function VisuelsPilote({ b }: { b: PilotBoard }) {
   return (
     <>
       <Tuiles label="Pilote de 180 jours — synthèse" max={4}>
-        <KpiTile hero label="Jour du pilote" value={b.day} format={(v) => fmtNombre(v, 0)} unit="/ 180" target={b.day !== null ? { value: 180, label: 'Durée du pilote : 180 jours (§ 45)', max: 180 } : undefined}
+        <KpiTile hero label="Jour du pilote" value={b.day} format={(v) => fmtNombre(v, 0)} unit="/ 180" sub="Durée du pilote : 180 jours (§ 45)"
           reason="Date de démarrage non fixée." state={{ label: b.config.startDate ? `Démarré le ${b.config.startDate}` : 'Non démarré', tone: b.config.startDate ? 'info' : 'neutral' }} />
         <KpiTile label="Critères atteints" value={b.criteria.filter((c) => c.status === 'ATTEINT').length} format={(v) => fmtNombre(v, 0)} unit={`/ ${b.criteria.length}`} state={{ label: 'Seuils du Cahier (§ 45.3)', tone: 'good' }} />
         <KpiTile label="Revues signées" value={signees} format={(v) => fmtNombre(v, 0)} unit={`/ ${b.milestones.length}`} state={{ label: 'Instantanés figés', tone: signees > 0 ? 'good' : 'neutral' }} />

@@ -47,6 +47,13 @@ export const ETATS_OBLIGATION: EtatMap = {
   ANNULEE: { label: 'Annulée', tone: 'neutral' }, ADMISE_EN_NON_VALEUR: { label: 'Admise en non-valeur', tone: 'neutral' },
 };
 
+/** États du programme (ch. 41 à 48), libellés du serveur (`recette-programme/referentiels.ts`). */
+export const ETATS_VERSION: EtatMap = { PREVUE: { label: 'Prévue', tone: 'info' }, EN_RECETTE: { label: 'En recette', tone: 'warning' }, EN_SERVICE: { label: 'En service', tone: 'good' } };
+export const ETATS_SUIVI: EtatMap = { A_PLANIFIER: { label: 'À planifier', tone: 'neutral' }, PLANIFIE: { label: 'Planifié', tone: 'info' }, REALISE: { label: 'Réalisé', tone: 'good' }, ECHEC: { label: 'En échec — à reprendre', tone: 'critical' } };
+export const ETATS_ACTION: EtatMap = { A_FAIRE: { label: 'À faire', tone: 'neutral' }, EN_COURS: { label: 'En cours', tone: 'warning' }, FAITE: { label: 'Faite', tone: 'good' }, BLOQUEE: { label: 'Bloquée', tone: 'critical' } };
+export const STATUTS_DECISION: EtatMap = { A_PRENDRE: { label: 'À prendre', tone: 'warning' }, PRISE: { label: 'Prise', tone: 'good' }, REFUSEE: { label: 'Refusée', tone: 'critical' } };
+export const ETATS_CONSTRUCTION: EtatMap = { CONSTRUIT: { label: 'Construit', tone: 'good' }, PARTIEL: { label: 'Partiel', tone: 'warning' }, EXTERNE: { label: 'Relève d’un tiers (externe)', tone: 'info' } };
+
 /** États d'un indicateur des modules 41 à 58 : dans la cible, hors cible, mesuré sans cible, non mesuré. */
 export const ETATS_INDICATEUR: EtatMap = {
   CIBLE: { label: 'Dans la cible', tone: 'good' },
@@ -94,7 +101,7 @@ export function EtatIndicateurs({ items, title = 'Indicateurs par état', classN
       <StatusDistribution className={className} title={title} subtitle="Valeurs calculées sur les données réelles ; non mesuré = donnée source absente" unitLabel="indicateurs"
         items={etatsDe(list, etatIndicateur, ETATS_INDICATEUR)} emptyText="Aucun indicateur servi pour ce module" />
       {pcts.length > 0 && (
-        <VizFrame frame={{ title: 'Indicateurs en pourcentage', subtitle: 'Progression vers la cible déclarée (sans cible : suivi seulement)' }} empty={false}
+        <VizFrame frame={{ className: 'viz-span-2', title: 'Indicateurs en pourcentage', subtitle: 'Progression vers la cible déclarée (sans cible : suivi seulement)' }} empty={false}
           table={{ columns: ['Indicateur', 'Valeur', 'Cible'], rows: pcts.map((k) => [k.label, k.measured && k.value !== null ? `${fmtNombre(nombre(k.value) ?? 0)} %` : 'non mesuré', k.target === undefined ? 'sans cible' : String(k.target)]) }}>
           <div className="pl-meters">
             {pcts.map((k) => (

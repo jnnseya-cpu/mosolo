@@ -7,7 +7,7 @@
  * Aucune saisie, aucun filtre : l'écran d'accueil reste consultable en 90 secondes.
  */
 import { SIX_ETATS, type MoneyJSON } from '@mosolo/shared';
-import { HeatGrid, KpiGrid, KpiTile, LadderFunnel, fmtCompact, fmtNombre, type LadderStep } from '../../components/viz';
+import { BarChartViz, HeatGrid, KpiGrid, KpiTile, LadderFunnel, StatusDistribution, TimelineStrip, fmtCompact, fmtNombre, type LadderStep } from '../../components/viz';
 import type { Tone } from '../../components/StatusBadge';
 import { kinshasaMonth, periodLabel, periodRange } from '../../lib/aggregate';
 import { ChiffreView, usePosteApi, type Chiffre } from './common';
@@ -95,5 +95,96 @@ export function VignetteCommunes({ com }: { com: { mesure: boolean; note: string
   return (
     <HeatGrid framed={false} compact href="/poste-de-decision/communes" title="Carte des communes, couleur selon l’écart à l’objectif" measureLabel="Taux d’atteinte de l’objectif"
       cells={cells} unit="%" domain={[0, max]} format={(v) => fmtNombre(v, 0)} unmeasuredReason={com.note} />
+  );
+}
+
+// ————————————————————————— visuels des autres postes (ajout du 27/09/2026) —————————————————————————
+
+/** Tuiles d'un groupe de chiffres du poste (état, comparaison, source) ; les fiches complètes restent affichées. */
+export function TuilesChiffres({ chiffres, label, max = 3 }: { chiffres: Chiffre[]; label: string; max?: 2 | 3 | 4 }) {
+  if (!chiffres.length) return null;
+  return (
+    <KpiGrid max={max} label={label}>
+      {chiffres.map((c) => {
+        const v = num(c.valeur);
+        const money = c.unite === 'CDF' || c.unite === 'USD';
+        const fmt = money ? fmtCompact : (x: number) => fmtNombre(x);
+        return (
+          <KpiTile key={c.code} label={c.libelle} value={v} unit={c.unite} format={fmt} example={c.exemple} href={c.source.chemin[Math.min(1, c.source.chemin.length - 1)]}
+            state={{ label: c.etatLabel, tone: TON[c.etat] ?? 'neutral' }} reason={c.hypotheses?.join(' ; ') || c.comparaison.libelle}
+            delta={c.comparaison.type === 'PERIODE_PRECEDENTE' ? { current: v, previous: num(c.comparaison.valeur), versus: 'vs N−1', format: fmt } : undefined} />
+        );
+      })}
+    </KpiGrid>
+  );
+}
+
+/** Ligne d'exécution (actes décidés) — forme minimale lue par les visuels. */
+export interface ExecLike { id: string; acteLibelle: string; etat: string; enRetard: boolean; echeance: string; exemple?: boolean }
+
+/** Exécution des décisions : exécuté, en retard, dans les délais ; échéances dans le temps. */
+export function EtatExecution({ rows }: { rows: ExecLike[] }) {
+  if (!rows.length) return null;
+  const etat = (r: ExecLike) => (r.etat === 'EXECUTE' ? 'Exécuté' : r.enRetard ? 'En retard' : 'Dans les délais');
+  return (
+    <>
+      <StatusDistribution framed={false} title="Actes par état d’exécution" unitLabel="actes" example={rows.some((r) => r.exemple)}
+        items={[
+          { key: 'x', label: 'Exécuté', tone: 'good', count: rows.filter((r) => etat(r) === 'Exécuté').length },
+          { key: 'd', label: 'Dans les délais', tone: 'info', count: rows.filter((r) => etat(r) === 'Dans les délais').length },
+          { key: 'r', label: 'En retard', tone: 'critical', count: rows.filter((r) => etat(r) === 'En retard').length },
+        ]} />
+      <TimelineStrip framed={false} title="Échéances des actes" categories={['En retard', 'Dans les délais', 'Exécuté']}
+        events={rows.map((r) => ({ id: r.id, at: r.echeance, category: etat(r), label: r.acteLibelle }))} />
+    </>
+  );
+}
+
+/** « À traiter » du cabinet : dossiers par état d'instruction. */
+export function EtatInstruction({ items }: { items: { etat: string; etatLabel: string }[] }) {
+  if (!items.length) return null;
+  const tones: Record<string, Tone> = { INSTRUIT: 'good', INCOMPLET: 'critical' };
+  const codes = [...new Set(items.map((i) => i.etat))];
+  return (
+    <StatusDistribution framed={false} title="Dossiers par état d’instruction" unitLabel="dossiers"
+      items={codes.map((k) => ({ key: k, label: items.find((i) => i.etat === k)!.etatLabel, tone: tones[k] ?? 'warning', count: items.filter((i) => i.etat === k).length }))} />
+  );
+}
+
+/** Classement des communes (vue « Communes ») en carte de chaleur des 24 communes. */
+export function CarteClassement({ classement, note }: { classement: { commune: string; tauxPct: string | null; couleur: string }[]; note: string }) {
+  const cells = classement.map((c) => ({ commune: c.commune, value: num(c.tauxPct), detail: `Classement : ${c.couleur.toLowerCase()}` }));
+  const max = Math.max(100, ...cells.map((c) => c.value ?? 0));
+  return (
+    <HeatGrid framed={false} compact title="Communes, couleur selon l’écart à l’objectif" measureLabel="Taux d’atteinte de l’objectif" cells={cells} unit="%" domain={[0, max]} format={(v) => fmtNombre(v, 0)} unmeasuredReason={note} />
+  );
+}
+
+/** Taille des corbeilles par autorité, avec le seuil servi par le serveur (statut affiché). */
+export function CorbeillesVisuel({ autorites, seuil, statut }: { autorites: { userId: string; nom: string; taille: number }[]; seuil: number; statut: string }) {
+  return (
+    <BarChartViz framed={false} title="Taille des corbeilles" orientation="horizontal" format={(v) => fmtNombre(v, 0)} series={[{ key: 'n', label: 'Éléments en attente' }]}
+      reference={{ value: seuil, label: `Seuil ${seuil}` }} subtitle={`Seuil : ${statut}`} rows={autorites.map((a) => ({ key: a.userId, label: a.nom, values: { n: a.taille } }))} />
+  );
+}
+
+/** File de travail (poste de travail) : tuiles, éléments par module, échéances. */
+export interface FileLike { id: string; module: string; objet: string; echeance: string | null; enRetard: boolean; depose: string }
+export function VisuelsFile({ file, enAttente }: { file: FileLike[]; enAttente: number }) {
+  const modules = [...new Set(file.map((w) => w.module))];
+  return (
+    <>
+      <KpiGrid max={3} label="File de travail — synthèse">
+        <KpiTile hero label="Éléments à traiter" value={enAttente} format={(v) => fmtNombre(v, 0)} state={{ label: 'Aujourd’hui', tone: 'info' }} />
+        <KpiTile label="En retard" value={file.filter((w) => w.enRetard).length} format={(v) => fmtNombre(v, 0)} state={{ label: file.some((w) => w.enRetard) ? 'À traiter en priorité' : 'Aucun retard', tone: file.some((w) => w.enRetard) ? 'critical' : 'good' }} />
+        <KpiTile label="Modules sources" value={modules.length} format={(v) => fmtNombre(v, 0)} state={{ label: 'Décision dans le module', tone: 'neutral' }} />
+      </KpiGrid>
+      <div className="viz-grid" style={{ ['--viz-min' as string]: '300px' }}>
+        <BarChartViz title="Éléments par module source" orientation="horizontal" format={(v) => fmtNombre(v, 0)} emptyText="Rien à traiter aujourd’hui" series={[{ key: 'n', label: 'Éléments' }, { key: 'r', label: 'En retard' }]}
+          rows={modules.map((m) => ({ key: m, label: m, values: { n: file.filter((w) => w.module === m).length, r: file.filter((w) => w.module === m && w.enRetard).length } }))} />
+        <TimelineStrip className="viz-span-2" title="Échéances de la file" categories={['En retard', 'À échéance']} emptyText="Aucune échéance"
+          events={file.filter((w) => w.echeance).map((w) => ({ id: w.id, at: w.echeance!, category: w.enRetard ? 'En retard' : 'À échéance', label: `${w.objet} (${w.module})` }))} />
+      </div>
+    </>
   );
 }

@@ -17,6 +17,8 @@ import { api } from '../../lib/api';
 import { Section } from './shared';
 import { Area, Callout, Choice, Field, hasRole, Notice, useRunner } from './planif';
 import './pilotage.css';
+import { fmtNombre, GaugeMeter, KpiTile, StackedBarViz, StatusDistribution } from '../../components/viz';
+import { etatsDe, nombre, Tuiles, Visuels } from './visuels';
 
 // ————————————————————————— contrat —————————————————————————
 
@@ -64,6 +66,47 @@ function ProofFields({ value, onChange, label = 'Référence du document' }: { v
     <>
       <Field label={label} value={value.reference} onChange={(v) => onChange({ ...value, reference: v })} />
       <EmpreinteFichier label="Document (empreinte SHA-256 calculée sur l’appareil)" value={value.sha256} onChange={(sha256) => onChange({ ...value, sha256 })} />
+    </>
+  );
+}
+
+// ————————————————————————— visuels —————————————————————————
+
+const PHASE_LABEL: Record<string, string> = { A_VENIR: 'À venir', EN_COURS: 'En cours', PORTE_DEMANDEE: 'Porte demandée', FRANCHIE: 'Franchie', REFUSEE: 'Refusée' };
+
+/** Visuels de la feuille de route : phases par état, plans d'action par horizon, autonomie, instances de gouvernance. */
+export function VisuelsFeuilleDeRoute({ r, m, g }: { r: Roadmap; m: OperatingModel | null; g: Governance | null }) {
+  const entier = (v: number) => fmtNombre(v, 0);
+  const actions = r.horizons.reduce((s, h) => s + h.actions.length, 0);
+  const faites = r.horizons.reduce((s, h) => s + h.doneCount, 0);
+  const phaseMap = Object.fromEntries(Object.entries(PHASE_TONE).map(([k, tone]) => [k, { label: r.phases.find((p) => p.state === k)?.stateLabel ?? PHASE_LABEL[k] ?? k, tone }]));
+  return (
+    <>
+      <Tuiles label="Feuille de route — synthèse" max={4}>
+        <KpiTile hero label="Phases franchies" value={r.phases.filter((p) => p.state === 'FRANCHIE').length} format={entier} unit={`/ ${r.phases.length}`} state={{ label: 'Comité de pilotage', tone: 'info' }} sub={r.programme.startDate ? `Programme démarré le ${r.programme.startDate}` : 'Programme non démarré'} />
+        <KpiTile label="Actions réalisées" value={faites} format={entier} unit={`/ ${actions}`} target={{ value: actions, label: 'toutes les actions', max: actions }} state={{ label: 'Avec preuve', tone: 'good' }} />
+        <KpiTile label="Actions en retard" value={r.overdueActions.length} format={entier} state={{ label: r.overdueActions.length ? 'Échéance dépassée' : 'Aucun retard', tone: r.overdueActions.length ? 'critical' : 'good' }} />
+        <KpiTile label="Instances en retard de réunion" value={g ? g.bodies.filter((b) => b.overdue).length : null} format={entier} reason="Gouvernance indisponible." state={{ label: 'Réunions consignées', tone: 'warning' }} />
+      </Tuiles>
+      <Visuels label="Feuille de route en graphiques">
+        <StatusDistribution title="Phases 0 à 6 par état" unitLabel="phases" items={etatsDe(r.phases, (p) => p.state, phaseMap)} />
+        <StackedBarViz className="viz-span-2" title="Plans d’action par horizon" subtitle="Réalisées, en retard et restantes (30 jours → 24 mois)" mode="absolute" orientation="horizontal" format={entier}
+          series={[{ key: 'f', label: 'Réalisées' }, { key: 'r', label: 'En retard' }, { key: 'a', label: 'À réaliser' }]}
+          rows={r.horizons.map((h) => ({ key: h.code, label: h.label, values: { f: h.doneCount, r: h.overdueCount, a: Math.max(0, h.actions.length - h.doneCount - h.overdueCount) } }))} />
+        {m && (
+          <GaugeMeter title="Autonomie : postes externes transférés" subtitle={m.autonomy.note} value={nombre(m.autonomy.sharePct)} unit="%" target={100} targetLabel="transfert complet des postes externes"
+            reason="aucun poste externe" />
+        )}
+        {m && (
+          <StackedBarViz className="viz-span-2" title="Postes par fonction" subtitle="Tenus en interne ou par un prestataire externe" mode="absolute" orientation="horizontal" format={entier}
+            series={[{ key: 'i', label: 'Interne' }, { key: 'e', label: 'Externe' }]}
+            rows={m.functions.filter((f) => f.posts.length > 0).map((f) => ({ key: f.code, label: f.label, values: { i: f.posts.filter((p) => !p.external).length, e: f.posts.filter((p) => p.external).length } }))} />
+        )}
+        {g && (
+          <StatusDistribution title="Instances de gouvernance" subtitle={g.delaisNote} unitLabel="instances"
+            items={[{ key: 'ok', label: 'Réunion à jour', tone: 'good', count: g.bodies.filter((b) => b.overdue === false).length }, { key: 'ko', label: 'Réunion en retard', tone: 'critical', count: g.bodies.filter((b) => b.overdue === true).length }, { key: 'nd', label: 'Périodicité à confirmer', tone: 'neutral', count: g.bodies.filter((b) => b.overdue === null).length }]} />
+        )}
+      </Visuels>
     </>
   );
 }
@@ -279,6 +322,7 @@ export default function FeuilleDeRoute() {
       <PageHead eyebrow="Pilotage · ch. 35 à 37" title="Feuille de route et modèle opérationnel" lead="Phases et portes de sortie décidées par le comité de pilotage, plans d’action datés, binômes provinciaux et transfert de compétences, instances de gouvernance et réunions consignées." />
       {road.loading && !road.data ? <Loading /> : road.error ? <ErrorState error={road.error} onRetry={reload} /> : road.data && (
         <div className="dash-grid">
+          <VisuelsFeuilleDeRoute r={road.data} m={om.data ?? null} g={gov.data ?? null} />
           <PhasesPanel r={road.data} meetings={gov.data?.meetings ?? []} onDone={reload} />
           <HorizonsPanel r={road.data} onDone={reload} />
           {om.data && <OperatingModelPanel m={om.data} onDone={reload} />}

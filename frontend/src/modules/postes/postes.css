@@ -15,7 +15,8 @@
 .ps-menu a { min-height: 36px; display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); font-size: 13px; text-decoration: none; }
 .ps-menu a[aria-current='page'] { background: var(--navy); color: #fff; border-color: var(--navy); }
 
-.ps-bloc { display: grid; gap: 8px; min-width: 0; }
+.ps-bloc { display: grid; gap: 8px; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.ps-bloc .btn { white-space: normal; max-width: 100%; }
 .ps-bloc-title { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; margin: 0; color: var(--ink-3); }
 .ps-bloc-sub { text-transform: none; letter-spacing: 0; font-weight: 500; }
 .ps-entete { display: inline-flex; gap: 4px; font-size: 15px; text-decoration: none; color: var(--ink); }

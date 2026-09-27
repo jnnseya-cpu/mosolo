@@ -10,7 +10,7 @@ import { Section } from '../pilotage/shared';
 import { Ecran, Indicateurs, montants, pct, useVue, type Indicator } from './commun';
 import { BarChartViz, fmtNombre, KpiTile, StatusDistribution } from '../../components/viz';
 import type { Tone } from '../../components/StatusBadge';
-import { BarresParDevise, EtatIndicateurs, etatsDe, nombre, Tuiles, TuilesIndicateurs, Visuels } from '../pilotage/visuels';
+import { BarresParDevise, EtatIndicateurs, etatsDe, Tuiles, TuilesIndicateurs, Visuels } from '../pilotage/visuels';
 
 const entier = (v: number) => fmtNombre(v, 0);
 const VALIDATION = { VALIDEE: { label: 'Validée', tone: 'good' as Tone }, A_VALIDER: { label: 'À valider', tone: 'warning' as Tone }, NON_PROPOSEE: { label: 'Non proposée', tone: 'neutral' as Tone } };
