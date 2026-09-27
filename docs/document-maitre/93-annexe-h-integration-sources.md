@@ -7,7 +7,7 @@ Cette annexe garantit qu'aucune exigence des quatre documents sources du program
 | Documents sources | **C** — Cahier des exigences consolidé v2.9 (24 septembre 2026) ; **SF** — Spécification fonctionnelle des 81 modules et 16 verticales v1.2 ; **DG** — Dossier Gouverneur et spécification directrice v1.0 ; **NE** — Note exécutive au Gouverneur (24 septembre 2026) |
 | Rang normatif | **Chapitres 1 à 47 du document maître > Annexe H > documents sources.** L'Annexe H complète les chapitres ; elle ne les modifie pas. Un élément de l'Annexe H qui contredirait un chapitre est réputé non écrit et doit être signalé au Bureau du programme |
 | Portée | Les éléments intégrés ici sont des **exigences opposables aux équipes de réalisation**, soumises aux mêmes marqueurs de statut, aux mêmes principes constitutionnels (P1 à P14, § 3.4) et à la même Constitution financière (§ 12.6) que le reste du document |
-| Ce que l'annexe ne fait pas | Elle ne réintroduit **aucune** position écartée par la version 3.0 : partage automatique 10/10/10/70 des recettes pendant 30 ans ; IRL à taux unique de 22 % ; sanctions, pénalités ou immobilisations déclenchées par un algorithme ; calendrier de pilote complet dès février 2027 ; prestataires techniques nommés (agrégateurs, vérificateurs) prescrits sans mise en concurrence ; pile Java/.NET ou Next.js/NestJS imposée. Ces points figurent au tableau d'arbitrage (§ H.29) |
+| Ce que l'annexe ne fait pas | Elle ne réintroduit **aucune** position écartée par la version 3.0 : partage automatique 10/10/10/70 des recettes pendant 30 ans ; IRL à taux unique de 22 % ; sanctions, pénalités ou immobilisations déclenchées par un algorithme ; calendrier de pilote complet dès février 2027 ; prestataires techniques nommés (agrégateurs, vérificateurs) prescrits sans mise en concurrence ; pile Java/.NET ou Next.js/NestJS imposée. Ces points figurent au tableau d'arbitrage (§ H.29). **Depuis le 27/09/2026** (règle d'ajout du maître d'ouvrage : rien n'est omis), ces positions sont réintégrées comme **positions du promoteur** à côté de l'analyse v3.0 (§ H.31) |
 
 **Marqueurs.** Les conventions de lecture du document s'appliquent sans exception : **[CONFIRMÉ]**, **[À VÉRIFIER]**, **[ACTE REQUIS]**, **[EXEMPLE]**. Tout chiffre repris des sources et non vérifié sur une source publique ou un texte officiel porte **[À VÉRIFIER]** ; toute valeur illustrative porte **[EXEMPLE]** et reste interdite en production (tests d'acceptation du chapitre 41).
 
@@ -104,7 +104,7 @@ Les sections à fort taux « I » sont celles que la v3.0 avait renvoyées au Ca
 | RW3 | **Aucune activation sans certification** | Chaque verticale et chaque tarif repris est une règle au statut `A_VERIFIER` ou `ACTE_REQUIS` jusqu'à certification (§ 6.12) |
 | RW4 | **Chiffres marqués** | Les estimations des dossiers sectoriels (wewa, AVIA, stationnement, exemples financiers) portent [À VÉRIFIER] ou [EXEMPLE] |
 | RW5 | **Calendrier v3.0** | Les releases citées sont celles de la v3.0 (R0 déc. 2026, R1 avril 2027, R2 oct. 2027, R3 mars 2028, R4 déc. 2028 — § 43) ; la release source est donnée pour mémoire |
-| RW6 | **Aucun partage automatique de recettes** | Toute mention de la clé 10/10/10/70, de la « réserve de 10 % », des « deux flux de décaissement » ou de la « part de 10 % du ministère de tutelle » est remplacée par : clés **légales** de répartition (module 73), rémunération contractuelle des prestataires et sous-traitants **sur crédit budgétaire**, incitations des agents **uniquement si un texte les prévoit** (§ 27.2) |
+| RW6 | **Aucun partage automatique de recettes** | Toute mention de la clé 10/10/10/70, de la « réserve de 10 % », des « deux flux de décaissement » ou de la « part de 10 % du ministère de tutelle » est remplacée par : clés **légales** de répartition (module 73), rémunération contractuelle des prestataires et sous-traitants **sur crédit budgétaire**, incitations des agents **uniquement si un texte les prévoit** (§ 27.2). **Complément du 27/09/2026** : la clé 10/10/10/70 du promoteur est conservée comme paramètre gouverné au statut « acte requis » (simulation seulement, décaissement après acte et double validation — § H.31) |
 
 ```mermaid
 flowchart LR
@@ -2483,7 +2483,22 @@ Les arbitrages ARB-01 à ARB-55 reprennent, dans l'ordre, les contradictions et 
 ## H.31 Tenue de l'annexe
 
 1. **Toute nouvelle version d'un document source** est soumise à la même méthode (§ H.1.1) ; les éléments nouveaux sont classés C, I ou A et la matrice H.30 est mise à jour.
-2. **Tout élément intégré ici qui est ensuite repris dans un chapitre** est retiré de l'Annexe H au profit d'un renvoi, pour éviter les doubles sources.
+2. **Tout élément intégré ici qui est ensuite repris dans un chapitre** est conservé dans l'Annexe H, complété d'un renvoi vers le chapitre qui le reprend (règle d'ajout du 27/09/2026 : rien n'est retiré).
 3. **Chaque arbitrage** peut être rouvert par le Comité de contrôle des changements (et, pour le droit, par le Comité juridique et tarifaire) ; la décision est consignée avec sa date et sa motivation.
 4. **Les points J17 à J30** sont ajoutés au suivi du relevé juridique certifié (décision n° 3) et à la liste des validations juridiques critiques de la conclusion stratégique.
 5. **Les critères AC-* du § H.21** sont intégrés à la suite de tests automatisés au plus tard à la release de leur module ; ceux des modules R1 conditionnent la porte G2.
+
+## H.31 Règle d'ajout et positions du promoteur réintégrées (27/09/2026)
+
+**Décision du maître d'ouvrage.** Les spécifications nouvelles s'ajoutent à l'existant : rien n'est supprimé, retiré ni omis ; tout ajout est construit par-dessus l'existant, fusionné, combiné et harmonisé. Les contradictions sont signalées pour arbitrage, et l'existant reste en place jusqu'à décision. La relecture du Cahier des exigences v2.9 transmise le même jour (note de consolidation, tableau d'harmonisation, historique des versions 2.1 à 2.9, note exécutive, sept piliers, résumé exécutif, huit résultats attendus, décisions demandées) confirme que ces textes sont ceux déjà intégrés (§ H.1, matrice H.30). Les positions que la version 3.0 avait écartées sont **réintégrées comme positions du promoteur**, à côté de l'analyse v3.0, et portées dans la plateforme sous forme **gouvernée et non active** tant que l'acte juridique n'est pas certifié (statut du Cahier : « aucune règle, aucun taux et aucune projection ne peuvent être mis en production avant certification »).
+
+| Position du Cahier v2.9 | Lecture v3.0 (conservée) | Harmonisation retenue |
+|---|---|---|
+| Clé 10/10/10/70 sur 30 ans (§ 37A) ; financement intégral du système d'exploitation numérique par Groupe Nseya, hors moyens physiques | Déconseillée ; modèle hybride plafonné (§ 37.2, § 37.3) | Paramètre « acte requis » : simulation sur recettes rapprochées ; activation par acte enregistré et double validation ; décaissements proposés en opérations du Trésor à quatre yeux ; commission des agents (10 %) rattachée à la tranche « agents et sous-traitants » |
+| IRL = 22 % des loyers encaissés, dont 20 % de retenue de premier rang | Pas de taux unique codé | Versions de règle au statut « à vérifier », jamais actives ; la lecture certifiée de l'OL 18/004 et de l'arrêté des taux prévaut (J3) |
+| Pénalités et blocages automatiques (AVIA, ParkSmart) | Le système constate et calcule, l'autorité décide (RW1) | Identique à l'arbitrage du Cahier lui-même : aucune divergence |
+| Pilote complet dès février 2027 | Recensement R0 en déc. 2026, test en février, R1 en avril 2027 | Les deux calendriers sont présentés ; la campagne de février 2027 reste le premier test réel (décision demandée n° 4) |
+| Prestataires techniques nommés | Mise en concurrence | Prestataires nommés conservés comme propositions du promoteur, soumises aux règles des marchés publics |
+| Pile technique imposée (Java/.NET ou Next.js/NestJS) | Pile ouverte (Annexe E) | Pile construite conservée ; la pile du Cahier reste une option documentée |
+| Chiffres de contexte : budget ≈ 1,2 milliard $, moins de 70 $ par habitant | ≈ 1,1 milliard $ [À VÉRIFIER], 55 à 65 $ par habitant | Les deux estimations sont citées ; seul l'édit budgétaire promulgué fait foi |
+
