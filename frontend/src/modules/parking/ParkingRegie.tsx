@@ -17,9 +17,10 @@ import {
 } from './shared';
 import { EvidencePhotos } from './EvidencePhotos';
 import { AgentCommissions } from './AgentEarnings';
+import { ExemptionsPanel } from './Stationnement14';
 import './parking.css';
 
-type Tab = 'decisions' | 'reservations' | 'zones' | 'partners' | 'commissions';
+type Tab = 'decisions' | 'reservations' | 'zones' | 'partners' | 'commissions' | 'exemptions';
 
 export default function ParkingRegie() {
   const { user } = useApp();
@@ -41,7 +42,7 @@ export default function ParkingRegie() {
         <button type="button" className="btn btn-secondary btn-sm" onClick={refresh}><Icon name="refresh" size={16} /> Actualiser</button>
       </PageHead>
       <div className="seg seg-wrap pk-tabs" role="tablist" aria-label="Rubriques">
-        {([['decisions', 'Décisions sur constats'], ['reservations', 'Réservations'], ['zones', 'Zones'], ['partners', 'Partenaires'], ['commissions', 'Commissions des agents (10 %)']] as [Tab, string][]).map(([k, l]) => (
+        {([['decisions', 'Décisions sur constats'], ['reservations', 'Réservations'], ['zones', 'Zones'], ['partners', 'Partenaires'], ['commissions', 'Commissions des agents (10 %)'], ['exemptions', 'Exemptions']] as [Tab, string][]).map(([k, l]) => (
           <button key={k} type="button" role="tab" aria-pressed={tab === k} aria-selected={tab === k} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -50,6 +51,7 @@ export default function ParkingRegie() {
       {tab === 'zones' && <Zones tick={tick} onChange={refresh} />}
       {tab === 'partners' && <Partners tick={tick} onChange={refresh} />}
       {tab === 'commissions' && <AgentCommissions key={tick} />}
+      {tab === 'exemptions' && <ExemptionsPanel tick={tick} />}
     </div>
   );
 }

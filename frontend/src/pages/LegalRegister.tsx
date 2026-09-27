@@ -16,6 +16,7 @@ import type { UIKey } from '../lib/i18n';
 import { periodicityLabel, revenueCategoryLabel } from '../lib/labels';
 import '../modules/recouvrement/recouvrement.css';
 import { RuleLegalTests, RuleTechnicalView } from '../modules/juridique/RuleJuridiqueTools';
+import { VeilleRegles } from '../modules/juridique/VeilleRegles';
 
 interface HistoryEntry { at: string; action: string; by: string; status: string; detail?: string }
 interface Suspension { reason: string; authority: string; instrumentRef?: string; by: string; at: string; previousStatus: string; liftedAt?: string; liftReason?: string }
@@ -552,6 +553,8 @@ export default function LegalRegister() {
           ]}
         />
       )}
+      {/* Module 26 : veille (règles expirantes, conflits de normes), archivage à quatre yeux, indicateurs. */}
+      {q.data && !q.data.fallback && <VeilleRegles onChanged={q.reload} />}
       <Drawer open={!!open} title={open ? `${open.code} — ${open.label}` : ''} onClose={() => setOpenId(null)}>
         {open && <RuleDetail rule={open} instruments={inst.data ?? []} onChanged={q.reload} onNewVersion={(r) => { setInitial(draftFrom(r)); setOpenId(null); setCreating(true); }} />}
       </Drawer>

@@ -110,6 +110,7 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/verifier-plaque', element: lazy(() => import('./verticales/PlateVerify')) },
   { path: '/verifier-plaque/:code', element: lazy(() => import('./verticales/PlateVerify')) },
   { path: '/controle/calcu', element: lazy(() => import('./verticales/CalcuConsole')), nav: { label: 'CALCU — contrôle de la dépense', short: 'CALCU', icon: 'bank', group: 'pilotage', roles: ['R01', 'R05', 'R08', 'R15', 'R17', 'R22', 'R23'] } },
+  { path: '/verticales/fiches', element: lazy(() => import('./verticales/Fiches')), nav: { label: 'Fiches sectorielles (modules 13 à 25)', short: 'Fiches', icon: 'grid', group: 'operations', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24', 'R30', 'R31', 'R34', 'R35'] } },
   { path: '/verticales/secteurs', element: lazy(() => import('./verticales/Secteurs')), nav: { label: 'Modules sectoriels (acte requis)', short: 'Secteurs', icon: 'grid', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24', 'R30', 'R31', 'R35'] } },
   // Référentiel des recettes (Cahier ch. 7) : transparence publique, inventaire et codes pour les agents habilités.
   { path: '/referentiel/recettes', element: lazy(() => import('./referentiel/Recettes')), nav: { label: 'Référentiel des recettes', short: 'Recettes', icon: 'ledger', group: 'public', roles: [] } },
