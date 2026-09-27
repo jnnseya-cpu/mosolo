@@ -16,7 +16,7 @@ interface MyPoint { id: string; name: string; type: string; operator: string; co
 interface Lookup { paymentReference: string; amount: MoneyJSON; amountEditable: false; expiresAt: string; revenue: string; revenueLabel: string; administration: string; dueDate: string; taxpayerRefSuffix: string; holderInitials: string }
 interface CardSituation { card: { numberSuffix: string; holderInitials: string; commune: string }; obligations: { obligationId: string; revenue: string; amount: MoneyJSON; dueDate: string; activeReference: string | null }[] }
 interface CashDay {
-  pointId: string; day: string; status: 'OUVERTE' | 'CLOTUREE' | 'VERSEE' | 'ECART'; expected: MoneyJSON[]; expectedByAccount: { accountAlias: string; amount: MoneyJSON }[];
+  pointId: string; day: string; status: 'OUVERTE' | 'CLOTUREE' | 'DECLAREE' | 'VERSEE' | 'ECART'; expected: MoneyJSON[]; expectedByAccount: { accountAlias: string; amount: MoneyJSON }[];
   counted: MoneyJSON[] | null; closedAt: string | null; deposit: { bankSlipRef: string; depositedAt: string } | null; depositDeadline: string;
   collections: { id: string; paymentReference: string; amount: MoneyJSON; collectedAt: string; receiptNumber: string; shortCode: string; orderStatus: string; receiptStatus: string | null }[];
   reconciledCount: number; exceptions: { id: string; type: string; detail: string }[];
@@ -24,7 +24,8 @@ interface CashDay {
 
 const DAY_STATUS: Record<string, { tone: 'good' | 'warning' | 'critical' | 'info'; label: string }> = {
   OUVERTE: { tone: 'info', label: 'Caisse ouverte' }, CLOTUREE: { tone: 'warning', label: 'Clôturée — versement à déclarer' },
-  VERSEE: { tone: 'good', label: 'Versée au compte public' }, ECART: { tone: 'critical', label: 'Écart — exception ouverte' },
+  DECLAREE: { tone: 'warning', label: 'Versement déclaré — en attente du relevé bancaire' },
+  VERSEE: { tone: 'good', label: 'Versée au compte public (relevé bancaire rapproché)' }, ECART: { tone: 'critical', label: 'Écart — exception ouverte' },
 };
 
 export function PrintableReceipt({ r }: { r: ReceiptPrint }) {
