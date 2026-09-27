@@ -24,7 +24,7 @@ non contractuelles, mode `--demo`).
 **Réalité sans fard (hard reality).** Le code est d'une qualité rare pour un socle de recettes publiques : contrôle
 d'accès refusé par défaut sur 1 513 routes, grand livre en partie double chaîné par hachage, quittances signées Ed25519,
 journal d'audit HMAC avec ancre externe, double validation (quatre yeux) des mouvements d'argent, IA sans pouvoir
-d'exécution, 1 283 tests automatisés verts. Mais **aucune production ne peut démarrer aujourd'hui** : il n'existe ni
+d'exécution, 1 309 tests automatisés verts. Mais **aucune production ne peut démarrer aujourd'hui** : il n'existe ni
 prestataire de paiement réel raccordé, ni compte bancaire public réel, ni module matériel de sécurité (HSM), ni
 hébergement national, ni domaine officiel, ni actes juridiques fixant les tarifs, ni test d'intrusion par un tiers, ni
 astreinte avec acheminement des alertes. Le stockage persistant n'a été éprouvé ici que sur pg-mem (PostgreSQL simulé) ;
@@ -90,9 +90,9 @@ conditions externes ne sont pas remplies et prouvées, le verdict reste **NO-GO*
 
 | Mesure | Résultat | Preuve |
 |---|---|---|
-| Tests automatisés | **1 283 verts / 1 283** (backend 974, frontend 277, shared 32) | `npm test` (porte finale, § 13) |
-| Fichiers de test | backend 101, frontend 51, shared 2 | idem |
-| Test le plus lent (backend) | 3,1 s ; **aucun test > 5 s** sur 968 mesurés | `vitest --reporter=json` : le délai de 30 s ne masque aucune lenteur réelle |
+| Tests automatisés | **1 309 verts / 1 309** (backend 1 000, frontend 277, shared 32) | `npm test` et `vitest --reporter=json` (porte finale, § 13) |
+| Fichiers de test | backend 107, frontend 51, shared 2 | idem |
+| Test le plus lent (backend) | 2,1 s à la porte finale (3,1 s lors d'une mesure antérieure sous forte charge) ; **aucun test > 5 s** | `vitest --reporter=json` : le délai de 30 s ne masque aucune lenteur réelle |
 | Parcours Playwright (Chromium) | **9 rôles** (R01, R02, R03, R04, R05, R10, R17, R22, R30), **499 visites de pages**, 3 boutons principaux cliqués par page | `crawl.cjs` : 0 erreur JavaScript, 0 réponse 5xx, 0 requête en échec réseau |
 | Postes de décision | `/poste-de-decision` et ses sous-vues : 66 visites (R01 : 33, R02 : 8, R03 : 8, R04 : 8, R05 : 9) | idem |
 | Mobile 360 × 800 | 499 pages : **0 défilement horizontal** | `mobile.cjs` (après correctifs) |
@@ -321,10 +321,10 @@ réseau réel. À refaire sur l'infrastructure cible avec PostgreSQL.
 `flushOfflineQueues` n'attendait que quelques tours de boucle d'événements, jamais les chiffrements WebCrypto en cours ;
 sous charge, le test lisait un stockage encore vide. Correctif : opérations suivies et attendues explicitement. Preuve :
 test de non-régression avec chiffrement ralenti de 60 ms — **échoue avec l'ancien code, passe avec le nouveau**. Aucun
-délai relevé. **Délai de 30 s du backend** : mesuré, aucun test ne dépasse 3,1 s ; il ne masque aucune lenteur.
+délai relevé. **Délai de 30 s du backend** : mesuré, aucun test ne dépasse 3,1 s (2,1 s à la porte finale) ; il ne masque aucune lenteur.
 
 **Porte finale** (après les derniers correctifs) : `npm ci` (verrou inchangé), `npm run typecheck`, `npm run lint`
-(0 erreur, 0 avertissement), `npm test` (1 283 / 1 283), `npm run build -w frontend`, `python3 tools/gen_routes.py`
+(0 erreur, 0 avertissement), `npm test` (1 309 / 1 309 ; aucun rejet de promesse non géré dans la sortie), `npm run build -w frontend`, `python3 tools/gen_routes.py`
 (catalogue inchangé, 1 513 routes).
 
 ## 14. Risques non résolus (Unresolved risks)
