@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1469 routes** dans 48 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1484 routes** dans 48 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -14,7 +14,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1469 routes** dans 4
 | extension decision | 30 |
 | extension documents | 16 |
 | extension equipements | 11 |
-| extension fiscal | 82 |
+| extension fiscal | 91 |
 | extension ia | 40 |
 | extension integrite | 82 |
 | extension juridique | 11 |
@@ -25,8 +25,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1469 routes** dans 4
 | extension preuves | 14 |
 | extension publicite | 52 |
 | extension rakapay | 53 |
-| extension recouvrement | 74 |
-| extension referentiel | 10 |
+| extension recouvrement | 75 |
+| extension referentiel | 12 |
 | extension sanctions | 12 |
 | extension socle | 24 |
 | extension terrain | 64 |
@@ -36,7 +36,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1469 routes** dans 4
 | extension verticales | 193 |
 | module ai | 3 |
 | module alerts | 1 |
-| module appeals | 9 |
+| module appeals | 12 |
 | module assessment | 6 |
 | module audit | 2 |
 | module communications | 4 |
@@ -421,6 +421,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1469 routes** dans 4
 | GET | `/v1/fiscal/clearances/eligibility` |
 | GET | `/v1/fiscal/clearances/review` |
 | GET | `/v1/fiscal/clearances/verify/:code` |
+| GET | `/v1/fiscal/couches` |
+| GET | `/v1/fiscal/couverture-locative` |
 | GET | `/v1/fiscal/data-protocols` |
 | POST | `/v1/fiscal/data-protocols` |
 | POST | `/v1/fiscal/data-protocols/:id/decision` |
@@ -445,6 +447,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1469 routes** dans 4
 | POST | `/v1/fiscal/exemptions/rappels` |
 | GET | `/v1/fiscal/exemptions/registre` |
 | GET | `/v1/fiscal/geo-units` |
+| GET | `/v1/fiscal/igf/:code` |
 | GET | `/v1/fiscal/imports` |
 | POST | `/v1/fiscal/imports` |
 | GET | `/v1/fiscal/imports/:id` |
@@ -453,18 +456,24 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1469 routes** dans 4
 | GET | `/v1/fiscal/imports/format` |
 | GET | `/v1/fiscal/leases` |
 | POST | `/v1/fiscal/leases/:id/attestations` |
+| POST | `/v1/fiscal/leases/:id/resiliation` |
 | GET | `/v1/fiscal/map` |
 | GET | `/v1/fiscal/nearby` |
+| GET | `/v1/fiscal/object-closures` |
+| POST | `/v1/fiscal/object-closures/:id/decision` |
 | GET | `/v1/fiscal/object-corrections` |
 | POST | `/v1/fiscal/object-corrections/:id/decision` |
 | GET | `/v1/fiscal/objects` |
 | GET | `/v1/fiscal/objects/:id` |
 | POST | `/v1/fiscal/objects/:id/census-stage` |
+| POST | `/v1/fiscal/objects/:id/closure` |
 | GET | `/v1/fiscal/objects/:id/corrections` |
 | POST | `/v1/fiscal/objects/:id/corrections` |
 | POST | `/v1/fiscal/objects/:id/plate/pose` |
 | POST | `/v1/fiscal/objects/:id/plate/replace` |
 | POST | `/v1/fiscal/objects/:id/provenance` |
+| POST | `/v1/fiscal/objects/:id/reactivation` |
+| POST | `/v1/fiscal/objects/:id/suspension` |
 | POST | `/v1/fiscal/objects/:id/validate` |
 | POST | `/v1/fiscal/partner-data/:source/lots` |
 | GET | `/v1/fiscal/plates/:code/scan` |
@@ -1054,6 +1063,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1469 routes** dans 4
 | GET | `/v1/recouvrement/avis/:id` |
 | POST | `/v1/recouvrement/avis/:id/lecture` |
 | GET | `/v1/recouvrement/avis/:id/preuve` |
+| POST | `/v1/recouvrement/avis/:id/remise` |
 | GET | `/v1/recouvrement/campagnes/:id/rendement` |
 | POST | `/v1/recouvrement/contribuables/:id/adresse-notification` |
 | POST | `/v1/recouvrement/couts` |
@@ -1104,6 +1114,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1469 routes** dans 4
 | POST | `/v1/referentiel/codes` |
 | POST | `/v1/referentiel/codes/:code/retrait` |
 | GET | `/v1/referentiel/espaces` |
+| GET | `/v1/referentiel/matrice-habilitations` |
+| GET | `/v1/referentiel/modele-donnees` |
 | GET | `/v1/referentiel/recettes` |
 | GET | `/v1/referentiel/recettes-administratives` |
 | GET | `/v1/referentiel/recettes/:code` |
@@ -1607,12 +1619,15 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1469 routes** dans 4
 | GET | `/v1/appeals` |
 | POST | `/v1/appeals` |
 | GET | `/v1/appeals/:id` |
+| POST | `/v1/appeals/:id/assign` |
 | POST | `/v1/appeals/:id/decide` |
 | POST | `/v1/appeals/:id/documents` |
 | POST | `/v1/appeals/:id/instruct` |
 | POST | `/v1/appeals/:id/suspensive-effect` |
 | POST | `/v1/appeals/:id/suspensive-effect/decision` |
+| GET | `/v1/appeals/indicateurs` |
 | GET | `/v1/appeals/procedure` |
+| GET | `/v1/appeals/proprietaires` |
 
 ## Module assessment
 

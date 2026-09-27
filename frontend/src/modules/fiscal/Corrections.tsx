@@ -16,6 +16,7 @@ import { sha256Hex } from '../../lib/crypto';
 import { DemoNote, FiscalTabs, ReasonAction, useViewer } from './common';
 import type { FiscalObjectView } from './types';
 import { AideContextuelle } from '../apprentissage/AideContextuelle';
+import { LifecyclePanel } from './CycleDeVie';
 import './fiscal.css';
 
 export interface ObjectCorrection {
@@ -168,7 +169,7 @@ function ProposeForm({ o, onDone }: { o: FiscalObjectView; onDone: () => void })
   );
 }
 
-function ObjectCorrections({ o, canPropose, onChanged }: { o: FiscalObjectView; canPropose: boolean; onChanged: () => void }) {
+function ObjectCorrections({ o, canPropose, canApprove = false, onChanged }: { o: FiscalObjectView; canPropose: boolean; canApprove?: boolean; onChanged: () => void }) {
   const { fmtDate } = useApp();
   const q0 = useApi(() => api<CorrectionsResponse>(`/v1/fiscal/objects/${encodeURIComponent(o.id)}/corrections`), [o.id]);
   const q = { ...q0, reload: () => { q0.reload(); onChanged(); } };
@@ -180,8 +181,10 @@ function ObjectCorrections({ o, canPropose, onChanged }: { o: FiscalObjectView; 
         <div><dt>Objet</dt><dd><span className="mono">{o.id}</span> — {o.categoryLabel}</dd></div>
         <div><dt>Localisation</dt><dd>{o.commune} · {o.quartier}{o.avenue ? ` · ${o.avenue}` : ''}</dd></div>
         <div><dt>Rang de localité</dt><dd>{o.localityRank}</dd></div>
+        {o.igf && <div><dt>Identifiant (IGF)</dt><dd><span className="mono">{o.igf.code}</span>{o.igf.cahierCode ? <> · format du Cahier <span className="mono">{o.igf.cahierCode}</span></> : null}</dd></div>}
         <div><dt>Attributs de base</dt><dd>{Object.entries(o.attributes).filter(([k]) => k !== 'demo').map(([k, v]) => `${k} = ${show(v)}`).join(' · ') || '—'}</dd></div>
       </dl>
+      {o.lifecycle && <LifecyclePanel objectId={o.id} lifecycle={o.lifecycle} canAct={canPropose} canApprove={canApprove} onDone={onChanged} />}
       {q.loading && <Loading />}
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
       {q.data && (
@@ -257,7 +260,7 @@ export default function Corrections() {
             )}
           </section>
           <section className="panel">
-            {open ? <ObjectCorrections key={`${open.id}-${tick}`} o={open} canPropose={has('R06', 'R07', 'R11')} onChanged={queue.reload} /> : <EmptyState title="Choisissez un objet" icon="building">Les corrections sont listées et décidées objet par objet.</EmptyState>}
+            {open ? <ObjectCorrections key={`${open.id}-${tick}`} o={open} canPropose={has('R06', 'R07', 'R11')} canApprove={canApprove} onChanged={() => { queue.reload(); objs.reload(); }} /> : <EmptyState title="Choisissez un objet" icon="building">Les corrections sont listées et décidées objet par objet.</EmptyState>}
           </section>
         </div>
       )}

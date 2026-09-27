@@ -9,6 +9,7 @@ import { ErrorState, Loading } from '../../components/States';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { FiscalTabs } from './common';
+import { CouvertureLocative } from './CouvertureLocative';
 import './fiscal.css';
 
 interface Coverage {
@@ -40,6 +41,7 @@ export default function Recensement() {
               <tr key={s.stage}><td data-label="Vague" className="cell-primary">{s.stage} — {s.label}</td><td data-label="Cible">{s.target}</td><td data-label="Sortie">{s.output}</td>
                 <td data-label="Objets" className="num">{s.count}</td><td data-label="Part" className="num">{s.pct} %</td><td data-label="Au moins" className="num">{s.atLeast}</td></tr>))}</tbody>
           </table></div>
+          <CouvertureLocative commune={commune} />
         </div>
       )}
     </div>

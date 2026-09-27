@@ -3,7 +3,7 @@ import { Money, type MoneyJSON, type ProbativeStatus } from '@mosolo/shared';
 import type { AuditLog } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import type { Clock } from '../../core/clock.js';
-import { badRequest, forbidden, notFound, unprocessable } from '../../core/errors.js';
+import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { authorize } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import { isCommune } from '../../reference/kinshasa.js';
@@ -40,7 +40,11 @@ export interface FiscalObject {
    * Identifiant géographique fiscal (§ 17.3) : UUID interne permanent + code territorial lisible,
    * attribués à la validation et jamais réattribués.
    */
-  igf?: { uuid: string; code: string; codeVersion: number; assignedAt: string; assignedBy: string };
+  igf?: {
+    uuid: string; code: string; codeVersion: number; assignedAt: string; assignedBy: string;
+    /** Alias au format du Cahier nouvelle version (§ 17.2) « KIN-<commune>-<quartier>-<voie>-<n°> », stable, non réattribuable. */
+    cahierCode?: string;
+  };
   validatedBy?: string;
   validatedAt?: string;
   /**
@@ -63,6 +67,27 @@ export interface FiscalObject {
   censusHistory?: { at: string; from: CensusStage | null; to: CensusStage; by: string; reason: string }[];
   /** Objet repris d'un système existant (ex. « e-DGRK ») : lot et référence d'origine. */
   importedFrom?: { source: string; batchId: string; externalRef: string };
+  /**
+   * Cycle de vie de l'objet fiscal (Document maître FR 2 nouvelle version, § 30 : provisoire, actif, suspendu, clos).
+   * Absent : l'état se déduit du statut de validation (PROVISOIRE ⇒ provisoire, VALIDE ⇒ actif). Une suspension ou une
+   * clôture est une décision humaine motivée ; l'objet n'est jamais supprimé et son IGF n'est jamais réattribué.
+   */
+  lifecycle?: { state: 'SUSPENDU' | 'CLOS'; motif: string; reason: string; since: string; decidedBy: string[] };
+  /** Historique des changements d'état du cycle de vie (ajout seul). */
+  lifecycleHistory?: { at: string; from: ObjectLifecycleState; to: ObjectLifecycleState; by: string[]; motif: string; reason: string }[];
+}
+
+/** États du cycle de vie d'un objet fiscal (§ 30 du Document maître FR 2, nouvelle version). */
+export const OBJECT_LIFECYCLE_STATES = ['PROVISOIRE', 'ACTIF', 'SUSPENDU', 'CLOS'] as const;
+export type ObjectLifecycleState = (typeof OBJECT_LIFECYCLE_STATES)[number];
+export const OBJECT_LIFECYCLE_LABELS: Record<ObjectLifecycleState, string> = {
+  PROVISOIRE: 'Provisoire', ACTIF: 'Actif', SUSPENDU: 'Suspendu', CLOS: 'Clos',
+};
+
+/** État courant du cycle de vie d'un objet. */
+export function lifecycleOf(o: Pick<FiscalObject, 'status' | 'lifecycle'>): ObjectLifecycleState {
+  if (o.lifecycle) return o.lifecycle.state;
+  return o.status === 'VALIDE' ? 'ACTIF' : 'PROVISOIRE';
 }
 
 /** Vagues du recensement massif (§ 17.4) : 0 préparation … 5 entretien. */
@@ -112,6 +137,21 @@ export interface Lease {
   declaredByRole: 'BAILLEUR' | 'LOCATAIRE' | 'MANDATAIRE';
   probativeStatus: ProbativeStatus;
   createdAt: string;
+  /** Résiliation (§ 30 : déclaré, vérifié, résilié, contesté) : date d'effet, auteur, motif ; le bail n'est jamais supprimé. */
+  termination?: { endDate: string; reason: string; by: string; byRole: 'BAILLEUR' | 'LOCATAIRE' | 'MANDATAIRE'; at: string };
+}
+
+/** États du bail (§ 30) : trois statuts probants + résiliation. */
+export const LEASE_STATES = ['DECLARE', 'VERIFIE', 'RESILIE', 'CONTESTE'] as const;
+export type LeaseState = (typeof LEASE_STATES)[number];
+export const LEASE_STATE_LABELS: Record<LeaseState | 'OBSERVE', string> = {
+  DECLARE: 'Déclaré', OBSERVE: 'Observé', VERIFIE: 'Vérifié', RESILIE: 'Résilié', CONTESTE: 'Contesté',
+};
+/** État d'un bail : la contestation prime (instruction en cours), puis la résiliation, puis le statut probant. */
+export function leaseStateOf(l: Pick<Lease, 'probativeStatus' | 'termination'>): LeaseState | 'OBSERVE' {
+  if (l.probativeStatus === 'CONTESTE') return 'CONTESTE';
+  if (l.termination) return 'RESILIE';
+  return l.probativeStatus;
 }
 
 export interface CreateObjectInput {
@@ -196,7 +236,7 @@ export class ObjectService {
    * Validation d'un objet par un agent habilité (l'autorisation est vérifiée par l'appelant) :
    * statut VALIDE, statut probant VÉRIFIÉ, identifiant géofiscal figé s'il n'existe pas encore.
    */
-  markValidated(id: string, by: User, igf: { uuid: string; code: string; codeVersion: number }, rank?: { localityRank: 1 | 2 | 3 | 4; source: 'VALIDATION' | 'TABLE_CERTIFIEE'; reason: string }): FiscalObject {
+  markValidated(id: string, by: User, igf: { uuid: string; code: string; codeVersion: number; cahierCode?: string }, rank?: { localityRank: 1 | 2 | 3 | 4; source: 'VALIDATION' | 'TABLE_CERTIFIEE'; reason: string }): FiscalObject {
     const o = this.get(id);
     const now = this.clock.now().toISOString();
     const confirmedRank = rank?.localityRank ?? o.localityRank;
@@ -213,13 +253,14 @@ export class ObjectService {
       history: [...(o.history ?? []), rankChange],
       status: 'VALIDE',
       probativeStatus: o.probativeStatus === 'CONTESTE' ? 'CONTESTE' : 'VERIFIE',
-      igf: o.igf ?? { ...igf, assignedAt: now, assignedBy: by.id },
+      // L'IGF n'est jamais réattribué ; seul l'alias au format du Cahier s'ajoute s'il manquait (objet validé avant son ajout).
+      igf: o.igf ? { ...o.igf, ...(!o.igf.cahierCode && igf.cahierCode ? { cahierCode: igf.cahierCode } : {}) } : { ...igf, assignedAt: now, assignedBy: by.id },
       validatedBy: by.id,
       validatedAt: now,
     });
     this.audit.append({
       actor: { kind: 'user', id: by.id, roles: by.roles }, action: 'object.validated', resourceType: 'fiscal_object', resourceId: id,
-      details: { igf: updated.igf?.code, igfUuid: updated.igf?.uuid, firstAssignment: !o.igf, localityRank: confirmedRank, previousRank: o.localityRank },
+      details: { igf: updated.igf?.code, igfUuid: updated.igf?.uuid, igfCahier: updated.igf?.cahierCode ?? null, firstAssignment: !o.igf, localityRank: confirmedRank, previousRank: o.localityRank },
     });
     return updated;
   }
@@ -263,6 +304,56 @@ export class ObjectService {
   setProbativeStatus(id: string, probativeStatus: ProbativeStatus): FiscalObject {
     const o = this.get(id);
     return this.objects.update({ ...o, probativeStatus });
+  }
+
+  /**
+   * Changement d'état du cycle de vie (suspension, levée, clôture) décidé par l'appelant, qui contrôle les habilitations
+   * et les quatre yeux. L'historique est conservé ; l'objet n'est jamais supprimé.
+   */
+  setLifecycle(id: string, next: { state: 'ACTIF' | 'SUSPENDU' | 'CLOS'; motif: string; reason: string; by: User[] }): FiscalObject {
+    const o = this.get(id);
+    const from = lifecycleOf(o);
+    const now = this.clock.now().toISOString();
+    const by = next.by.map((u) => u.id);
+    const updated = this.objects.update({
+      ...o,
+      ...(next.state === 'ACTIF' ? { lifecycle: undefined } : { lifecycle: { state: next.state, motif: next.motif, reason: next.reason, since: now, decidedBy: by } }),
+      lifecycleHistory: [...(o.lifecycleHistory ?? []), { at: now, from, to: next.state === 'ACTIF' && o.status !== 'VALIDE' ? 'PROVISOIRE' : next.state, by, motif: next.motif, reason: next.reason }],
+    });
+    const last = next.by[next.by.length - 1]!;
+    this.audit.append({
+      actor: { kind: 'user', id: last.id, roles: last.roles }, action: `object.lifecycle.${next.state === 'ACTIF' ? 'reactivated' : next.state === 'SUSPENDU' ? 'suspended' : 'closed'}`,
+      resourceType: 'fiscal_object', resourceId: id, details: { from, to: lifecycleOf(updated), motif: next.motif, reason: next.reason, decidedBy: by },
+    });
+    return updated;
+  }
+
+  /**
+   * Résiliation d'un bail (§ 30) par une partie (bailleur, locataire ou mandataire de l'un d'eux) : date d'effet
+   * datée, motif ; le bail reste au registre (historique de l'IRL), jamais supprimé.
+   */
+  terminateLease(user: User, leaseId: string, input: { endDate: string; reason: string }): Lease {
+    const lease = this.leases.get(leaseId);
+    if (!lease) throw notFound('LEASE_NOT_FOUND', `Bail inconnu : ${leaseId}`);
+    if (lease.termination) throw conflict('LEASE_ALREADY_TERMINATED', `Bail déjà résilié au ${lease.termination.endDate}.`);
+    if (input.endDate < lease.start) throw badRequest('INVALID_PERIOD', 'La date de résiliation précède le début du bail.');
+    const parties = [lease.lessorId, lease.lesseeId].filter((x): x is string => !!x);
+    let byRole: Lease['declaredByRole'];
+    if (user.roles.includes('R30') && user.taxpayerId && parties.includes(user.taxpayerId)) byRole = user.taxpayerId === lease.lessorId ? 'BAILLEUR' : 'LOCATAIRE';
+    else if (user.roles.includes('R31') && (user.mandants ?? []).some((m) => parties.includes(m))) byRole = 'MANDATAIRE';
+    else throw forbidden('NOT_A_LEASE_PARTY', 'Seuls le bailleur, le locataire ou leur mandataire peuvent résilier ce bail.');
+    const now = this.clock.now().toISOString();
+    const updated = this.leases.update({
+      ...lease,
+      end: lease.end && lease.end < input.endDate ? lease.end : input.endDate,
+      termination: { endDate: input.endDate, reason: input.reason, by: user.id, byRole, at: now },
+    });
+    this.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'lease.terminated', resourceType: 'lease', resourceId: leaseId, details: { endDate: input.endDate, byRole, previousEnd: lease.end ?? null } });
+    const other = byRole === 'BAILLEUR' ? lease.lesseeId : byRole === 'LOCATAIRE' ? lease.lessorId : undefined;
+    for (const t of other ? [other] : parties) {
+      this.comms.publish('lease.ended', [taxpayerRecipient(this.taxpayers.get(t))], { unite: lease.unitObjectId, reference: leaseId, date: input.endDate }, { entity: 'DGIPK' });
+    }
+    return updated;
   }
 
   byTaxpayer(taxpayerId: string): FiscalObject[] {

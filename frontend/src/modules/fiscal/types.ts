@@ -38,7 +38,9 @@ export interface FiscalObjectView {
   localityRank: number;
   status: 'PROVISOIRE' | 'VALIDE';
   probativeStatus: string;
-  igf: { code: string; uuid: string; assignedAt: string } | null;
+  /** Cycle de vie (§ 30 du Document maître FR 2) : provisoire, actif, suspendu, clos. */
+  lifecycle?: ObjectLifecycle;
+  igf: { code: string; uuid: string; assignedAt: string; cahierCode?: string | null } | null;
   holder: string | null;
   highValue: boolean;
   attributes: Record<string, unknown>;
@@ -133,6 +135,9 @@ export interface LeaseAttestationView {
 export interface LeaseRow {
   id: string; role: 'BAILLEUR' | 'LOCATAIRE'; unitIgf: string; commune: string | null; quartier: string | null; rent: MoneyJSON;
   periodicity: string; start: string; end: string | null; probativeStatus: string; attestation: LeaseAttestationView | null;
+  /** État du bail (§ 30 du Document maître FR 2) : déclaré, vérifié, résilié, contesté. */
+  state?: 'DECLARE' | 'OBSERVE' | 'VERIFIE' | 'RESILIE' | 'CONTESTE'; stateLabel?: string;
+  termination?: { endDate: string; reason: string; by: string; byRole: string; at: string } | null;
 }
 
 export interface MapResponse {
@@ -144,4 +149,10 @@ export interface MapResponse {
   objects: { id: string; igf: string | null; category: string; categoryLabel: string; commune: string; quartier: string; lat: number; lon: number; color: MapStatusColor; label: string; reason: string; demo: boolean }[];
   notice: string;
   example: boolean;
+}
+
+/** Cycle de vie d'un objet fiscal (§ 30, § 17.3 du Document maître FR 2, nouvelle version). */
+export interface ObjectLifecycle {
+  state: 'PROVISOIRE' | 'ACTIF' | 'SUSPENDU' | 'CLOS'; label: string; since: string | null; motif: string | null; reason: string | null;
+  pendingClosureId: string | null; liquidationAllowed: boolean;
 }

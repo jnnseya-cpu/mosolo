@@ -72,6 +72,28 @@ export function registerAppealRoutes(app: FastifyInstance, ctx: AppContext): voi
     return ctx.appeals.list({ taxpayerIds: own, ...(status ? { status } : {}) });
   });
 
+  /** Indicateurs de respect des délais (§ 23) : direction de la régie, contentieux, audit interne et externe. */
+  app.get('/v1/appeals/indicateurs', async (req) => {
+    const user = requireUser(req);
+    authorize(user, 'appeals:indicators.read');
+    ctx.appeals.sweepDeadlines(ctx.users);
+    return ctx.appeals.indicators();
+  });
+
+  /** Agents de contentieux (R20) du service de la direction, propriétaires possibles d'un recours. */
+  app.get('/v1/appeals/proprietaires', async (req) => {
+    const user = requireUser(req);
+    authorize(user, 'appeals:assign', { entity: user.entity });
+    return ctx.users.withRole('R20').filter((u) => u.entity === user.entity).map((u) => ({ id: u.id, name: u.name, entity: u.entity }));
+  });
+
+  /** Affectation nominative du recours à un agent de contentieux (propriétaire, § 23). */
+  app.post<{ Params: { id: string } }>('/v1/appeals/:id/assign', async (req) => {
+    const user = requireUser(req);
+    const body = parse(z.object({ assigneeId: z.string().min(2).max(100), reason: z.string().trim().min(5).max(1000) }).strict(), req.body);
+    return ctx.appeals.assign(user, req.params.id, body, ctx.users);
+  });
+
   app.get<{ Params: { id: string } }>('/v1/appeals/:id', async (req) => {
     const user = requireUser(req);
     const a = ctx.appeals.get(req.params.id);
