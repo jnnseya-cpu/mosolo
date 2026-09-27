@@ -22,7 +22,7 @@ import { AdAround, AdVehicle, type ConstatPreset } from './AdTerrain';
 import '../parking/parking.css';
 
 type Tab = 'around' | 'vehicles' | 'control' | 'inventory' | 'verify' | 'mine';
-interface InspectionDone { inspection: { reference: string }; case: Case | null; penalitesImpayees?: OverduePenaltiesData }
+interface InspectionDone { inspection: { reference: string }; case: Case | null; penalitesImpayees?: OverduePenaltiesData; autoMatched?: string | null }
 interface Lookup { detected: { deviceReferences: string[]; authorizationReferences: string[] }; matches: { id: string; reference: string; type: string; commune: string; address: string; status: DeviceStatus; authorization: { reference: string; validUntil: string } | null; rights: Device['rights'] }[]; notice: string }
 
 export default function AdInspector() {
@@ -158,6 +158,7 @@ function Control({ onDone, preset }: { onDone: () => void; preset?: ConstatPrese
           <div className="result-card" role="status">
             <StatusBadge tone="good" label="Constat enregistré" />
             <p className="small">Référence <span className="mono">{done.inspection.reference}</span>{done.case ? <> · dossier <span className="mono">{done.case.reference}</span> transmis pour vérification.</> : ' · aucun dossier (support conforme).'}</p>
+            {done.autoMatched && <p className="small"><Icon name="check" size={13} /> Support et autorisation retrouvés automatiquement par la lecture optique : <span className="mono">{done.autoMatched}</span>.</p>}
             <OverduePenalties data={done.penalitesImpayees} />
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setDone(null); setLk(null); setQ(''); }}>Nouveau contrôle</button>
           </div>
