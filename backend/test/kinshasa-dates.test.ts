@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { isoDate, kinshasaDate } from '../src/core/clock.js';
+import { isoDate, kinshasaDate, kinshasaDay } from '../src/core/clock.js';
 import type { Appeal } from '../src/modules/appeals/service.js';
-import { DEMO, setup } from './helpers.js';
+import { DEMO, payDemoObligation, setup } from './helpers.js';
 
 /** 23 h 30 UTC le 26/09 = 00 h 30 le 27/09 à Kinshasa (UTC+1) : le jour métier est déjà le 27. */
 const LATE_UTC = '2026-09-26T23:30:00.000Z';
@@ -50,5 +50,25 @@ describe('Jours métier à Kinshasa (UTC+1) — frontière de 23 h 30 UTC', () =
     expect(ctx.fx.convert({ amount: '10.00', currency: 'USD' }, 'CDF').rateDate).toBe('2026-09-27');
     ctx.receipts.publicVerify('INCONNU', { clientKey: 'client-test' });
     expect(ctx.receipts.verificationJournal().days.map((x) => x.date)).toEqual(['2026-09-27']);
+  });
+
+  it('quittance vérifiée publiquement : « payé le » au jour de Kinshasa', async () => {
+    const env = await setup();
+    env.clock.set(LATE_UTC);
+    const { callback } = await payDemoObligation(env);
+    const check = env.app.ctx.receipts.publicVerify(callback.receiptCode);
+    expect(check).toMatchObject({ status: 'PENDING', paidOn: '2026-09-27' });
+    expect(kinshasaDay('2026-09-27')).toBe('2026-09-27');
+    expect(kinshasaDay('2026-09-26T23:30:00+00:00')).toBe('2026-09-27');
+  });
+
+  it('abrogation à date passée : obligations émises depuis ce jour (à Kinshasa) signalées pour examen', async () => {
+    const { env, obligation } = await liquidateAt(LATE_UTC);
+    const seeded = env.app.ctx.assessment.byTaxpayer(DEMO.taxpayerId).find((o) => o.id !== obligation.id && o.ruleId === obligation.ruleId)!;
+    expect(kinshasaDay(seeded.createdAt)).toBe('2026-09-26');
+    const res = await env.req('POST', `/v1/legal-rules/${obligation.ruleId}/abrogate`, 'u-autorite-publication', { date: '2026-09-27', instrumentId: 'demo-instrument-001', reason: 'Abrogation fictive pour le test' });
+    expect(res.statusCode).toBe(200);
+    const review = res.json().obligationsToReview as { id: string; issuedOn: string }[];
+    expect(review).toEqual([expect.objectContaining({ id: obligation.id, issuedOn: '2026-09-27' })]);
   });
 });

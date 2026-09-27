@@ -11,6 +11,7 @@ import type { User } from '../../core/auth.js';
 import { conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { evaluate } from '../../core/policy.js';
 import { IdGenerator } from '../../core/repository.js';
+import { kinshasaDay } from '../../core/clock.js';
 
 const DAY = 86_400_000;
 
@@ -275,7 +276,7 @@ export class MemoryService {
     if (!item) throw notFound('MEMORY_ITEM_NOT_FOUND', `Élément de mémoire inconnu : ${id}`);
     if (item.status === 'EFFACEE') throw conflict('MEMORY_ALREADY_ERASED', 'Élément déjà effacé.');
     if (item.kind === 'DECISION' && this.now() < item.retainUntil) {
-      throw conflict('MEMORY_RETENTION_ACTIVE', `Décision historique conservée jusqu’au ${item.retainUntil.slice(0, 10)} : effacement impossible avant l’échéance.`);
+      throw conflict('MEMORY_RETENTION_ACTIVE', `Décision historique conservée jusqu’au ${kinshasaDay(item.retainUntil)} : effacement impossible avant l’échéance.`);
     }
     const updated = this.entityItems.set(id, { ...item, status: 'EFFACEE', content: '[effacé]', title: `[effacé] ${item.kind}`, erasedAt: this.now(), erasedBy: u.id, erasureReason: reason });
     this.ctx.audit.append({ actor: this.actor(u), action: 'ia.memory.entity.erased', resourceType: 'ia_memory', resourceId: id, details: { entity: item.entity, kind: item.kind, reason } });

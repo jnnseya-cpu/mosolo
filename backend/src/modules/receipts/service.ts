@@ -6,7 +6,7 @@
 import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify, type KeyObject } from 'node:crypto';
 import { type MoneyJSON, type PublicReceiptCheck, type ReceiptStatus } from '@mosolo/shared';
 import type { AuditLog } from '../../core/audit.js';
-import { kinshasaDate, type Clock } from '../../core/clock.js';
+import { kinshasaDate, kinshasaDay, type Clock } from '../../core/clock.js';
 import { canonicalJson, sha256Hex } from '../../core/crypto.js';
 import { conflict, notFound } from '../../core/errors.js';
 import { VerificationGate, type GateDecision } from './limiter.js';
@@ -593,7 +593,7 @@ export class ReceiptService {
       return {
         status, message: PUBLIC_MESSAGE[status], verifiedAt,
         ...(status === 'REPLACED' && r.replacedBy ? { replacedBy: r.replacedBy, message: `Remplacée par la quittance n° ${r.replacedBy}.` } : {}),
-        ...(r.decision && status !== 'FRAUD_SUSPECTED' ? { reason: r.decision.publicReason, statusSince: r.statusChangedAt?.slice(0, 10) } : {}),
+        ...(r.decision && status !== 'FRAUD_SUSPECTED' ? { reason: r.decision.publicReason, statusSince: r.statusChangedAt ? kinshasaDay(r.statusChangedAt) : undefined } : {}),
         ...(duplicate ? { duplicate } : {}),
       };
     }
@@ -603,7 +603,7 @@ export class ReceiptService {
       settlementStatus: r.status === 'DEFINITIVE' ? 'RECONCILED' : 'PENDING_SETTLEMENT',
       revenueCategory: r.revenueCategory,
       amount: r.amount,
-      paidOn: r.paidAt.slice(0, 10),
+      paidOn: kinshasaDay(r.paidAt), // jour de paiement à Kinshasa
       beneficiaryAdministration: r.administration,
       taxpayerRefSuffix: '…' + refSuffix(r.taxpayerRef),
       ...(r.replaces ? { replaces: r.replaces } : {}),

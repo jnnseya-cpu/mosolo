@@ -10,6 +10,7 @@ import { VERTICALS } from './catalogue.js';
 import { ACCOUNT_TYPES, DOCUMENT_TYPES } from './calcu.js';
 import { type VerticalesService } from './service.js';
 import { withOverdue } from '../sanctions/service.js';
+import { kinshasaDate } from '../../core/clock.js';
 
 const sha256 = z.string().regex(/^[0-9a-f]{64}$/, 'empreinte SHA-256 hexadécimale attendue');
 const docSchema = z.object({ label: z.string().trim().min(1).max(160), sha256 }).strict();
@@ -125,7 +126,7 @@ export function registerVerticalRoutes(app: FastifyInstance, ctx: AppContext, sv
   });
   app.get<{ Params: { code: string } }>('/v1/verticales/plates/:code/counter', async (req) => svc.counterLookup(requireUser(req), req.params.code));
   app.get<{ Querystring: { date?: string } }>('/v1/verticales/plates-report/daily', async (req) => {
-    const date = req.query.date ?? ctx.clock.now().toISOString().slice(0, 10);
+    const date = req.query.date ?? kinshasaDate(ctx.clock.now());
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw badRequest('INVALID_DATE', 'date AAAA-MM-JJ attendue');
     return svc.dailyReport(requireUser(req), date);
   });

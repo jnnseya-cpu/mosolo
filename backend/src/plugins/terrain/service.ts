@@ -11,7 +11,7 @@ import { Money, type RoleCode } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { AuditActor } from '../../core/audit.js';
 import { isDemoMode, type User } from '../../core/auth.js';
-import { kinshasaDate } from '../../core/clock.js';
+import { kinshasaDate, kinshasaDay } from '../../core/clock.js';
 import { canonicalJson, checkChar, hmacSha256Hex, randomCode, randomSecret, safeEqualHex, sha256Hex } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, authorize } from '../../core/policy.js';
@@ -784,7 +784,7 @@ export class TerrainService {
     if (!agent.habilitation.communes.includes(m.commune)) throw forbidden('AGENT_OUT_OF_ZONE', 'Commune hors habilitation.');
     const captured = new Date(input.capturedAt).getTime();
     if (captured > this.ctx.clock.now().getTime() + 5 * 60_000) throw badRequest('CAPTURE_IN_FUTURE', 'Horodatage de capture dans le futur.');
-    if (input.capturedAt.slice(0, 10) < m.periodStart) throw unprocessable('OUTSIDE_MISSION_PERIOD', 'Capture antérieure au début de la mission.');
+    if (kinshasaDay(input.capturedAt) < m.periodStart) throw unprocessable('OUTSIDE_MISSION_PERIOD', 'Capture antérieure au début de la mission.');
     if (input.deviceId) {
       const d = this.ctx.field.devices.get(input.deviceId);
       if (!d) throw forbidden('UNKNOWN_DEVICE', 'Terminal non enrôlé.');
@@ -1072,7 +1072,7 @@ export class TerrainService {
     const agents = this.agents.find((a) => (scoped ? a.subcontractorId === scoped.id : true));
     const verifs = this.verifications.all();
     const days: Record<string, number> = {};
-    for (const f of fs) days[f.capturedAt.slice(0, 10)] = (days[f.capturedAt.slice(0, 10)] ?? 0) + 1;
+    for (const f of fs) days[kinshasaDay(f.capturedAt)] = (days[kinshasaDay(f.capturedAt)] ?? 0) + 1;
     return {
       missions: { total: ms.length, byStatus, overdue: ms.filter((m) => m.status !== 'TERMINEE' && m.status !== 'ANNULEE' && m.dueDate < this.today()).length },
       findings: {
@@ -1111,7 +1111,7 @@ export class TerrainService {
     const fs = this.findings.find((f) => f.subcontractorId === st.id);
     const validated = fs.filter((f) => f.status === 'VALIDE').length;
     const ms = this.missions.find((m) => m.subcontractorId === st.id && m.status === 'TERMINEE');
-    const onTime = ms.filter((m) => (m.completedAt ?? '').slice(0, 10) <= m.dueDate).length;
+    const onTime = ms.filter((m) => (m.completedAt ? kinshasaDay(m.completedAt) : '') <= m.dueDate).length;
     const notice = 'Calcul indicatif sur livrables vérifiés (constats validés après contrôle qualité, missions achevées dans les délais), aux prix unitaires du contrat. Jamais un pourcentage des recettes ni un montant lié à ce que paient les contribuables. Paiement sur crédit budgétaire, hors plateforme, après certification par la régie.';
     const deliverables = {
       validatedFindings: validated, missionsOnTime: onTime, missionsLate: ms.length - onTime,

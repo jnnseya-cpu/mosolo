@@ -1,12 +1,16 @@
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
+import { PersistenceRuntime } from '../src/persistence/runtime.js';
+import { MemorySnapshotStore } from '../src/persistence/store.js';
+import { createSoclePlugin } from '../src/plugins/socle/plugin.js';
+import { DEFAULT_RATE_LIMITS } from '../src/plugins/socle/rate-limit.js';
 import { ManualClock } from '../src/core/clock.js';
 import { hmacSha256Hex } from '../src/core/crypto.js';
 import { defaultSecrets, providerKeyRingsFromEnv, providerSecretsFromEnv } from '../src/context.js';
 import { NonceStore, parseProviderKeyRing, signCallback } from '../src/modules/payments/callback-signing.js';
 import { loadReceiptVerificationKeys, receiptKeyId, ReceiptService } from '../src/modules/receipts/service.js';
-import { callbackBody, callbackHeaders, createOrder, payDemoObligation, PROVIDER_SECRET, setup, signedCallback } from './helpers.js';
+import { callbackBody, callbackHeaders, demoObligationId, createOrder, payDemoObligation, PROVIDER_SECRET, setup, signedCallback } from './helpers.js';
 
 const OLD = 'ancien-secret-mm-operator-a-2025';
 const NEW = 'nouveau-secret-mm-operator-a-2026';
@@ -87,7 +91,7 @@ describe('Rappels génériques — signature v2 (horodatage et nonce signés)', 
     expect(secrets.providerKeyRings?.['mm-operator-a']?.map((k) => k.kid)).toEqual(['k2', 'k1']);
   });
 
-  it('mémoire anti-rejeu bornée : purge à l’expiration, éviction au plafond', () => {
+  it('mémoire anti-rejeu bornée : cases recyclées à l’expiration, éviction au plafond', () => {
     const store = new NonceStore(3);
     expect(store.remember('a', 100, 0).fresh).toBe(true);
     expect(store.remember('a', 100, 50).fresh).toBe(false);
@@ -95,12 +99,57 @@ describe('Rappels génériques — signature v2 (horodatage et nonce signés)', 
     store.remember('b', 1000, 150);
     store.remember('c', 1000, 150);
     expect(store.size).toBe(3);
-    const r = store.remember('d', 1000, 200); // plafond : purge des expirés (aucun) puis éviction du plus ancien
+    const r = store.remember('d', 1000, 200); // plafond, aucune case expirée : éviction de la plus ancienne
     expect(r).toEqual({ fresh: true, evicted: 1 });
     expect(store.size).toBe(3);
     expect(store.remember('d', 1000, 200).fresh).toBe(false);
-    expect(store.remember('x', 2000, 1500)).toEqual({ fresh: true, evicted: 0 }); // b, c, d expirés : purgés sans éviction
-    expect(store.size).toBe(1);
+    expect(store.remember('x', 2000, 1500)).toEqual({ fresh: true, evicted: 0 }); // case expirée recyclée, sans éviction
+    expect(store.size).toBe(3); // jamais de suppression : les cases sont réécrites
+    expect(store.remember('b', 2000, 1500).fresh).toBe(true); // b expiré : ré-admis
+    expect(store.remember('x', 2000, 1600).fresh).toBe(false);
+    expect(store.slots.all().map((x) => x.key).sort()).toEqual(['b', 'd', 'x'].sort());
+  });
+
+  it('mémoire anti-rejeu persistée : après redémarrage, un nonce encore dans sa fenêtre est refusé', async () => {
+    const store = new MemorySnapshotStore();
+    const clock = new ManualClock('2026-09-26T09:00:00.000Z');
+    const boot = async () => {
+      const rt = await PersistenceRuntime.open(store);
+      const app = buildApp({
+        clock, secrets: { auditHmacKey: 'test-audit-key', providerSecrets: { 'mm-operator-a': PROVIDER_SECRET }, commsProviderKeys: {} },
+        plugins: [createSoclePlugin({ rateLimit: { ...DEFAULT_RATE_LIMITS, enabled: false }, persistence: rt })],
+      });
+      await app.ready();
+      const req = (method: string, url: string, user?: string, body?: unknown, headers: Record<string, string> = {}) => app.inject({
+        method: method as 'GET', url,
+        headers: { ...(user ? { 'x-demo-user': user } : {}), ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...headers },
+        ...(body !== undefined ? { payload: JSON.stringify(body) } : {}),
+      });
+      return { app, rt, clock, req };
+    };
+    const env1 = await boot();
+    const order = (await createOrder(env1)).json();
+    const nonce = randomUUID();
+    const first = await signedCallback(env1, callbackBody(env1, order.paymentReference), { nonce });
+    expect(first.json().status).toBe('CONFIRME');
+    expect(env1.app.ctx.payments.nonces.size).toBe(1);
+    await env1.app.close();
+    await env1.rt.flush();
+    expect((await store.loadAll()).some((r) => r.repo === 'payments.nonces.slots')).toBe(true);
+
+    // Redémarrage 2 minutes plus tard : même nonce, autre transaction ⇒ rejeu refusé.
+    clock.advance(2 * 60_000);
+    const env2 = await boot();
+    expect(env2.app.ctx.payments.nonces.size).toBe(1);
+    const replay = await signedCallback(env2, callbackBody(env2, order.paymentReference), { nonce, timestamp: new Date(clock.now().getTime() - 60_000).toISOString() });
+    expect(replay.statusCode).toBe(409);
+    expect(replay.json().code).toBe('NONCE_REPLAYED');
+    // Un nouveau nonce passe (rejeu de transaction ⇒ DOUBLON/idempotent, jamais NONCE_REPLAYED).
+    const fresh = await signedCallback(env2, callbackBody(env2, order.paymentReference));
+    expect(fresh.statusCode).toBe(200);
+    expect(env2.app.ctx.payments.byObligation(demoObligationId(env2)).length).toBe(1);
+    await env2.app.close();
+    await env2.rt.flush();
   });
 
   it('signCallback : chaîne canonique séparée par des retours à la ligne (pas d’ambiguïté horodatage/nonce)', () => {

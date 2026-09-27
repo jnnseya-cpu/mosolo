@@ -7,6 +7,7 @@ import { currencySchema, decimalString, isoDateString, parse } from '../../core/
 import { authorize } from '../../core/policy.js';
 import { recalculationsFor } from './recalculation.js';
 import type { RuleInput } from './service.js';
+import { kinshasaDay } from '../../core/clock.js';
 
 const REVENUE_CATEGORIES = [
   'IMPOT_PROVINCIAL', 'INTERET_COMMUN', 'PROVINCIAL_SPECIFIQUE', 'RECETTE_ETD', 'RECETTE_CENTRALE', 'PARTAGEE',
@@ -117,10 +118,11 @@ export function registerRuleRoutes(app: FastifyInstance, ctx: AppContext): void 
     authorize(user, 'rules:abrogate');
     const input = parse(abrogateSchema, req.body);
     const rule = ctx.rules.abrogate(user, req.params.id, input);
-    // Abrogation à date passée : les obligations émises depuis sont signalées pour examen (jamais annulées d'office).
+    // Abrogation à date passée : les obligations émises depuis (jour d'émission à Kinshasa) sont signalées pour examen
+    // (jamais annulées d'office).
     const obligationsToReview = ctx.assessment.obligations
-      .find((o) => o.ruleId === rule.id && o.createdAt.slice(0, 10) >= input.date && o.status !== 'ANNULEE')
-      .map((o) => ({ id: o.id, status: o.status, issuedOn: o.createdAt.slice(0, 10), amount: o.amount }));
+      .find((o) => o.ruleId === rule.id && kinshasaDay(o.createdAt) >= input.date && o.status !== 'ANNULEE')
+      .map((o) => ({ id: o.id, status: o.status, issuedOn: kinshasaDay(o.createdAt), amount: o.amount }));
     return { rule, obligationsToReview };
   });
 
