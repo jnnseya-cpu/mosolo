@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **696 routes** dans 36 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **725 routes** dans 37 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -10,6 +10,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **696 routes** dans 36
 | extension fiscal | 44 |
 | extension ia | 28 |
 | extension integrite | 58 |
+| extension opportunites | 29 |
 | extension parking | 64 |
 | extension pilotage | 24 |
 | extension preuves | 14 |
@@ -311,6 +312,40 @@ Généré depuis le code source (`tools/gen_routes.py`) : **696 routes** dans 36
 | POST | `/v1/public/integrite/reports/track` |
 | POST | `/v1/public/integrite/reports/track/complement` |
 | GET | `/v1/public/integrite/summary` |
+
+## Extension opportunites
+
+| Méthode | Chemin |
+|---|---|
+| GET | `/v1/opportunites` |
+| POST | `/v1/opportunites` |
+| GET | `/v1/opportunites-leviers` |
+| GET | `/v1/opportunites-maximisation/cas-usage` |
+| GET | `/v1/opportunites-maximisation/classement` |
+| POST | `/v1/opportunites-maximisation/simulations` |
+| GET | `/v1/opportunites/:id` |
+| POST | `/v1/opportunites/:id/decision` |
+| POST | `/v1/opportunites/:id/etapes/:n` |
+| PUT | `/v1/opportunites/:id/grille/:field` |
+| POST | `/v1/opportunites/:id/hypotheses` |
+| PUT | `/v1/opportunites/:id/maximisation/:key` |
+| GET | `/v1/opportunites/decouverte/champ` |
+| GET | `/v1/opportunites/decouverte/signaux-ia` |
+| GET | `/v1/opportunites/pipeline` |
+| GET | `/v1/recoupement/blocages` |
+| POST | `/v1/recoupement/blocages/:id/reexamen` |
+| GET | `/v1/recoupement/liste-travail` |
+| POST | `/v1/recoupement/liste-travail/:id/examen` |
+| POST | `/v1/recoupement/liste-travail/:id/mission` |
+| GET | `/v1/recoupement/parametres` |
+| PUT | `/v1/recoupement/parametres` |
+| GET | `/v1/recoupement/plaques/:plaque` |
+| GET | `/v1/recoupement/sources` |
+| POST | `/v1/recoupement/sources` |
+| POST | `/v1/recoupement/sources/:id/conformite` |
+| POST | `/v1/recoupement/sources/:id/lots` |
+| POST | `/v1/recoupement/sources/:id/protocole` |
+| POST | `/v1/recoupement/sources/:id/suspendre` |
 
 ## Extension parking
 
