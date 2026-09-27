@@ -168,6 +168,11 @@ export const planificationPlugin = definePlugin<PlanificationService>({
     app.get('/v1/pilotage/disponibilite', async (req) => svc.availability(requireUser(req)));
     // Projets publics et emploi des fonds (§ 27.2–27.3)
     app.get('/v1/pilotage/projets', async (req) => svc.listProjects(requireUser(req)));
+    // Module 48 : enveloppe d'investissement du budget voté (capacité disponible), certifiée à deux personnes.
+    app.post('/v1/pilotage/projets/enveloppes', async (req, reply) => reply.code(201).send(svc.importEnvelope(requireUser(req), parse(z.object({
+      period: z.string().regex(/^\d{4}(-(0[1-9]|1[0-2])|-T[1-4])?$/), amount: moneySchema, actReference: z.string().trim().min(3).max(160), label: z.string().trim().min(3).max(200),
+    }).strict(), req.body))));
+    app.post<{ Params: { id: string } }>('/v1/pilotage/projets/enveloppes/:id/certification', async (req) => svc.certifyEnvelope(requireUser(req), req.params.id, parse(z.object({ approve: z.boolean(), motif: z.string().trim().min(10).max(2000) }).strict(), req.body)));
     app.post('/v1/pilotage/projets', async (req, reply) => reply.code(201).send(svc.createProject(requireUser(req), parse(projectSchema, req.body) as Parameters<PlanificationService['createProject']>[1])));
     app.post('/v1/pilotage/projets/recommandations', async (req, reply) => {
       const b = parse(recommendSchema, req.body);

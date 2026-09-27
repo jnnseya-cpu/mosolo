@@ -484,6 +484,24 @@ export class TerrainService {
     return this.setAgentStatus(u, agent, 'SUSPENDU', this.reason(reason));
   }
 
+  /**
+   * Fin d'affectation (module 51 « révoquer automatiquement à la fin d'une affectation ») : tout agent HABILITÉ dont
+   * l'habilitation est échue (heure du serveur) est révoqué — badge, terminaux, missions rendues — par l'échéancier.
+   * Mesure de sécurité liée à l'échéance, jamais une sanction : une nouvelle habilitation reste possible.
+   */
+  expireAssignments(): string[] {
+    const today = this.today();
+    const system = { kind: 'user' as const, id: 'systeme-echeancier', name: 'Échéancier des affectations', roles: [], entity: 'PLATEFORME' };
+    const out: string[] = [];
+    for (const a of this.agents.find((x) => x.status === 'HABILITE' && !!x.habilitation && x.habilitation.validUntil < today)) {
+      this.setAgentStatus(system, a, 'REVOQUE', `Fin d’affectation : habilitation échue le ${a.habilitation!.validUntil}`);
+      const target = this.ctx.users.get(a.id);
+      if (target) target.territory = [];
+      out.push(a.id);
+    }
+    return out;
+  }
+
   revokeAgent(u: User, agentId: string, reason: string): FieldAgent {
     authorize(u, A.agentSuspend);
     const agent = this.agents.get(agentId);

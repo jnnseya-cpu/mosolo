@@ -1,6 +1,7 @@
 /**
  * Construction de l'application Fastify. `buildApp({ clock, secrets })` : horloge et secrets injectables (tests).
  */
+import { loggerOptions } from './plugins/plateforme/supervision.js';
 import { staticSiteFromEnv } from './core/static-site.js';
 import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -89,7 +90,7 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
   const origin = corsOrigins(process.env);
   // TLS mutuel direct (§ 30.1) : certificat client demandé si MOSOLO_TLS_CERT_FILE / MOSOLO_TLS_KEY_FILE sont fournis.
   const https = httpsOptionsFromEnv(process.env);
-  const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 1_048_576, trustProxy: trustProxyFromEnv(process.env), ...(https ? { https } : {}) }) as unknown as FastifyInstance;
+  const app = Fastify({ logger: opts.logger ? loggerOptions() : false, bodyLimit: 1_048_576, trustProxy: trustProxyFromEnv(process.env), ...(https ? { https } : {}) }) as unknown as FastifyInstance;
   // Corrélation (X-Request-Id) et contexte d'audit : PREMIER crochet, avant l'authentification.
   installRequestCorrelation(app);
   const ctx = createContext(opts);

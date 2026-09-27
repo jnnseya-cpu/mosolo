@@ -17,7 +17,7 @@ export interface VersionContenu {
   lecons?: string[]; epreuve?: Question[]; controlePratique?: string; statut: StatutVersion; auteur: string; creeLe: string;
   proposition?: { par: string; le: string }; decision?: { par: string; le: string; approuve: boolean; motif: string };
 }
-export interface Contenu { id: string; type: 'FICHE' | 'MODULE'; cle: string; publics: Profil[]; versions: VersionContenu[]; demo?: boolean }
+export interface Contenu { id: string; type: 'FICHE' | 'MODULE' | 'PROCEDURE'; cle: string; publics: Profil[]; versions: VersionContenu[]; demo?: boolean }
 
 /** Vue apprenant d'une version publiée (jamais la bonne réponse). */
 export interface ContenuVue extends Omit<VersionContenu, 'epreuve'> {

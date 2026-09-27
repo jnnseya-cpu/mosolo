@@ -1,20 +1,23 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1073 routes** dans 43 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
-| extension acces | 68 |
-| extension apprentissage | 16 |
+| extension acces | 74 |
+| extension apprentissage | 17 |
 | extension canaux | 46 |
 | extension chaine | 3 |
-| extension fiscal | 80 |
-| extension ia | 39 |
+| extension decision | 30 |
+| extension equipements | 11 |
+| extension fiscal | 82 |
+| extension ia | 40 |
 | extension integrite | 70 |
 | extension juridique | 11 |
 | extension opportunites | 29 |
 | extension parking | 64 |
-| extension pilotage | 67 |
+| extension pilotage | 69 |
+| extension plateforme | 23 |
 | extension preuves | 14 |
 | extension publicite | 52 |
 | extension rakapay | 41 |
@@ -25,7 +28,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | extension terrain | 50 |
 | extension titres | 20 |
 | extension tresor | 39 |
-| extension verticales | 102 |
+| extension verticales | 107 |
 | module ai | 3 |
 | module alerts | 1 |
 | module appeals | 9 |
@@ -49,6 +52,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 
 | Méthode | Chemin |
 |---|---|
+| POST | `/v1/acces/abac/explication` |
 | GET | `/v1/acces/accounts` |
 | POST | `/v1/acces/accounts/:id/revoke` |
 | POST | `/v1/acces/accounts/me/secrets` |
@@ -64,7 +68,12 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | POST | `/v1/acces/consultations` |
 | GET | `/v1/acces/consultations/:id/dossier` |
 | POST | `/v1/acces/consultations/:id/review` |
+| GET | `/v1/acces/delegations` |
+| POST | `/v1/acces/delegations` |
+| POST | `/v1/acces/delegations/:id/decision` |
+| POST | `/v1/acces/delegations/:id/fin` |
 | GET | `/v1/acces/duplicates` |
+| POST | `/v1/acces/echeancier` |
 | GET | `/v1/acces/elevations` |
 | POST | `/v1/acces/elevations` |
 | POST | `/v1/acces/elevations/:id/decision` |
@@ -138,6 +147,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | GET | `/v1/apprentissage/indicateurs` |
 | GET | `/v1/apprentissage/mes-certificats` |
 | POST | `/v1/apprentissage/modules/:id/epreuve` |
+| GET | `/v1/apprentissage/procedures` |
 
 ## Extension canaux
 
@@ -198,6 +208,57 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | GET | `/v1/objects/:id/sept-questions` |
 | GET | `/v1/obligations/:id/chaine` |
 
+## Extension decision
+
+| Méthode | Chemin |
+|---|---|
+| GET | `/v1/decision/audit/corrections/:ref` |
+| GET | `/v1/decision/audit/missions` |
+| POST | `/v1/decision/audit/missions` |
+| POST | `/v1/decision/audit/missions/:id/cloture` |
+| POST | `/v1/decision/audit/missions/:id/constats` |
+| POST | `/v1/decision/audit/missions/:id/constats/:findingId/recommandations` |
+| POST | `/v1/decision/audit/missions/:id/echantillons` |
+| POST | `/v1/decision/audit/missions/:id/scelle` |
+| POST | `/v1/decision/audit/recommandations/:id/suivi` |
+| GET | `/v1/decision/audit/scelles` |
+| GET | `/v1/decision/audit/scelles/:id` |
+| POST | `/v1/decision/audit/scelles/:id/remise` |
+| GET | `/v1/decision/commandement` |
+| POST | `/v1/decision/commandement/decisions` |
+| GET | `/v1/decision/commandement/rapport` |
+| GET | `/v1/decision/ministere` |
+| POST | `/v1/decision/ministere/versements` |
+| POST | `/v1/decision/ministere/versements/:id/decision` |
+| GET | `/v1/decision/ministeres` |
+| GET | `/v1/decision/previsions` |
+| POST | `/v1/decision/previsions` |
+| GET | `/v1/decision/previsions/:id` |
+| GET | `/v1/decision/previsions/:id/ecart` |
+| GET | `/v1/decision/regie-fiscale` |
+| GET | `/v1/decision/regie-taxes` |
+| GET | `/v1/decision/salle-controle` |
+| POST | `/v1/decision/salle-controle/escalades` |
+| POST | `/v1/decision/salle-controle/escalades/:id/prise-en-charge` |
+| GET | `/v1/decision/transparence` |
+| GET | `/v1/public/transparence/repartition/:period` |
+
+## Extension equipements
+
+| Méthode | Chemin |
+|---|---|
+| GET | `/v1/equipements` |
+| POST | `/v1/equipements/echeancier` |
+| POST | `/v1/equipements/politiques` |
+| POST | `/v1/equipements/terminaux` |
+| POST | `/v1/equipements/terminaux/:id/attestation` |
+| POST | `/v1/equipements/terminaux/:id/attestation/defi` |
+| POST | `/v1/equipements/terminaux/:id/effacement` |
+| POST | `/v1/equipements/terminaux/:id/levee-quarantaine` |
+| POST | `/v1/equipements/terminaux/:id/perte` |
+| POST | `/v1/equipements/terminaux/:id/revocation` |
+| POST | `/v1/equipements/terminaux/:id/signalement` |
+
 ## Extension fiscal
 
 | Méthode | Chemin |
@@ -246,6 +307,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | POST | `/v1/fiscal/exemptions/:id/instruction` |
 | POST | `/v1/fiscal/exemptions/:id/legal-visa` |
 | POST | `/v1/fiscal/exemptions/:id/revoke` |
+| POST | `/v1/fiscal/exemptions/rappels` |
+| GET | `/v1/fiscal/exemptions/registre` |
 | GET | `/v1/fiscal/geo-units` |
 | GET | `/v1/fiscal/imports` |
 | POST | `/v1/fiscal/imports` |
@@ -321,6 +384,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | POST | `/v1/ia/modeles/versions/:id/mise-en-service/decision` |
 | POST | `/v1/ia/modeles/versions/:id/retour-arriere` |
 | POST | `/v1/ia/modeles/versions/:id/tests-biais` |
+| GET | `/v1/ia/prompts` |
 | GET | `/v1/ia/recommendations/:id` |
 | POST | `/v1/ia/recommendations/:id/actions/:actionId/undo` |
 | POST | `/v1/ia/recommendations/:id/decide` |
@@ -566,6 +630,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | POST | `/v1/pilotage/projets` |
 | POST | `/v1/pilotage/projets/:id/avancement` |
 | POST | `/v1/pilotage/projets/:id/financement` |
+| POST | `/v1/pilotage/projets/enveloppes` |
+| POST | `/v1/pilotage/projets/enveloppes/:id/certification` |
 | POST | `/v1/pilotage/projets/recommandations` |
 | POST | `/v1/pilotage/projets/scenarios/:id/decision` |
 | GET | `/v1/pilotage/ranv` |
@@ -592,6 +658,34 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | GET | `/v1/public/transparency/:period` |
 | POST | `/v1/satisfaction` |
 | GET | `/v1/tableaux/:profil` |
+
+## Extension plateforme
+
+| Méthode | Chemin |
+|---|---|
+| POST | `/v1/oauth/token` |
+| GET | `/v1/partenaires/api/v1` |
+| POST | `/v1/partenaires/api/v1/abonnements` |
+| GET | `/v1/partenaires/api/v1/paiements/:reference` |
+| GET | `/v1/partenaires/api/v1/quittances/:numero` |
+| GET | `/v1/partenaires/api/v1/statistiques` |
+| GET | `/v1/plateforme/administration` |
+| POST | `/v1/plateforme/astreintes` |
+| POST | `/v1/plateforme/changements` |
+| POST | `/v1/plateforme/changements/:id/avis` |
+| POST | `/v1/plateforme/changements/:id/execution` |
+| POST | `/v1/plateforme/incidents` |
+| POST | `/v1/plateforme/incidents/:id/etapes` |
+| GET | `/v1/plateforme/metrics` |
+| GET | `/v1/plateforme/partenaires` |
+| POST | `/v1/plateforme/partenaires/clients` |
+| POST | `/v1/plateforme/partenaires/clients/:id/revocation` |
+| POST | `/v1/plateforme/partenaires/contrats` |
+| POST | `/v1/plateforme/partenaires/contrats/:id/decision` |
+| POST | `/v1/plateforme/partenaires/contrats/:id/suspension` |
+| GET | `/v1/plateforme/supervision` |
+| POST | `/v1/plateforme/supervision/alertes` |
+| POST | `/v1/plateforme/supervision/phase` |
 
 ## Extension preuves
 
@@ -963,6 +1057,11 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 
 | Méthode | Chemin |
 |---|---|
+| GET | `/v1/grands-redevables` |
+| POST | `/v1/grands-redevables/:taxpayerId/conventions` |
+| POST | `/v1/grands-redevables/:taxpayerId/gestionnaire` |
+| POST | `/v1/grands-redevables/:taxpayerId/journal` |
+| POST | `/v1/grands-redevables/conventions/:id/decision` |
 | GET | `/v1/public/verticales/avia/ifa/cle-publique` |
 | POST | `/v1/public/verticales/avia/ifa/verify` |
 | GET | `/v1/public/verticales/certificates/:code` |

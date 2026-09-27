@@ -30,6 +30,11 @@ import { soclePlugin } from './socle/plugin.js';
 import { chainePlugin } from './chaine/plugin.js';
 import { juridiquePlugin } from './juridique/plugin.js';
 import { integriteDetecteursPlugin } from './integrite/detecteurs/plugin.js';
+import { decisionPlugin } from './decision/plugin.js';
+import { plateformePlugin } from './plateforme/plugin.js';
+import { accesDelegationsPlugin } from './acces/delegations-plugin.js';
+import { equipementsPlugin } from './equipements/plugin.js';
+import { grandsRedevablesPlugin } from './verticales/grands-redevables-plugin.js';
 
 /**
  * Ordre : `acces` en tête (garde des revendications, mandats), puis `fiscal` (il branche les exonérations sur la liquidation), `titres` avant `rakapay`,
@@ -67,5 +72,15 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   chainePlugin,
   juridiquePlugin,
   integriteDetecteursPlugin,
+  // Pilotage et décision (modules 41 à 47) : lit le pilotage, la planification, le Trésor et l'intégrité.
+  decisionPlugin,
+  // Accès et délégations (module 51) : délégations, ABAC expliqué, détections, révocation à la fin d'une affectation.
+  accesDelegationsPlugin,
+  // Grands redevables (module 56) : portefeuille, gestionnaire dédié et rotation, conventions, journal des décisions.
+  grandsRedevablesPlugin,
+  // Gestion des équipements terrain (module 58) : MDM, attestation, expiration des données, appareil modifié.
+  equipementsPlugin,
+  // Plateforme (modules 52, 53, 55) : API partenaires, administration, supervision — avant le socle (limitation de débit).
+  plateformePlugin,
   soclePlugin,
 ];

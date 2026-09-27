@@ -288,6 +288,20 @@ export function registerFiscalRoutes(app: FastifyInstance, ctx: AppContext, svc:
     };
   });
 
+  // Registre des exonérations (module 57) : indicateurs, rappels d'échéance et de révision, alertes de concentration.
+  app.get('/v1/fiscal/exemptions/registre', async (req) => {
+    authorize(requireUser(req), 'fiscal:exemption.queue');
+    return {
+      indicators: svc.exemptions.indicators(), alerts: svc.exemptions.concentrationAlerts(),
+      reminders: svc.exemptions.reminders.all().sort((a, b) => (a.at < b.at ? 1 : -1)),
+      upcoming: svc.exemptions.exemptions.find((x) => x.status === 'APPROUVEE').map((x) => ({ id: x.id, kind: x.kind, effectiveStatus: svc.exemptions.effectiveStatus(x), validTo: x.validTo ?? null, reviewDate: svc.exemptions.reviewDate(x) })).sort((a, b) => a.reviewDate.localeCompare(b.reviewDate)),
+      params: { reminderDays: 30, reviewMonths: 12, status: 'PAR_DEFAUT — à confirmer par le maître d’ouvrage' },
+    };
+  });
+  app.post('/v1/fiscal/exemptions/rappels', async (req) => {
+    authorize(requireUser(req), 'fiscal:exemption.revoke');
+    return { created: svc.exemptions.runReminders() };
+  });
   app.get<{ Params: { id: string } }>('/v1/fiscal/exemptions/:id', async (req) => {
     const user = requireUser(req);
     const x = svc.exemptions.get(req.params.id);

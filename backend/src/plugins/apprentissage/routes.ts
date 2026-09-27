@@ -17,7 +17,7 @@ const contenu = z.object({
   titre: texte(200), corps: texte(4000), lingala: z.object({ titre: texte(200), corps: texte(4000) }).strict().optional(),
   lecons: z.array(cle).max(20).optional(), epreuve: z.array(question).max(30).optional(), controlePratique: texte(1000).optional(),
 }).strict();
-const creation = contenu.extend({ type: z.enum(['FICHE', 'MODULE']), cle, publics: z.array(z.enum(PROFILS)).min(1) }).strict();
+const creation = contenu.extend({ type: z.enum(['FICHE', 'MODULE', 'PROCEDURE']), cle, publics: z.array(z.enum(PROFILS)).min(1) }).strict();
 const profilCertifie = z.enum(PROFILS_CERTIFIES as [ProfilCertifie, ...ProfilCertifie[]]);
 const evaluation = z.object({
   userId: z.string().trim().min(1).max(100), profil: profilCertifie, resultat: z.enum(['CONFORME', 'NON_CONFORME']).optional(),
@@ -30,6 +30,8 @@ export function registerApprentissageRoutes(app: FastifyInstance, svc: Apprentis
   // Aide contextuelle publiée : lecture libre (aucune donnée personnelle), utilisable sur les écrans publics.
   app.get<{ Params: { cle: string } }>('/v1/apprentissage/aide/:cle', async (req) => svc.aide(parse(cle, req.params.cle)));
   app.get('/v1/apprentissage/espace', async (req) => svc.espace(requireUser(req)));
+  // Base de procédures versionnée (module 50) : version publiée, historique des versions, décisions de publication.
+  app.get('/v1/apprentissage/procedures', async (req) => svc.procedures(requireUser(req)));
   app.get('/v1/apprentissage/mes-certificats', async (req) => svc.mesCertificats(requireUser(req)));
   app.post<P>('/v1/apprentissage/modules/:id/epreuve', async (req) =>
     svc.soumettreEpreuve(requireUser(req), req.params.id, parse(z.object({ reponses: z.record(z.string(), z.number().int().min(0).max(5)) }).strict(), req.body).reponses));
