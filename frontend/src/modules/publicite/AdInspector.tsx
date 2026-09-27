@@ -14,8 +14,10 @@ import { DataTable } from '../../components/DataTable';
 import { useApi } from '../../hooks/useApi';
 import { OverduePenalties, type OverduePenaltiesData } from '../../components/OverduePenalties';
 import { api } from '../../lib/api';
-import { ErrorLine, GpsField, hasRole, MiniMap, parsePosition, PhotoHashes, ReasonForm, useAction } from '../parking/shared';
+import { ErrorLine, GpsField, hasRole, MiniMap, parsePosition, ReasonForm, useAction } from '../parking/shared';
+import { EvidencePhotos } from '../parking/EvidencePhotos';
 import { AD_TYPE, CASE_STATUS, DEVICE_STATUS, FINDING, LIGHTING, PLACEMENT, RIGHTS, VEHICLE_KIND, type Case, type Device, type DeviceStatus } from './types';
+import { AdPhotoUpload, adPhotoView, type PhotoPosition, type UploadedPhoto } from './AdPhotoUpload';
 import { AdAround, AdVehicle, type ConstatPreset } from './AdTerrain';
 import '../parking/parking.css';
 
@@ -73,12 +75,13 @@ export default function AdInspector() {
 const DEFAULT_SIZE: Record<string, [string, string]> = { PANNEAU: ['4.00', '3.00'], ENSEIGNE: ['2.00', '1.00'], CHEVALET: ['0.60', '1.00'], HABILLAGE_VEHICULE: ['2.00', '1.00'], BANDEROLE: ['5.00', '1.00'] };
 
 function Control({ onDone, preset }: { onDone: () => void; preset?: ConstatPreset | null }) {
-  const { fmtDate } = useApp();
+  const { fmtDate, user } = useApp();
   const [q, setQ] = useState('');
   const [lk, setLk] = useState<Lookup | null>(null);
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [finding, setFinding] = useState(preset ? 'NON_DECLARE' : 'CONFORME');
-  const [photos, setPhotos] = useState<string[]>([]);
+  // Photos déjà versées au serveur (le constat les cite par empreinte).
+  const [photos, setPhotos] = useState<UploadedPhoto[]>([]);
   // Aucune position par défaut : un constat ne doit jamais partir avec un point fictif.
   const [lat, setLat] = useState('');
   const [lon, setLon] = useState('');
@@ -109,17 +112,19 @@ function Control({ onDone, preset }: { onDone: () => void; preset?: ConstatPrese
     setDone(null);
     void search.run(() => api<Lookup>(`/v1/publicite/lookup?q=${encodeURIComponent(q)}`), (r) => { setLk(r); setDeviceId(r.matches[0]?.id ?? null); setFinding(r.matches.length ? 'CONFORME' : 'NON_DECLARE'); });
   }
+  const pos = parsePosition(lat, lon);
+  const photoPos: PhotoPosition | null = pos ? { ...pos, ...(acc !== undefined ? { accuracy: acc } : {}), source: gpsSource ?? 'MANUEL' } : null;
   function submit(e: FormEvent) {
     e.preventDefault();
     if (photos.length === 0) { act.setError('Au moins une photographie est obligatoire.'); return; }
     const pos = parsePosition(lat, lon);
     if (!pos) { act.setError('Position obligatoire : localisez-vous ou placez le point sur la carte.'); return; }
     const body = {
-      finding, photos, lat: pos.lat, lon: pos.lon, observations: obs || 'Constat sur place.',
+      finding, photos: photos.map((p) => p.sha256), lat: pos.lat, lon: pos.lon, observations: obs || 'Constat sur place.',
       ...(acc !== undefined ? { gpsAccuracyM: acc } : {}), gpsSource: gpsSource ?? 'MANUEL', ...(q.trim() ? { ocrText: q.trim() } : {}), ...(operator.trim() ? { presumedOperator: operator.trim() } : {}),
       ...(deviceId ? { deviceId } : { newDevice: ndBody() }),
     };
-    void act.run(() => api<InspectionDone>('/v1/publicite/inspections', { method: 'POST', body }), (r) => { setDone(r); setPhotos([]); setObs(''); onDone(); });
+    void act.run(() => api<InspectionDone>('/v1/publicite/inspections', { method: 'POST', body }), (r) => { setDone(r); photos.forEach((p) => URL.revokeObjectURL(p.preview)); setPhotos([]); setObs(''); onDone(); });
   }
   return (
     <div className="pk-grid pk-grid-2">
@@ -189,8 +194,8 @@ function Control({ onDone, preset }: { onDone: () => void; preset?: ConstatPrese
                 <label className="field"><span className="label">Exploitant présumé (mention visible)</span><input value={operator} onChange={(e) => setOperator(e.target.value)} /></label>
               </div>
             )}
-            <PhotoHashes value={photos} onChange={setPhotos} />
             <GpsField lat={lat} lon={lon} onChange={(a, b, c, s) => { setLat(a); setLon(b); setAcc(c); setGpsSource(s); }} />
+            <AdPhotoUpload value={photos} onChange={setPhotos} position={photoPos} inspector={user ? { id: user.id, name: user.name } : null} />
             <label className="field"><span className="label">Observations</span><textarea rows={3} value={obs} onChange={(e) => setObs(e.target.value)} /></label>
             <ErrorLine error={act.error} />
             <button type="submit" className="btn btn-primary" disabled={act.busy}>{act.busy ? 'Envoi…' : 'Enregistrer le constat'}</button>
@@ -248,7 +253,12 @@ function CaseCard({ c, children }: { c: Case; children?: ReactNode }) {
           <span>{c.inspection.observations}</span>
           {c.inspection.presumedOperator && <span>Exploitant présumé : {c.inspection.presumedOperator}</span>}
           {c.inspection.ocrMatches.length > 0 && <span>Lecture optique (proposition) : {c.inspection.ocrMatches.join(', ')}</span>}
+          {c.inspection.weakEvidence && <span className="ev-warn"><Icon name="alert" size={12} /> Preuve faible : {c.inspection.serverPhotos?.length ? 'position imprécise ou ajustée à la main' : 'aucune photo conservée au serveur (empreintes déclarées seulement)'}</span>}
         </div>
+      )}
+      {c.inspection?.serverPhotos && c.inspection.serverPhotos.length > 0 && (
+        <EvidencePhotos photos={c.inspection.serverPhotos.map(adPhotoView)}
+          caption={`${c.inspection.serverPhotos.length} photo(s) conservée(s) au serveur sur ${c.inspection.photos.length} citée(s) · inspecteur ${c.inspection.inspectorId}`} />
       )}
       {c.verification && <p className="small"><strong>Vérification ({c.verification.by}) :</strong> {c.verification.note}</p>}
       {c.decision && <p className="small"><strong>Décision ({c.decision.by}) :</strong> {c.decision.reason} — {c.decision.effect}</p>}

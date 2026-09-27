@@ -21,10 +21,12 @@ import {
 import { PlateScanner } from '../../components/PlateScanner';
 import { EvidenceCamera } from './EvidenceCamera';
 import { EvidencePhotos } from './EvidencePhotos';
+import { GpsQualityLine } from '../../components/GpsQuality';
+import { usePreciseLocation, withPresence, type PreciseFix } from '../../lib/geo';
 import './parking.css';
 
 interface PenaltyLine { module: string; reference: string; nature: string; status: string; createdAt: string; decidedAt: string | null; amount: MoneyJSON | null; payment: string; unpaid: boolean; overdueDays: number | null; zone?: string; obligationId?: string | null }
-interface ControlResult { checkId: string; plate: string; zone: { id: string; code: string; name: string } | null; light: Light; title: string | null; validUntil: string | null; checkedAt: string; guidance: string; penalties?: PenaltyLine[]; penaltiesUnpaid?: number; penalitesImpayees?: OverduePenaltiesData }
+interface ControlResult { checkId: string; plate: string; zone: { id: string; code: string; name: string } | null; light: Light; title: string | null; validUntil: string | null; checkedAt: string; guidance: string; penalties?: PenaltyLine[]; penaltiesUnpaid?: number; penalitesImpayees?: OverduePenaltiesData; presenceVerified?: boolean }
 interface Evidence { photoIds: string[]; place: string; lat: number; lon: number; accuracy: number | null }
 
 export default function ParkingControl() {
@@ -55,6 +57,9 @@ export default function ParkingControl() {
   );
 }
 
+/** Âge maximal d'un relevé joint à un contrôle : au-delà, l'agent a pu se déplacer. */
+const FIX_MAX_AGE_MS = 2 * 60_000;
+
 function ControlPanel({ zones, loading, onRecorded }: { zones: Zone[]; loading: boolean; onRecorded: () => void }) {
   const { fmtDate, user } = useApp();
   const [zoneId, setZoneId] = useState('');
@@ -65,9 +70,16 @@ function ControlPanel({ zones, loading, onRecorded }: { zones: Zone[]; loading: 
   const [evidence, setEvidence] = useState<Evidence | null>(null);
   const act = useAction();
   const zone = zones.find((z) => z.id === (zoneId || zones[0]?.id));
+  // Présence de l'agent : relevé GPS précis joint au contrôle (précision ≤ 100 m, à 150 m au plus de la zone,
+  // vérifié par le serveur). Sans relevé récent, le contrôle reste valable mais n'ouvre aucune commission.
+  const gps = usePreciseLocation({ targetM: 20, maxWaitMs: 20_000 });
   function run(p: string) {
     setStep('result'); setEvidence(null);
-    void act.run(() => api<ControlResult>(`/v1/parking/control/${encodeURIComponent(p.trim())}${zone ? `?zoneId=${encodeURIComponent(zone.id)}` : ''}`), (r) => {
+    const fix: PreciseFix | null = gps.fix && Date.now() - Date.parse(gps.fix.at) <= FIX_MAX_AGE_MS ? gps.fix : null;
+    const path = withPresence(`/v1/parking/control/${encodeURIComponent(p.trim())}${zone ? `?zoneId=${encodeURIComponent(zone.id)}` : ''}`, fix);
+    // Nouveau relevé pour le contrôle suivant (l'agent se déplace entre deux véhicules).
+    if (gps.status !== 'searching') gps.start();
+    void act.run(() => api<ControlResult>(path), (r) => {
       setResult(r);
       // Plaque ROUGE : la caméra de preuve géolocalisée s'ouvre d'elle-même.
       if (r.light === 'ROUGE' && zone) setStep('camera');
@@ -88,6 +100,12 @@ function ControlPanel({ zones, loading, onRecorded }: { zones: Zone[]; loading: 
             <button type="submit" className="btn btn-primary" disabled={act.busy}>Contrôler</button></div>
           <span className="hint">Essayez KN-0001-DM (titre valide) ou KN-0777-DM (aucun titre) — plaques fictives.</span></label>
         {!scan && <button type="button" className="btn btn-secondary" onClick={() => setScan(true)}><Icon name="camera" size={18} /> Scanner la plaque (caméra)</button>}
+        <div className="field">
+          <span className="label">Position de l’agent (présence)</span>
+          <GpsQualityLine fix={gps.fix} status={gps.status} targetM={gps.targetM} />
+          {gps.status !== 'searching' && <button type="button" className="btn btn-ghost btn-sm" onClick={gps.start}><Icon name="gps" size={16} /> {gps.fix ? 'Actualiser la position' : 'Localiser l’appareil'}</button>}
+          <span className="hint">Jointe à chaque contrôle : un contrôle rouge n’ouvre une commission que si votre présence sur la zone est vérifiée.</span>
+        </div>
       </form>
       {scan && <PlateScanner onConfirm={(p) => { setScan(false); setPlate(p); run(p); }} onClose={() => setScan(false)} />}
       <ErrorLine error={act.error} />
@@ -101,6 +119,7 @@ function ControlPanel({ zones, loading, onRecorded }: { zones: Zone[]; loading: 
             <p className="small">{result.guidance}</p>
             <p className="small muted">Contrôle {result.checkId} · {fmtDate(result.checkedAt, true)}</p>
           </div>
+          {result.presenceVerified === false && <p className="notice small" role="note"><Icon name="gps" size={14} /> Position non vérifiée : contrôle sans commission.</p>}
           <Penalties items={result.penalties ?? []} />
           {/* Pénalités des autres modules impayées depuis plus de 30 jours (visibles après ce contrôle). */}
           <OverduePenalties data={result.penalitesImpayees} />

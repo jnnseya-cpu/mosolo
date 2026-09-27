@@ -24,7 +24,15 @@ export interface AuthRequest {
   pieces: { kind: string; name: string; sha256: string; addedAt: string }[]; history: { at: string; by: string; action: string; note: string }[];
   instruction?: { by: string; proposal: string; analysis: string }; decision?: { by: string; outcome: string; reason: string; at: string };
   liquidation?: { status: 'EMISE' | 'ACTE_REQUIS'; obligationId: string | null; note: string };
+  /** Liquidation différée (barème devenu actif) : proposition d'un instructeur, approbation par une autre personne. */
+  liquidationProposal?: { by: string; at: string; note: string; ruleCode: string; ruleVersion: number };
   device: { id: string; reference: string; type: string; commune: string; surfaceM2: string; faces: number } | null; obligation: Notice | null; submittedAt: string;
+}
+
+/** Photo de preuve d'une inspection, versée au serveur avant le constat (sans l'image : lue par `url`). */
+export interface AdPhotoMeta {
+  id: string; sha256: string; mime: 'image/jpeg'; sizeBytes: number; lat: number; lon: number; accuracyM: number | null; gpsSource: 'GPS' | 'MANUEL' | 'ZONE';
+  stampedAt: string; receivedAt: string; clockSkewSeconds: number; agentId: string; inspectionId: string | null; url: string; clockWarning: boolean; lowAccuracy: boolean;
 }
 
 export interface Case {
@@ -32,7 +40,13 @@ export interface Case {
   status: 'CONSTATE' | 'VERIFIE' | 'REJETE_QA' | 'RETENU' | 'CLASSE'; createdAt: string;
   verification?: { by: string; outcome: string; note: string }; decision?: { by: string; outcome: string; reason: string; effect: string; obligationId: string | null; at: string };
   notifiedAt?: string; contests: { id: string; at: string; grounds: string; stage: string; appealId?: string }[];
-  inspection: { reference: string; inspectorId: string; photos: string[]; lat: number; lon: number; observedAt: string; observations: string; ocrMatches: string[]; presumedOperator: string | null } | null;
+  inspection: {
+    reference: string; inspectorId: string; photos: string[]; lat: number; lon: number; observedAt: string; observations: string; ocrMatches: string[]; presumedOperator: string | null;
+    /** Photos conservées au serveur (JPEG reçu, empreinte vérifiée) ; absentes des dossiers anciens. */
+    serverPhotos?: AdPhotoMeta[];
+    /** Preuve faible : aucune photo conservée au serveur, ou position imprécise / ajustée à la main. */
+    weakEvidence?: boolean;
+  } | null;
   device: { id: string; reference: string; type: string; commune: string; address: string; surfaceM2: string; faces: number; ownerIdentified: boolean } | null;
   obligation: Notice | null; appealPath: string;
 }
