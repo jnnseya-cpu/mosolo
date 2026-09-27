@@ -9,6 +9,7 @@ import { recalculationsFor } from './recalculation.js';
 import type { RuleInput } from './service.js';
 import { kinshasaDay } from '../../core/clock.js';
 import { completude } from './textes.js';
+import { ruleWatchFor } from './veille.js';
 
 const REVENUE_CATEGORIES = [
   'IMPOT_PROVINCIAL', 'INTERET_COMMUN', 'PROVINCIAL_SPECIFIQUE', 'RECETTE_ETD', 'RECETTE_CENTRALE', 'PARTAGEE',
@@ -225,4 +226,12 @@ export function registerRuleRoutes(app: FastifyInstance, ctx: AppContext): void 
     const user = requireUser(req);
     return recalculationsFor(ctx).decide(user, req.params.id, parse(recalcDecisionSchema, req.body));
   });
+
+  // Module 26 : veille (règles expirantes, conflits de normes), indicateurs, archivage à quatre yeux.
+  app.get<{ Querystring: { jours?: string } }>('/v1/legal-rules/veille', async (req) =>
+    ruleWatchFor(ctx).view(requireUser(req), req.query.jours ? Number.parseInt(req.query.jours, 10) : undefined));
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/archive-requests', async (req, reply) =>
+    reply.code(201).send(ruleWatchFor(ctx).requestArchive(requireUser(req), req.params.id, parse(z.object({ motif: motive }).strict(), req.body).motif)));
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/archives/:id/decide', async (req) =>
+    ruleWatchFor(ctx).decideArchive(requireUser(req), req.params.id, parse(z.object({ approve: z.boolean(), motif: motive }).strict(), req.body)));
 }

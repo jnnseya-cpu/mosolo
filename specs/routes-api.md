@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1110 routes** dans 42 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1179 routes** dans 42 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -14,7 +14,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1110 routes** dans 4
 | extension integrite | 70 |
 | extension juridique | 11 |
 | extension opportunites | 29 |
-| extension parking | 64 |
+| extension parking | 72 |
 | extension pilotage | 81 |
 | extension preuves | 14 |
 | extension publicite | 52 |
@@ -27,7 +27,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1110 routes** dans 4
 | extension titres | 20 |
 | extension tresor | 39 |
 | extension vehicules-controle | 84 |
-| extension verticales | 102 |
+| extension verticales | 160 |
 | module ai | 3 |
 | module alerts | 1 |
 | module appeals | 9 |
@@ -42,7 +42,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1110 routes** dans 4
 | module objects | 2 |
 | module payments | 8 |
 | module receipts | 2 |
-| module rules | 23 |
+| module rules | 26 |
 | module system | 3 |
 | module treasury | 6 |
 | module vault | 4 |
@@ -489,12 +489,19 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1110 routes** dans 4
 | POST | `/v1/parking/affectation/commitments/:id/publish` |
 | GET | `/v1/parking/agents/earnings` |
 | GET | `/v1/parking/agents/me/earnings` |
+| POST | `/v1/parking/canal-texte/passerelle/:operator` |
+| POST | `/v1/parking/canal-texte/simulateur` |
+| GET | `/v1/parking/canal-texte/statistiques` |
 | GET | `/v1/parking/control/:plate` |
 | GET | `/v1/parking/deployment` |
 | POST | `/v1/parking/deployment/phases/:n/activation` |
 | POST | `/v1/parking/deployment/phases/:n/zones` |
 | POST | `/v1/parking/evidence-photos` |
 | GET | `/v1/parking/evidence-photos/:id` |
+| GET | `/v1/parking/exemptions` |
+| POST | `/v1/parking/exemptions` |
+| POST | `/v1/parking/exemptions/:id/decide` |
+| POST | `/v1/parking/exemptions/:id/revoke` |
 | GET | `/v1/parking/indicators` |
 | GET | `/v1/parking/occupancy` |
 | GET | `/v1/parking/overbooking` |
@@ -506,6 +513,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1110 routes** dans 4
 | POST | `/v1/parking/partners/:id/status` |
 | GET | `/v1/parking/partners/mine` |
 | GET | `/v1/parking/penalties` |
+| GET | `/v1/parking/plates/:plate/active-titles` |
 | GET | `/v1/parking/plates/:plate/profile` |
 | POST | `/v1/parking/plates/:plate/referrals` |
 | GET | `/v1/parking/plates/priorities` |
@@ -1170,10 +1178,68 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1110 routes** dans 4
 | GET | `/v1/verticales/domaine-public/emprises` |
 | POST | `/v1/verticales/evenements/events/:objectId/controls` |
 | POST | `/v1/verticales/evenements/events/:objectId/ticketing` |
+| GET | `/v1/verticales/fiches/:module/configuration` |
+| POST | `/v1/verticales/fiches/:module/configuration` |
+| GET | `/v1/verticales/fiches/:module/objets` |
+| POST | `/v1/verticales/fiches/:module/objets` |
+| GET | `/v1/verticales/fiches/:module/types-titres` |
+| POST | `/v1/verticales/fiches/antennes/imports` |
+| GET | `/v1/verticales/fiches/antennes/mutations` |
+| POST | `/v1/verticales/fiches/antennes/mutations/:id/decision` |
+| GET | `/v1/verticales/fiches/antennes/recouvrement` |
+| POST | `/v1/verticales/fiches/antennes/sites/:objectId/mutations` |
+| POST | `/v1/verticales/fiches/assainissement/application` |
+| GET | `/v1/verticales/fiches/assainissement/portefeuille` |
+| GET | `/v1/verticales/fiches/boissons/coherence` |
+| POST | `/v1/verticales/fiches/boissons/livraisons` |
+| GET | `/v1/verticales/fiches/boissons/points-livraison` |
+| GET | `/v1/verticales/fiches/boissons/points-non-autorises` |
+| POST | `/v1/verticales/fiches/boissons/redevables/:taxpayerId/relances` |
+| GET | `/v1/verticales/fiches/boissons/suivi` |
+| GET | `/v1/verticales/fiches/boissons/transmissions` |
+| POST | `/v1/verticales/fiches/boissons/transmissions` |
+| POST | `/v1/verticales/fiches/carrieres/:objectId/bons` |
+| GET | `/v1/verticales/fiches/carrieres/:objectId/sorties` |
+| POST | `/v1/verticales/fiches/carrieres/:objectId/sorties` |
+| GET | `/v1/verticales/fiches/departs` |
+| POST | `/v1/verticales/fiches/departs` |
+| GET | `/v1/verticales/fiches/departs/:id/embarquements` |
+| POST | `/v1/verticales/fiches/departs/:id/embarquements` |
+| POST | `/v1/verticales/fiches/departs/:id/manifeste` |
+| POST | `/v1/verticales/fiches/departs/:id/mouvements` |
+| GET | `/v1/verticales/fiches/departs/:id/rapprochement` |
+| POST | `/v1/verticales/fiches/departs/:id/titres` |
+| GET | `/v1/verticales/fiches/embarcations/:ref/controle` |
+| POST | `/v1/verticales/fiches/evenements/:objectId/liquidation` |
+| GET | `/v1/verticales/fiches/evenements/recettes` |
+| GET | `/v1/verticales/fiches/forets/declarations` |
+| POST | `/v1/verticales/fiches/forets/declarations` |
+| GET | `/v1/verticales/fiches/indicateurs` |
+| GET | `/v1/verticales/fiches/liquidations` |
+| POST | `/v1/verticales/fiches/liquidations` |
+| POST | `/v1/verticales/fiches/liquidations/:id/decision` |
+| GET | `/v1/verticales/fiches/liquidations/automatique` |
+| POST | `/v1/verticales/fiches/liquidations/automatique` |
+| GET | `/v1/verticales/fiches/marches/abonnements/mine` |
+| POST | `/v1/verticales/fiches/marches/etals/:stallId/abonnement` |
+| GET | `/v1/verticales/fiches/marches/rapprochement` |
+| GET | `/v1/verticales/fiches/objets/:objectId/avis-unique` |
+| GET | `/v1/verticales/fiches/peage/carnets/:plaque` |
+| POST | `/v1/verticales/fiches/peage/passages` |
+| POST | `/v1/verticales/fiches/peage/titres` |
+| GET | `/v1/verticales/fiches/ports/rapprochement` |
+| GET | `/v1/verticales/fiches/references` |
+| POST | `/v1/verticales/fiches/references` |
 | GET | `/v1/verticales/indicators` |
 | GET | `/v1/verticales/marches/plan` |
 | POST | `/v1/verticales/marches/stalls/:id/titles` |
 | GET | `/v1/verticales/me/summary` |
+| GET | `/v1/verticales/plastique` |
+| POST | `/v1/verticales/plastique/assujettis` |
+| POST | `/v1/verticales/plastique/declarations` |
+| POST | `/v1/verticales/plastique/declarations/:id/reversement` |
+| POST | `/v1/verticales/plastique/etude` |
+| POST | `/v1/verticales/plastique/simulations` |
 | POST | `/v1/verticales/plates` |
 | GET | `/v1/verticales/plates-report/daily` |
 | GET | `/v1/verticales/plates/:code/counter` |
@@ -1323,6 +1389,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1110 routes** dans 4
 | GET | `/v1/legal-rules/:id` |
 | POST | `/v1/legal-rules/:id/abrogate` |
 | POST | `/v1/legal-rules/:id/approve` |
+| POST | `/v1/legal-rules/:id/archive-requests` |
 | GET | `/v1/legal-rules/:id/fiche-technique` |
 | POST | `/v1/legal-rules/:id/impact-simulations` |
 | POST | `/v1/legal-rules/:id/lift-suspension` |
@@ -1334,7 +1401,9 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1110 routes** dans 4
 | POST | `/v1/legal-rules/:id/test-cases/:caseId/validate` |
 | POST | `/v1/legal-rules/:id/test-cases/run` |
 | GET | `/v1/legal-rules/:id/versions` |
+| POST | `/v1/legal-rules/archives/:id/decide` |
 | GET | `/v1/legal-rules/attributs-techniques` |
+| GET | `/v1/legal-rules/veille` |
 | GET | `/v1/recalculations` |
 | GET | `/v1/recalculations/:id` |
 | POST | `/v1/recalculations/:id/decide` |

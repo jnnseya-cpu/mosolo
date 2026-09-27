@@ -211,6 +211,9 @@ export class VerticalesService {
   readonly calcu: CalcuService;
   /** Modules sectoriels « acte requis » (11, 13, 16, 17, 21, 22, 23, 24, 25, 56) sur le socle commun. */
   readonly secteurs: SecteursService;
+  /** Fiches sectorielles 13 à 25 (fiches.ts) et module 18 (plastique.ts), branchées par le module d'extension. */
+  fiches?: import('./fiches.js').FichesService;
+  plastique?: import('./plastique.js').PlastiqueService;
 
   constructor(readonly ctx: AppContext) {
     this.avia = new AviaService(ctx);

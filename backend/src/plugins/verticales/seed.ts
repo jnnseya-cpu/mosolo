@@ -9,6 +9,8 @@ import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
 import { DAY_MS, kinshasaDate } from '../../core/clock.js';
 import type { RuleInput } from '../../modules/rules/service.js';
+import type { CredentialType } from '../titres/model.js';
+import type { TitresService } from '../titres/service.js';
 import { VX_DEMO_RULES, type VerticalesService } from './service.js';
 
 export const VX_DEMO = {
@@ -22,6 +24,8 @@ export const VX_DEMO = {
   users: {
     instructor: 'vx-instructeur-dgtk',
     chief: 'vx-chef-service-dgtk',
+    /** Directeur DGTK : configuration des fiches sectorielles (règle et type de titre, avec l'acte). */
+    director: 'vx-directeur-dgtk',
     fieldAgent: 'vx-agent-terrain-dgtk',
     airline: 'vx-compagnie-aerienne',
     airport: 'vx-exploitant-aeroport',
@@ -36,6 +40,7 @@ export const VX_DEMO = {
 const DEMO_USERS: Omit<User, 'kind'>[] = [
   { id: VX_DEMO.users.instructor, name: 'Instructeur DGTK — verticales (démo)', roles: ['R11'], entity: 'DGTK' },
   { id: VX_DEMO.users.chief, name: 'Cheffe de service DGTK — décisions (démo)', roles: ['R07'], entity: 'DGTK' },
+  { id: VX_DEMO.users.director, name: 'Directeur DGTK — configuration des fiches sectorielles (démo)', roles: ['R06'], entity: 'DGTK' },
   { id: VX_DEMO.users.fieldAgent, name: 'Agent de terrain DGTK (démo)', roles: ['R10'], entity: 'DGTK', territory: ['Gombe', 'Ngaliema', 'Lingwala', 'Kalamu', 'Nsele'] },
   { id: VX_DEMO.users.airline, name: 'Compagnie aérienne fictive (démo)', roles: ['R30'], entity: 'PUBLIC', taxpayerId: VX_DEMO.airlineTaxpayerId },
   { id: VX_DEMO.users.airport, name: 'Exploitant d’aérodrome — données d’embarquement (démo)', roles: ['R34'], entity: 'EXPLOITANT-AERO' },
@@ -129,6 +134,8 @@ export function seedVerticales(ctx: AppContext, svc: VerticalesService): void {
 
   // Règles FICTIVES publiées par le circuit des quatre visas.
   for (const r of DEMO_RULES) publishDemoRule(ctx, r);
+  // Titres à usage unique de DÉMONSTRATION [EXEMPLE] (embarquement, bons de sortie, péage) sur règles fictives ACTIVES.
+  seedSingleUseDemoTypes(ctx);
 
   // ---------------------------------------------------------------- Marchés : plan, étals, titre d'étal
   svc.seedMarket({ id: 'MKT-CENTRAL', name: 'Marché central', commune: 'Gombe', quartier: 'Commerce' });
@@ -295,4 +302,41 @@ function seedSecteursReferences(svc: VerticalesService): void {
   r.seedReference({ id: 'EMB-EX-01', module: '13', kind: 'POINT_EMBARQUEMENT', label: 'Point d’embarquement [EXEMPLE] — Kinkole', commune: 'Nsele', lat: -4.341, lon: 15.492 });
   r.seedReference({ id: 'PCF-EX-01', module: '23', kind: 'POINT_CONTROLE', label: 'Point de contrôle forestier [EXEMPLE] — entrée sud', commune: 'Mont-Ngafula', lat: -4.48, lon: 15.28 });
   r.seedReference({ id: 'PCF-EX-02', module: '23', kind: 'POINT_CONTROLE', label: 'Point de contrôle forestier [EXEMPLE] — entrée est', commune: 'Maluku', lat: -4.07, lon: 15.56 });
+}
+
+/**
+ * Titres à usage unique de DÉMONSTRATION [EXEMPLE] — embarquement (13), bon de sortie de carrière (22), passage et carnet
+ * de péage (25) — adossés à des règles FICTIVES publiées par le circuit des quatre visas (marquées demo, non
+ * opposables). Les types réels du catalogue (EMB-CARTE, CAR-BON, PEA-*) restent « acte requis » ; la régie ne choisit un
+ * type [EXEMPLE] que pour la démonstration. Montants d'exemple non contractuels.
+ */
+export const SINGLE_USE_DEMO = {
+  rules: { embarquement: 'DEMO-EMB-EX', carriere: 'DEMO-CAR-BON-EX', peage: 'DEMO-PEA-EX' },
+  types: { embarquement: 'EMB-CARTE-EX', bon: 'CAR-BON-EX', passage: 'PEA-PASSAGE-EX', carnet: 'PEA-CARNET-EX' },
+  carnetUses: 10,
+} as const;
+
+function seedSingleUseDemoTypes(ctx: AppContext): void {
+  const t = ctx.ext.titres as TitresService | undefined;
+  if (!t) return;
+  const rule = (code: string, label: string, event: string, rate: string) => publishDemoRule(ctx, {
+    code, revenueCategory: 'REDEVANCE_SERVICE', administeringEntity: 'DGTK', beneficiaryAccountAlias: 'KIN-DGTK-RECETTES-01',
+    label: `DÉMONSTRATION [EXEMPLE] — ${label} (règle fictive, non opposable)`, taxableEvent: `${event} (démonstration)`, liableParty: 'Usager ou exploitant',
+    baseDefinition: 'Nombre de titres (unités)', formula: 'unites * tarif_unite', rateTable: { tarif_unite: rate }, currency: 'CDF', periodicity: 'PONCTUELLE',
+  });
+  if (!ctx.rules.rules.findOne((r) => r.code === SINGLE_USE_DEMO.rules.embarquement)) rule(SINGLE_USE_DEMO.rules.embarquement, 'titre d’embarquement', 'Embarquement à un point de départ', '1000');
+  if (!ctx.rules.rules.findOne((r) => r.code === SINGLE_USE_DEMO.rules.carriere)) rule(SINGLE_USE_DEMO.rules.carriere, 'bon de sortie de carrière', 'Sortie d’un camion d’un site d’extraction', '5000');
+  if (!ctx.rules.rules.findOne((r) => r.code === SINGLE_USE_DEMO.rules.peage)) rule(SINGLE_USE_DEMO.rules.peage, 'passage de péage', 'Franchissement d’un point de péage', '2000');
+  const act = (ref: string): CredentialType['legalAct'] => ({ ref, status: 'DEMONSTRATION', note: 'Type de DÉMONSTRATION [EXEMPLE] sur règle fictive : aucun titre réel avant l’acte.' });
+  const once = { model: 'USAGE_UNIQUE' as const, periodDays: 1, amberMinutes: 0, toleranceMinutes: 0, startMode: 'PAIEMENT' as const, extendable: false, refundable: false };
+  const def = (d: Omit<CredentialType, 'id' | 'version' | 'createdAt' | 'createdBy'>) => { if (!t.types.findOne((x) => x.code === d.code)) t.defineType(d, 'fiches-demonstration'); };
+  def({ code: SINGLE_USE_DEMO.types.embarquement, module: '13', moduleLabel: 'Embarquement et débarquement', label: 'Carte d’embarquement — DÉMONSTRATION [EXEMPLE]', prefix: 'EMB', entity: 'DGTK',
+    validity: once, transferable: false, plateBound: false, supports: ['QR_STATIQUE', 'CODE_COURT', 'SMS'], pricing: { ruleCode: SINGLE_USE_DEMO.rules.embarquement, inputs: { unites: '1' } }, legalAct: act('J30'), demo: true });
+  def({ code: SINGLE_USE_DEMO.types.bon, module: '22', moduleLabel: 'Carrières et recettes minières', label: 'Bon de sortie (camion) — DÉMONSTRATION [EXEMPLE]', prefix: 'CAR', entity: 'DGTK',
+    validity: once, transferable: false, plateBound: true, supports: ['QR_STATIQUE', 'CODE_COURT', 'PLAQUE'], pricing: { ruleCode: SINGLE_USE_DEMO.rules.carriere, inputs: { unites: '1' } }, legalAct: act('J1'), demo: true });
+  def({ code: SINGLE_USE_DEMO.types.passage, module: '25', moduleLabel: 'Péage provincial', label: 'Péage — passage unique — DÉMONSTRATION [EXEMPLE]', prefix: 'PEA', entity: 'DGTK',
+    validity: once, transferable: false, plateBound: true, supports: ['PLAQUE', 'QR_STATIQUE', 'SMS'], pricing: { ruleCode: SINGLE_USE_DEMO.rules.peage, inputs: { unites: '1' } }, legalAct: act('J1'), demo: true });
+  def({ code: SINGLE_USE_DEMO.types.carnet, module: '25', moduleLabel: 'Péage provincial', label: `Péage — carnet de ${SINGLE_USE_DEMO.carnetUses} passages — DÉMONSTRATION [EXEMPLE]`, prefix: 'PEA', entity: 'DGTK',
+    validity: { ...once, model: 'CARNET_USAGES', periodDays: 365, uses: SINGLE_USE_DEMO.carnetUses }, transferable: false, plateBound: true, supports: ['PLAQUE', 'QR_STATIQUE', 'SMS'],
+    pricing: { ruleCode: SINGLE_USE_DEMO.rules.peage, inputs: { unites: String(SINGLE_USE_DEMO.carnetUses) } }, legalAct: act('J1'), demo: true });
 }

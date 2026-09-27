@@ -121,12 +121,16 @@ export const SECTOR_MODULES: SectorModuleDef[] = [
 export interface SectorReference {
   id: string;
   module: string;
-  kind: 'AXE' | 'QUAI' | 'POINT_EMBARQUEMENT' | 'POINT_CONTROLE';
+  kind: 'AXE' | 'QUAI' | 'POINT_EMBARQUEMENT' | 'POINT_CONTROLE' | 'POINT_PEAGE';
   label: string;
   commune: string;
   lat: number;
   lon: number;
   demo: boolean;
+  /** Opérateur de rattachement (point d'embarquement, port privé) — fiches 13 et 24. */
+  operatorTaxpayerId?: string;
+  /** Quai ou port privé (fiche 24). */
+  privateQuay?: boolean;
 }
 
 export interface SectorObservation {
@@ -209,10 +213,31 @@ export class SecteursService {
   /** Types de titres du moteur (§ 19A.4) portés par un module : statut d'activation, jamais un prix inventé. */
   private credentialTypes(m: SectorModuleDef) {
     const t = this.titres();
-    return m.credentialTypes.map((code) => {
-      const type = t?.types.findOne((x) => x.code === code);
+    // Types amorcés du catalogue (acte requis), puis les types que la régie a retenus pour le module dans la
+    // configuration de la fiche (avec la référence de l'acte) — par exemple un type de DÉMONSTRATION [EXEMPLE] sur
+    // règle fictive ACTIVE. Chacun garde son statut d'activation et sa marque demo.
+    const extra = (this.vx.fiches?.configuredTypes(m.module) ?? []).filter((c) => !m.credentialTypes.includes(c));
+    return [...m.credentialTypes, ...extra].map((code) => {
+      const type = t ? t.types.find((x) => x.code === code).sort((a, b) => b.version - a.version)[0] : undefined;
       const act = type && t ? t.activation(type) : { ok: false as const, reason: 'Moteur de titres non chargé.' };
-      return { code, label: type?.label ?? code, prefix: type?.prefix ?? null, model: type?.validity.model ?? null, legalAct: type?.legalAct ?? null, activable: act.ok, reason: act.ok ? null : act.reason };
+      return { code, label: type?.label ?? code, prefix: type?.prefix ?? null, model: type?.validity.model ?? null, legalAct: type?.legalAct ?? null, demo: type?.demo === true, activable: act.ok, reason: act.ok ? null : act.reason };
+    });
+  }
+
+  /** Types de titres d'un module sectoriel (catalogue et types retenus par la régie), avec leur statut d'activation. */
+  credentialTypesOf(module: string) {
+    return this.credentialTypes(this.moduleDef(module));
+  }
+
+  /** Tous les types déclarés au moteur de titres pour un module (choix offert à la régie dans la configuration). */
+  availableCredentialTypes(module: string) {
+    const t = this.titres();
+    if (!t) return [];
+    const codes = [...new Set(t.types.all().filter((x) => x.module === module).map((x) => x.code))];
+    return codes.map((code) => {
+      const type = t.types.find((x) => x.code === code).sort((a, b) => b.version - a.version)[0]!;
+      const act = t.activation(type);
+      return { code, label: type.label, model: type.validity.model, demo: type.demo, legalAct: type.legalAct, activable: act.ok, reason: act.ok ? null : act.reason };
     });
   }
 
