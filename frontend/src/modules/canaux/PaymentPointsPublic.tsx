@@ -10,6 +10,7 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { api, describeError } from '../../lib/api';
 import { POINT_STATUS, POINT_TYPE_LABEL, type Guichet, type PublicPoint } from './shared';
+import { OuPayerVisuel } from './visuels';
 import './canaux.css';
 
 interface VerifyResult { kind: string; status: string; message: string; amount?: MoneyJSON; date?: string; verifiedAt: string }
@@ -73,6 +74,7 @@ export default function PaymentPointsPublic() {
       {data.error !== null && <ErrorState error={data.error} onRetry={data.reload} />}
       {data.data && (
         <>
+          <OuPayerVisuel points={data.data.points} guichets={data.data.guichets} />
           <div className="seg seg-wrap" role="group" aria-label="Commune">
             <button type="button" aria-pressed={!commune} onClick={() => setCommune('')}>Toutes</button>
             {communes.map((c) => <button key={c} type="button" aria-pressed={commune === c} onClick={() => setCommune(c)}>{c}</button>)}

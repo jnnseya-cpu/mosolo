@@ -8,6 +8,7 @@ import { formatMoney, type MoneyJSON } from '@mosolo/shared';
 import { PageHead } from '../../components/Shell';
 import { api, describeError } from '../../lib/api';
 import { sha256Hex } from '../../lib/crypto';
+import { SituationContribuable } from './visuels';
 
 interface Obl { id: string; label: string; amount: MoneyJSON | null; status: string; dueDate: string }
 const TYPES: [string, string][] = [
@@ -19,13 +20,14 @@ const PAYABLE = ['EMISE', 'EXIGIBLE', 'EN_RETARD', 'PARTIELLEMENT_PAYEE'];
 export default function ContestationAssistee() {
   const [taxpayerId, setTaxpayerId] = useState('');
   const [obls, setObls] = useState<Obl[] | null>(null);
+  const [all, setAll] = useState<Obl[] | null>(null);
   const [f, setF] = useState({ obligationId: '', type: 'MONTANT_ERRONE', grounds: '', method: 'ORAL_ENREGISTRE', witnessName: '', readBack: false, suspensive: false });
   const [file, setFile] = useState<File | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<{ id: string; acknowledgement?: { number: string } } | null>(null);
   async function find(e: FormEvent) {
-    e.preventDefault(); setErr(null); setObls(null);
-    try { const r = await api<{ obligations: Obl[] }>(`/v1/taxpayers/${encodeURIComponent(taxpayerId.trim())}`); setObls(r.obligations.filter((o) => PAYABLE.includes(o.status))); } catch (x) { setErr(describeError(x).message); }
+    e.preventDefault(); setErr(null); setObls(null); setAll(null);
+    try { const r = await api<{ obligations: Obl[] }>(`/v1/taxpayers/${encodeURIComponent(taxpayerId.trim())}`); setAll(r.obligations); setObls(r.obligations.filter((o) => PAYABLE.includes(o.status))); } catch (x) { setErr(describeError(x).message); }
   }
   async function submit(e: FormEvent) {
     e.preventDefault(); setErr(null);
@@ -49,6 +51,7 @@ export default function ContestationAssistee() {
             <div className="field"><label className="label" htmlFor="ca-tp">Identifiant du contribuable</label><input id="ca-tp" required value={taxpayerId} onChange={(e) => setTaxpayerId(e.target.value)} /></div>
             <button type="submit" className="btn btn-secondary btn-sm">Rechercher ses obligations</button>
           </form>
+          {all && <SituationContribuable obligations={all} />}
           {obls && (
             <form className="panel stack-sm" onSubmit={(e) => void submit(e)}>
               <div className="field"><label className="label" htmlFor="ca-ob">Obligation contestée</label>

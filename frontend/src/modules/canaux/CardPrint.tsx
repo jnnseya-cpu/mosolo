@@ -11,6 +11,8 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { api, describeError } from '../../lib/api';
 import { cardVerifyUrl, hasRole, Pictogram, type CardView } from './shared';
+import { AvisVisuel, CartesEtat, IndicateursAgent } from './visuels';
+import { ChartGrid } from '../../components/viz';
 import './canaux.css';
 
 interface Notice {
@@ -139,6 +141,12 @@ export default function CardPrint() {
             {err && <p className="notice notice-err" role="alert">{err}</p>}
             {guichet && <ReissueQueue onDone={card.reload} />}
           </aside>
+        </div>
+      )}
+      {card.data && (
+        <div className="cx-noprint cx-mt">
+          {notice.data && <AvisVisuel notice={notice.data} />}
+          <IndicateursAgent>{(ind) => <ChartGrid min={280}><CartesEtat ind={ind} /></ChartGrid>}</IndicateursAgent>
         </div>
       )}
     </div>

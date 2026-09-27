@@ -12,6 +12,7 @@ import { hmacSha256Hex, sha256Hex, uid } from '../../lib/crypto';
 import { hasRole, Pictogram } from './shared';
 import { GpsQualityLine, MapCheck } from '../../components/GpsQuality';
 import { usePreciseGps, type PreciseFix } from '../../lib/geo';
+import { EnrolementVisuel } from './visuels';
 import './canaux.css';
 
 const LANGS = [
@@ -167,6 +168,7 @@ export default function AssistedEnrolment() {
     <div className="page page-wide">
       <PageHead eyebrow="Enrôlement inclusif — module 63" title="Enrôlement assisté" lead="À domicile, sur site ou au guichet MOSOLO, même sans réseau : compte N0-A et carte MOSOLO, après lecture du résumé et consentement. Aucun paiement n’est demandé ni reçu." />
       <ExampleNotice text="Démonstration : personnes fictives. Audio du résumé : version de travail à valider (§ 11.5). Empreinte digitale non ouverte tant que J18 n’est pas certifié (ARB-24)." />
+      {list.data && <EnrolementVisuel list={list.data} queued={queue.length} />}
       {!canEnrol && !supervisor && <div className="callout callout-warn">Choisissez un agent d’enrôlement (R10 ou R12) ou un superviseur (R09) dans l’en-tête.</div>}
       <div className="cx-two">
         {canEnrol && (

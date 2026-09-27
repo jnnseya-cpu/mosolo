@@ -10,6 +10,7 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { api, describeError, newIdempotencyKey } from '../../lib/api';
 import { DAY_STATUS, hasRole, kinshasaToday, Pictogram, POINT_STATUS, POINT_TYPE_LABEL, type ReceiptPrint } from './shared';
+import { CaisseVisuel } from './visuels';
 import './canaux.css';
 
 interface MyPoint { id: string; name: string; type: string; operator: string; commune: string; status: string; hours: string; settlementDelayHours: number; limits: { perTransaction: MoneyJSON[]; perDay: MoneyJSON[] }; approval: { reference: string } }
@@ -203,6 +204,7 @@ function CashDayPanel({ point, day, setDay, cash }: { point: MyPoint; day: strin
             <span className="small">Attendu : {c.expected.length ? c.expected.map((m) => <MoneyText key={m.currency} money={m} showIndicative={false} />) : '—'}</span>
             <span className="small muted">Versement au plus tard le {fmtDate(c.depositDeadline, true)} · {c.reconciledCount}/{c.collections.length} rapproché(s) au compte public</span>
           </div>
+          <CaisseVisuel cd={c} />
           {c.collections.length === 0 ? <p className="muted small">Aucun encaissement ce jour.</p> : (
             <div className="table-scroll"><table className="data-table">
               <thead><tr><th>Heure</th><th>Référence</th><th className="num">Montant</th><th>Code</th><th>Quittance</th></tr></thead>
