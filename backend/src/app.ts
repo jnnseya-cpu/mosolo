@@ -1,6 +1,7 @@
 /**
  * Construction de l'application Fastify. `buildApp({ clock, secrets })` : horloge et secrets injectables (tests).
  */
+import { staticSiteFromEnv } from './core/static-site.js';
 import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { createContext, type AppContext, type AppOptions } from './context.js';
@@ -151,7 +152,11 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
     return reply.code(apiErr.status).type('application/problem+json').send(apiErr.toProblem(req.url));
   });
 
+  const site = staticSiteFromEnv();
   app.setNotFoundHandler((req, reply) => {
+    // Démonstration hébergée en un seul service : l'API sert aussi l'application web construite.
+    const f = site && (req.method === 'GET' || req.method === 'HEAD') ? site(req.url) : null;
+    if (f) return reply.code(200).type(f.type).header('cache-control', f.immutable ? 'public, max-age=31536000, immutable' : 'no-cache').send(f.body);
     const e = new ApiError(404, 'ROUTE_NOT_FOUND', `Route inconnue : ${req.method} ${req.url}`);
     return reply.code(404).type('application/problem+json').send(e.toProblem(req.url));
   });

@@ -47,6 +47,17 @@ python3 tools/gen_graphiques.py      # figures en couleur
 MMDC=/chemin/vers/mmdc PUPPETEER_CONFIG=pp.json python3 tools/build_docx.py   # version Word
 ```
 
+## Démonstration en ligne (un seul service)
+
+L'API peut servir elle-même l'application web construite (`MOSOLO_STATIC_DIR=frontend/dist`) : une seule adresse suffit
+pour parcourir toute la plateforme. **Données de démonstration uniquement, non contractuelles** — ne jamais y saisir de
+données réelles ; le mode démonstration ouvre les rôles de démonstration à tout visiteur.
+
+- **Render** (gratuit) : tableau de bord Render → *New* → *Blueprint* → choisir ce dépôt et la branche à publier ; le
+  fichier [`render.yaml`](render.yaml) construit et démarre tout. Adresse obtenue : `https://<nom>.onrender.com`.
+- **Docker** (tout hébergeur) : `docker build -t mosolo-demo . && docker run -p 8080:8080 mosolo-demo` → http://localhost:8080.
+- **Sans Docker** : `npm ci && VITE_API_URL= npm run build -w frontend && MOSOLO_DEMO_MODE=true MOSOLO_STATIC_DIR=frontend/dist npx tsx backend/src/server.ts --demo`.
+
 ## Principes non négociables
 
 1. Le système applique le droit, il ne le crée pas : aucune obligation sans règle **active et certifiée** ; les fiches de règles fournies sont au statut `A_VERIFIER` et ne produisent aucun effet financier.
