@@ -49,6 +49,8 @@ export default defineConfig({
         description: 'Plateforme souveraine des recettes de la Ville Province de Kinshasa — une ville, un contribuable, une donnée, une quittance.',
         lang: 'fr',
         dir: 'ltr',
+        // Identifiant stable de l'application installée (indépendant d'un futur changement de start_url).
+        id: '/',
         start_url: '/',
         scope: '/',
         display: 'standalone',
