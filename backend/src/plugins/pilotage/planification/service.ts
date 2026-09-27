@@ -598,7 +598,7 @@ export class PlanificationService implements PilotagePlanningHooks {
       const u = this.ctx.users.get(input.assignee.userId);
       if (!u || u.entity !== input.assignee.entity) throw badRequest('INVALID_ASSIGNEE', 'Destinataire inconnu ou hors de l’entité désignée.');
     }
-    const authority = user.roles.includes('R01') ? 'Gouverneur' : user.roles.includes('R02') ? 'Directeur de cabinet' : 'Secrétaire général';
+    const authority = user.roles.includes('R01') ? 'Gouverneur' : user.roles.includes('R02') ? 'Directeur de cabinet' : 'Secrétaire exécutif du Gouvernement provincial (Secrétaire général)';
     const n = this.instructions.count() + 1;
     const i = this.instructions.insert({
       id: this.ids.next('INSTR'), number: `INS-${this.today().slice(0, 4)}-${String(n).padStart(4, '0')}`, issuedBy: user.id, authority, origin: input.origin, subject: input.subject, body: input.body,

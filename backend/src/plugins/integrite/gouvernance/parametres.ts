@@ -43,6 +43,7 @@ import {
 import { ATYPICAL_CANCELLATIONS_MIN, ATYPICAL_SALES_FACTOR, ATYPICAL_SALES_MIN } from '../../rakapay/operateurs.js';
 import { PARAMETRES_SECURITE } from './parametres-securite.js';
 import { PARAMETRES_VEHICULES } from '../../vehicules-controle/parametres.js';
+import { PARAMETRES_POSTES } from '../../postes/parametres.js';
 
 export type ParamValue = number | boolean;
 export type ParamOwner = 'CODE' | 'REGISTRE';
@@ -103,6 +104,8 @@ export const REGISTRE_DEFAUTS: ParamDefinition[] = [
   R('cles.age_max_jours', 'Âge maximal d’une clé avant rotation recommandée', 'Gestion des clés', 365, 'jours', { min: 30, max: 3650 }),
   // Sécurité, accès et audit (élévation, extraction massive, DLP, appareils, GPS, plafonds, clés d'accès, scellement).
   ...PARAMETRES_SECURITE,
+  // Postes de décision des autorités (Cahier nouvelle version, ch. 27) : seuils de remontée, délégation, notifications.
+  ...PARAMETRES_POSTES,
   // Conservation des données (§ 32) : 0 = durée non fixée ⇒ aucune purge. Durées à fixer par acte (J4, J8).
   R('conservation.codes_otp_jours', 'Conservation des codes à usage unique et défis de connexion (0 = non fixée : aucune purge)', 'Conservation des données (§ 32)', 0, 'jours', { min: 0, max: 3650 },
     'Durée à fixer par acte (prescription, archives publiques, J4, J8) ; purge par effacement des champs personnels, après aperçu et approbation à deux personnes.'),

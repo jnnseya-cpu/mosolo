@@ -72,7 +72,7 @@ export type MapStatusColor = 'green' | 'amber' | 'red' | 'grey' | 'blue';
 
 /** Rôles (§ 12.3) — codes stables */
 export const ROLES = {
-  R01: 'Gouverneur', R02: 'Directeur de cabinet', R03: 'Secrétaire général', R04: 'Ministre provincial',
+  R01: 'Gouverneur', R02: 'Directeur de cabinet', R03: 'Secrétaire exécutif du Gouvernement provincial', R04: 'Ministre provincial',
   R05: 'Ministre provincial des Finances', R06: 'Directeur général de régie', R07: 'Chef de service de régie',
   R08: "Administrateur d'entité", R09: 'Superviseur terrain', R10: 'Agent de terrain', R11: 'Contrôleur',
   R12: 'Agent de guichet', R13: 'Juriste rédacteur', R14: 'Juriste vérificateur', R15: 'Validateur financier',
@@ -85,6 +85,12 @@ export const ROLES = {
   R36: 'Observateur société civile', R37: 'Service vérificateur du quitus',
 } as const;
 export type RoleCode = keyof typeof ROLES;
+
+/**
+ * Anciens libellés conservés comme alias (règle n° 1 : rien n'est retiré). R03 s'affiche désormais « Secrétaire exécutif
+ * du Gouvernement provincial » (Cahier nouvelle version, ch. 27, 27/09/2026) ; « Secrétaire général » reste reconnu.
+ */
+export const ROLE_ALIASES: Partial<Record<RoleCode, string[]>> = { R03: ['Secrétaire général'] };
 
 /** Paires de rôles incompatibles (§ 12.5) */
 export const INCOMPATIBLE_ROLES: [RoleCode, RoleCode][] = [
