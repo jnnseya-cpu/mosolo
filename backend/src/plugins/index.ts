@@ -10,6 +10,7 @@ import { parkingPlugin } from './parking/plugin.js';
 import { publicitePlugin } from './publicite/plugin.js';
 import { verticalesPlugin } from './verticales/plugin.js';
 import { canauxPlugin } from './canaux/plugin.js';
+import { apprentissagePlugin } from './apprentissage/plugin.js';
 import { terrainPlugin } from './terrain/plugin.js';
 import { integritePlugin } from './integrite/plugin.js';
 import { integriteGouvernancePlugin } from './integrite/gouvernance/plugin.js';
@@ -38,6 +39,8 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   publicitePlugin,
   verticalesPlugin,
   canauxPlugin,
+  // Apprentissage (§ 24) avant terrain : garde « certification avant affectation » et certificats de démonstration.
+  apprentissagePlugin,
   terrainPlugin,
   integritePlugin,
   integriteGouvernancePlugin,

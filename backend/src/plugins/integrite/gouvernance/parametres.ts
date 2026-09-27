@@ -31,6 +31,9 @@ import { DYNAMIC_GRACE_SECONDS, DYNAMIC_WINDOW_SECONDS } from '../../titres/toke
 import { EXCEPTION_SLA_HOURS, PROVIDER_SETTLEMENT_DELAY_DAYS, REFUND_EXTRA_APPROVAL_THRESHOLDS, SUSPENSE_MAX_DAYS, SUSPENSE_SLA_DAYS } from '../../tresor/service.js';
 import { DETECTION_PARAMS } from '../service.js';
 import {
+  ECHANTILLON_CONFORMITE_MIN_PCT, ECHANTILLON_TAILLE, EVALUATION_CONTINUE_INTERVALLE_JOURS, SEUIL_REUSSITE_EPREUVE_PCT, VALIDITE_CERTIFICAT_JOURS,
+} from '../../apprentissage/model.js';
+import {
   REPARTITION_DUREE_ANS, REPARTITION_NOMBRE_FLUX, REPARTITION_PART_AGENTS_PCT, REPARTITION_PART_GOUVERNEMENT_PCT, REPARTITION_PART_NSEYA_PCT,
   REPARTITION_PART_TUTELLE_PCT,
 } from '../../pilotage/repartition/model.js';
@@ -152,6 +155,14 @@ export const PARAMETRES_CODE: ParamDefinition[] = [
   C('socle.code_essais', 'Connexion : essais de code avant blocage', 'Authentification', MAX_CODE_ATTEMPTS, 'essais', code('plugins/socle/service.ts', 'MAX_CODE_ATTEMPTS')),
   C('socle.mot_de_passe_echecs', 'Connexion : échecs de mot de passe avant blocage', 'Authentification', MAX_PASSWORD_FAILURES, 'échecs', code('plugins/socle/service.ts', 'MAX_PASSWORD_FAILURES')),
   C('acces.otp_essais', 'Invitations : essais de code à usage unique', 'Authentification', OTP_MAX_ATTEMPTS, 'essais', code('plugins/acces/service.ts', 'OTP_MAX_ATTEMPTS')),
+  // Apprentissage et certification (§ 24) : certification avant affectation des agents recenseurs
+  C('apprentissage.epreuve_seuil_pct', 'Apprentissage : score minimal d’une épreuve de module', 'Apprentissage et certification (§ 24)', SEUIL_REUSSITE_EPREUVE_PCT, '%', code('plugins/apprentissage/model.ts', 'SEUIL_REUSSITE_EPREUVE_PCT')),
+  ...Object.entries(VALIDITE_CERTIFICAT_JOURS).map(([p, v]) =>
+    C(`apprentissage.validite_certificat_j.${p.toLowerCase()}`, `Apprentissage : validité d’un certificat — ${p.toLowerCase()}`, 'Apprentissage et certification (§ 24)', v, 'jours', code('plugins/apprentissage/model.ts', `VALIDITE_CERTIFICAT_JOURS.${p}`),
+      p === 'CONTROLEUR' ? 'Recertification annuelle : périodicité donnée par le Cahier (§ 24).' : undefined)),
+  C('apprentissage.evaluation_continue_j', 'Apprentissage : ancienneté maximale de l’évaluation continue du guichet', 'Apprentissage et certification (§ 24)', EVALUATION_CONTINUE_INTERVALLE_JOURS, 'jours', code('plugins/apprentissage/model.ts', 'EVALUATION_CONTINUE_INTERVALLE_JOURS')),
+  C('apprentissage.echantillon_taille', 'Apprentissage : actes tirés pour le contrôle par échantillon (finances)', 'Apprentissage et certification (§ 24)', ECHANTILLON_TAILLE, 'actes', code('plugins/apprentissage/model.ts', 'ECHANTILLON_TAILLE')),
+  C('apprentissage.echantillon_conformite_pct', 'Apprentissage : conformité minimale de l’échantillon (finances)', 'Apprentissage et certification (§ 24)', ECHANTILLON_CONFORMITE_MIN_PCT, '%', code('plugins/apprentissage/model.ts', 'ECHANTILLON_CONFORMITE_MIN_PCT')),
   // Détection explicable (module Intégrité)
   C('detection.verifications_repetees', 'Détection : vérifications répétées d’une quittance', 'Détection (Intégrité)', DETECTION_PARAMS.repeatedVerificationCount, 'vérifications', code('plugins/integrite/service.ts', 'DETECTION_PARAMS.repeatedVerificationCount')),
   C('detection.lieux_eloignes_km', 'Détection : quittance vérifiée depuis des lieux distants de', 'Détection (Intégrité)', DETECTION_PARAMS.distantVerificationKm, 'km', code('plugins/integrite/service.ts', 'DETECTION_PARAMS.distantVerificationKm')),

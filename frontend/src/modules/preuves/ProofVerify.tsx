@@ -5,6 +5,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PageHead } from '../../components/Shell';
+import { AideContextuelle } from '../apprentissage/AideContextuelle';
 import { Icon } from '../../components/Icon';
 import { ValidityCountdown, ValidityLegend } from '../../components/ValidityCountdown';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -44,7 +45,7 @@ export default function ProofVerify() {
   return (
     <div className="page pv-page">
       <PageHead eyebrow="Vérification publique" title="Vérifier une preuve"
-        lead="Ticket, place de stationnement ou de marché, pass wewa, certificat, autorisation, quitus, quittance, badge : scannez le QR code avec la caméra, prenez-le en photo, ou saisissez le code imprimé dessous." />
+        lead="Ticket, place de stationnement ou de marché, pass wewa, certificat, autorisation, quitus, quittance, badge : scannez le QR code avec la caméra, prenez-le en photo, ou saisissez le code imprimé dessous."><AideContextuelle cle="preuves.verifier" libelle="Aide : vérifier une preuve" /></PageHead>
       <ExampleNotice />
       <form className="card pv-form" onSubmit={submit}>
         <label htmlFor="pv-code">Code de la preuve</label>

@@ -142,6 +142,11 @@ export const CIRCUITS: Circuit[] = [
     guard: { url: '/v1/pilotage/repartition/cles/:id/activation/decision', key: (p) => p.id!, refusal: approveFalse },
   },
   {
+    code: 'APPRENTISSAGE_PUBLICATION', label: 'Publication d’un contenu d’apprentissage (fiche d’aide, module) — § 24',
+    proposals: ['apprentissage.contenu.publication_proposee'], approvals: ['apprentissage.contenu.publie'], refusals: ['apprentissage.contenu.publication_refusee'],
+    guard: { url: '/v1/apprentissage/contenus/:id/publication/decision', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
     code: 'REGISTRE_SEUILS', label: 'Registre des seuils anti-fraude (confirmation ou modification)',
     proposals: ['integrite.threshold.change_proposed'], approvals: ['integrite.threshold.change_approved'], refusals: ['integrite.threshold.change_rejected'],
   },
