@@ -114,9 +114,12 @@ export function registerVerticalRoutes(app: FastifyInstance, ctx: AppContext, sv
     const body = parse(z.object({ reason }).strict(), req.body);
     return reply.code(201).send(svc.replacePlate(requireUser(req), req.params.code, body.reason));
   });
-  app.get<{ Params: { code: string } }>('/v1/verticales/plates/:code/scan', async (req) => {
+  app.get<{ Params: { code: string }; Querystring: Record<string, string> }>('/v1/verticales/plates/:code/scan', async (req) => {
     const user = requireUser(req);
-    const r = svc.scanPlate(user, req.params.code);
+    // Position du terminal facultative (présence attestée : condition d'une commission sur ce scan).
+    const q = parse(z.object({ lat: z.coerce.number().min(-90).max(90).optional(), lon: z.coerce.number().min(-180).max(180).optional(), accuracyM: z.coerce.number().min(0).max(100_000).optional() }), req.query);
+    const gps = q.lat !== undefined && q.lon !== undefined && q.accuracyM !== undefined ? { lat: q.lat, lon: q.lon, accuracyM: q.accuracyM } : undefined;
+    const r = svc.scanPlate(user, req.params.code, gps);
     const owner = ctx.objects.objects.get(r.object.id)?.taxpayerId ?? null;
     return withOverdue(ctx, user, r, { taxpayerId: owner }, 'VERTICALES', `SCAN:${r.plate.code}`);
   });

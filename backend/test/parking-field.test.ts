@@ -184,10 +184,12 @@ describe('Commission des agents : 10 % des pénalités et des paiements génér�
     expect(s.lines.find((l: { source: string }) => l.source === 'PENALITE').state).toBe('ACQUISE');
     expect(s.totals.acquise).toEqual([{ amount: '2000.00', currency: 'CDF' }]);
 
-    // Paiement généré : session ouverte dans l'heure qui suit le contrôle rouge de l'agent.
+    // Paiement généré : session ouverte dans l'heure qui suit le contrôle rouge de l'agent — contrôle à présence
+    // attestée (GPS dans la zone) et session au-delà du délai de grâce (10 min après la première observation).
     const plate = 'KN-0661-TS';
     await e.req('POST', '/v1/parking/vehicles', 'u-contribuable', { plate });
-    expect((await e.req('GET', `/v1/parking/control/${plate}?zoneId=${PARKING_DEMO.zoneGombe}`, 'pk-controleur')).json().light).toBe('ROUGE');
+    const redCtl = (await e.req('GET', `/v1/parking/control/${plate}?zoneId=${PARKING_DEMO.zoneGombe}&lat=${GPS.lat}&lon=${GPS.lon}&accuracyM=${GPS.accuracyM}`, 'pk-controleur')).json();
+    expect(redCtl).toMatchObject({ light: 'ROUGE', presenceVerified: true });
     e.clock.advance(10 * 60_000);
     const sesR = await e.req('POST', '/v1/parking/sessions', 'u-contribuable', { zoneId: PARKING_DEMO.zoneGombe, plate, durationMinutes: 60 }, { 'idempotency-key': randomUUID() });
     expect(sesR.statusCode, sesR.body).toBe(201);
@@ -249,14 +251,17 @@ describe('Commission de 10 % : tous les agents, quel que soit leur module', () =
     const ob = open(plate.objectId)[0]!;
     const svc = (e.app.ctx.ext.sanctions as { commissions: { lines(a?: string): { obligationId: string; agentId: string }[] } }).commissions;
     // Scan avant l'échéance (situation non rouge) : aucun défaut révélé, rien d'attribuable à ce scan.
+    // Scan à présence attestée : position du terminal à l'objet (sans elle, le scan ne fonde aucune commission).
+    const obj = e.app.ctx.objects.objects.get(plate.objectId)!;
+    const here = `lat=${obj.lat}&lon=${obj.lon}&accuracyM=10`;
     const dueMs = Date.parse(`${ob.dueDate}T00:00:00.000Z`);
     if (e.clock.now().getTime() < dueMs) {
-      const early = (await e.req('GET', `/v1/verticales/plates/${plate.code}/scan`, scanner)).json();
+      const early = (await e.req('GET', `/v1/verticales/plates/${plate.code}/scan?${here}`, scanner)).json();
       expect(early.situation.color).not.toBe('red');
       e.clock.set(new Date(dueMs + 86_400_000).toISOString());
     }
     // Scan après l'échéance : situation ROUGE conservée sur le scan.
-    const scan = await e.req('GET', `/v1/verticales/plates/${plate.code}/scan`, scanner);
+    const scan = await e.req('GET', `/v1/verticales/plates/${plate.code}/scan?${here}`, scanner);
     expect(scan.statusCode, scan.body).toBe(200);
     expect(scan.json().situation.color).toBe('red');
     e.clock.advance(2 * 3_600_000);

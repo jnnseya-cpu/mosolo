@@ -36,7 +36,15 @@ export function seedSanctions(ctx: AppContext): void {
     ...(cur.verification ? { verification: { ...cur.verification, at: back(cur.verification.at) } } : {}),
     ...(cur.decision ? { decision: { ...cur.decision, at: back(cur.decision.at) } } : {}),
   });
-  svc.control(controleur, 'KN-0321-DM', PARKING_DEMO.zoneGombe);
+  // Contrôle rouge à présence attestée (GPS au centre de la zone), vingt minutes avant la session : au-delà du délai de
+  // grâce, le paiement est attribué au contrôle (démonstration).
+  const zg = svc.zones.get(PARKING_DEMO.zoneGombe);
+  if (zg) {
+    svc.checks.append({
+      id: 'CHK-DEMO-SANCTIONS-01', plate: 'KN-0321-DM', zoneId: zg.id, commune: zg.commune, light: 'ROUGE', title: null, agentId: controleur.id,
+      at: new Date(ctx.clock.now().getTime() - 20 * 60_000).toISOString(), gps: { lat: zg.center.lat, lon: zg.center.lon, accuracyM: 8 }, distanceFromZoneM: 0, presenceVerified: true,
+    });
+  }
   const s3 = svc.startSession(owner, { zoneId: PARKING_DEMO.zoneGombe, plate: 'KN-0321-DM', durationMinutes: 60 });
   demoPay(ctx, owner, s3.obligation.id);
 
@@ -51,7 +59,8 @@ export function seedSanctions(ctx: AppContext): void {
       const ob = ctx.assessment.obligations.find((o) => o.objectId === p.objectId && o.status !== 'SOLDEE' && o.status !== 'ANNULEE' && o.status !== 'CONTESTEE' && (o.dueDate < today || o.status === 'EN_RETARD'))[0];
       const payer = ob ? ctx.users.all().find((u) => u.taxpayerId === ob.taxpayerId) : undefined;
       if (!agent || !ob || !payer) continue;
-      vx.scanPlate(agent, p.code);
+      const obj = ctx.objects.objects.get(p.objectId);
+      vx.scanPlate(agent, p.code, obj ? { lat: obj.lat, lon: obj.lon, accuracyM: 10 } : undefined);
       demoPay(ctx, payer, ob.id);
       break;
     }

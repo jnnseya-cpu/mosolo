@@ -18,7 +18,10 @@ import type { User } from '../../core/auth.js';
 import { DAY_MS, isoDate } from '../../core/clock.js';
 import { dec, decMul, decToString, divideDecimalStrings } from '../../core/decimal.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
-import { assertDistinctPerson, authorize, evaluate } from '../../core/policy.js';
+import { assertDistinctPerson, assertNotRelated, authorize, evaluate } from '../../core/policy.js';
+import { sha256Hex } from '../../core/crypto.js';
+import { CLOCK_SKEW_WARN_SECONDS, lowAccuracy, MAX_PHOTO_BYTES, PHOTO_WINDOW_MINUTES } from '../parking/field.js';
+import { sampleForCounterCheck } from '../sanctions/service.js';
 import { validityView } from '../../core/validity.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
@@ -102,6 +105,11 @@ export interface AuthorizationRequest {
   instruction?: { by: string; at: string; proposal: 'ACCORDER' | 'REFUSER'; analysis: string };
   decision?: { by: string; at: string; outcome: 'ACCORDEE' | 'REFUSEE'; reason: string };
   liquidation?: { status: 'EMISE' | 'ACTE_REQUIS'; obligationId: string | null; ruleCode: string | null; note: string };
+  /**
+   * Liquidation différée (autorisation accordée sous « acte requis », barème devenu ACTIF depuis) : proposée par
+   * l'instructeur, approuvée par une personne distincte (quatre yeux) qui liquide en son nom.
+   */
+  liquidationProposal?: { by: string; at: string; note: string; ruleCode: string; ruleVersion: number };
   expiryNoticeAt?: string;
   expiredNoticeAt?: string;
   submittedBy: string;
@@ -162,6 +170,38 @@ export interface AdInspection {
   presumedOperator: string | null;
   observations: string;
   caseId: string | null;
+  /** Photos conservées au serveur (JPEG reçu, empreinte vérifiée) ; absentes : seules des empreintes déclarées. */
+  serverPhotoIds?: string[];
+  /** Preuve faible : aucune photo conservée au serveur, ou position imprécise / ajustée à la main. */
+  weakEvidence?: boolean;
+}
+
+/** Photo de preuve d'une inspection, versée au serveur avant le constat (image conservée, jamais modifiable). */
+export interface AdEvidencePhoto {
+  id: string;
+  sha256: string;
+  mime: 'image/jpeg';
+  sizeBytes: number;
+  dataBase64: string;
+  lat: number;
+  lon: number;
+  accuracyM: number | null;
+  gpsSource: 'GPS' | 'MANUEL' | 'ZONE';
+  stampedAt: string;
+  receivedAt: string;
+  clockSkewSeconds: number;
+  agentId: string;
+  inspectionId: string | null;
+}
+
+export type AdPhotoMeta = Omit<AdEvidencePhoto, 'dataBase64'> & { url: string; clockWarning: boolean; lowAccuracy: boolean };
+
+const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
+
+/** Preuve faible d'une inspection (même règle pour le vérificateur et la surveillance des agents). */
+export function inspectionWeakEvidence(i: AdInspection): boolean {
+  if (i.weakEvidence !== undefined) return i.weakEvidence;
+  return !i.serverPhotoIds?.length || lowAccuracy(i.gpsSource ?? 'GPS', i.gpsAccuracyM);
 }
 
 export interface AdCase {
@@ -193,6 +233,8 @@ export class PubliciteService {
   readonly inspections = new InMemoryAppendOnlyRepository<AdInspection>();
   readonly cases = new InMemoryRepository<AdCase>();
   readonly accreditations = new InMemoryRepository<Accreditation>();
+  /** Photos de preuve des inspections (images conservées au serveur). */
+  readonly photos = new InMemoryRepository<AdEvidencePhoto>();
   private readonly ids = new IdGenerator();
 
   constructor(private readonly ctx: AppContext) {}
@@ -490,6 +532,63 @@ export class PubliciteService {
     return this.requestView(updated);
   }
 
+  /** Barème applicable au support (publicité mobile ou taxe au m²) ACTIF ? */
+  private taxRuleActive(d: AdDevice): boolean {
+    return !!activeRule(this.ctx, d.placement === 'VEHICULE' ? AD_MOBILE_TAX_RULE : AD_TAX_RULE);
+  }
+
+  /**
+   * File des autorisations accordées sous « acte requis » dont le barème est désormais ACTIF : droits à liquider
+   * (proposition de l'instructeur, approbation par une personne distincte).
+   */
+  pendingLiquidations(user: User) {
+    if (!evaluate(user, 'publicite:liquidation.propose', { entity: DGTK })) authorize(user, 'publicite:liquidation.approve', { entity: DGTK });
+    return this.requests
+      .find((r) => r.status === 'ACCORDEE' && r.liquidation?.status === 'ACTE_REQUIS')
+      .filter((r) => { const d = this.devices.get(r.deviceId); return !!d && d.registration !== 'RETIRE' && this.taxRuleActive(d); })
+      .sort((a, b) => a.submittedAt.localeCompare(b.submittedAt))
+      .map((r) => this.requestView(r));
+  }
+
+  private pendingLiquidation(id: string): { r: AuthorizationRequest; d: AdDevice } {
+    const r = this.getRequest(id);
+    if (r.status !== 'ACCORDEE' || r.liquidation?.status !== 'ACTE_REQUIS') throw conflict('NOTHING_TO_LIQUIDATE', 'Aucune liquidation en attente d’acte pour cette autorisation.');
+    const d = this.getDevice(r.deviceId);
+    if (d.registration === 'RETIRE') throw conflict('DEVICE_RETIRED', 'Dispositif retiré : plus aucun droit ne court.');
+    if (!this.taxRuleActive(d)) throw unprocessable('RULE_NOT_ACTIVE', 'Barème toujours non publié (acte requis) : aucune liquidation possible.');
+    return { r, d };
+  }
+
+  /** Proposition de liquidation différée (instructeur, R07). */
+  proposeLiquidation(user: User, id: string, note: string) {
+    authorize(user, 'publicite:liquidation.propose', { entity: DGTK });
+    const { r, d } = this.pendingLiquidation(id);
+    assertNotRelated(user, r.taxpayerId, 'Conflit d’intérêts : vous êtes lié au redevable ; la proposition revient à un autre instructeur.');
+    const rule = activeRule(this.ctx, d.placement === 'VEHICULE' ? AD_MOBILE_TAX_RULE : AD_TAX_RULE)!;
+    const at = this.now().toISOString();
+    const updated = this.requests.update({
+      ...r, liquidationProposal: { by: user.id, at, note, ruleCode: rule.code, ruleVersion: rule.version },
+      history: [...r.history, { at, by: user.id, action: 'LIQUIDATION_PROPOSEE', note }],
+    });
+    this.ctx.audit.append({ actor: actorOf(user), action: 'publicite.liquidation.proposed', resourceType: 'ad_authorization', resourceId: r.id, details: { ruleCode: rule.code, ruleVersion: rule.version, note } });
+    return this.requestView(updated);
+  }
+
+  /** Approbation (quatre yeux) : personne distincte du proposant ; liquidation par la règle ACTIVE, au nom de l'approbateur. */
+  approveLiquidation(user: User, id: string, reason: string) {
+    authorize(user, 'publicite:liquidation.approve', { entity: DGTK });
+    const { r, d } = this.pendingLiquidation(id);
+    if (!r.liquidationProposal) throw conflict('LIQUIDATION_NOT_PROPOSED', 'Proposition de liquidation préalable requise (quatre yeux).');
+    assertDistinctPerson(user.id, [r.liquidationProposal.by], 'Proposition et approbation de la liquidation : deux personnes distinctes sont exigées.');
+    assertNotRelated(user, r.taxpayerId, 'Conflit d’intérêts : vous êtes lié au redevable ; l’approbation revient à une autre personne habilitée.');
+    const liquidation = this.liquidateDevice(user, d);
+    const at = this.now().toISOString();
+    const updated = this.requests.update({ ...r, liquidation, history: [...r.history, { at, by: user.id, action: 'LIQUIDATION_APPROUVEE', note: reason }] });
+    this.ctx.audit.append({ actor: actorOf(user), action: 'publicite.liquidation.approved', resourceType: 'ad_authorization', resourceId: r.id, details: { reason, liquidation, proposedBy: r.liquidationProposal.by } });
+    if (liquidation.obligationId) this.ctx.comms.publish('permit.issued', [taxpayerRecipient(this.ctx.taxpayers.get(r.taxpayerId))], { reference: r.reference }, { entity: DGTK });
+    return this.requestView(updated);
+  }
+
   requestView(r: AuthorizationRequest) {
     const d = this.devices.get(r.deviceId);
     const ob = r.liquidation?.obligationId ? this.ctx.assessment.get(r.liquidation.obligationId) : null;
@@ -591,6 +690,8 @@ export class PubliciteService {
       throw forbidden('NOT_ACCREDITED', 'Inspecteur non accrédité (ou accréditation expirée, révoquée ou hors périmètre) : aucun constat possible.');
     }
     if (input.photos.length === 0) throw badRequest('PHOTO_REQUIRED', 'Constat photographique : au moins une photographie (empreinte SHA-256) est exigée.');
+    // Photos versées au serveur par l'inspecteur (récentes, non encore jointes) : seules elles font une preuve forte.
+    const serverPhotos = this.claimPhotos(user, input.photos);
     if (!device) {
       if (input.finding !== 'NON_DECLARE' || !input.newDevice) {
         throw badRequest('DEVICE_REQUIRED', 'Dispositif inconnu : seul un constat « non déclaré » avec description du support peut l’enregistrer.');
@@ -618,12 +719,74 @@ export class PubliciteService {
       photos: input.photos, lat: input.lat, lon: input.lon, gpsAccuracyM: input.gpsAccuracyM ?? null, gpsSource: input.gpsSource ?? 'GPS', observedAt: now.toISOString(),
       qrScanned: input.qrScanned ?? null, ocrText: input.ocrText ?? null, ocrMatches, authorizationValidAtInspection: st.status === 'AUTORISE',
       presumedOperator: input.presumedOperator ?? null, observations: input.observations, caseId,
+      serverPhotoIds: serverPhotos.map((p) => p.id),
+      weakEvidence: serverPhotos.length === 0 || lowAccuracy(input.gpsSource ?? 'GPS', input.gpsAccuracyM ?? null),
     });
+    for (const p of serverPhotos) this.photos.update({ ...p, inspectionId: insp.id });
     this.ctx.audit.append({
       actor: actorOf(user), action: 'publicite.inspection.recorded', resourceType: 'ad_inspection', resourceId: insp.id,
-      details: { deviceId: device.id, finding: insp.finding, photos: insp.photos, lat: insp.lat, lon: insp.lon, caseId },
+      details: { deviceId: device.id, finding: insp.finding, photos: insp.photos, serverPhotos: serverPhotos.length, weakEvidence: insp.weakEvidence, lat: insp.lat, lon: insp.lon, caseId },
     });
     return { inspection: insp, device: this.deviceView(this.getDevice(device.id), { withOwner: true }), case: caseId ? this.caseView(this.cases.get(caseId)!) : null };
+  }
+
+  // ---------------------------------------------------------------- Photos de preuve (conservées au serveur)
+
+  photoMeta(p: AdEvidencePhoto): AdPhotoMeta {
+    const { dataBase64: _omit, ...rest } = p;
+    return { ...rest, url: `/v1/publicite/evidence-photos/${p.id}`, clockWarning: p.clockSkewSeconds > CLOCK_SKEW_WARN_SECONDS, lowAccuracy: lowAccuracy(p.gpsSource, p.accuracyM) };
+  }
+
+  /**
+   * Versement d'une photo par l'inspecteur accrédité, avant le constat : JPEG, empreinte SHA-256 recalculée et
+   * comparée, image conservée telle que reçue ; une même image ne sert jamais deux fois. Le constat la cite par son
+   * empreinte (champ `photos`).
+   */
+  uploadPhoto(user: User, input: { imageBase64: string; sha256: string; lat: number; lon: number; accuracyM?: number; gpsSource: 'GPS' | 'MANUEL' | 'ZONE'; stampedAt: string }): AdPhotoMeta {
+    authorize(user, 'publicite:inspection.create', { communes: user.territory ?? [] });
+    const acc = this.accreditations.get(user.id);
+    if (!this.accreditationValid(acc)) throw forbidden('NOT_ACCREDITED', 'Inspecteur non accrédité (ou accréditation expirée ou révoquée).');
+    const buf = Buffer.from(input.imageBase64, 'base64');
+    if (buf.length === 0 || buf.length > MAX_PHOTO_BYTES) throw badRequest('PHOTO_SIZE', `Photo vide ou trop lourde (${Math.round(MAX_PHOTO_BYTES / 1000)} Ko au plus).`);
+    if (!buf.subarray(0, 3).equals(JPEG_MAGIC)) throw badRequest('PHOTO_FORMAT', 'Photo JPEG attendue.');
+    const sha = sha256Hex(buf);
+    if (sha !== input.sha256.toLowerCase()) throw unprocessable('PHOTO_HASH_MISMATCH', 'Empreinte SHA-256 différente de l’image reçue : photo altérée en transit.');
+    if (this.photos.findOne((p) => p.sha256 === sha)) throw conflict('PHOTO_DUPLICATE', 'Cette photo a déjà été versée (une même image ne peut pas servir deux fois).');
+    const now = this.now();
+    const skew = Math.round(Math.abs(now.getTime() - Date.parse(input.stampedAt)) / 1000);
+    const photo = this.photos.insert({
+      id: this.ids.next('ADP'), sha256: sha, mime: 'image/jpeg', sizeBytes: buf.length, dataBase64: buf.toString('base64'),
+      lat: input.lat, lon: input.lon, accuracyM: input.accuracyM ?? null, gpsSource: input.gpsSource, stampedAt: input.stampedAt, receivedAt: now.toISOString(),
+      clockSkewSeconds: Number.isFinite(skew) ? skew : 999_999, agentId: user.id, inspectionId: null,
+    });
+    this.ctx.audit.append({ actor: actorOf(user), action: 'publicite.evidence.photo.received', resourceType: 'ad_evidence_photo', resourceId: photo.id, details: { sha256: sha, bytes: buf.length, gpsSource: input.gpsSource } });
+    return this.photoMeta(photo);
+  }
+
+  /** Photos du serveur citées par empreinte : même inspecteur, non jointes, versées depuis moins de 30 minutes. */
+  private claimPhotos(user: User, hashes: string[]): AdEvidencePhoto[] {
+    const now = this.now().getTime();
+    const wanted = new Set(hashes.map((h) => h.toLowerCase()));
+    return this.photos.find((p) => wanted.has(p.sha256) && p.agentId === user.id && p.inspectionId === null && now - Date.parse(p.receivedAt) <= PHOTO_WINDOW_MINUTES * 60_000);
+  }
+
+  /** Lecture d'une photo : son auteur ; une fois jointe, les lecteurs du support (vérificateur, régie, exploitant). */
+  readPhoto(user: User, id: string): { mime: string; data: Buffer; sha256: string } {
+    const p = this.photos.get(id);
+    if (!p) throw notFound('PHOTO_NOT_FOUND', 'Photo inconnue.');
+    if (p.agentId !== user.id) {
+      const insp = p.inspectionId ? this.inspections.get(p.inspectionId) : undefined;
+      const d = insp ? this.devices.get(insp.deviceId) : undefined;
+      if (!insp || !d) throw forbidden('FORBIDDEN', 'Photo non encore jointe à une inspection : visible de son auteur seulement.');
+      authorize(user, 'publicite:device.read', { taxpayerId: d.ownerTaxpayerId ?? undefined, communes: [d.commune], entity: DGTK });
+    }
+    this.ctx.audit.append({ actor: actorOf(user), action: 'publicite.evidence.photo.viewed', resourceType: 'ad_evidence_photo', resourceId: id, details: { inspectionId: p.inspectionId } });
+    return { mime: p.mime, data: Buffer.from(p.dataBase64, 'base64'), sha256: p.sha256 };
+  }
+
+  /** Exploitant (bénéficiaire) du support d'un dossier : contrôle du conflit d'intérêts. */
+  private beneficiaryOf(c: AdCase): string | null {
+    return this.devices.get(c.deviceId)?.ownerTaxpayerId ?? null;
   }
 
   private getCase(id: string): AdCase {
@@ -638,6 +801,7 @@ export class PubliciteService {
     if (c.status !== 'CONSTATE') throw conflict('CASE_NOT_PENDING_VERIFICATION', `Dossier au statut ${c.status}.`);
     const insp = this.inspections.get(c.inspectionId)!;
     assertDistinctPerson(user.id, [insp.inspectorId], 'Le vérificateur doit être distinct de l’inspecteur auteur du constat.');
+    assertNotRelated(user, this.beneficiaryOf(c), 'Conflit d’intérêts : vous êtes lié à l’exploitant du support ; la vérification revient à un autre superviseur.');
     const updated = this.cases.update({ ...c, status: input.confirm ? 'VERIFIE' : 'REJETE_QA', verification: { by: user.id, at: this.now().toISOString(), outcome: input.confirm ? 'CONFIRME' : 'REJETE', note: input.note } });
     this.ctx.audit.append({ actor: actorOf(user), action: input.confirm ? 'publicite.case.verified' : 'publicite.case.rejected_qa', resourceType: 'ad_case', resourceId: c.id, details: { note: input.note } });
     if (!input.confirm) {
@@ -658,6 +822,8 @@ export class PubliciteService {
     if (c.status !== 'VERIFIE') throw conflict('CASE_NOT_VERIFIED', `Décision impossible : dossier au statut ${c.status} (vérification préalable requise).`);
     const insp = this.inspections.get(c.inspectionId)!;
     assertDistinctPerson(user.id, [insp.inspectorId, c.verification!.by], 'Constat, vérification et décision : trois personnes distinctes sont exigées.');
+    assertNotRelated(user, this.beneficiaryOf(c), 'Conflit d’intérêts : vous êtes lié à l’exploitant du support ; la décision revient à une autre personne habilitée.');
+    assertNotRelated(user, input.ownerTaxpayerId, 'Conflit d’intérêts : vous êtes lié à l’exploitant à rattacher ; la décision revient à une autre personne habilitée.');
     let d = this.getDevice(c.deviceId);
     const effects: string[] = [];
     let obligationId: string | null = null;
@@ -676,7 +842,10 @@ export class PubliciteService {
       } else {
         effects.push('Mise en conformité demandée à l’exploitant.');
       }
-      if (input.liquidateDues && c.finding !== 'RETIRE') {
+      // Support non déclaré : les droits sont liquidés par défaut dès que le barème applicable est ACTIF et l'exploitant
+      // identifié (la personne qui décide peut l'écarter explicitement : liquidateDues = false).
+      const liquidate = input.liquidateDues ?? (c.finding === 'NON_DECLARE' && !!d.ownerTaxpayerId && this.taxRuleActive(d));
+      if (liquidate && c.finding !== 'RETIRE') {
         if (!d.ownerTaxpayerId) throw unprocessable('DEVICE_OWNER_UNKNOWN', 'Liquidation impossible : exploitant non identifié.');
         const liq = this.liquidateDevice(user, d);
         obligationId = liq.obligationId;
@@ -693,6 +862,8 @@ export class PubliciteService {
       ...(notify ? { notifiedAt: now } : {}),
     });
     this.ctx.audit.append({ actor: actorOf(user), action: input.outcome === 'RETENU' ? 'publicite.case.retained' : 'publicite.case.dismissed', resourceType: 'ad_case', resourceId: c.id, details: { reason: input.reason, effects, obligationId } });
+    // Contre-vérification aléatoire d'un échantillon de dossiers retenus (superviseur, résultat enregistré).
+    if (input.outcome === 'RETENU') sampleForCounterCheck(this.ctx, { module: 'PUBLICITE', caseId: c.id, reference: c.reference, agentId: insp.inspectorId, commune: c.commune, involved: [insp.inspectorId, c.verification!.by, user.id] });
     // Notification : référence, support, nature, preuves, démarches, délais, voies de contestation, paiement officiel.
     if (notify) this.ctx.comms.publish('inspection.report.issued', [taxpayerRecipient(notify)], { reference: c.reference }, { entity: DGTK });
     return this.caseView(updated);
@@ -718,7 +889,12 @@ export class PubliciteService {
     const ob = c.decision?.obligationId ? this.ctx.assessment.get(c.decision.obligationId) : null;
     return {
       ...c,
-      inspection: insp ? { reference: insp.reference, inspectorId: insp.inspectorId, photos: insp.photos, lat: insp.lat, lon: insp.lon, observedAt: insp.observedAt, observations: insp.observations, ocrMatches: insp.ocrMatches, presumedOperator: insp.presumedOperator } : null,
+      inspection: insp ? {
+        reference: insp.reference, inspectorId: insp.inspectorId, photos: insp.photos, lat: insp.lat, lon: insp.lon, observedAt: insp.observedAt, observations: insp.observations, ocrMatches: insp.ocrMatches, presumedOperator: insp.presumedOperator,
+        // Preuve montrée au vérificateur : photos conservées au serveur, ou seulement des empreintes déclarées (faible).
+        serverPhotos: (insp.serverPhotoIds ?? []).map((id) => this.photos.get(id)).filter((p): p is AdEvidencePhoto => !!p).map((p) => this.photoMeta(p)),
+        weakEvidence: inspectionWeakEvidence(insp),
+      } : null,
       device: d ? { id: d.id, reference: d.reference, type: d.type, commune: d.commune, address: d.address, surfaceM2: d.surfaceM2, faces: d.faces, ownerIdentified: d.ownerTaxpayerId !== null } : null,
       obligation: ob ? noticeOf(ob, paymentState(this.ctx, ob.id).state) : null,
       appealPath: 'Contestation dans MOSOLO (observations avant décision ; réclamation sur l’obligation après décision), délai indiqué dans l’avis.',
