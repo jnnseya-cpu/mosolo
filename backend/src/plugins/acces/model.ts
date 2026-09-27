@@ -189,6 +189,12 @@ export const SENSITIVE_ROLES: RoleCode[] = [
   'R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R08', 'R13', 'R14', 'R15', 'R16', 'R17', 'R18', 'R19', 'R21',
   'R22', 'R23', 'R24', 'R25', 'R26', 'R27', 'R28', 'R29',
 ];
+/**
+ * Rôles de la chaîne constat → vérification → décision (chef de service, superviseur, contrôleur, contentieux) :
+ * non « sensibles » au sens de la clé d'accès, mais activés seulement après seconde validation par une personne
+ * distincte de l'invitant — un invitant seul ne peut pas fabriquer les maillons successifs d'un même dossier.
+ */
+export const SECOND_VALIDATION_ROLES: RoleCode[] = ['R07', 'R09', 'R11', 'R20'];
 /** Agents de terrain : actifs seulement après habilitation par la régie (formation certifiée, § 15A.4). */
 export const FIELD_ROLES: RoleCode[] = ['R10', 'R35'];
 
@@ -222,6 +228,8 @@ export interface Invitation {
   finalizedAt?: string;
   finalizedVia?: 'LIEN' | 'OPERATEUR_ACCES';
   accountId?: string;
+  /** Personne physique ayant finalisé l'invitation (empreinte à clé de la pièce d'identité). */
+  personId?: string;
   revokedAt?: string;
   revokedReason?: string;
 }
@@ -245,6 +253,13 @@ export interface WorkAccount {
   /** Secrets définis par la personne elle-même (jamais par l'opérateur d'accès, § 12A.7). */
   secretsPending: boolean;
   deviceId?: string;
+  /**
+   * Personne physique : empreinte HMAC (clé serveur) du numéro de pièce d'identité normalisé — jamais le numéro.
+   * Un seul compte de travail non clos par personne.
+   */
+  personId?: string;
+  /** Date de naissance déclarée à la finalisation (détection de doublons nom + date de naissance). */
+  birthDate?: string;
   /** Profil contribuable de la même personne (deux profils distincts, sans croisement, § 12A.1). */
   linkedTaxpayerIds: string[];
   createdAt: string;

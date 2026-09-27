@@ -13,16 +13,16 @@ import type { AppContext } from '../../context.js';
 import type { AuditActor } from '../../core/audit.js';
 import { ACR, hasAcr, isDemoMode, type User } from '../../core/auth.js';
 import { isoDate } from '../../core/clock.js';
-import { randomSecret, sha256Hex } from '../../core/crypto.js';
+import { hmacSha256Hex, randomSecret, sha256Hex } from '../../core/crypto.js';
 import { ApiError, conflict, forbidden, notFound, unauthorized, unprocessable } from '../../core/errors.js';
-import { assertDistinctPerson, evaluate, registerRelatedTaxpayersResolver, type AnyAction } from '../../core/policy.js';
+import { assertDistinctPerson, evaluate, registerPersonResolver, registerRelatedTaxpayersResolver, type AnyAction } from '../../core/policy.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { obligationSummary } from '../../modules/assessment/views.js';
 import type { Recipient } from '../../modules/communications/service.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
 import { maskPhone, type Taxpayer } from '../../modules/identity/service.js';
 import {
-  FIELD_ROLES, LEVEL_INFO, LEVEL_ORDER, LEVEL_RANK, LEVEL_RIGHTS, ROLE_LEVEL, SENSITIVE_ROLES,
+  FIELD_ROLES, LEVEL_INFO, LEVEL_ORDER, LEVEL_RANK, LEVEL_RIGHTS, ROLE_LEVEL, SECOND_VALIDATION_ROLES, SENSITIVE_ROLES,
   type AccessLevel, type ArbitrationCase, type Claim, type Consultation, type EntityKind, type EntitySpace, type Grant,
   type IdentityProof, type Invitation, type InvitationScope, type Mandate, type MandateAction, type MergeRequest,
   type ModuleConfig, type ModuleStatus, type ModuleVisa, type Organisation, type OtpChallenge, type ProofType,
@@ -39,6 +39,10 @@ const SPECIAL_LEVELS: AccessLevel[] = ['AUDIT', 'ADMIN_TECHNIQUE'];
 const PUBLIC_ROLES: RoleCode[] = ['R30', 'R31'];
 
 export const normalizePhone = (p: string): string => p.replace(/[\s-]/g, '');
+/** Pièce présentée à la finalisation d'une invitation (numéro jamais conservé en clair). */
+export interface IdentityDocumentInput { type: string; number: string; birthDate?: string }
+/** Comptes clos : n'empêchent pas l'ouverture d'un nouveau compte pour la même personne. */
+const CLOSED_ACCOUNT: WorkAccount['status'][] = ['REVOQUE', 'EXPIRE'];
 const tooMany = (code: string, detail: string) => new ApiError(429, code, detail);
 
 function maskRef(ref: string): string {
@@ -76,11 +80,26 @@ export class AccesService {
   readonly ruleFacts = new Map<string, TaxableFact>();
   private readonly ids = new IdGenerator();
   private readonly smsWired: boolean;
+  /** Clé d'empreinte des pièces d'identité, dérivée du secret serveur (jamais le secret lui-même, jamais le numéro). */
+  private readonly personKey: string;
 
   constructor(private readonly ctx: AppContext) {
     this.smsWired = ctx.comms.channelStatus().some((c) => c.channel === 'sms' && c.wired);
+    this.personKey = hmacSha256Hex(ctx.secrets.auditHmacKey, 'mosolo:acces:empreinte-personne:v1');
     // Source des liens agent ↔ contribuables pour le contrôle de conflit d'intérêts (vérifier, décider, accorder).
     registerRelatedTaxpayersResolver((u) => this.relatedTaxpayers(u));
+    // Séparation des tâches par personne physique : compte → empreinte de la pièce d'identité.
+    registerPersonResolver((id) => this.ctx.users.get(id)?.personId ?? this.accounts.get(id)?.personId);
+  }
+
+  /**
+   * Identifiant de personne : HMAC (clé serveur) du numéro de pièce normalisé (majuscules, sans accents, espaces ni
+   * séparateurs). Le TYPE de pièce, saisi librement, est ignoré : changer le libellé ne fabrique pas une autre personne.
+   */
+  personIdFor(documentNumber: string): string {
+    const norm = documentNumber.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (norm.length < 3) throw unprocessable('ID_DOCUMENT_INVALID', 'Numéro de pièce d’identité illisible.');
+    return `P-${hmacSha256Hex(this.personKey, norm).slice(0, 40)}`;
   }
 
   /**
@@ -682,6 +701,8 @@ export class AccesService {
       id: u.id, fullName: u.name, entity: u.entity, accessLevel: this.userLevel(u) ?? 'CONSULTATION', roles: [...u.roles],
       scope: { ...(u.territory ? { territory: u.territory } : {}), ...(this.managedModules(u.id).length ? { modules: this.managedModules(u.id) } : {}) },
       canInvite: false, status: 'ACTIF', origin: 'AMORCAGE_DEMO', secretsPending: false, linkedTaxpayerIds: [], createdAt: this.now(),
+      // Comptes amorcés : pièce FICTIVE distincte par compte de démonstration (une personne par compte).
+      personId: u.personId ?? this.personIdFor(`DEMO-PIECE-${u.id}`),
     });
   }
 
@@ -703,7 +724,7 @@ export class AccesService {
   }
 
   accountView(a: WorkAccount) {
-    const { phone, ...rest } = a;
+    const { phone, personId: _p, birthDate: _b, ...rest } = a;
     return {
       ...rest, ...(phone ? { phoneMasked: maskPhone(phone) } : {}),
       accessLevelLabel: LEVEL_INFO[a.accessLevel].label, roleLabels: a.roles.map((r) => ROLES[r]),
@@ -734,7 +755,7 @@ export class AccesService {
   }
 
   invitationView(i: Invitation) {
-    const { tokenHash: _t, codeHash: _c, phone, ...rest } = i;
+    const { tokenHash: _t, codeHash: _c, personId: _p, phone, ...rest } = i;
     return { ...rest, phoneMasked: maskPhone(phone), accessLevelLabel: LEVEL_INFO[i.accessLevel].label, roleLabels: i.roles.map((r) => ROLES[r]) };
   }
 
@@ -880,13 +901,14 @@ export class AccesService {
     if (i.roles.includes('R01')) return 'HORS_BANDE_CABINET';
     if (i.accessLevel === 'AUDIT') return 'AUTORITE_AUDIT';
     if (i.canInvite || i.roles.some((r) => SENSITIVE_ROLES.includes(r)) || i.accessLevel === 'OPERATEUR_ACCES') return 'SECURITE';
+    if (i.roles.some((r) => SECOND_VALIDATION_ROLES.includes(r))) return 'SECURITE';
     if (i.roles.some((r) => FIELD_ROLES.includes(r))) return 'HABILITATION_REGIE';
     return null;
   }
 
   /** Finalisation depuis le lien : usage unique, lié au numéro, code, pièce, photo, MFA (§ 12A.5). */
   acceptInvitation(input: {
-    token: string; phone: string; code: string; identityDocument: { type: string; number: string }; photoTaken: true;
+    token: string; phone: string; code: string; identityDocument: IdentityDocumentInput; photoTaken: true;
     mfaMethod: 'PASSKEY' | 'TOTP' | 'SMS'; deviceId?: string;
   }) {
     const i = this.invitationByToken(input.token);
@@ -900,12 +922,12 @@ export class AccesService {
     if (i.roles.some((r) => FIELD_ROLES.includes(r)) && !input.deviceId) {
       throw unprocessable('DEVICE_REQUIRED', 'Agent de terrain : liaison à un terminal enregistré obligatoire.');
     }
-    return this.finalize(i, { via: 'LIEN', actor: { kind: 'public', id: `invite:${i.id}` }, mfaMethod: input.mfaMethod, idDocumentType: input.identityDocument.type, ...(input.deviceId ? { deviceId: input.deviceId } : {}) });
+    return this.finalize(i, { via: 'LIEN', actor: { kind: 'public', id: `invite:${i.id}` }, mfaMethod: input.mfaMethod, idDocument: input.identityDocument, ...(input.deviceId ? { deviceId: input.deviceId } : {}) });
   }
 
   /** Inscription assistée par l'opérateur d'accès désigné, en présence de la personne (§ 12A.7). */
   assistedFinalize(user: User, invitationId: string, input: {
-    identityDocument: { type: string; number: string }; photoTaken: true; otpCode?: string; witness?: { fullName: string; idNumber?: string };
+    identityDocument: IdentityDocumentInput; photoTaken: true; otpCode?: string; witness?: { fullName: string; idNumber?: string };
     gps: { lat: number; lon: number }; operatorDeviceId: string; personDeviceId?: string;
   }) {
     this.sweep();
@@ -926,26 +948,40 @@ export class AccesService {
       throw unprocessable('DEVICE_REQUIRED', 'Agent de terrain : liaison au terminal de terrain qui lui est attribué obligatoire.');
     }
     return this.finalize(i, {
-      via: 'OPERATEUR_ACCES', actor: this.actor(user), idDocumentType: input.identityDocument.type, ...(input.personDeviceId ? { deviceId: input.personDeviceId } : {}),
+      via: 'OPERATEUR_ACCES', actor: this.actor(user), idDocument: input.identityDocument, ...(input.personDeviceId ? { deviceId: input.personDeviceId } : {}),
       assisted: { operatorId: user.id, gps: input.gps, operatorDeviceId: input.operatorDeviceId, witness: !!input.witness },
     });
   }
 
   private finalize(i: Invitation, opts: {
-    via: 'LIEN' | 'OPERATEUR_ACCES'; actor: AuditActor; mfaMethod?: 'PASSKEY' | 'TOTP' | 'SMS'; idDocumentType: string; deviceId?: string;
+    via: 'LIEN' | 'OPERATEUR_ACCES'; actor: AuditActor; mfaMethod?: 'PASSKEY' | 'TOTP' | 'SMS'; idDocument: IdentityDocumentInput; deviceId?: string;
     assisted?: { operatorId: string; gps: { lat: number; lon: number }; operatorDeviceId: string; witness: boolean };
   }) {
+    // Une personne physique = un seul compte de travail non clos, quel que soit le téléphone (séparation des tâches).
+    const personId = this.personIdFor(opts.idDocument.number);
+    const existing = this.accounts.findOne((a) => a.personId === personId && !CLOSED_ACCOUNT.includes(a.status));
+    if (existing) {
+      this.log(opts.actor, 'invitation.duplicate_person', 'invitation', i.id, { entity: i.entity, existingAccountId: existing.id, existingEntity: existing.entity }, 'DENIED');
+      this.ctx.alerts.raise({
+        type: 'DUPLICATE_PERSON_ATTEMPT', severity: 'HIGH', source: 'acces',
+        detail: `Tentative d’ouvrir un second compte de travail pour une personne déjà titulaire du compte ${existing.id} (invitation ${i.id}).`,
+        context: { invitationId: i.id, existingAccountId: existing.id, inviterId: i.inviterId, entity: i.entity },
+      });
+      throw conflict('DUPLICATE_PERSON', 'Cette personne détient déjà un compte de travail non clos : un seul compte par personne ; changement de rôle par nouvelle validation, ou clôture préalable du compte existant.', { existingAccountId: existing.id });
+    }
     const id = this.ids.next('acc-u', 5);
-    this.ctx.users.add({ id, name: `${i.fullName} (invité)`, roles: [], entity: i.entity, ...(i.scope.territory?.length ? { territory: i.scope.territory } : {}), phone: i.phone });
+    this.ctx.users.add({ id, name: `${i.fullName} (invité)`, roles: [], entity: i.entity, ...(i.scope.territory?.length ? { territory: i.scope.territory } : {}), phone: i.phone, personId });
     const requirement = this.invitationRequirement(i);
     const linked = this.ctx.taxpayers.taxpayers.find((t) => t.phone === i.phone).map((t) => t.id);
     let acc = this.accounts.insert({
       id, fullName: i.fullName, phone: i.phone, entity: i.entity, accessLevel: i.accessLevel, roles: i.roles, scope: i.scope,
       canInvite: i.canInvite, status: requirement ? 'ATTENTE_VALIDATION' : 'ATTENTE_SECRETS', origin: 'INVITATION', invitationId: i.id,
       sponsorId: i.inviterId, ...(opts.mfaMethod ? { mfaMethod: opts.mfaMethod } : {}), secretsPending: opts.via === 'OPERATEUR_ACCES',
-      ...(opts.deviceId ? { deviceId: opts.deviceId } : {}), linkedTaxpayerIds: linked, createdAt: this.now(),
+      ...(opts.deviceId ? { deviceId: opts.deviceId } : {}), personId, ...(opts.idDocument.birthDate ? { birthDate: opts.idDocument.birthDate } : {}),
+      linkedTaxpayerIds: linked, createdAt: this.now(),
     });
-    this.invitations.update({ ...i, status: 'FINALISEE', finalizedAt: this.now(), finalizedVia: opts.via, accountId: id });
+    this.invitations.update({ ...i, status: 'FINALISEE', finalizedAt: this.now(), finalizedVia: opts.via, accountId: id, personId });
+    this.detectPossibleDuplicates(acc);
     let validationId: string | undefined;
     if (requirement) {
       validationId = this.validations.insert({
@@ -956,7 +992,7 @@ export class AccesService {
       acc = this.activate(acc);
     }
     this.log(opts.actor, opts.via === 'LIEN' ? 'invitation.finalized' : 'invitation.assisted_registration', 'invitation', i.id, {
-      entity: i.entity, accountId: id, status: acc.status, requirement, idDocumentType: opts.idDocumentType, ...(opts.assisted ? { assisted: opts.assisted } : {}),
+      entity: i.entity, accountId: id, status: acc.status, requirement, idDocumentType: opts.idDocument.type, ...(opts.assisted ? { assisted: opts.assisted } : {}),
     });
     const inviter = this.ctx.users.get(i.inviterId);
     const admins = this.ctx.users.all().filter((u) => u.entity === i.entity && u.roles.includes('R08'));
@@ -967,6 +1003,37 @@ export class AccesService {
         ? 'Identité vérifiée. Le compte reste inactif jusqu’à la seconde validation par une personne distincte de l’invitant.'
         : acc.status === 'ACTIF' ? 'Compte de travail actif.' : 'Compte créé : la personne doit définir elle-même ses secrets sur son terminal.',
     };
+  }
+
+  /**
+   * Détection (sans blocage : homonymes et terminaux partagés existent) : même nom et même date de naissance, ou même
+   * terminal, sur un autre compte non clos ⇒ alerte de sécurité à instruire (pièce d'identité différente déclarée).
+   */
+  private detectPossibleDuplicates(acc: WorkAccount): void {
+    const key = (n: string) => normName(n).sort().join(' ');
+    const name = key(acc.fullName);
+    const reasons = new Map<string, Set<string>>();
+    const flag = (other: string, reason: string) => {
+      const set = reasons.get(other) ?? new Set<string>();
+      set.add(reason);
+      reasons.set(other, set);
+    };
+    for (const a of this.accounts.all()) {
+      if (a.id === acc.id || CLOSED_ACCOUNT.includes(a.status)) continue;
+      if (acc.birthDate && a.birthDate === acc.birthDate && key(a.fullName) === name) flag(a.id, 'NOM_ET_DATE_DE_NAISSANCE');
+      if (acc.deviceId && a.deviceId === acc.deviceId) flag(a.id, 'MEME_TERMINAL');
+    }
+    if (acc.deviceId) {
+      for (const d of this.ctx.field.devices.find((x) => x.id === acc.deviceId && x.agentUserId !== acc.id && x.status === 'ACTIF')) flag(d.agentUserId, 'MEME_TERMINAL');
+    }
+    if (reasons.size === 0) return;
+    const matches = [...reasons].map(([accountId, r]) => ({ accountId, reasons: [...r] }));
+    this.ctx.alerts.raise({
+      type: 'POSSIBLE_DUPLICATE_PERSON', severity: 'HIGH', source: 'acces',
+      detail: `Compte ${acc.id} : indices d’une même personne derrière plusieurs comptes de travail (${matches.map((m) => `${m.accountId} — ${m.reasons.join(', ')}`).join(' ; ')}).`,
+      context: { accountId: acc.id, matches },
+    });
+    this.log({ kind: 'system', id: 'acces' }, 'account.possible_duplicate', 'account', acc.id, { entity: acc.entity, matches });
   }
 
   private activate(acc: WorkAccount): WorkAccount {

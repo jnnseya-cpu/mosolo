@@ -94,6 +94,13 @@ describe('Domaine', () => {
     expect(hasIncompatibility(['R26', 'R17'])).toEqual(['R26', 'R17']);
     expect(hasIncompatibility(['R01'])).toBeNull();
   });
+  it('un agent de terrain (ou tout agent public, ou sous-traitant) ne peut pas être opérateur de point de paiement', () => {
+    expect(hasIncompatibility(['R10', 'R32'])).toEqual(['R10', 'R32']);
+    expect(hasIncompatibility(['R32', 'R35'])).toEqual(['R35', 'R32']);
+    for (let i = 1; i <= 29; i++) expect(hasIncompatibility([`R${String(i).padStart(2, '0')}` as 'R01', 'R32'])).not.toBeNull();
+    expect(hasIncompatibility(['R32', 'R33'])).toBeNull();
+    expect(hasIncompatibility(['R32'])).toBeNull();
+  });
 });
 
 describe('i18n', () => {

@@ -219,9 +219,28 @@ export function authorize(principal: Principal, action: AnyAction, resource: Res
   return access;
 }
 
-/** Séparation des tâches sur un même dossier : la personne ne doit pas déjà être intervenue. */
+/**
+ * Résolution compte → personne physique (empreinte de la pièce d'identité), fournie par le module d'accès.
+ * Sans résolveur ou sans empreinte connue, chaque compte vaut une personne (comportement historique).
+ */
+type PersonResolver = (userId: string) => string | undefined;
+let personResolver: PersonResolver = () => undefined;
+export function registerPersonResolver(fn: PersonResolver): void {
+  personResolver = fn;
+}
+/** Identifiant de la personne derrière un compte (à défaut, le compte lui-même). */
+export function personOf(userId: string): string {
+  return personResolver(userId) ?? `compte:${userId}`;
+}
+
+/**
+ * Séparation des tâches sur un même dossier : la PERSONNE (et non seulement le compte) ne doit pas déjà être
+ * intervenue. Deux comptes d'une même personne (autre téléphone, même pièce d'identité) sont une seule personne.
+ */
 export function assertDistinctPerson(userId: string, previous: string[], detail: string): void {
   if (previous.includes(userId)) throw forbidden('SEPARATION_OF_DUTIES', detail);
+  const me = personResolver(userId);
+  if (me && previous.some((p) => !!p && personResolver(p) === me)) throw forbidden('SEPARATION_OF_DUTIES', detail, { samePerson: true });
 }
 
 /**

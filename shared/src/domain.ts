@@ -91,6 +91,10 @@ export const INCOMPATIBLE_ROLES: [RoleCode, RoleCode][] = [
   ['R13', 'R14'], ['R13', 'R15'], ['R13', 'R16'], ['R14', 'R16'],
   ['R10', 'R17'], ['R19', 'R17'], ['R26', 'R17'], ['R26', 'R19'], ['R26', 'R13'], ['R26', 'R06'],
   ['R22', 'R17'], ['R22', 'R10'], ['R22', 'R06'], ['R29', 'R06'],
+  // Un agent public (R01 à R29) ou un sous-traitant terrain (R35) ne manie jamais d'espèces : le rôle d'opérateur de
+  // point de paiement agréé (R32, encaissement) lui est incompatible.
+  ...Array.from({ length: 29 }, (_, i) => [`R${String(i + 1).padStart(2, '0')}` as RoleCode, 'R32'] as [RoleCode, RoleCode]),
+  ['R35', 'R32'],
 ];
 
 export function hasIncompatibility(roles: RoleCode[]): [RoleCode, RoleCode] | null {

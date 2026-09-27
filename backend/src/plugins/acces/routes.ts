@@ -19,7 +19,11 @@ const phone = z.string().regex(/^\+?[0-9 -]{9,20}$/, 'numéro de téléphone inv
 const motif = z.string().trim().min(5, 'motif obligatoire').max(500);
 const language = z.enum(LANGUAGE_CODES as [string, ...string[]]);
 const code6 = z.string().regex(/^\d{6}$/, 'code à 6 chiffres attendu');
-const idDocument = z.object({ type: z.string().trim().min(2).max(40), number: z.string().trim().min(3).max(40) }).strict();
+const idDocument = z.object({
+  type: z.string().trim().min(2).max(40), number: z.string().trim().min(3).max(40),
+  // Date de naissance portée par la pièce : détection des comptes multiples d'une même personne (nom + date).
+  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date AAAA-MM-JJ').optional(),
+}).strict();
 
 const entitySchema = z.object({
   id: z.string().regex(/^[A-Z0-9-]{2,32}$/, 'code d’entité en majuscules (A-Z, 0-9, -)'),

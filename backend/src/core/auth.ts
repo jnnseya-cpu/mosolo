@@ -20,6 +20,11 @@ export interface User {
   territory?: string[];
   /** Pour un contribuable (R30) : son identifiant de contribuable. */
   taxpayerId?: string;
+  /**
+   * Personne physique titulaire du compte de travail : empreinte à clé (HMAC) du numéro de pièce d'identité normalisé.
+   * Plusieurs comptes d'une même personne partagent cet identifiant ; la séparation des tâches s'apprécie par personne.
+   */
+  personId?: string;
   /** Pour un mandataire (R31) : contribuables mandants. */
   mandants?: string[];
   email?: string;

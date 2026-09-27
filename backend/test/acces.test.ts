@@ -57,7 +57,8 @@ async function received(env: TestEnv, phone: string) {
 }
 
 const acceptBody = (token: string, phone: string, code: string, extra: Record<string, unknown> = {}) => ({
-  token, phone, code, identityDocument: { type: 'Carte d’électeur', number: 'CE-TEST-001' }, photoTaken: true, mfaMethod: 'TOTP', ...extra,
+  // Pièce FICTIVE distincte par numéro invité : une personne = un compte de travail.
+  token, phone, code, identityDocument: { type: 'Carte d’électeur', number: `CE-TEST-${phone.slice(-6)}` }, photoTaken: true, mfaMethod: 'TOTP', ...extra,
 });
 
 describe('Module acces — référentiels et amorçage', () => {
@@ -160,7 +161,7 @@ describe('Identité : inscription publique, OTP, personnes morales, niveaux', ()
 });
 
 describe('Invitations en cascade (§ 12A)', () => {
-  it('parcours nominal : lien lié au numéro, code, usage unique ; compte actif avec ses seuls rôles', async () => {
+  it('parcours nominal : lien lié au numéro, code, usage unique ; contrôleur actif après seconde validation, avec ses seuls rôles', async () => {
     const env = await setupAcces();
     const r = await invite(env, 'u-admin-entite', { fullName: 'Kasongo Ilunga', phone: '+243811000001', entity: 'DGIPK', accessLevel: 'OPERATEUR', roles: ['R11'] });
     expect(r.statusCode).toBe(201);
@@ -173,7 +174,10 @@ describe('Invitations en cascade (§ 12A)', () => {
     expect(other.json().code).toBe('INVITATION_PHONE_MISMATCH');
     const ok = await env.req('POST', '/v1/acces/invitations/accept', undefined, acceptBody(token, '+243811000001', code));
     expect(ok.statusCode).toBe(201);
-    expect(ok.json().status).toBe('ACTIF');
+    // Contrôleur (R11) : maillon de la chaîne constat → décision ⇒ seconde validation par une personne distincte.
+    expect(ok.json()).toMatchObject({ status: 'ATTENTE_VALIDATION', requirement: 'SECURITE' });
+    await mfa(env, 'u-rssi');
+    expect((await env.req('POST', `/v1/acces/validations/${ok.json().validationId}/decision`, 'u-rssi', { decision: 'APPROUVEE' })).statusCode).toBe(200);
     const me = (await env.req('GET', '/v1/acces/me', ok.json().accountId)).json();
     expect(me.user.roles).toEqual(['R11']);
     expect(me.user.entity).toBe('DGIPK');
@@ -298,6 +302,97 @@ describe('Invitations en cascade (§ 12A)', () => {
     const sus = await env.req('POST', '/v1/acces/entities/ST-RECENSEMENT-DEMO/suspend', 'u-superadmin', { motif: 'Fin de convention (démo)', decisionRef: 'Décision FICTIVE CP-02' });
     expect(sus.json().revokedAccounts).toBe(1);
     expect(env.app.ctx.users.get(acc.accountId)!.roles).toEqual([]);
+  });
+});
+
+describe('Une personne physique = un compte de travail (séparation des tâches par personne)', () => {
+  async function acceptAs(env: TestEnv, inviter: string, body: Record<string, unknown>, doc: Record<string, unknown>, extra: Record<string, unknown> = {}) {
+    expect((await invite(env, inviter, body)).statusCode).toBe(201);
+    const phone = body.phone as string;
+    const { token, code } = await received(env, phone);
+    return env.req('POST', '/v1/acces/invitations/accept', undefined, { ...acceptBody(token, phone, code, extra), identityDocument: doc });
+  }
+
+  it('ATTAQUE : même pièce d’identité sous deux téléphones ⇒ second compte refusé (DUPLICATE_PERSON), alerte ; possible après clôture', async () => {
+    const env = await setupAcces();
+    const s = svcOf(env);
+    const first = await acceptAs(env, 'u-admin-entite', { fullName: 'Kabila Mutombo', phone: '+243811000101', entity: 'DGIPK', accessLevel: 'OPERATEUR', roles: ['R11'] },
+      { type: 'Carte d’électeur', number: 'CE-4455-6677' });
+    expect(first.statusCode).toBe(201);
+    const firstId = first.json().accountId as string;
+    // Même numéro, autre téléphone, autre libellé de pièce, séparateurs et casse différents : même personne.
+    const second = await acceptAs(env, 'u-admin-entite', { fullName: 'K. Mutombo', phone: '+243822000102', entity: 'DGIPK', accessLevel: 'CONSULTATION', roles: ['R36'] },
+      { type: 'Passeport', number: 'ce 4455 6677' });
+    expect(second.statusCode).toBe(409);
+    expect(second.json()).toMatchObject({ code: 'DUPLICATE_PERSON', existingAccountId: firstId });
+    expect(env.app.ctx.alerts.list().some((a) => a.type === 'DUPLICATE_PERSON_ATTEMPT')).toBe(true);
+    expect(s.accounts.find((a) => a.personId === s.accounts.get(firstId)!.personId)).toHaveLength(1);
+    // Le numéro n'est jamais conservé en clair ; l'empreinte n'est pas exposée par l'API.
+    expect(JSON.stringify(s.accounts.get(firstId))).not.toMatch(/4455/);
+    const listed = await env.req('GET', '/v1/acces/accounts', 'u-admin-entite');
+    expect(JSON.stringify(listed.json())).not.toContain(s.accounts.get(firstId)!.personId!);
+    // Après clôture (révocation) du premier compte, la personne peut recevoir un nouveau compte.
+    await mfa(env, 'u-rssi');
+    expect((await env.req('POST', `/v1/acces/accounts/${firstId}/revoke`, 'u-rssi', { motif: 'Changement d’affectation (test)' })).statusCode).toBe(200);
+    const { token, code } = await received(env, '+243822000102');
+    const again = await env.req('POST', '/v1/acces/invitations/accept', undefined, { ...acceptBody(token, '+243822000102', code), identityDocument: { type: 'Passeport', number: 'CE44556677' } });
+    expect(again.statusCode).toBe(201);
+  });
+
+  it('ATTAQUE : une personne, deux comptes (données antérieures) ne peut pas vérifier ce qu’elle a constaté', async () => {
+    const env = await setupAcces();
+    const s = svcOf(env);
+    const pid = s.personIdFor('CE-DOUBLE-0001');
+    env.app.ctx.users.add({ id: 'test-auteur', name: 'Auteur', roles: ['R10'], entity: 'DGIPK', personId: pid });
+    env.app.ctx.users.add({ id: 'test-verificateur', name: 'Vérificateur (autre téléphone)', roles: ['R09'], entity: 'DGIPK', personId: pid });
+    env.app.ctx.users.add({ id: 'test-autre', name: 'Autre personne', roles: ['R09'], entity: 'DGIPK', personId: s.personIdFor('CE-AUTRE-0002') });
+    const { assertDistinctPerson } = await import('../src/core/policy.js');
+    expect(() => assertDistinctPerson('test-verificateur', ['test-auteur'], 'personne distincte')).toThrow(/personne distincte/);
+    expect(() => assertDistinctPerson('test-autre', ['test-auteur'], 'personne distincte')).not.toThrow();
+    // Sans empreinte connue : comparaison par compte (comportement historique inchangé pour les comptes amorcés).
+    expect(() => assertDistinctPerson('u-controleur', ['u-agent-terrain'], 'x')).not.toThrow();
+    expect(() => assertDistinctPerson('u-controleur', ['u-controleur'], 'x')).toThrow();
+  });
+
+  it('seconde validation désormais requise pour chef de service, superviseur, contrôleur et contentieux', async () => {
+    const env = await setupAcces();
+    for (const [i, role, lvl] of [[1, 'R07', 'RESPONSABLE_MODULE'], [2, 'R09', 'SUPERVISEUR'], [3, 'R11', 'OPERATEUR'], [4, 'R20', 'OPERATEUR']] as const) {
+      const phone = `+24381100020${i}`;
+      const r = await acceptAs(env, 'u-superadmin', { fullName: `Agent ${role}`, phone, entity: 'DGIPK', accessLevel: lvl, roles: [role] }, { type: 'CNI', number: `CNI-SV-${i}000` });
+      expect(r.json()).toMatchObject({ status: 'ATTENTE_VALIDATION', requirement: 'SECURITE' });
+      expect(env.app.ctx.users.get(r.json().accountId)!.roles).toEqual([]);
+    }
+  });
+
+  it('détection : même nom et date de naissance, ou même terminal, sur un autre compte ⇒ alerte (sans blocage)', async () => {
+    const env = await setupAcces();
+    const a = await acceptAs(env, 'u-admin-entite', { fullName: 'Ngalula Mbuyi', phone: '+243811000301', entity: 'DGIPK', accessLevel: 'AGENT_TERRAIN', roles: ['R10'], scope: { territory: ['Limete'] } },
+      { type: 'CNI', number: 'CNI-AAA-111', birthDate: '1990-04-12' }, { deviceId: 'dev-terrain-301' });
+    expect(a.statusCode).toBe(201);
+    expect(env.app.ctx.alerts.list().some((x) => x.type === 'POSSIBLE_DUPLICATE_PERSON')).toBe(false);
+    const b = await acceptAs(env, 'u-admin-entite', { fullName: 'MBUYI Ngalula', phone: '+243822000302', entity: 'DGIPK', accessLevel: 'CONSULTATION', roles: ['R36'] },
+      { type: 'Passeport', number: 'OP-BBB-222', birthDate: '1990-04-12' });
+    expect(b.statusCode).toBe(201);
+    const c = await acceptAs(env, 'u-admin-entite', { fullName: 'Autre Nom', phone: '+243833000303', entity: 'DGIPK', accessLevel: 'AGENT_TERRAIN', roles: ['R10'], scope: { territory: ['Limete'] } },
+      { type: 'CNI', number: 'CNI-CCC-333' }, { deviceId: 'dev-terrain-301' });
+    expect(c.statusCode).toBe(201);
+    const alerts = env.app.ctx.alerts.list().filter((x) => x.type === 'POSSIBLE_DUPLICATE_PERSON');
+    expect(alerts).toHaveLength(2);
+    const byAccount = (id: string) => JSON.stringify(alerts.find((x) => x.context?.accountId === id)?.context);
+    expect(byAccount(b.json().accountId)).toContain('NOM_ET_DATE_DE_NAISSANCE');
+    expect(byAccount(c.json().accountId)).toContain('MEME_TERMINAL');
+    expect(byAccount(c.json().accountId)).toContain(a.json().accountId);
+  });
+
+  it('ATTAQUE : un agent public (terrain) ne peut pas être opérateur de point de paiement (R32), ni à l’invitation ni par attribution', async () => {
+    const env = await setupAcces();
+    const r = await invite(env, 'u-superadmin', { fullName: 'Agent-caissier', phone: '+243811000401', entity: 'DGIPK', accessLevel: 'OPERATEUR', roles: ['R10', 'R32'] });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe('ROLE_INCOMPATIBILITY');
+    const r2 = await invite(env, 'u-superadmin', { fullName: 'Sous-traitant-caissier', phone: '+243811000402', entity: 'ST-RECENSEMENT-DEMO', accessLevel: 'OPERATEUR', roles: ['R35', 'R32'] });
+    expect(r2.json().code).toBe('ROLE_INCOMPATIBILITY');
+    expect(() => env.app.ctx.users.setRoles('u-agent-terrain', ['R10', 'R32'])).toThrow(/Cumul interdit/);
+    expect(() => env.app.ctx.users.add({ id: 'test-agent-caisse', name: 'x', roles: ['R11', 'R32'], entity: 'DGIPK' })).toThrow(/Cumul interdit/);
   });
 });
 
