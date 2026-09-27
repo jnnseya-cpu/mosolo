@@ -23,8 +23,8 @@ import { taxpayerRecipient } from '../../modules/identity/recipients.js';
 import type { PaymentChannel } from '../../modules/payments/service.js';
 import { isCommune } from '../../reference/kinshasa.js';
 import {
-  KINSHASA_OFFSET_MS, VALIDITY_MODEL_LABELS,
-  type Constat, type ControlMethod, type ControlResult, type Credential, type CredentialPlace, type CredentialState, type CredentialSubject,
+  KINSHASA_OFFSET_MS, penaltyRuleCode, VALIDITY_MODEL_LABELS,
+  type Constat, type ConstatPenalty, type ControlMethod, type ControlResult, type Credential, type CredentialPlace, type CredentialState, type CredentialSubject,
   type CredentialType, type DisplayStatus, type Issuance, type IssuanceItem, type IssuancePayment, type Revocation, type UsageEvent,
   type UsePlace, type VerificationEvent,
 } from './model.js';
@@ -987,16 +987,70 @@ export class TitresService {
     return u;
   }
 
-  decideConstat(user: User, id: string, input: { outcome: 'CLASSE' | 'TRANSMIS'; motif: string }): Constat {
+  decideConstat(user: User, id: string, input: { outcome: 'CLASSE' | 'TRANSMIS' | 'RETENU'; motif: string; referenceTypeCode?: string; holderTaxpayerId?: string; commune?: string }): Constat {
     const k = this.constats.get(id);
     if (!k) throw notFound('CONSTAT_NOT_FOUND', `Constat inconnu : ${id}`);
     authorize(user, 'titres:decide', { entity: k.entity });
     if (k.controllerId === user.id) throw forbidden('SEPARATION_OF_DUTIES', 'Le contrôleur auteur du constat ne peut pas en décider.');
     if (k.status !== 'OUVERT') throw conflict('CONSTAT_ALREADY_DECIDED', `Constat déjà ${k.status}.`);
     if (input.motif.trim().length < 5) throw badRequest('MOTIF_REQUIRED', 'Motif obligatoire.');
-    const decided = this.constats.update({ ...k, status: input.outcome, decision: { by: user.id, at: this.ctx.clock.now().toISOString(), outcome: input.outcome, motif: input.motif.trim() } });
-    this.ctx.audit.append({ actor: this.actor(user), action: `titres.constat.${input.outcome.toLowerCase()}`, resourceType: 'constat', resourceId: id, details: { motif: input.motif.trim(), legalEffect: 'AUCUN_MONTANT' } });
+    const penalty = input.outcome === 'RETENU' ? this.liquidatePenalty(user, k, input) : undefined;
+    const decided = this.constats.update({ ...k, status: input.outcome, decision: { by: user.id, at: this.ctx.clock.now().toISOString(), outcome: input.outcome, motif: input.motif.trim() }, ...(penalty ? { penalty } : {}) });
+    this.ctx.audit.append({
+      actor: this.actor(user), action: `titres.constat.${input.outcome.toLowerCase()}`, resourceType: 'constat', resourceId: id,
+      details: { motif: input.motif.trim(), legalEffect: penalty ? 'PENALITE_DECIDEE' : 'AUCUN_MONTANT', ...(penalty ? { obligationId: penalty.obligationId, ruleCode: penalty.ruleCode, percentage: penalty.percentage } : {}) },
+    });
+    if (penalty) {
+      const tp = this.ctx.taxpayers.taxpayers.get(penalty.holderTaxpayerId);
+      if (tp) this.ctx.comms.publish('inspection.report.issued', [taxpayerRecipient(tp)], { reference: id }, { entity: k.entity });
+    }
     return decided;
+  }
+
+  /**
+   * Pénalité au pourcentage réglementaire du ticket (module 76) : règle ACTIVE du registre `PEN-TITRE-<module>` (formule
+   * sur `prix_ticket`), prix du ticket de référence calculé par SA règle de tarif ACTIVE (jamais saisi), jamais pendant la
+   * période de grâce, jamais sans redevable identifié. Liquidée par le moteur commun : contestable par le circuit des réclamations.
+   */
+  private liquidatePenalty(user: User, k: Constat, input: { referenceTypeCode?: string; holderTaxpayerId?: string; commune?: string }): ConstatPenalty {
+    if (k.duringGrace) throw unprocessable('GRACE_PERIOD', 'Constat pédagogique : aucune pénalité pendant la période de grâce.');
+    const module = k.module;
+    if (!module) throw unprocessable('MODULE_UNKNOWN', 'Constat sans module : aucune pénalité possible.');
+    const cred = k.credentialId ? this.credentials.get(k.credentialId) : undefined;
+    const holder = cred?.holderTaxpayerId ?? cred?.payerTaxpayerId ?? input.holderTaxpayerId;
+    if (!holder || !this.ctx.taxpayers.taxpayers.get(holder)) throw unprocessable('HOLDER_REQUIRED', 'Redevable non identifié : la décision peut classer ou transmettre, jamais liquider une pénalité.');
+    const refCode = input.referenceTypeCode ?? cred?.typeCode;
+    if (!refCode) throw badRequest('REFERENCE_TICKET_REQUIRED', 'Ticket de référence requis : la pénalité est un pourcentage de son prix.');
+    const refType = this.type(refCode);
+    if (refType.module !== module) throw unprocessable('REFERENCE_TICKET_MISMATCH', 'Le ticket de référence doit relever du module du constat.');
+    const price = this.pricePreview(refType);
+    if (!price.amount || !price.executable) throw unprocessable('ACTE_REQUIS', `Prix du ticket de référence non exigible : ${price.reason ?? 'règle de tarif non ACTIVE'}.`);
+    const code = penaltyRuleCode(module);
+    const rule = this.activeRule(code);
+    if (!rule || rule.status !== 'ACTIVE') throw unprocessable('ACTE_REQUIS', `Aucune pénalité sans règle publiée : règle ${code} ${rule ? `au statut ${rule.status}` : 'absente du registre'}.`);
+    if (rule.currency !== price.amount.currency) throw unprocessable('CURRENCY_MISMATCH', 'La règle de pénalité et le ticket de référence doivent être dans la même devise.');
+    const commune = cred?.place.commune ?? (k.place as { commune?: string }).commune ?? input.commune;
+    if (!commune || !isCommune(commune)) throw unprocessable('PLACE_WITHOUT_COMMUNE', 'Commune du constat requise (attribution territoriale de la pénalité).');
+    const objectId = this.serviceObject(holder, { commune, sourceId: `CONSTAT-${module}-${commune}`, label: k.place.label ?? commune, basis: 'LIEU_OBJET', ...(k.place.lat !== undefined ? { lat: k.place.lat } : {}), ...(k.place.lon !== undefined ? { lon: k.place.lon } : {}) });
+    const res = this.ctx.assessment.calculate(this.liquidator(rule.administeringEntity), { ruleId: rule.id, taxpayerId: holder, objectId, simulate: false, inputs: { prix_ticket: price.amount.amount } });
+    const ob = res.obligation!;
+    return {
+      ruleCode: rule.code, ruleVersion: rule.version, referenceTypeCode: refType.code, ticketPrice: price.amount, percentage: String(rule.rateTable.pourcentage ?? ''),
+      amount: ob.amount, obligationId: ob.id, holderTaxpayerId: holder,
+    };
+  }
+
+  /** Contestation d'une pénalité retenue par le redevable : recours ouvert par le circuit commun des réclamations. */
+  contestConstat(user: User, id: string, grounds: string): Constat {
+    const k = this.constats.get(id);
+    if (!k) throw notFound('CONSTAT_NOT_FOUND', `Constat inconnu : ${id}`);
+    if (k.status !== 'RETENU' || !k.penalty) throw conflict('NOTHING_TO_CONTEST', 'Seule une pénalité retenue se conteste (le constat n’a aucun effet financier).');
+    authorize(user, 'titres:read.own', { taxpayerId: k.penalty.holderTaxpayerId });
+    if (grounds.trim().length < 10) throw badRequest('GROUNDS_REQUIRED', 'Motif de contestation de 10 caractères au moins.');
+    const appeal = this.ctx.appeals.submit(user, { obligationId: k.penalty.obligationId, grounds: grounds.trim() });
+    const next = this.constats.update({ ...k, contests: [...(k.contests ?? []), { appealId: appeal.id, by: user.id, at: this.ctx.clock.now().toISOString(), grounds: grounds.trim() }] });
+    this.ctx.audit.append({ actor: this.actor(user), action: 'titres.constat.contested', resourceType: 'constat', resourceId: id, details: { appealId: appeal.id } });
+    return next;
   }
 
   /** Prolongation / renouvellement (nouveau paiement) : même sujet, même lieu, continuité de validité. */
@@ -1050,7 +1104,11 @@ export class TitresService {
         reuseAttempts: ctrls.filter((e) => e.displayStatus === 'INVALIDE' && e.alreadyUsed).length,
       },
       renewals: { total: renewals, beforeExpiry: amberRenewals },
-      constats: { total: constats.length, open: constats.filter((k) => k.status === 'OUVERT').length, classified: constats.filter((k) => k.status === 'CLASSE').length, transmitted: constats.filter((k) => k.status === 'TRANSMIS').length },
+      constats: {
+        total: constats.length, open: constats.filter((k) => k.status === 'OUVERT').length, classified: constats.filter((k) => k.status === 'CLASSE').length, transmitted: constats.filter((k) => k.status === 'TRANSMIS').length,
+        // Module 76 : pénalités retenues (décision motivée) et pénalités contestées (recours ouvert).
+        retained: constats.filter((k) => k.status === 'RETENU').length, contested: constats.filter((k) => (k.contests ?? []).length > 0).length,
+      },
     };
   }
 }

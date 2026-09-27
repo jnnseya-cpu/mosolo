@@ -64,6 +64,11 @@ export function registerSecteursRoutes(app: FastifyInstance, svc: VerticalesServ
   // Antennes : liquidation annuelle proposée (module 16).
   app.get<{ Querystring: { exercice?: string } }>('/v1/verticales/secteurs/antennes/liquidation-annuelle', async (req) =>
     s.antennesAnnual(requireUser(req), req.query.exercice ?? String(svc.now().getUTCFullYear())));
+  // Avis annuel d'un opérateur : exécuté par une personne habilitée (jamais automatique), règle ACTIVE seulement.
+  app.post('/v1/verticales/secteurs/antennes/liquidation-annuelle', async (req, reply) => {
+    const body = parse(z.object({ exercice: z.string().regex(/^\d{4}$/), taxpayerId: z.string().min(1).max(64) }).strict(), req.body);
+    return reply.code(201).send(s.antennesExecute(requireUser(req), body.exercice, body.taxpayerId));
+  });
 
   // Contrôle d'un véhicule par plaque (modules 11, 12, 25) : réponse minimale.
   app.get<{ Params: { plaque: string }; Querystring: Record<string, string> }>('/v1/verticales/vehicules/:plaque/controle', async (req) => {

@@ -296,3 +296,19 @@ function seedSecteursReferences(svc: VerticalesService): void {
   r.seedReference({ id: 'PCF-EX-01', module: '23', kind: 'POINT_CONTROLE', label: 'Point de contrôle forestier [EXEMPLE] — entrée sud', commune: 'Mont-Ngafula', lat: -4.48, lon: 15.28 });
   r.seedReference({ id: 'PCF-EX-02', module: '23', kind: 'POINT_CONTROLE', label: 'Point de contrôle forestier [EXEMPLE] — entrée est', commune: 'Maluku', lat: -4.07, lon: 15.56 });
 }
+
+/**
+ * Patrimoine provincial (Partie V, MOSOLO Assets) — gestionnaire et chef du service du patrimoine (MINFIN, démo), et un
+ * actif inventorié [EXEMPLE] sans évaluation ni appel : aucune valeur, aucune mise à prix, aucune redevance semée.
+ */
+export const ACT_DEMO = { manager: 'vx-gestionnaire-patrimoine', chief: 'vx-chef-patrimoine' } as const;
+
+export function seedActifs(ctx: AppContext, svc: VerticalesService): void {
+  if (!ctx.users.get(ACT_DEMO.manager)) ctx.users.add({ id: ACT_DEMO.manager, name: 'Gestionnaire du patrimoine provincial (démo)', roles: ['R11'], entity: 'MINFIN' });
+  if (!ctx.users.get(ACT_DEMO.chief)) ctx.users.add({ id: ACT_DEMO.chief, name: 'Chef du service du patrimoine provincial (démo)', roles: ['R07'], entity: 'MINFIN' });
+  if (!svc.actifs || svc.actifs.assets.count() > 0) return;
+  svc.actifs.inventory(ctx.users.get(ACT_DEMO.manager)!, {
+    nature: 'LOCAL_COMMERCIAL', designation: 'Local commercial provincial [EXEMPLE] — boulevard du 30 Juin', commune: 'Gombe', quartier: 'Commerce',
+    surfaceM2: '120', titleReference: 'ACTE-AFFECTATION-DEMO-0001 [EXEMPLE]',
+  }, true);
+}

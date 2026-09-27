@@ -29,7 +29,7 @@ import { isCommune } from '../../reference/kinshasa.js';
 import type { TitresService } from '../titres/service.js';
 import { statusAt } from '../titres/validity.js';
 import { P } from './policies.js';
-import type { VerticalesService } from './service.js';
+import { ruleCodeFor, type VerticalesService } from './service.js';
 
 export const SECTOR_ENTITY = 'DGTK';
 
@@ -481,16 +481,56 @@ export class SecteursService {
     const operators = new Map<string, typeof sites>();
     for (const s of sites) operators.set(s.taxpayerId ?? 'NON_IDENTIFIE', [...(operators.get(s.taxpayerId ?? 'NON_IDENTIFIE') ?? []), s]);
     const telecom = this.vx.vertical('telecom');
+    // Règle réellement lue au registre (clé VX-TEL-SITES) : jamais un statut figé dans le code.
+    const active = this.vx.activeRuleFor('telecom');
+    const code = ruleCodeFor('telecom')!;
+    const latest = this.vx.ruleByCode(code);
+    const rule = active
+      ? { status: 'ACTIVE', code: active.code, version: active.version, label: active.label, demo: active.demo === true, note: `Règle ${active.code} v${active.version} ACTIVE : la liquidation annuelle peut être exécutée par une personne habilitée.` }
+      : { status: latest ? latest.status : 'ACTE_REQUIS', code, version: latest?.version ?? null, label: latest?.label ?? null, demo: latest?.demo === true, note: `Aucune règle ACTIVE au registre pour la taxe sur les antennes (clé ${code}) : aucun montant.` };
+    const liquidatedThisYear = (siteId: string) => this.ctx.assessment.obligations.findOne((ob) => ob.objectId === siteId && ob.ruleCode === code && ob.status !== 'ANNULEE' && ob.createdAt.startsWith(exercice));
     return {
-      exercice, vertical: telecom.name, rule: { status: 'ACTE_REQUIS', note: 'Aucune règle ACTIVE au registre pour la taxe sur les antennes : aucun montant.' },
-      operators: [...operators.entries()].map(([taxpayerId, list]) => ({
-        taxpayerId, name: taxpayerId === 'NON_IDENTIFIE' ? 'Opérateur non identifié' : this.ctx.taxpayers.taxpayers.get(taxpayerId)?.fullName ?? taxpayerId,
-        sites: list.length, declared: list.filter((s) => s.probativeStatus === 'DECLARE').length, observed: list.filter((s) => s.probativeStatus === 'OBSERVE').length,
-        verified: list.filter((s) => s.probativeStatus === 'VERIFIE').length,
-        proposal: taxpayerId === 'NON_IDENTIFIE' ? 'Identifier l’opérateur (vérification contradictoire)' : 'Liquidation annuelle à exécuter par une personne habilitée dès qu’une règle ACTIVE existe',
-      })),
-      notice: 'Proposition seulement : la liquidation annuelle n’est jamais automatique ; chaque site reste contestable.',
+      exercice, vertical: telecom.name, rule,
+      operators: [...operators.entries()].map(([taxpayerId, list]) => {
+        const liquidable = list.filter((s) => s.probativeStatus !== 'OBSERVE' && !this.vx.cessations.findOne((c) => c.objectId === s.id));
+        const done = liquidable.filter((s) => !!liquidatedThisYear(s.id));
+        return {
+          taxpayerId, name: taxpayerId === 'NON_IDENTIFIE' ? 'Opérateur non identifié' : this.ctx.taxpayers.taxpayers.get(taxpayerId)?.fullName ?? taxpayerId,
+          sites: list.length, declared: list.filter((s) => s.probativeStatus === 'DECLARE').length, observed: list.filter((s) => s.probativeStatus === 'OBSERVE').length,
+          verified: list.filter((s) => s.probativeStatus === 'VERIFIE').length,
+          liquidated: done.length, toLiquidate: taxpayerId === 'NON_IDENTIFIE' || !active ? 0 : liquidable.length - done.length,
+          proposal: taxpayerId === 'NON_IDENTIFIE'
+            ? 'Identifier l’opérateur (vérification contradictoire)'
+            : !active ? 'Liquidation annuelle à exécuter par une personne habilitée dès qu’une règle ACTIVE existe'
+              : liquidable.length === done.length ? 'Avis annuel déjà émis pour tous les sites déclarés ou vérifiés' : 'Avis annuel prêt : exécution par une personne habilitée (sites observés non déclarés exclus : contradictoire d’abord)',
+        };
+      }),
+      notice: 'Proposition seulement : la liquidation annuelle n’est jamais automatique ; chaque site reste contestable ; un site seulement observé n’est jamais liquidé avant la procédure contradictoire.',
     };
+  }
+
+  /**
+   * Avis annuel d'un opérateur (module 16) : exécuté par une personne habilitée, site par site, par le moteur de liquidation
+   * commun (règle ACTIVE, aucune double facturation). Les sites seulement observés restent exclus (contradictoire d'abord).
+   */
+  antennesExecute(user: User, exercice: string, taxpayerId: string) {
+    authorize(user, P.telecomReconcile, { entity: SECTOR_ENTITY });
+    if (!/^\d{4}$/.test(exercice)) throw badRequest('INVALID_YEAR', 'Exercice AAAA attendu.');
+    if (exercice !== String(this.now().getUTCFullYear())) throw unprocessable('EXERCICE_NOT_CURRENT', 'Seul l’exercice en cours se liquide ; un exercice passé relève de la reprise d’arriérés.');
+    if (!this.vx.activeRuleFor('telecom')) throw unprocessable('NO_RULE', `Aucune règle ACTIVE au registre (clé ${ruleCodeFor('telecom')}) : aucun avis annuel.`);
+    const sites = this.ctx.objects.objects.find((o) => o.attributes.objectType === 'SITE_TELECOM' && o.taxpayerId === taxpayerId && o.probativeStatus !== 'OBSERVE' && !this.vx.cessations.findOne((c) => c.objectId === o.id));
+    if (!sites.length) throw notFound('NO_SITE', 'Aucun site déclaré ou vérifié pour cet opérateur.');
+    const issued: unknown[] = [];
+    const skipped: { objectId: string; reason: string }[] = [];
+    for (const site of sites) {
+      try {
+        issued.push(this.vx.liquidateObject(user, 'telecom', site.id));
+      } catch (e) {
+        skipped.push({ objectId: site.id, reason: (e as { code?: string }).code ?? 'ERREUR' });
+      }
+    }
+    this.ctx.audit.append({ actor: actorOf(user), action: 'verticales.antennes.annual_executed', resourceType: 'taxpayer', resourceId: taxpayerId, details: { exercice, issued: issued.length, skipped: skipped.length } });
+    return { exercice, taxpayerId, issued, skipped };
   }
 
   // ------------------------------------------------------------------ contrôle d'un véhicule par plaque (module 11, 12, 25)
