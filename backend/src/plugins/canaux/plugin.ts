@@ -26,6 +26,10 @@ definePolicy('canaux:card.reissue.approve', { R12: GRANTS.always, R09: GRANTS.al
 definePolicy('canaux:point.reference', { R17: GRANTS.always });
 definePolicy('canaux:point.activate', { R17: GRANTS.always });
 definePolicy('canaux:point.suspend', { R17: GRANTS.always });
+// Quatre yeux : rétablissement, écartement d'une proposition et constatation d'un versement au relevé sont DEMANDÉS
+// par un membre du Trésor (R17/R18) puis DÉCIDÉS par un R17 distinct.
+definePolicy('canaux:point.decision.request', { R17: GRANTS.always, R18: GRANTS.always });
+definePolicy('canaux:point.deposit.confirm', { R17: GRANTS.always });
 definePolicy('canaux:point.supervise', { R17: GRANTS.always, R18: GRANTS.always, R22: GRANTS.always, R24: GRANTS.always });
 // Encaissement : UNIQUEMENT l'opérateur d'un point agréé (R32) — jamais un agent public ni un sous-traitant.
 definePolicy('canaux:point.collect', { R32: GRANTS.always });
@@ -41,7 +45,13 @@ definePolicy('canaux:indicators', { ...allAgentRoles(GRANTS.always), R36: GRANTS
 
 export const canauxPlugin = definePlugin({
   name: 'canaux',
-  create: (ctx) => new CanauxService(ctx),
+  create: (ctx) => {
+    const svc = new CanauxService(ctx);
+    // Balayage périodique des retards de versement des points agréés (MOSOLO_POINTS_SCAN_MS, défaut : 1 h ; 0 = désactivé).
+    const every = Number.parseInt(process.env.MOSOLO_POINTS_SCAN_MS ?? '3600000', 10);
+    if (Number.isFinite(every) && every >= 60_000) svc.points.startScheduler(every);
+    return svc;
+  },
   seed: (_ctx, svc) => svc.seedDemo(),
   routes: (app, ctx, svc) => registerCanauxRoutes(app, ctx, svc),
 });

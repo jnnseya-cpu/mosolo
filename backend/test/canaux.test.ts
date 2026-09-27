@@ -471,6 +471,8 @@ describe('canaux — points de paiement agréés (R32)', () => {
     expect(expected.length).toBe(1);
     const close = await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/close`, 'canaux-op-limete', { counted: expected });
     expect(close.json().status).toBe('CLOTUREE');
+    // Versement déclaré après la clôture (horloge serveur) : une date antérieure à la clôture est refusée.
+    c.clock.advanceHours(7);
     // Caisse clôturée : aucun nouvel encaissement ce jour.
     const ref = await cardReference(c);
     expect((await collect(c, ref.paymentReference)).json().code).toBe('CASH_DAY_CLOSED');
@@ -501,10 +503,12 @@ describe('canaux — points de paiement agréés (R32)', () => {
     const day = '2026-09-26';
     const view = (await c.env.req('GET', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}`, 'canaux-op-limete')).json();
     await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/close`, 'canaux-op-limete', { counted: view.expected });
+    c.clock.advanceHours(7);
     const dep = await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/deposit`, 'canaux-op-limete', {
       bankSlipRef: 'BORD-003', depositedAt: '2026-09-26T15:00:00.000Z', lines: view.expectedByAccount,
     });
-    expect(dep.json().status).toBe('VERSEE');
+    // Déclaration seule : en attente du relevé bancaire, jamais VERSEE sur la parole de l'opérateur.
+    expect(dep.json().status).toBe('DECLAREE');
     const col = view.collections[0];
     const order = c.env.app.ctx.payments.byReference(col.paymentReference)!;
     c.env.app.ctx.treasury.importStatement(c.env.app.ctx.users.get('u-tresor')!, {
@@ -520,6 +524,143 @@ describe('canaux — points de paiement agréés (R32)', () => {
     const sup = await c.env.req('GET', '/v1/payment-points', 'u-tresor');
     expect(sup.json().exceptions.some((e: { type: string; pointId: string }) => e.type === 'VERSEMENT_EN_RETARD' && e.pointId === 'PA-LIMETE-MM01')).toBe(true);
     expect(c.svc.points.get('PA-LIMETE-MM01').status).toBe('ACTIF');
+  });
+
+  // ---------- Espèces : fraudes rejouées (clôture tardive, versement fictif, rétablissement solitaire, référence morte) ----------
+
+  it('attaque : clôture tardive pour repousser l’échéance ⇒ retard compté depuis la fin du jour de caisse ; dates déclarées bornées', async () => {
+    const day = '2026-09-26';
+    // L'opérateur garde les espèces 50 h puis clôture : l'échéance (fin du jour + 24 h) est déjà dépassée.
+    c.clock.advanceHours(50);
+    const view = (await c.env.req('GET', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}`, 'canaux-op-limete')).json();
+    expect(view.depositDeadline).toBe('2026-09-27T23:00:00.000Z');
+    const close = await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/close`, 'canaux-op-limete', { counted: view.expected });
+    expect(close.json().exceptions.some((e: { type: string }) => e.type === 'VERSEMENT_EN_RETARD')).toBe(true);
+    // Date antidatée (avant la clôture) ou dans le futur : refusée.
+    const backdated = await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/deposit`, 'canaux-op-limete', {
+      bankSlipRef: 'BORD-ANTIDATE', depositedAt: '2026-09-26T15:00:00.000Z', lines: view.expectedByAccount,
+    });
+    expect(backdated.json().code).toBe('DEPOSIT_BEFORE_CLOSE');
+    const future = await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/deposit`, 'canaux-op-limete', {
+      bankSlipRef: 'BORD-FUTUR', depositedAt: '2026-10-05T15:00:00.000Z', lines: view.expectedByAccount,
+    });
+    expect(future.json().code).toBe('DEPOSIT_IN_FUTURE');
+    const late = await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/deposit`, 'canaux-op-limete', {
+      bankSlipRef: 'BORD-TARDIF', depositedAt: c.clock.now().toISOString(), lines: view.expectedByAccount,
+    });
+    expect(late.json().status).toBe('ECART');
+  });
+
+  it('attaque : versement fictif (bordereau inventé) ⇒ DECLAREE, jamais VERSEE ; non constaté au relevé ⇒ retard et vieillissement', async () => {
+    const day = '2026-09-26';
+    const view = (await c.env.req('GET', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}`, 'canaux-op-limete')).json();
+    await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/close`, 'canaux-op-limete', { counted: view.expected });
+    c.clock.advanceHours(1);
+    const dep = await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/deposit`, 'canaux-op-limete', {
+      bankSlipRef: 'BORD-INVENTE', depositedAt: c.clock.now().toISOString(), lines: view.expectedByAccount,
+    });
+    expect(dep.json().status).toBe('DECLAREE');
+    // Aucun crédit au relevé : échéance + délai de relevé dépassés ⇒ exception au balayage périodique (sans consultation).
+    c.clock.advanceHours(24 + 14 + 24 + 48 + 1);
+    c.svc.points.scanOverdue();
+    const ex = c.svc.points.exceptions.find((e) => e.pointId === 'PA-LIMETE-MM01' && e.day === day);
+    expect(ex.find((e) => e.type === 'VERSEMENT_EN_RETARD')?.detail).toMatch(/non constaté au relevé/);
+    expect(ex.some((e) => e.type === 'ENCAISSEMENT_NON_RAPPROCHE')).toBe(true);
+    expect(c.svc.points.cashDays.get(`PA-LIMETE-MM01:${day}`)!.status).toBe('ECART');
+  });
+
+  it('versement groupé constaté au relevé (bordereau, montants) à quatre yeux ⇒ VERSEE et encaissements rapprochés', async () => {
+    const day = '2026-09-26';
+    const ctx = c.env.app.ctx;
+    const view = (await c.env.req('GET', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}`, 'canaux-op-limete')).json();
+    await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/close`, 'canaux-op-limete', { counted: view.expected });
+    c.clock.advanceHours(1);
+    await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/deposit`, 'canaux-op-limete', {
+      bankSlipRef: 'BORD-777', depositedAt: c.clock.now().toISOString(), lines: view.expectedByAccount,
+    });
+    // Le même bordereau ne couvre pas une seconde caisse.
+    await c.env.req('POST', `/v1/payment-points/PA-GOMBE-AB01/cash-days/${day}/close`, 'canaux-op-gombe', { counted: [] });
+    const reuse = await c.env.req('POST', `/v1/payment-points/PA-GOMBE-AB01/cash-days/${day}/deposit`, 'canaux-op-gombe', {
+      bankSlipRef: ' bord-777 ', depositedAt: c.clock.now().toISOString(), lines: view.expectedByAccount,
+    });
+    expect(reuse.json().code).toBe('BANK_SLIP_ALREADY_USED');
+    const line = view.expectedByAccount[0];
+    const tresor = ctx.users.get('u-tresor')!;
+    ctx.treasury.importStatement(tresor, { statementId: 'REL-PT-0', lines: [{ accountAlias: line.accountAlias, amount: { amount: '1.00', currency: line.amount.currency }, valueDate: day, paymentReference: 'BORD-777' }] });
+    const short = await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/bank-match`, 'u-tresor', { statementId: 'REL-PT-0' });
+    expect(short.json().code).toBe('STATEMENT_AMOUNT_MISMATCH');
+    ctx.treasury.importStatement(tresor, { statementId: 'REL-PT-1', lines: [{ accountAlias: line.accountAlias, amount: line.amount, valueDate: day, paymentReference: 'BORD-777' }] });
+    expect((await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/bank-match`, 'canaux-op-limete', { statementId: 'REL-PT-1' })).statusCode).toBe(403);
+    const prop = await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/bank-match`, 'u-tresor', { statementId: 'REL-PT-1' });
+    expect(prop.statusCode).toBe(200);
+    expect(c.svc.points.cashDays.get(`PA-LIMETE-MM01:${day}`)!.status).toBe('DECLAREE');
+    const self = await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/bank-match/approve`, 'u-tresor');
+    expect(self.json().code).toBe('SEPARATION_OF_DUTIES');
+    const ok = await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/bank-match/approve`, 'canaux-tresor-2');
+    expect(ok.json().status).toBe('VERSEE');
+    expect(ok.json().reconciledCount).toBe(ok.json().collections.length);
+    expect(ok.json().collections[0].receiptStatus).toBe('DEFINITIVE');
+  });
+
+  it('attaque : un seul R17 rétablit un point suspendu ou écarte une proposition ⇒ quatre yeux exigés', async () => {
+    const req = await c.env.req('POST', '/v1/payment-points/PA-KALAMU-MM01/reinstate', 'u-analyste-rappro', { motif: 'Écart régularisé, pièces justificatives reçues.' });
+    expect(req.json().status).toBe('SUSPENDU');
+    expect(c.env.app.ctx.secrets.providerSecrets['point-agree-pa-kalamu-mm01']).toBeUndefined();
+    // Celui qui a suspendu (u-tresor) ne peut pas décider seul du rétablissement, ni le demandeur.
+    expect((await c.env.req('POST', '/v1/payment-points/PA-KALAMU-MM01/reinstate', 'u-tresor', { motif: 'Je rétablis moi-même ce point.' })).json().code).toBe('SEPARATION_OF_DUTIES');
+    expect((await c.env.req('POST', '/v1/payment-points/PA-KALAMU-MM01/reinstate', 'u-analyste-rappro', { motif: 'Je rétablis moi-même ce point.' })).statusCode).toBe(403);
+    const done = await c.env.req('POST', '/v1/payment-points/PA-KALAMU-MM01/reinstate', 'canaux-tresor-2', { motif: 'Rétablissement validé en seconde lecture.' });
+    expect(done.json().status).toBe('ACTIF');
+    // Proposition de suspension (écart de caisse) : écartement à quatre yeux.
+    await c.env.req('POST', '/v1/payment-points/PA-LIMETE-MM01/cash-days/2026-09-26/close', 'canaux-op-limete', { counted: [{ amount: '1.00', currency: 'USD' }] });
+    const prop = c.svc.points.proposals.findOne((p) => p.pointId === 'PA-LIMETE-MM01' && p.status === 'PROPOSEE')!;
+    const first = await c.env.req('POST', `/v1/payment-point-proposals/${prop.id}/dismiss`, 'u-tresor', { motif: 'Erreur de saisie du comptage, justifiée.' });
+    expect(first.json().status).toBe('PROPOSEE');
+    expect((await c.env.req('POST', `/v1/payment-point-proposals/${prop.id}/dismiss`, 'u-tresor', { motif: 'Erreur de saisie du comptage, justifiée.' })).json().code).toBe('SEPARATION_OF_DUTIES');
+    expect((await c.env.req('POST', `/v1/payment-point-proposals/${prop.id}/dismiss`, 'canaux-tresor-2', { motif: 'Confirmé en seconde lecture.' })).json().status).toBe('ECARTEE');
+  });
+
+  it('attaque : espèces reçues sur une référence dont l’obligation n’est plus payable ⇒ refus ; non-affecté compté dans l’attendu', async () => {
+    const ctx = c.env.app.ctx;
+    const ref = await cardReference(c);
+    const order = ctx.payments.byReference(ref.paymentReference)!;
+    const before = (await c.env.req('GET', '/v1/payment-points/PA-LIMETE-MM01/cash-days/2026-09-26', 'canaux-op-limete')).json();
+    ctx.assessment.setStatus(order.obligationId, 'ANNULEE');
+    const look = await c.env.req('GET', `/v1/payment-points/PA-LIMETE-MM01/references/${ref.paymentReference}`, 'canaux-op-limete');
+    expect(look.json().code).toBe('OBLIGATION_NOT_PAYABLE');
+    const cash = await collect(c, ref.paymentReference);
+    expect(cash.json().code).toBe('OBLIGATION_NOT_PAYABLE');
+    // Course : confirmation signée du point arrivée malgré tout ⇒ non affecté ; les espèces restent dues par le point.
+    const secret = ctx.secrets.providerSecrets['point-agree-pa-limete-mm01']!;
+    const raw = JSON.stringify({ providerTxnId: 'PA-LIMETE-MM01-TX-COURSE', paymentReference: order.paymentReference, amount: order.amount, status: 'SUCCESS', completedAt: ctx.clock.now().toISOString() });
+    const res = ctx.payments.handleCallback('point-agree-pa-limete-mm01', { signature: hmacSha256Hex(secret, raw), nonce: randomUUID(), timestamp: ctx.clock.now().toISOString() }, raw);
+    expect(res.status).toBe('NON_AFFECTE');
+    const after = (await c.env.req('GET', '/v1/payment-points/PA-LIMETE-MM01/cash-days/2026-09-26', 'canaux-op-limete')).json();
+    expect(after.unapplied).toHaveLength(1);
+    expect(after.expected).not.toEqual(before.expected);
+    const close = await c.env.req('POST', '/v1/payment-points/PA-LIMETE-MM01/cash-days/2026-09-26/close', 'canaux-op-limete', { counted: before.expected });
+    expect(close.json().status).toBe('ECART');
+    expect(close.json().exceptions[0].type).toBe('ECART_CAISSE');
+  });
+
+  it('attaque : un agent public opérateur d’un point ⇒ refusé au référencement et à l’encaissement', async () => {
+    const ctx = c.env.app.ctx;
+    // Cumul entré par un autre chemin que l'invitation (donnée restaurée, ancienne attribution) : refus au niveau du point.
+    ctx.users.add({ id: 'canaux-op-agent', name: 'Opérateur cumulant un rôle d’agent (test)', roles: ['R32'], entity: 'DGIPK' });
+    (ctx.users.get('canaux-op-agent')!.roles as string[]).push('R10');
+    const body = {
+      name: 'Point test cumul', type: 'AGENT_MONNAIE_MOBILE', operator: 'Opérateur A (démo)',
+      approval: { authority: 'Opérateur A', reference: 'AGR-T-2', grantedOn: '2026-09-01' }, commune: 'Kalamu', quartier: 'Matonge',
+      address: 'Avenue test', lat: -4.33, lon: 15.31, hours: '8 h–18 h',
+      limits: { perTransaction: [{ amount: '100.00', currency: 'USD' }], perDay: [{ amount: '1000.00', currency: 'USD' }] },
+      settlementDelayHours: 24, operatorUserIds: ['canaux-op-agent'],
+    };
+    expect((await c.env.req('POST', '/v1/payment-points', 'u-tresor', body)).json().code).toBe('OPERATOR_IS_PUBLIC_AGENT');
+    // Rôle d'agent (R35) attribué après le référencement : l'encaissement est refusé.
+    const ref = await cardReference(c);
+    const op = ctx.users.get('canaux-op-limete')!;
+    expect(() => c.svc.points.collect({ ...op, roles: ['R32', 'R35'] }, 'PA-LIMETE-MM01', ref.paymentReference)).toThrow(/agent public/);
+    expect(ctx.payments.byReference(ref.paymentReference)!.status).toBe('INITIE');
   });
 
   it('registre : référencement avec agrément, activation par une seconde personne du Trésor', async () => {

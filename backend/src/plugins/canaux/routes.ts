@@ -28,6 +28,7 @@ const depositSchema = z.object({
   depositedAt: z.string().datetime({ offset: true }),
   lines: z.array(z.object({ accountAlias: z.string().min(3).max(60), amount: moneySchema }).strict()).min(1).max(10),
 }).strict();
+const bankMatchSchema = z.object({ statementId: z.string().min(1).max(100) }).strict();
 const pointSchema = z.object({
   name: z.string().trim().min(3).max(120), type: z.enum(POINT_TYPES), operator: z.string().trim().min(2).max(120),
   approval: z.object({ authority: z.string().min(2).max(120), reference: z.string().min(3).max(60), grantedOn: isoDateString }).strict(),
@@ -151,6 +152,7 @@ export function registerCanauxRoutes(app: FastifyInstance, ctx: AppContext, svc:
     const body = parse(suspendSchema, req.body);
     return svc.points.suspend(requireUser(req), req.params.id, body.motif, body.proposalId);
   });
+  // Rétablissement / écartement à quatre yeux : le premier appel enregistre la demande, un R17 distinct décide.
   app.post<{ Params: { id: string } }>('/v1/payment-points/:id/reinstate', async (req) => {
     const body = parse(motifSchema, req.body);
     return svc.points.reinstate(requireUser(req), req.params.id, body.motif);
@@ -214,6 +216,13 @@ export function registerCanauxRoutes(app: FastifyInstance, ctx: AppContext, svc:
     const body = parse(depositSchema, req.body);
     return svc.points.deposit(requireUser(req), req.params.id, parse(isoDateString, req.params.day), body);
   });
+  // Constatation du versement au relevé du compte public (Trésor, quatre yeux) : proposition R17/R18, approbation R17 distinct.
+  app.post<{ Params: { id: string; day: string } }>('/v1/payment-points/:id/cash-days/:day/bank-match', async (req) => {
+    const body = parse(bankMatchSchema, req.body);
+    return svc.points.proposeBankMatch(requireUser(req), req.params.id, parse(isoDateString, req.params.day), body.statementId);
+  });
+  app.post<{ Params: { id: string; day: string } }>('/v1/payment-points/:id/cash-days/:day/bank-match/approve', async (req) =>
+    svc.points.approveBankMatch(requireUser(req), req.params.id, parse(isoDateString, req.params.day)));
 
   // ---------- Indicateurs d'inclusion (agrégats) ----------
   app.get('/v1/channels/indicators', async (req) => svc.indicators(requireUser(req)));

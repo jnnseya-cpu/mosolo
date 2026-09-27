@@ -189,7 +189,7 @@ export interface PaymentPoint {
   hours: string;
   /** Plafonds par devise (contractuels, [EXEMPLE] en démonstration). */
   limits: { perTransaction: MoneyJSON[]; perDay: MoneyJSON[] };
-  /** Délai contractuel de versement au compte public (heures après clôture). */
+  /** Délai contractuel de versement au compte public (heures après la fin du jour de caisse, heure de Kinshasa — jamais après la clôture). */
   settlementDelayHours: number;
   /** Guichet MOSOLO hôte (guichet bancaire partenaire au kiosque communal). */
   guichetId?: string;
@@ -202,6 +202,8 @@ export interface PaymentPoint {
   activatedBy?: string;
   activatedAt?: string;
   suspension?: { by: string; at: string; motif: string; proposalId?: string };
+  /** Demande de rétablissement en attente : un second membre du Trésor (R17), distinct du demandeur, décide (quatre yeux). */
+  reinstatementRequest?: { by: string; at: string; motif: string };
   history: { at: string; by: string; action: string; motif?: string }[];
   demo: boolean;
 }
@@ -228,7 +230,11 @@ export interface CashDay {
   id: string;
   pointId: string;
   day: string;
-  status: 'OUVERTE' | 'CLOTUREE' | 'VERSEE' | 'ECART';
+  /**
+   * DECLAREE : versement déclaré par l'opérateur, en attente du relevé bancaire ; VERSEE UNIQUEMENT après
+   * constatation au relevé du compte public (ligne du bordereau, montants) confirmée à quatre yeux par le Trésor.
+   */
+  status: 'OUVERTE' | 'CLOTUREE' | 'DECLAREE' | 'VERSEE' | 'ECART';
   /** Totaux attendus par devise (somme des encaissements confirmés du jour), figés à la clôture. */
   expected: MoneyJSON[];
   /** Attendus par compte public bénéficiaire (alias du coffre) et devise. */
@@ -236,11 +242,18 @@ export interface CashDay {
   counted?: MoneyJSON[];
   closedAt?: string;
   closedBy?: string;
-  deposit?: { bankSlipRef: string; lines: { accountAlias: string; amount: MoneyJSON }[]; depositedAt: string; declaredBy: string; declaredAt: string };
+  deposit?: {
+    bankSlipRef: string; lines: { accountAlias: string; amount: MoneyJSON }[]; depositedAt: string; declaredBy: string; declaredAt: string;
+    /** Constatation au relevé bancaire : proposée par R17/R18, approuvée par un R17 distinct. */
+    bankMatch?: {
+      statementId: string; exceptionIds: string[]; valueDate: string; lines: { accountAlias: string; amount: MoneyJSON }[];
+      proposedBy: string; proposedAt: string; approvedBy?: string; approvedAt?: string;
+    };
+  };
   exceptionIds: string[];
 }
 
-export type PointExceptionType = 'ECART_CAISSE' | 'ECART_VERSEMENT' | 'VERSEMENT_EN_RETARD' | 'COMPTE_NON_PUBLIC';
+export type PointExceptionType = 'ECART_CAISSE' | 'ECART_VERSEMENT' | 'VERSEMENT_EN_RETARD' | 'COMPTE_NON_PUBLIC' | 'ENCAISSEMENT_NON_RAPPROCHE';
 
 export interface PointException {
   id: string;
@@ -266,6 +279,8 @@ export interface SuspensionProposal {
   decidedBy?: string;
   decidedAt?: string;
   motif?: string;
+  /** Demande d'écartement en attente : un second membre du Trésor (R17), distinct du demandeur, décide (quatre yeux). */
+  dismissalRequest?: { by: string; at: string; motif: string };
 }
 
 export interface GuichetMosolo {
