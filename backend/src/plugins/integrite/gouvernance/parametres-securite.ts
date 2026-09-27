@@ -9,6 +9,7 @@
  * Fichier sans dépendance d'exécution (import de type seulement) : lisible par tous les modules sans cycle d'import.
  */
 import type { ParamDefinition, ParamValue } from './parametres.js';
+import { paramForEntity } from './parametres-entites.js';
 
 const FILE = 'backend/src/plugins/integrite/gouvernance/parametres-securite.ts';
 const R = (id: string, label: string, category: string, value: ParamValue, unit: string, bounds: { min?: number; max?: number } = {}, description?: string): ParamDefinition => ({
@@ -54,8 +55,12 @@ export const PARAMETRES_SECURITE: ParamDefinition[] = [
   R('scellement.controle_intervalle_h', 'Contrôle d’intégrité du journal (chaîne, copie WORM, racines publiées) : intervalle', 'Scellement du journal', 1, 'h', { min: 0, max: 168 }, '0 = contrôle planifié désactivé.'),
 ];
 
-/** Lecture d'un paramètre : valeur en vigueur du registre (module de gouvernance chargé) ou valeur par défaut. */
-export function securityParam(ctx: { ext: Record<string, unknown> }, id: string): ParamValue {
+/**
+ * Lecture d'un paramètre : valeur en vigueur du registre (module de gouvernance chargé) ou valeur par défaut.
+ * `entity` (27/09/2026, facultatif) : pour un paramètre modulable par entité, la valeur de l'entité ou de sa lignée.
+ */
+export function securityParam(ctx: { ext: Record<string, unknown> }, id: string, entity?: string): ParamValue {
+  if (entity) return paramForEntity(ctx, id, entity, () => securityParam(ctx, id));
   const gov = ctx.ext['integrite-gouvernance'] as { value?: (id: string) => ParamValue } | undefined;
   if (gov?.value) {
     try { return gov.value(id); } catch { /* paramètre inconnu du registre chargé : défaut ci-dessous */ }
@@ -65,5 +70,5 @@ export function securityParam(ctx: { ext: Record<string, unknown> }, id: string)
   return d.value;
 }
 
-export const securityNum = (ctx: { ext: Record<string, unknown> }, id: string): number => Number(securityParam(ctx, id));
+export const securityNum = (ctx: { ext: Record<string, unknown> }, id: string, entity?: string): number => Number(securityParam(ctx, id, entity));
 export const securityBool = (ctx: { ext: Record<string, unknown> }, id: string): boolean => securityParam(ctx, id) === true;

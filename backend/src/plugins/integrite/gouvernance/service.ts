@@ -9,13 +9,16 @@
 import { runScheduledJob } from '../../../core/jobs.js';
 import type { AppContext } from '../../../context.js';
 import type { User } from '../../../core/auth.js';
-import { badRequest, conflict, notFound, unprocessable } from '../../../core/errors.js';
+import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../../core/errors.js';
+import { kinshasaDate } from '../../../core/clock.js';
+import { hasAnyGrant } from '../../../core/policy.js';
 import { assertDistinctPerson, authorize } from '../../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../../core/repository.js';
 import { CIRCUITS, reconstruct } from './circuits.js';
 import { keyHealth } from './cles.js';
 import { analyse, pairApprovalsInWindow, type CollusionParams, type Finding } from './collusion.js';
 import { ALL_PARAMETERS, type ParamDefinition, type ParamValue } from './parametres.js';
+import { isModulable, MODULABLES_PAR_ENTITE, STATUT_MODULABLE, type EntityOverride } from './parametres-entites.js';
 
 export const STATUS_LABELS = {
   PAR_DEFAUT: 'PAR_DEFAUT — à confirmer par le maître d’ouvrage',
@@ -46,11 +49,21 @@ export interface ChangeRequest {
   proposedBy: string;
   proposedAt: string;
   decision?: { by: string; at: string; motif: string };
+  /** Surcharge par entité (27/09/2026) : entité visée et date d'effet ; absent ⇒ valeur globale (circuit historique). */
+  entity?: string;
+  effectiveFrom?: string;
+  /** Retour à la valeur héritée (retrait de la surcharge de l'entité). */
+  removal?: boolean;
 }
+
+/** Vue minimale du module « acces » (arborescence des entités), lue à la demande (aucun cycle d'import). */
+interface EntityTree { entities: { get(id: string): { id: string; parentId: string | null } | undefined }; subtree(root: string): Set<string> }
 
 export class GouvernanceService {
   readonly states = new InMemoryRepository<ParamState>();
   readonly requests = new InMemoryRepository<ChangeRequest>();
+  /** Surcharges par entité approuvées à deux personnes (27/09/2026). */
+  readonly overrides = new InMemoryRepository<EntityOverride>();
   private readonly ids = new IdGenerator();
 
   constructor(readonly ctx: AppContext) {}
@@ -98,7 +111,7 @@ export class GouvernanceService {
       statusLabel: effective === 'CONFIRME' && s?.confirmation ? `CONFIRME (acte ${s.confirmation.acte})` : STATUS_LABELS[effective],
       ...(s?.confirmation && !drifted ? { confirmation: s.confirmation } : {}),
       ...(drifted ? { drift: `Valeur confirmée ${String(s!.confirmation!.value)} ≠ valeur du code ${String(d.value)} : nouvelle confirmation requise.` } : {}),
-      pendingRequest: this.requests.findOne((r) => r.parameterId === d.id && r.status === 'PROPOSEE')?.id ?? null,
+      pendingRequest: this.requests.findOne((r) => r.parameterId === d.id && !r.entity && r.status === 'PROPOSEE')?.id ?? null,
     };
   }
 
@@ -118,10 +131,11 @@ export class GouvernanceService {
     };
   }
 
-  proposeChange(user: User, input: { parameterId: string; kind: 'CONFIRMATION' | 'MODIFICATION'; proposedValue?: ParamValue; acte?: string; motif: string }): ChangeRequest {
+  proposeChange(user: User, input: { parameterId: string; kind: 'CONFIRMATION' | 'MODIFICATION'; proposedValue?: ParamValue; acte?: string; motif: string; entity?: string; effectiveFrom?: string; removal?: boolean }): ChangeRequest {
+    if (input.entity) return this.proposeEntityOverride(user, { ...input, entity: input.entity });
     authorize(user, 'integrite:thresholds.propose');
     const d = this.definition(input.parameterId);
-    if (this.requests.findOne((r) => r.parameterId === d.id && r.status === 'PROPOSEE')) {
+    if (this.requests.findOne((r) => r.parameterId === d.id && !r.entity && r.status === 'PROPOSEE')) {
       throw conflict('CHANGE_REQUEST_PENDING', `Une demande attend déjà une décision pour ${d.id}.`);
     }
     const current = this.value(d.id);
@@ -160,6 +174,7 @@ export class GouvernanceService {
     if (!r) throw notFound('CHANGE_REQUEST_NOT_FOUND', `Demande inconnue : ${id}`);
     if (r.status !== 'PROPOSEE') throw conflict('CHANGE_REQUEST_ALREADY_DECIDED', `Demande au statut ${r.status}.`);
     assertDistinctPerson(user.id, [r.proposedBy], 'Quatre yeux : la demande est approuvée par une personne distincte de son auteur.');
+    if (r.entity && input.approve) return this.applyEntityOverride(user, r, input.motif);
     const at = this.now();
     if (!input.approve) {
       const out = this.requests.update({ ...r, status: 'REJETEE', decision: { by: user.id, at, motif: input.motif.trim() } });
@@ -187,6 +202,173 @@ export class GouvernanceService {
       details: { parameterId: d.id, kind: r.kind, proposedBy: r.proposedBy, from: r.currentValue, to: r.proposedValue, acte: r.acte ?? null, status },
     });
     return out;
+  }
+
+  /* ================================================================ */
+  /* Variables par département (27/09/2026)                            */
+  /* ================================================================ */
+
+  private tree(): EntityTree | undefined {
+    return this.ctx.ext.acces as EntityTree | undefined;
+  }
+
+  private day(): string {
+    return kinshasaDate(this.ctx.clock.now());
+  }
+
+  /** Lignée d'une entité : elle-même, puis ses entités parentes jusqu'à la racine. */
+  lineage(entity: string): string[] {
+    const t = this.tree();
+    const out: string[] = [];
+    let cur: string | null | undefined = entity;
+    let guard = 0;
+    while (cur && guard++ < 20) {
+      out.push(cur);
+      cur = t?.entities.get(cur)?.parentId;
+    }
+    return out;
+  }
+
+  private activeOverride(id: string, entity: string): EntityOverride | undefined {
+    const o = this.overrides.get(`${id}|${entity}`);
+    return o && o.status === 'ACTIVE' && o.effectiveFrom <= this.day() ? o : undefined;
+  }
+
+  /** Résolution : entité → entité parente (en remontant) → valeur globale ; seulement pour un paramètre modulable. */
+  resolve(id: string, entity: string): { value: ParamValue; provenance: 'ENTITE' | 'ENTITE_PARENTE' | 'GLOBAL'; sourceEntity: string | null } {
+    const global = this.value(id);
+    if (!isModulable(id)) return { value: global, provenance: 'GLOBAL', sourceEntity: null };
+    for (const [i, e] of this.lineage(entity).entries()) {
+      const o = this.activeOverride(id, e);
+      if (o) return { value: o.value, provenance: i === 0 ? 'ENTITE' : 'ENTITE_PARENTE', sourceEntity: e };
+    }
+    return { value: global, provenance: 'GLOBAL', sourceEntity: null };
+  }
+
+  valueFor(id: string, entity: string): ParamValue {
+    return this.resolve(id, entity).value;
+  }
+
+  /** Administration de la plateforme (tout), administrateur d'entité (son sous-arbre), habilités du registre (tout). */
+  private assertEntityScope(user: User, entity: string, write: boolean): void {
+    const t = this.tree();
+    if (!t?.entities.get(entity)) throw notFound('ENTITY_NOT_FOUND', `Entité inconnue : ${entity}`);
+    if (user.roles.includes('R26')) return;
+    if (user.roles.includes('R08') && t.subtree(user.entity).has(entity)) return;
+    if (write ? hasAnyGrant(user, 'integrite:thresholds.propose') : hasAnyGrant(user, 'integrite:thresholds.read')) return;
+    this.ctx.audit.append({ actor: this.actor(user), action: 'integrite.threshold.entity_scope_refused', resourceType: 'entity', resourceId: entity, outcome: 'DENIED', details: { entity, write } });
+    throw forbidden('OUT_OF_PERIMETER', 'Hors de votre périmètre : un administrateur d’entité n’agit que sur son entité et ses sous-entités.');
+  }
+
+  /** Variable d'une règle juridique (table de taux) : jamais surchargeable par entité (registre des règles, quatre visas). */
+  private isLegalRuleVariable(id: string): boolean {
+    if (id.startsWith('regle:') || id.startsWith('rule:')) return true;
+    const rules = (this.ctx as unknown as { rules?: { list(): { code: string; rateTable?: Record<string, string> }[] } }).rules?.list() ?? [];
+    return rules.some((r) => Object.keys(r.rateTable ?? {}).some((k) => k === id || `${r.code}:${k}` === id || `${r.code}.${k}` === id));
+  }
+
+  private proposeEntityOverride(user: User, input: { parameterId: string; proposedValue?: ParamValue; acte?: string; motif: string; entity: string; effectiveFrom?: string; removal?: boolean }): ChangeRequest {
+    this.assertEntityScope(user, input.entity, true);
+    const refuse = (code: string) => this.ctx.audit.append({
+      actor: this.actor(user), action: 'integrite.threshold.entity_override_refused', resourceType: 'threshold', resourceId: input.parameterId, outcome: 'DENIED', details: { entity: input.entity, code },
+    });
+    if (this.isLegalRuleVariable(input.parameterId)) {
+      refuse('LEGAL_RULE_VARIABLE');
+      throw unprocessable('LEGAL_RULE_VARIABLE', 'Variable d’un barème juridique : elle reste gouvernée par le registre des règles et ses quatre visas ; aucune surcharge par entité.');
+    }
+    const d = ALL_PARAMETERS.find((p) => p.id === input.parameterId);
+    if (!d) throw notFound('PARAMETER_NOT_FOUND', `Paramètre inconnu du registre : ${input.parameterId}`);
+    if (!isModulable(d.id) || d.owner !== 'REGISTRE') {
+      refuse('PARAMETER_NOT_MODULABLE');
+      throw unprocessable('PARAMETER_NOT_MODULABLE', `${d.id} n’est pas déclaré « modulable par entité » : seule la valeur globale du registre s’applique.`);
+    }
+    if (this.requests.findOne((r) => r.parameterId === d.id && r.entity === input.entity && r.status === 'PROPOSEE')) {
+      throw conflict('CHANGE_REQUEST_PENDING', `Une demande attend déjà une décision pour ${d.id} (${input.entity}).`);
+    }
+    const effectiveFrom = input.effectiveFrom ?? this.day();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) throw badRequest('BAD_DATE', 'Date d’effet AAAA-MM-JJ attendue.');
+    const current = this.resolve(d.id, input.entity).value;
+    let proposed: ParamValue = current;
+    if (input.removal) {
+      if (this.overrides.get(`${d.id}|${input.entity}`)?.status !== 'ACTIVE') throw conflict('NO_OVERRIDE', 'Aucune surcharge active pour cette entité.');
+    } else {
+      if (input.proposedValue === undefined) throw badRequest('VALUE_REQUIRED', 'Valeur proposée requise.');
+      if (typeof input.proposedValue !== typeof d.value) throw badRequest('VALUE_TYPE', `Valeur de type ${typeof d.value} attendue.`);
+      if (typeof input.proposedValue === 'number' && (!Number.isFinite(input.proposedValue) || (d.min !== undefined && input.proposedValue < d.min) || (d.max !== undefined && input.proposedValue > d.max))) {
+        throw unprocessable('VALUE_OUT_OF_RANGE', `Valeur hors des bornes admises (${d.min ?? '−∞'} à ${d.max ?? '+∞'} ${d.unit}).`);
+      }
+      proposed = input.proposedValue;
+    }
+    const acte = input.acte?.trim();
+    const r = this.requests.insert({
+      id: this.ids.next('SEUIL'), parameterId: d.id, kind: 'MODIFICATION', currentValue: current, proposedValue: proposed, ...(acte ? { acte } : {}),
+      motif: input.motif.trim(), status: 'PROPOSEE', proposedBy: user.id, proposedAt: this.now(), entity: input.entity, effectiveFrom, ...(input.removal ? { removal: true } : {}),
+    });
+    this.ctx.audit.append({
+      actor: this.actor(user), action: 'integrite.threshold.entity_override_proposed', resourceType: 'threshold_change', resourceId: r.id,
+      details: { parameterId: d.id, entity: input.entity, currentValue: current, proposedValue: proposed, effectiveFrom, removal: !!input.removal, acte: acte ?? null, motif: r.motif },
+    });
+    return r;
+  }
+
+  private applyEntityOverride(user: User, r: ChangeRequest, motif: string): ChangeRequest {
+    const entity = r.entity!;
+    if (this.resolve(r.parameterId, entity).value !== r.currentValue) {
+      throw conflict('VALUE_CHANGED', `La valeur de ${r.parameterId} pour ${entity} a changé depuis la proposition : nouvelle proposition requise.`);
+    }
+    const at = this.now();
+    const key = `${r.parameterId}|${entity}`;
+    const prev = this.overrides.get(key);
+    const step = { at, by: user.id, action: r.removal ? 'RETRAIT' : 'SURCHARGE', value: r.removal ? null : r.proposedValue, effectiveFrom: r.effectiveFrom!, requestId: r.id };
+    const o: EntityOverride = r.removal && prev
+      ? { ...prev, status: 'RETIREE', history: [...prev.history, step] }
+      : {
+        id: key, parameterId: r.parameterId, entity, value: r.proposedValue, effectiveFrom: r.effectiveFrom!, status: 'ACTIVE', requestId: r.id,
+        proposedBy: r.proposedBy, approvedBy: user.id, ...(r.acte ? { acte: r.acte } : {}), history: [...(prev?.history ?? []), step],
+      };
+    if (prev) this.overrides.update(o); else this.overrides.insert(o);
+    const out = this.requests.update({ ...r, status: 'APPROUVEE', decision: { by: user.id, at, motif: motif.trim() } });
+    this.ctx.audit.append({
+      actor: this.actor(user), action: 'integrite.threshold.entity_override_approved', resourceType: 'threshold_change', resourceId: r.id,
+      details: { parameterId: r.parameterId, entity, proposedBy: r.proposedBy, from: r.currentValue, to: r.proposedValue, effectiveFrom: r.effectiveFrom, removal: !!r.removal },
+    });
+    return out;
+  }
+
+  /** Valeurs en vigueur pour une entité, avec leur provenance (GET /v1/parametres/effectifs?entity=…). */
+  effectifs(user: User, entity: string, opts: { modulablesOnly?: boolean } = {}) {
+    this.assertEntityScope(user, entity, false);
+    const line = this.lineage(entity);
+    const today = this.day();
+    const items = ALL_PARAMETERS.filter((d) => !opts.modulablesOnly || isModulable(d.id)).map((d) => {
+      const res = this.resolve(d.id, entity);
+      const programmed = line.map((e) => this.overrides.get(`${d.id}|${e}`)).filter((o): o is EntityOverride => !!o && o.status === 'ACTIVE' && o.effectiveFrom > today);
+      return {
+        id: d.id, label: d.label, category: d.category, unit: d.unit, owner: d.owner, globalValue: this.value(d.id), value: res.value,
+        provenance: res.provenance, sourceEntity: res.sourceEntity, modulable: isModulable(d.id) && d.owner === 'REGISTRE',
+        ...(isModulable(d.id) ? { modulableStatus: STATUT_MODULABLE, consumer: MODULABLES_PAR_ENTITE[d.id]!.consommateur } : {}),
+        ...(d.min !== undefined ? { min: d.min } : {}), ...(d.max !== undefined ? { max: d.max } : {}),
+        override: this.overrides.get(`${d.id}|${entity}`) ?? null,
+        programmed: programmed.map((o) => ({ entity: o.entity, value: o.value, effectiveFrom: o.effectiveFrom })),
+        pending: this.requests.find((r) => r.parameterId === d.id && r.entity === entity && r.status === 'PROPOSEE'),
+      };
+    });
+    return {
+      entity, lineage: line, resolution: 'entité → entité parente → valeur globale du registre', modulableStatus: STATUT_MODULABLE,
+      items, note: 'Les variables des barèmes juridiques restent gouvernées par le registre des règles (quatre visas) : aucune surcharge par entité.',
+    };
+  }
+
+  /** Surcharges et demandes par entité, dans le périmètre de la personne. */
+  overridesFor(user: User, entity?: string) {
+    if (entity) this.assertEntityScope(user, entity, false);
+    const t = this.tree();
+    const all = user.roles.includes('R26') || hasAnyGrant(user, 'integrite:thresholds.read');
+    const scope = entity ? new Set([entity]) : all ? null : t && user.roles.includes('R08') ? t.subtree(user.entity) : new Set<string>();
+    return {
+      items: this.overrides.all().filter((o) => !scope || scope.has(o.entity)),
+      requests: this.requests.all().filter((r) => r.entity && (!scope || scope.has(r.entity))),
+    };
   }
 
   /* ================================================================ */

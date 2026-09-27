@@ -8,7 +8,7 @@
  * aucun code à usage unique n'est jamais renvoyé par l'API métier (bac à sable : boîte d'envoi journalisée).
  */
 import { randomInt } from 'node:crypto';
-import { hasIncompatibility, ROLES, type RoleCode, type VerificationLevel } from '@mosolo/shared';
+import { hasIncompatibility, ROLES, ROLES_CONTRAT_PARTENAIRE, type RoleCode, type VerificationLevel } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import { actorOf, type AuditActor } from '../../core/audit.js';
 import { ACR, hasAcr, isDemoMode, type User } from '../../core/auth.js';
@@ -24,7 +24,7 @@ import { maskPhone, type Taxpayer } from '../../modules/identity/service.js';
 import {
   FIELD_ROLES, LEVEL_INFO, LEVEL_ORDER, LEVEL_RANK, LEVEL_RIGHTS, ROLE_LEVEL, SECOND_VALIDATION_ROLES, SENSITIVE_ROLES,
   type AccessLevel, type ArbitrationCase, type Claim, type Consultation, type EntityKind, type EntitySpace, type Grant,
-  type IdentityProof, type Invitation, type InvitationScope, type Mandate, type MandateAction, type MergeRequest,
+  type IdentityProof, type Invitation, type InvitationScope, type Mandate, type MandateAction, type MandataireRegistration, type MergeRequest, type PartnerContract,
   type ModuleConfig, type ModuleStatus, type ModuleVisa, type Organisation, type OtpChallenge, type ProofType,
   type Representative, type SandboxMessage, type TaxableFact, type ValidationRequest, type ValidatorRequirement, type WorkAccount,
 } from './model.js';
@@ -70,6 +70,10 @@ export class AccesService {
   readonly merges = new InMemoryRepository<MergeRequest>();
   readonly consultations = new InMemoryRepository<Consultation>();
   readonly mandates = new InMemoryRepository<Mandate>();
+  /** Contrats de partenariat (R32 à R34) : invitation d'un rôle partenaire seulement sous contrat actif (27/09/2026). */
+  readonly partnerContracts = new InMemoryRepository<PartnerContract>();
+  /** Inscriptions publiques des mandataires (R31), vérifiées par code à usage unique (27/09/2026). */
+  readonly mandataireRegistrations = new InMemoryRepository<MandataireRegistration>();
   /** Sessions MFA (démo) : utilisateur → fin de validité. */
   private readonly mfaSessions = new Map<string, string>();
   /** Mandataires professionnels certifiés N3 (cabinet, mandat notarié). */
@@ -801,6 +805,12 @@ export class AccesService {
     }
     const clash = hasIncompatibility(roles);
     if (clash) throw deny('ROLE_INCOMPATIBILITY', `Rôles incompatibles (§ 12.5) : ${clash[0]} (${ROLES[clash[0]]}) et ${clash[1]} (${ROLES[clash[1]]}).`, { roles: clash });
+    // Rôles partenaires (R32 à R34) : invitation seulement sous contrat de partenariat actif pour l'entité (27/09/2026).
+    const partnerRoles = roles.filter((r) => ROLES_CONTRAT_PARTENAIRE.includes(r));
+    if (partnerRoles.length && !this.activePartnerContract(input.entity, partnerRoles)) {
+      this.log(this.actor(user), 'invitation.refused', 'invitation', '—', { entity: input.entity, code: 'PARTNER_CONTRACT_REQUIRED', roles }, 'DENIED');
+      throw unprocessable('PARTNER_CONTRACT_REQUIRED', `Rôle partenaire (${partnerRoles.join(', ')}) : un contrat de partenariat actif, enregistré à deux personnes, est requis pour l’entité ${input.entity}.`, { roles: partnerRoles });
+    }
     const lvl = input.accessLevel;
     for (const r of roles) {
       const rl = ROLE_LEVEL[r]!;
@@ -873,6 +883,49 @@ export class AccesService {
       entity: input.entity, accessLevel: lvl, roles, canInvite: inv.canInvite, scope, inviteeMasked: maskPhone(phone), motif: input.motif,
     });
     return { invitation: this.invitationView(inv), sandbox: this.sandbox };
+  }
+
+  /** Contrat de partenariat ACTIF et en vigueur couvrant tous les rôles demandés pour l'entité (27/09/2026). */
+  activePartnerContract(entity: string, roles: RoleCode[]): PartnerContract | undefined {
+    const today = this.today();
+    return this.partnerContracts.findOne((c) => c.entity === entity && c.status === 'ACTIF' && c.validFrom <= today
+      && (!c.validTo || c.validTo >= today) && roles.every((r) => c.roles.includes(r)));
+  }
+
+  // ─────────────── Inscription publique du mandataire (R31, 27/09/2026) ───────────────
+
+  /** Étape 1 : déclaration et envoi d'un code au téléphone (anti-énumération : un compte actif par numéro). */
+  registerMandataire(input: { fullName: string; phone: string; kind: MandataireRegistration['kind']; language: string }) {
+    const phone = normalizePhone(input.phone);
+    const existing = this.mandataireRegistrations.findOne((r) => r.phone === phone && r.status === 'ACTIF');
+    if (existing || this.ctx.users.all().some((u) => u.roles.includes('R31') && u.phone && normalizePhone(u.phone) === phone)) {
+      throw conflict('MANDATAIRE_EXISTS', 'Un compte de mandataire existe déjà pour ce numéro : connectez-vous ou récupérez votre compte.');
+    }
+    const pending = this.mandataireRegistrations.findOne((r) => r.phone === phone && r.status === 'EN_ATTENTE_CODE');
+    const reg = pending ?? this.mandataireRegistrations.insert({
+      id: this.ids.next('MDR', 5), fullName: input.fullName.trim(), phone, kind: input.kind, language: input.language, status: 'EN_ATTENTE_CODE', createdAt: this.now(),
+    });
+    const c = this.issueOtp('VERIFICATION_TELEPHONE', reg.id, phone, 'Inscription du mandataire');
+    this.log({ kind: 'public', id: 'inscription-mandataire' }, 'mandataire.registration_started', 'mandataire_registration', reg.id, { kind: reg.kind });
+    return { registrationId: reg.id, challengeId: c.id, expiresAt: c.expiresAt, destinationMasked: maskPhone(phone), sandbox: this.sandbox };
+  }
+
+  /** Étape 2 : code vérifié ⇒ compte public de mandataire (R31, entité PUBLIC) ; aucun mandant tant qu'aucun mandat. */
+  verifyMandataire(registrationId: string, challengeId: string, code: string) {
+    const reg = this.mandataireRegistrations.get(registrationId);
+    if (!reg) throw notFound('REGISTRATION_NOT_FOUND', 'Inscription inconnue.');
+    if (reg.status === 'ACTIF') throw conflict('REGISTRATION_DONE', 'Inscription déjà finalisée.');
+    try {
+      this.checkOtp(challengeId, reg.id, 'VERIFICATION_TELEPHONE', code);
+    } catch (e) {
+      this.log({ kind: 'public', id: 'inscription-mandataire' }, 'mandataire.registration_failed', 'mandataire_registration', reg.id, {}, 'DENIED');
+      throw e;
+    }
+    const userId = `u-mdt-${reg.id.split('-').pop()!.toLowerCase()}`;
+    this.ctx.users.add({ id: userId, name: reg.fullName, roles: ['R31'], entity: 'PUBLIC', phone: reg.phone, mandants: [] });
+    const out = this.mandataireRegistrations.update({ ...reg, status: 'ACTIF', userId, activatedAt: this.now() });
+    this.log({ kind: 'public', id: 'inscription-mandataire' }, 'mandataire.registered', 'user', userId, { registrationId: reg.id, kind: reg.kind });
+    return { userId, status: out.status, certified: false, message: 'Compte de mandataire actif. Vous n’agissez que dans le périmètre d’un mandat daté et révocable accordé par un contribuable (N1 au moins).' };
   }
 
   private invitationByToken(token: string): Invitation {

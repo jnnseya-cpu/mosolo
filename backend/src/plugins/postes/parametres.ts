@@ -13,6 +13,7 @@
  * Fichier sans dépendance d'exécution (import de type seulement) : lisible par tous les modules sans cycle d'import.
  */
 import type { ParamDefinition, ParamValue } from '../integrite/gouvernance/parametres.js';
+import { paramForEntity } from '../integrite/gouvernance/parametres-entites.js';
 
 const FILE = 'backend/src/plugins/postes/parametres.ts';
 const CAT = 'Postes de décision (ch. 27)';
@@ -56,8 +57,12 @@ export const PARAMETRES_POSTES: ParamDefinition[] = [
     'Au-delà, une nouvelle authentification est demandée avant toute décision (jamais en deçà des exigences existantes).'),
 ];
 
-/** Lecture d'un paramètre : valeur en vigueur du registre (module de gouvernance chargé) ou valeur par défaut. */
-export function posteParam(ctx: { ext: Record<string, unknown> }, id: string): number {
+/**
+ * Lecture d'un paramètre : valeur en vigueur du registre (module de gouvernance chargé) ou valeur par défaut.
+ * `entity` (27/09/2026, facultatif) : pour un paramètre modulable par entité, la valeur de l'entité ou de sa lignée.
+ */
+export function posteParam(ctx: { ext: Record<string, unknown> }, id: string, entity?: string): number {
+  if (entity) return Number(paramForEntity(ctx, id, entity, () => posteParam(ctx, id)));
   const gov = ctx.ext['integrite-gouvernance'] as { value?: (id: string) => ParamValue } | undefined;
   if (gov?.value) {
     try { return Number(gov.value(id)); } catch { /* paramètre inconnu du registre chargé : défaut ci-dessous */ }

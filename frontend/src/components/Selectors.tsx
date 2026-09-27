@@ -1,4 +1,4 @@
-import { CURRENCIES, CURRENCY_CODES, LANGUAGES, LANGUAGE_CODES, isCurrencyCode, isLanguageCode, type LanguageCode } from '@mosolo/shared';
+import { CURRENCIES, CURRENCY_CODES, FAMILLE_DU_ROLE, FAMILLES_COMPTES, LANGUAGES, LANGUAGE_CODES, ORDRE_FAMILLES, isCurrencyCode, isLanguageCode, type LanguageCode, type RoleCode } from '@mosolo/shared';
 import { useApp } from '../context';
 import { hasKey, isDraftLanguage, tr } from '../lib/i18n';
 import type { DemoUser } from '../lib/types';
@@ -53,6 +53,17 @@ export function CurrencySelector({ id = 'currency-select' }: { id?: string }) {
   );
 }
 
+/**
+ * Comptes de démonstration regroupés par famille de comptes (27/09/2026) : autorité, régie, trésor, juridique, contrôle,
+ * terrain, audit, technique, public, partenaire ; les comptes sans rôle (en attente de validation) en dernier.
+ */
+export function groupByFamily(users: DemoUser[]): { code: string; label: string; users: DemoUser[] }[] {
+  const famille = (u: DemoUser) => FAMILLE_DU_ROLE[u.roles[0] as RoleCode] as string | undefined;
+  const groups = ORDRE_FAMILLES.map((f) => ({ code: f as string, label: FAMILLES_COMPTES[f], users: users.filter((u) => famille(u) === f) }));
+  const other = users.filter((u) => !famille(u));
+  return [...groups, { code: 'AUTRES', label: 'Sans rôle (en attente)', users: other }].filter((g) => g.users.length > 0);
+}
+
 /** Utilisateur de démonstration (en-tête x-demo-user). */
 export function DemoUserSelector({ id = 'user-select' }: { id?: string }) {
   const { users, usersError, user, setUserId, tr: t, lang } = useApp();
@@ -61,8 +72,12 @@ export function DemoUserSelector({ id = 'user-select' }: { id?: string }) {
       <label htmlFor={id} className="ctl-label">{t('header.demoUser')}</label>
       <select id={id} className="user-select" value={user?.id ?? ''} title={user ? `${user.name} — ${user.roles.join(', ')}` : undefined} disabled={users.length === 0} onChange={(e) => setUserId(e.target.value)}>
         {users.length === 0 && <option value="">{usersError ? t('header.usersUnavailable') : t('common.loading')}</option>}
-        {users.map((u) => (
-          <option key={u.id} value={u.id} title={`${u.name} — ${u.roles.join(', ')}${u.entity ? ` · ${u.entity}` : ''}`}>{shortLabel(u, users, lang)}</option>
+        {groupByFamily(users).map((g) => (
+          <optgroup key={g.code} label={g.label}>
+            {g.users.map((u) => (
+              <option key={u.id} value={u.id} title={`${u.name} — ${u.roles.join(', ')}${u.entity ? ` · ${u.entity}` : ''}`}>{shortLabel(u, users, lang)}</option>
+            ))}
+          </optgroup>
         ))}
       </select>
     </div>

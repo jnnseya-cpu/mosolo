@@ -129,7 +129,8 @@ export class SurveillanceService {
     this.counted.add(key);
     if (this.counted.size > 50_000) this.counted.clear();
     const windowMs = securityNum(this.ctx, 'dlp.fenetre_min') * 60_000;
-    const max = securityNum(this.ctx, 'dlp.lectures_max');
+    // Modulable par entité (27/09/2026) : valeur de l'entité de la personne, sinon de sa lignée, sinon globale.
+    const max = securityNum(this.ctx, 'dlp.lectures_max', this.ctx.users.get(userId)?.entity);
     const t = Date.parse(at);
     const list = (this.reads.get(userId) ?? []).filter((x) => x > t - windowMs);
     list.push(t);
@@ -299,7 +300,7 @@ export class SurveillanceService {
         detail: `Canal ${channel} : ${c} références de paiement le ${day} (seuil d’alerte ${chAlert}).`, context: { channel, day, count: c, automaticEffect: 'AUCUN' },
       });
     }
-    const agAlert = securityNum(this.ctx, 'plafonds.agent.alerte_jour');
+    const agAlert = securityNum(this.ctx, 'plafonds.agent.alerte_jour', this.ctx.users.get(r.actor.id)?.entity);
     if (agent && agAlert > 0 && a >= agAlert) {
       this.ctx.alerts.raiseOnce(`PLAFOND:AGENT:${r.actor.id}:${day}`, {
         type: 'PLAFOND_REFERENCES_AGENT', severity: 'MEDIUM', source: 'integrite:plafonds',
@@ -332,7 +333,7 @@ export class SurveillanceService {
       if (max > 0 && n >= max) refuse('CHANNEL_REFERENCE_CEILING', `Plafond journalier de références du canal ${channel} atteint (${max}).`, { channel, max, count: n });
     }
     if (isAgent(user.roles)) {
-      const max = securityNum(this.ctx, 'plafonds.agent.max_jour');
+      const max = securityNum(this.ctx, 'plafonds.agent.max_jour', user.entity);
       const n = this.refByAgent.get(user.id) ?? 0;
       if (max > 0 && n >= max) refuse('AGENT_REFERENCE_CEILING', `Plafond journalier de références générées par agent atteint (${max}).`, { max, count: n });
     }
