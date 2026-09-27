@@ -99,7 +99,9 @@ export class AssistedPaymentService {
     if (input.accuracyM > ASSIST_MAX_ACCURACY_M) throw unprocessable('GPS_TOO_IMPRECISE', `Position trop imprécise (± ${Math.round(input.accuracyM)} m) : ${ASSIST_MAX_ACCURACY_M} m au plus.`);
     const obj = this.ctx.objects.objects.get(ob.objectId);
     let dist: number | null = null;
-    if (obj && !MOBILE_CATEGORIES.has(obj.category) && Number.isFinite(obj.lat) && Number.isFinite(obj.lon)) {
+    // Objet fixe seulement : un véhicule, ou une publicité portée par un véhicule, n'a pas de lieu fixe.
+    const mobile = !obj || MOBILE_CATEGORIES.has(obj.category) || obj.attributes['placement'] === 'VEHICULE';
+    if (obj && !mobile && Number.isFinite(obj.lat) && Number.isFinite(obj.lon)) {
       dist = distanceM({ lat: input.lat, lon: input.lon }, obj);
       if (dist > ASSIST_ON_SITE_M + input.accuracyM) throw unprocessable('NOT_ON_SITE', `Vous êtes à ${dist} m du bien : un paiement assisté se fait sur place (${ASSIST_ON_SITE_M} m au plus).`, { distanceM: dist });
     }

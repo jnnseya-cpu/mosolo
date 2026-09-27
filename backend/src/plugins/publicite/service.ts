@@ -25,7 +25,17 @@ import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipie
 import { isCommune } from '../../reference/kinshasa.js';
 import { actorOf, activeRule, DGTK, latestRule, paymentState, pct, perUnit, sumByCurrency } from '../parking/support.js';
 
-export const AD_TYPES = ['PANNEAU', 'ENSEIGNE', 'ECRAN_NUMERIQUE', 'BACHE', 'KAKEMONO', 'AFFICHE_MURALE', 'AUTRE'] as const;
+export const AD_TYPES = ['PANNEAU', 'ENSEIGNE', 'ECRAN_NUMERIQUE', 'BACHE', 'BANDEROLE', 'KAKEMONO', 'CHEVALET', 'AFFICHE_MURALE', 'HABILLAGE_VEHICULE', 'AUTRE'] as const;
+/**
+ * Emplacement du support (réalité de Kinshasa) : support dédié (panneau, écran, bâche, banderole) ; enseigne ou
+ * publicité sur la façade / la porte d'un commerce ; publicité posée DEVANT un commerce (chevalet, kakémono) ; publicité
+ * MOBILE sur un véhicule ou un autre objet qui se déplace (identifiée par sa plaque). Tous sont assujettis.
+ */
+export const PLACEMENTS = ['SUPPORT_DEDIE', 'FACADE_COMMERCE', 'DEVANT_COMMERCE', 'VEHICULE'] as const;
+export const VEHICLE_KINDS = ['VOITURE', 'TAXI', 'BUS', 'CAMION', 'MOTO', 'TRICYCLE', 'REMORQUE', 'AUTRE'] as const;
+/** Règle de la publicité sur véhicule : distincte de la taxe au m² des supports fixes. Tant qu'aucun acte n'est publié : aucun montant. */
+export const AD_MOBILE_TAX_RULE = 'DEMO-PUB-MOBILE';
+export type Placement = (typeof PLACEMENTS)[number];
 export const LIGHTING = ['NON_ECLAIRE', 'ECLAIRE', 'NUMERIQUE'] as const;
 export const FINDINGS = ['CONFORME', 'NON_CONFORME', 'NON_DECLARE', 'RETIRE'] as const;
 export const PIECE_KINDS = ['PLAN_SITUATION', 'PHOTO_MONTAGE', 'TITRE_OCCUPATION', 'ACCORD_PROPRIETAIRE', 'STATUTS', 'AUTRE'] as const;
@@ -51,6 +61,14 @@ export interface AdDevice {
   lat: number;
   lon: number;
   photos: string[];
+  /** Emplacement : support dédié, façade ou porte d'un commerce, devant un commerce, véhicule (mobile). */
+  placement: Placement;
+  /** Publicité mobile : plaque du véhicule qui la porte (normalisée) et genre de véhicule. */
+  vehiclePlate: string | null;
+  vehicleKind: (typeof VEHICLE_KINDS)[number] | null;
+  /** Enseigne ou publicité d'un commerce : nom affiché et, s'il est connu, objet fiscal « activité / établissement ». */
+  businessName: string | null;
+  businessObjectId: string | null;
   ownerTaxpayerId: string | null;
   presumedOperator: string | null;
   origin: 'DECLARATION' | 'RECENSEMENT';
@@ -112,7 +130,14 @@ export interface NewDeviceSpec {
   quartier: string;
   address: string;
   localityRank: 1 | 2 | 3 | 4;
+  placement?: Placement;
+  vehiclePlate?: string;
+  vehicleKind?: (typeof VEHICLE_KINDS)[number];
+  businessName?: string;
+  businessObjectId?: string;
 }
+
+export const normalizeAdPlate = (p: string) => p.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 /** Constat d'inspection : AJOUT SEUL (l'inspecteur ne peut ni le modifier ni le supprimer). */
 export interface AdInspection {
@@ -188,6 +213,13 @@ export class PubliciteService {
     if (!isCommune(spec.commune)) throw badRequest('UNKNOWN_COMMUNE', `Commune inconnue : ${spec.commune}`);
     if (spec.faces < 1 || spec.faces > 4) throw badRequest('INVALID_FACES', 'Nombre de faces : 1 à 4.');
     const surfaceM2 = this.computeSurface(spec.widthM, spec.heightM);
+    const placement: Placement = spec.placement ?? (spec.type === 'HABILLAGE_VEHICULE' ? 'VEHICULE' : spec.type === 'ENSEIGNE' ? 'FACADE_COMMERCE' : spec.type === 'CHEVALET' ? 'DEVANT_COMMERCE' : 'SUPPORT_DEDIE');
+    const plate = spec.vehiclePlate ? normalizeAdPlate(spec.vehiclePlate) : '';
+    if (placement === 'VEHICULE' && plate.length < 4) throw badRequest('VEHICLE_PLATE_REQUIRED', 'Publicité mobile : la plaque du véhicule qui la porte est obligatoire.');
+    if (spec.placement && (placement === 'FACADE_COMMERCE' || placement === 'DEVANT_COMMERCE') && !spec.businessName?.trim() && !spec.businessObjectId) {
+      throw badRequest('BUSINESS_REQUIRED', 'Enseigne ou publicité de commerce : indiquer le commerce (nom affiché ou établissement enregistré).');
+    }
+    if (spec.businessObjectId && !this.ctx.objects.objects.get(spec.businessObjectId)) throw badRequest('UNKNOWN_BUSINESS', `Établissement inconnu : ${spec.businessObjectId}`);
     const com = spec.commune.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase();
     const device = this.devices.insert({
       id: extra.id ?? this.ids.next('ADV'),
@@ -195,14 +227,15 @@ export class PubliciteService {
       qrToken: randomBytes(12).toString('base64url'),
       type: spec.type, widthM: spec.widthM, heightM: spec.heightM, surfaceM2, faces: spec.faces, lighting: spec.lighting,
       commune: spec.commune, quartier: spec.quartier, address: spec.address, localityRank: spec.localityRank, lat: spec.lat, lon: spec.lon,
-      photos: spec.photos, ownerTaxpayerId: owner, presumedOperator: extra.presumedOperator ?? null, origin,
+      photos: spec.photos, placement, vehiclePlate: placement === 'VEHICULE' ? plate : null, vehicleKind: placement === 'VEHICULE' ? spec.vehicleKind ?? 'AUTRE' : null,
+      businessName: spec.businessName?.trim() || null, businessObjectId: spec.businessObjectId ?? null, ownerTaxpayerId: owner, presumedOperator: extra.presumedOperator ?? null, origin,
       registration: origin === 'DECLARATION' ? 'DECLARE' : 'NON_DECLARE', currentAuthorizationId: null, objectId: null,
       demo: extra.demo === true, createdBy: user.id, createdAt: this.now().toISOString(),
     });
     if (owner) this.attachObject(user, device.id);
     this.ctx.audit.append({
       actor: actorOf(user), action: origin === 'DECLARATION' ? 'publicite.device.declared' : 'publicite.device.recorded_by_inspection', resourceType: 'ad_device', resourceId: device.id,
-      details: { reference: device.reference, type: device.type, surfaceM2, faces: device.faces, commune: device.commune, owner: owner !== null },
+      details: { reference: device.reference, type: device.type, placement, vehiclePlate: device.vehiclePlate, businessObjectId: device.businessObjectId, surfaceM2, faces: device.faces, commune: device.commune, owner: owner !== null },
     });
     return this.devices.get(device.id)!;
   }
@@ -213,7 +246,10 @@ export class PubliciteService {
     if (d.objectId || !d.ownerTaxpayerId) return d;
     const obj = this.ctx.objects.create(user, {
       taxpayerId: d.ownerTaxpayerId, category: 'PANNEAU', commune: d.commune, quartier: d.quartier, localityRank: d.localityRank, lat: d.lat, lon: d.lon,
-      attributes: { adDeviceId: d.id, reference: d.reference, type: d.type, surface_m2: d.surfaceM2, faces: d.faces, eclairage: d.lighting },
+      attributes: {
+        adDeviceId: d.id, reference: d.reference, type: d.type, surface_m2: d.surfaceM2, faces: d.faces, eclairage: d.lighting, placement: d.placement,
+        ...(d.vehiclePlate ? { vehiclePlate: d.vehiclePlate } : {}), ...(d.businessObjectId ? { businessObjectId: d.businessObjectId } : {}),
+      },
     });
     return this.devices.update({ ...d, objectId: obj.id });
   }
@@ -325,13 +361,14 @@ export class PubliciteService {
     const found = new Map<string, AdDevice>();
     for (const d of this.devices.all()) {
       if (refs.has(d.reference) || d.qrToken === q.trim() || d.reference === text) found.set(d.id, d);
+      if (d.vehiclePlate && normalizeAdPlate(text).includes(d.vehiclePlate)) found.set(d.id, d);
     }
     for (const r of this.requests.all()) if (auths.has(r.reference)) found.set(r.deviceId, this.getDevice(r.deviceId));
     return {
       query: q, detected: { deviceReferences: [...refs], authorizationReferences: [...auths] },
       matches: [...found.values()].map((d) => {
         const st = this.deviceStatus(d);
-        return { id: d.id, reference: d.reference, type: d.type, commune: d.commune, address: d.address, status: st.status, authorization: st.authorization, rights: st.rights };
+        return { id: d.id, reference: d.reference, type: d.type, placement: d.placement, vehiclePlate: d.vehiclePlate, businessName: d.businessName, commune: d.commune, address: d.address, status: st.status, authorization: st.authorization, rights: st.rights };
       }),
       notice: 'Résultat proposé par recherche automatique : l’inspecteur confirme sur place.',
     };
@@ -402,6 +439,17 @@ export class PubliciteService {
 
   /** Liquidation par la règle du registre (ACTIVE seulement), au nom de la personne qui décide. */
   private liquidateDevice(user: User, d: AdDevice): NonNullable<AuthorizationRequest['liquidation']> {
+    // Publicité mobile : règle propre (jamais la taxe au m² d'un support fixe) ; tant qu'elle n'est pas publiée, aucun montant.
+    if (d.placement === 'VEHICULE') {
+      const mobile = activeRule(this.ctx, AD_MOBILE_TAX_RULE);
+      if (!mobile) return { status: 'ACTE_REQUIS', obligationId: null, ruleCode: AD_MOBILE_TAX_RULE, note: 'Barème de la publicité sur véhicule non publié (acte requis) : aucun montant exigible.' };
+      const withObj = this.attachObject(user, d.id);
+      const { obligation } = this.ctx.assessment.calculate(user, {
+        ruleId: mobile.id, taxpayerId: withObj.ownerTaxpayerId!, objectId: withObj.objectId!,
+        inputs: { surface_m2: withObj.surfaceM2, faces: String(withObj.faces) }, simulate: false,
+      });
+      return { status: 'EMISE', obligationId: obligation!.id, ruleCode: mobile.code, note: `${mobile.label} (v${mobile.version})` };
+    }
     const rule = activeRule(this.ctx, AD_TAX_RULE);
     if (!rule) {
       return { status: 'ACTE_REQUIS', obligationId: null, ruleCode: AD_TAX_RULE, note: 'Barème de la taxe non publié (acte requis) : aucun montant exigible.' };

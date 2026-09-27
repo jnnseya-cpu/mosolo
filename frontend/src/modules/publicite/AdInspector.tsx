@@ -15,10 +15,11 @@ import { useApi } from '../../hooks/useApi';
 import { OverduePenalties, type OverduePenaltiesData } from '../../components/OverduePenalties';
 import { api } from '../../lib/api';
 import { ErrorLine, GpsField, hasRole, MiniMap, PhotoHashes, ReasonForm, useAction } from '../parking/shared';
-import { AD_TYPE, CASE_STATUS, DEVICE_STATUS, FINDING, LIGHTING, RIGHTS, type Case, type Device, type DeviceStatus } from './types';
+import { AD_TYPE, CASE_STATUS, DEVICE_STATUS, FINDING, LIGHTING, PLACEMENT, RIGHTS, VEHICLE_KIND, type Case, type Device, type DeviceStatus } from './types';
+import { AdAround, AdVehicle, type ConstatPreset } from './AdTerrain';
 import '../parking/parking.css';
 
-type Tab = 'control' | 'inventory' | 'verify' | 'mine';
+type Tab = 'around' | 'vehicles' | 'control' | 'inventory' | 'verify' | 'mine';
 interface InspectionDone { inspection: { reference: string }; case: Case | null; penalitesImpayees?: OverduePenaltiesData }
 interface Lookup { detected: { deviceReferences: string[]; authorizationReferences: string[] }; matches: { id: string; reference: string; type: string; commune: string; address: string; status: DeviceStatus; authorization: { reference: string; validUntil: string } | null; rights: Device['rights'] }[]; notice: string }
 
@@ -27,6 +28,8 @@ export default function AdInspector() {
   const isInspector = hasRole(user?.roles, 'R11');
   const isSupervisor = hasRole(user?.roles, 'R09', 'R06', 'R07');
   const [tab, setTab] = useState<Tab>(isInspector ? 'control' : 'inventory');
+  const [preset, setPreset] = useState<ConstatPreset | null>(null);
+  const constat = (p: ConstatPreset) => { setPreset(p); setTab('control'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const [tick, setTick] = useState(0);
   const refresh = () => setTick((n) => n + 1);
   const badge = useApi(user ? () => api<{ accredited: boolean; validFrom?: string | null; validUntil: string | null; communes: string[]; status: string }>(`/v1/publicite/public/badges/${encodeURIComponent(user.id)}`) : null, [user?.id, tick]);
@@ -40,6 +43,8 @@ export default function AdInspector() {
   }
   const tabs: [Tab, string][] = [
     ...(isInspector ? [['control', 'Contrôle'] as [Tab, string]] : []),
+    ['around', 'Autour de moi'],
+    ['vehicles', 'Véhicules'],
     ['inventory', 'Inventaire et carte'],
     ...(hasRole(user?.roles, 'R09') ? [['verify', 'Vérification'] as [Tab, string]] : []),
     ['mine', isInspector ? 'Mes constats' : 'Constats'],
@@ -54,7 +59,9 @@ export default function AdInspector() {
       <div className="seg seg-wrap pk-tabs" role="tablist" aria-label="Rubriques">
         {tabs.map(([k, l]) => <button key={k} type="button" role="tab" aria-pressed={tab === k} aria-selected={tab === k} onClick={() => setTab(k)}>{l}</button>)}
       </div>
-      {tab === 'control' && <Control onDone={refresh} />}
+      {tab === 'control' && <Control key={preset ? JSON.stringify(preset) : 'vide'} preset={preset} onDone={refresh} />}
+      {tab === 'around' && <AdAround onConstat={constat} />}
+      {tab === 'vehicles' && <AdVehicle onConstat={constat} />}
       {tab === 'inventory' && <Inventory tick={tick} />}
       {tab === 'verify' && <Verify tick={tick} onChange={refresh} />}
       {tab === 'mine' && <Constats tick={tick} />}
@@ -62,19 +69,36 @@ export default function AdInspector() {
   );
 }
 
-function Control({ onDone }: { onDone: () => void }) {
+/** Dimensions proposées par défaut (à mesurer sur place). */
+const DEFAULT_SIZE: Record<string, [string, string]> = { PANNEAU: ['4.00', '3.00'], ENSEIGNE: ['2.00', '1.00'], CHEVALET: ['0.60', '1.00'], HABILLAGE_VEHICULE: ['2.00', '1.00'], BANDEROLE: ['5.00', '1.00'] };
+
+function Control({ onDone, preset }: { onDone: () => void; preset?: ConstatPreset | null }) {
   const { fmtDate } = useApp();
   const [q, setQ] = useState('');
   const [lk, setLk] = useState<Lookup | null>(null);
   const [deviceId, setDeviceId] = useState<string | null>(null);
-  const [finding, setFinding] = useState('CONFORME');
+  const [finding, setFinding] = useState(preset ? 'NON_DECLARE' : 'CONFORME');
   const [photos, setPhotos] = useState<string[]>([]);
   const [lat, setLat] = useState('-4.3050');
   const [lon, setLon] = useState('15.3100');
   const [acc, setAcc] = useState<number | undefined>();
   const [obs, setObs] = useState('');
   const [operator, setOperator] = useState('');
-  const [nd, setNd] = useState({ type: 'PANNEAU', widthM: '4.00', heightM: '3.00', faces: 1, lighting: 'NON_ECLAIRE', commune: 'Gombe', quartier: '', address: '', localityRank: 1 });
+  const [nd, setNd] = useState<Record<string, string | number>>({
+    type: preset?.type ?? 'PANNEAU', widthM: DEFAULT_SIZE[preset?.type ?? 'PANNEAU']?.[0] ?? '4.00', heightM: DEFAULT_SIZE[preset?.type ?? 'PANNEAU']?.[1] ?? '3.00', faces: 1, lighting: 'NON_ECLAIRE',
+    commune: preset?.commune ?? 'Gombe', quartier: preset?.quartier ?? '', address: preset?.address ?? '', localityRank: 1,
+    placement: preset?.placement ?? 'SUPPORT_DEDIE', vehiclePlate: preset?.vehiclePlate ?? '', vehicleKind: preset?.vehicleKind ?? 'TAXI',
+    businessName: preset?.businessName ?? '', businessObjectId: preset?.businessObjectId ?? '',
+  });
+  // Seuls les champs utiles à l'emplacement choisi sont transmis.
+  const ndBody = () => {
+    const { placement, vehiclePlate, vehicleKind, businessName, businessObjectId, ...base } = nd;
+    return {
+      ...base, placement,
+      ...(placement === 'VEHICULE' ? { vehiclePlate, vehicleKind } : {}),
+      ...(placement === 'FACADE_COMMERCE' || placement === 'DEVANT_COMMERCE' ? { ...(businessName ? { businessName } : {}), ...(businessObjectId ? { businessObjectId } : {}) } : {}),
+    };
+  };
   const [done, setDone] = useState<InspectionDone | null>(null);
   const search = useAction();
   const act = useAction();
@@ -89,7 +113,7 @@ function Control({ onDone }: { onDone: () => void }) {
     const body = {
       finding, photos, lat: Number(lat), lon: Number(lon), observations: obs || 'Constat sur place.',
       ...(acc !== undefined ? { gpsAccuracyM: acc } : {}), ...(q.trim() ? { ocrText: q.trim() } : {}), ...(operator.trim() ? { presumedOperator: operator.trim() } : {}),
-      ...(deviceId ? { deviceId } : { newDevice: nd }),
+      ...(deviceId ? { deviceId } : { newDevice: ndBody() }),
     };
     void act.run(() => api<InspectionDone>('/v1/publicite/inspections', { method: 'POST', body }), (r) => { setDone(r); setPhotos([]); setObs(''); onDone(); });
   }
@@ -135,19 +159,29 @@ function Control({ onDone }: { onDone: () => void }) {
             {deviceId === null && (
               <div className="stack-sm">
                 <p className="small"><strong>Support non enregistré :</strong> décrivez-le pour l’inscrire à l’inventaire.</p>
+                <label className="field"><span className="label">Emplacement</span><select value={String(nd.placement)} onChange={(e) => setNd({ ...nd, placement: e.target.value, ...(e.target.value === 'VEHICULE' ? { type: 'HABILLAGE_VEHICULE' } : {}) })}>{Object.entries(PLACEMENT).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+                {nd.placement === 'VEHICULE' && (
+                  <div className="field-row">
+                    <label className="field"><span className="label">Plaque du véhicule</span><input className="mono" value={String(nd.vehiclePlate)} onChange={(e) => setNd({ ...nd, vehiclePlate: e.target.value.toUpperCase() })} required /></label>
+                    <label className="field"><span className="label">Véhicule</span><select value={String(nd.vehicleKind)} onChange={(e) => setNd({ ...nd, vehicleKind: e.target.value })}>{Object.entries(VEHICLE_KIND).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+                  </div>
+                )}
+                {(nd.placement === 'FACADE_COMMERCE' || nd.placement === 'DEVANT_COMMERCE') && (
+                  <label className="field"><span className="label">Commerce (nom affiché)</span><input value={String(nd.businessName)} onChange={(e) => setNd({ ...nd, businessName: e.target.value })} required />{nd.businessObjectId ? <span className="hint">Établissement enregistré : <span className="mono">{String(nd.businessObjectId)}</span></span> : null}</label>
+                )}
                 <div className="field-row">
-                  <label className="field"><span className="label">Type</span><select value={nd.type} onChange={(e) => setNd({ ...nd, type: e.target.value })}>{Object.entries(AD_TYPE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-                  <label className="field"><span className="label">Éclairage</span><select value={nd.lighting} onChange={(e) => setNd({ ...nd, lighting: e.target.value })}>{Object.entries(LIGHTING).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+                  <label className="field"><span className="label">Type</span><select value={String(nd.type)} onChange={(e) => setNd({ ...nd, type: e.target.value })}>{Object.entries(AD_TYPE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+                  <label className="field"><span className="label">Éclairage</span><select value={String(nd.lighting)} onChange={(e) => setNd({ ...nd, lighting: e.target.value })}>{Object.entries(LIGHTING).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
                 </div>
                 <div className="field-row">
-                  <label className="field"><span className="label">Largeur (m)</span><input value={nd.widthM} onChange={(e) => setNd({ ...nd, widthM: e.target.value })} /></label>
-                  <label className="field"><span className="label">Hauteur (m)</span><input value={nd.heightM} onChange={(e) => setNd({ ...nd, heightM: e.target.value })} /></label>
+                  <label className="field"><span className="label">Largeur (m)</span><input value={String(nd.widthM)} onChange={(e) => setNd({ ...nd, widthM: e.target.value })} /></label>
+                  <label className="field"><span className="label">Hauteur (m)</span><input value={String(nd.heightM)} onChange={(e) => setNd({ ...nd, heightM: e.target.value })} /></label>
                 </div>
                 <div className="field-row">
-                  <label className="field"><span className="label">Commune</span><input value={nd.commune} onChange={(e) => setNd({ ...nd, commune: e.target.value })} /></label>
-                  <label className="field"><span className="label">Quartier</span><input value={nd.quartier} onChange={(e) => setNd({ ...nd, quartier: e.target.value })} /></label>
+                  <label className="field"><span className="label">Commune</span><input value={String(nd.commune)} onChange={(e) => setNd({ ...nd, commune: e.target.value })} /></label>
+                  <label className="field"><span className="label">Quartier</span><input value={String(nd.quartier)} onChange={(e) => setNd({ ...nd, quartier: e.target.value })} /></label>
                 </div>
-                <label className="field"><span className="label">Adresse ou repère</span><input value={nd.address} onChange={(e) => setNd({ ...nd, address: e.target.value })} /></label>
+                <label className="field"><span className="label">Adresse ou repère</span><input value={String(nd.address)} onChange={(e) => setNd({ ...nd, address: e.target.value })} /></label>
                 <label className="field"><span className="label">Exploitant présumé (mention visible)</span><input value={operator} onChange={(e) => setOperator(e.target.value)} /></label>
               </div>
             )}

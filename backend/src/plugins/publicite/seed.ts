@@ -11,6 +11,7 @@ import { AD_TAX_RULE, type PubliciteService } from './service.js';
 
 export const PUB_DEMO = {
   advertiserTaxpayerId: 'TP-PUB-0001',
+  mobilePlate: 'KN-4521-BB',
   inspectorCommunes: ['Gombe', 'Lingwala', 'Barumbu', 'Kinshasa'],
 } as const;
 
@@ -59,7 +60,7 @@ export function seedPublicite(ctx: AppContext, svc: PubliciteService): void {
   // D2 : enseigne déclarée, demande déposée (en attente d'instruction).
   const d2 = svc.declareDevice(annonceur, {
     type: 'ENSEIGNE', widthM: '2.00', heightM: '1.00', faces: 1, lighting: 'NON_ECLAIRE', commune: 'Gombe', quartier: 'Avenue du Commerce',
-    address: 'Av. du Commerce, n° fictif 45', localityRank: 1, lat: -4.3068, lon: 15.3129, photos: [photo('d2')],
+    address: 'Av. du Commerce, n° fictif 45', localityRank: 1, lat: -4.3068, lon: 15.3129, photos: [photo('d2')], businessName: 'Quincaillerie du Commerce (fictive)',
   });
   svc.submitRequest(annonceur, { deviceId: d2.id, periodFrom: day(1), periodTo: day(365), pieces: [piece('TITRE_OCCUPATION', 'bail-d2.pdf')] });
 
@@ -87,4 +88,47 @@ export function seedPublicite(ctx: AppContext, svc: PubliciteService): void {
     observations: 'Dimensions apparentes supérieures à la déclaration (≈ 7 × 3 m) (démonstration).',
   });
   if (nc.case) svc.verifyCase(superviseur, nc.case.id, { confirm: true, note: 'Mesure au télémètre cohérente avec les photographies (démonstration).' });
+
+  // ——— Réalité du terrain (démonstration, Gombe, autour du boulevard du 30 Juin) ———
+  // Commerces enregistrés (fictifs) : l'un porte une enseigne déclarée, l'autre n'a encore rien déclaré (« à vérifier »).
+  const shop = (nom: string, lat: number, lon: number, quartier: string) => ctx.objects.create(annonceur, {
+    taxpayerId: PUB_DEMO.advertiserTaxpayerId, category: 'ACTIVITE', commune: 'Gombe', quartier, localityRank: 1, lat, lon,
+    attributes: { objectType: 'ETABLISSEMENT', nom, demo: true },
+  });
+  const pharmacie = shop('Pharmacie du Fleuve (fictive)', -4.3040, 15.3080, 'Boulevard du 30 Juin');
+  shop('Boutique Mode 243 (fictive)', -4.3027, 15.3062, 'Boulevard du 30 Juin');
+  // Enseigne sur la façade / porte d'un commerce, autorisée et payée.
+  const e1 = svc.declareDevice(annonceur, {
+    type: 'ENSEIGNE', widthM: '3.00', heightM: '0.80', faces: 1, lighting: 'ECLAIRE', commune: 'Gombe', quartier: 'Boulevard du 30 Juin',
+    address: 'Façade de la pharmacie, Bd du 30 Juin (fictif)', localityRank: 1, lat: -4.30402, lon: 15.30803, photos: [photo('e1')],
+    placement: 'FACADE_COMMERCE', businessName: 'Pharmacie du Fleuve (fictive)', businessObjectId: pharmacie.id,
+  });
+  const re1 = svc.submitRequest(annonceur, { deviceId: e1.id, periodFrom: day(-10), periodTo: day(355), pieces: [piece('PHOTO_MONTAGE', 'enseigne-e1.jpg')] });
+  svc.instruct(instructeur, re1.id, { action: 'PROPOSER', proposal: 'ACCORDER', analysis: 'Enseigne en façade conforme (démonstration).' });
+  const ge1 = svc.decideRequest(autorite, re1.id, { outcome: 'ACCORDEE', reason: 'Enseigne autorisée (démonstration).' });
+  if (ge1.liquidation?.obligationId) demoPay(ctx, annonceur, ge1.liquidation.obligationId);
+  // Chevalet posé devant un commerce : autorisé, droits IMPAYÉS (payables par canal numérique sur place).
+  const c1 = svc.declareDevice(annonceur, {
+    type: 'CHEVALET', widthM: '0.60', heightM: '1.00', faces: 2, lighting: 'NON_ECLAIRE', commune: 'Gombe', quartier: 'Boulevard du 30 Juin',
+    address: 'Trottoir devant la pharmacie (fictif)', localityRank: 1, lat: -4.30395, lon: 15.30812, photos: [photo('c1')],
+    placement: 'DEVANT_COMMERCE', businessName: 'Pharmacie du Fleuve (fictive)', businessObjectId: pharmacie.id,
+  });
+  const rc1 = svc.submitRequest(annonceur, { deviceId: c1.id, periodFrom: day(-5), periodTo: day(360), pieces: [piece('PHOTO_MONTAGE', 'chevalet-c1.jpg')] });
+  svc.instruct(instructeur, rc1.id, { action: 'PROPOSER', proposal: 'ACCORDER', analysis: 'Chevalet laissant 1,5 m de passage (démonstration).' });
+  svc.decideRequest(autorite, rc1.id, { outcome: 'ACCORDEE', reason: 'Occupation autorisée (démonstration).' });
+  // Banderole posée sans autorisation ni paiement, recensée par l'inspecteur.
+  svc.inspect(inspecteur, {
+    finding: 'NON_DECLARE', photos: [photo('b1')], lat: -4.3036, lon: 15.3066, gpsAccuracyM: 6, presumedOperator: 'Mention « Promo Kin Événements » (fictive)',
+    newDevice: { type: 'BANDEROLE', widthM: '5.00', heightM: '1.00', faces: 1, lighting: 'NON_ECLAIRE', commune: 'Gombe', quartier: 'Boulevard du 30 Juin', address: 'Entre deux poteaux, Bd du 30 Juin (fictif)', localityRank: 1 },
+    observations: 'Banderole tendue au-dessus du trottoir, sans plaque QR ni autorisation (démonstration).',
+  });
+  // Publicité mobile : habillage d'un taxi-bus, déclaré et autorisé ; barème du véhicule non publié (aucun montant).
+  const v1 = svc.declareDevice(annonceur, {
+    type: 'HABILLAGE_VEHICULE', widthM: '4.00', heightM: '1.20', faces: 2, lighting: 'NON_ECLAIRE', commune: 'Gombe', quartier: 'Boulevard du 30 Juin',
+    address: 'Taxi-bus, stationnement habituel : arrêt fictif de la Poste', localityRank: 1, lat: -4.3045, lon: 15.3095, photos: [photo('v1')],
+    placement: 'VEHICULE', vehiclePlate: PUB_DEMO.mobilePlate, vehicleKind: 'BUS',
+  });
+  const rv1 = svc.submitRequest(annonceur, { deviceId: v1.id, periodFrom: day(-20), periodTo: day(345), pieces: [piece('PHOTO_MONTAGE', 'habillage-v1.jpg')] });
+  svc.instruct(instructeur, rv1.id, { action: 'PROPOSER', proposal: 'ACCORDER', analysis: 'Habillage conforme (démonstration).' });
+  svc.decideRequest(autorite, rv1.id, { outcome: 'ACCORDEE', reason: 'Publicité mobile autorisée (démonstration).' });
 }

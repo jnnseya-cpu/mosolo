@@ -7,6 +7,7 @@ export type DeviceStatus = 'AUTORISE' | 'EXPIRE' | 'DECLARE' | 'NON_DECLARE' | '
 export interface Device {
   id: string; reference: string; qrToken: string; type: string; widthM: string; heightM: string; surfaceM2: string; faces: number; lighting: string;
   commune: string; quartier: string; address: string; localityRank: number; lat: number; lon: number; photos: string[]; origin: 'DECLARATION' | 'RECENSEMENT';
+  placement?: string; vehiclePlate?: string | null; vehicleKind?: string | null; businessName?: string | null; businessObjectId?: string | null;
   status: DeviceStatus; expiringSoon: boolean; rights: 'A_JOUR' | 'IMPAYE' | 'ACTE_REQUIS' | 'SANS_OBJET';
   authorization: { id: string; reference: string; validFrom: string; validUntil: string } | null;
   openCase: { id: string; reference: string; finding: string } | null; inspections: number; ownerIdentified: boolean;
@@ -37,7 +38,16 @@ export interface Case {
 }
 
 export const AD_TYPE: Record<string, string> = {
-  PANNEAU: 'Panneau', ENSEIGNE: 'Enseigne', ECRAN_NUMERIQUE: 'Écran numérique', BACHE: 'Bâche', KAKEMONO: 'Kakémono', AFFICHE_MURALE: 'Affiche murale', AUTRE: 'Autre',
+  PANNEAU: 'Panneau', ENSEIGNE: 'Enseigne', ECRAN_NUMERIQUE: 'Écran numérique', BACHE: 'Bâche', BANDEROLE: 'Banderole', KAKEMONO: 'Kakémono',
+  CHEVALET: 'Chevalet (devant un commerce)', AFFICHE_MURALE: 'Affiche murale', HABILLAGE_VEHICULE: 'Publicité sur véhicule', AUTRE: 'Autre',
+};
+/** Emplacement du support : dédié, façade ou porte d'un commerce, devant un commerce, véhicule (mobile). */
+export const PLACEMENT: Record<string, string> = {
+  SUPPORT_DEDIE: 'Support dédié (panneau, écran, bâche, banderole)', FACADE_COMMERCE: 'Façade ou porte d’un commerce (enseigne)',
+  DEVANT_COMMERCE: 'Devant un commerce (chevalet, kakémono)', VEHICULE: 'Véhicule ou objet mobile',
+};
+export const VEHICLE_KIND: Record<string, string> = {
+  VOITURE: 'Voiture', TAXI: 'Taxi', BUS: 'Bus / taxi-bus', CAMION: 'Camion', MOTO: 'Moto', TRICYCLE: 'Tricycle', REMORQUE: 'Remorque', AUTRE: 'Autre objet mobile',
 };
 export const LIGHTING: Record<string, string> = { NON_ECLAIRE: 'Non éclairé', ECLAIRE: 'Éclairé', NUMERIQUE: 'Numérique' };
 export const PIECE: Record<string, string> = {

@@ -17,6 +17,8 @@ export function declarePublicitePolicies(): void {
   definePolicy('publicite:authorization.instruct', { R07: sameEntity });
   definePolicy('publicite:authorization.decide', { R06: sameEntity, R07: sameEntity });
   definePolicy('publicite:inspection.create', { R11: inTerritory('full') });
+  // Terrain : supports proches (couleurs), commerces sans enseigne déclarée, publicité mobile par plaque.
+  definePolicy('publicite:nearby', { R11: inTerritory('full'), R09: inTerritory('full'), R06: sameEntity, R07: sameEntity, R22: always, R24: always });
   definePolicy('publicite:case.verify', { R09: inTerritory('full') });
   definePolicy('publicite:case.decide', { R06: sameEntity, R07: sameEntity });
   definePolicy('publicite:case.contest', { R30: ownTaxpayer, R31: mandant });

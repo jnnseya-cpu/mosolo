@@ -59,10 +59,12 @@ describe('KIN PUB CONTROL — inventaire et vérification publique', () => {
     const env = await setupPub();
     expect((await env.req('GET', '/v1/publicite/inventory', 'pb-annonceur')).statusCode).toBe(403);
     const inv = (await env.req('GET', '/v1/publicite/inventory', 'pb-inspecteur')).json().items;
-    expect(inv.length).toBe(4);
+    // 4 supports d'origine + réalité du terrain : enseigne de façade, chevalet devant un commerce, banderole non déclarée, taxi-bus.
+    expect(inv.length).toBe(8);
     const statuses = inv.map((d: { status: string }) => d.status).sort();
-    expect(statuses).toEqual(['AUTORISE', 'AUTORISE', 'DECLARE', 'NON_DECLARE']);
+    expect(statuses).toEqual(['AUTORISE', 'AUTORISE', 'AUTORISE', 'AUTORISE', 'AUTORISE', 'DECLARE', 'NON_DECLARE', 'NON_DECLARE']);
     const d1 = inv.find((d: { type: string }) => d.type === 'PANNEAU');
+    expect(inv.find((d: { placement: string }) => d.placement === 'VEHICULE')).toMatchObject({ vehiclePlate: 'KN4521BB', rights: 'ACTE_REQUIS' });
     expect(d1.rights).toBe('A_JOUR');
     const d3 = inv.find((d: { type: string }) => d.type === 'ECRAN_NUMERIQUE');
     expect(d3).toMatchObject({ rights: 'IMPAYE', expiringSoon: true });
@@ -70,7 +72,7 @@ describe('KIN PUB CONTROL — inventaire et vérification publique', () => {
     expect(lk.detected.deviceReferences).toEqual([d1.reference]);
     expect(lk.matches[0]).toMatchObject({ id: d1.id, status: 'AUTORISE' });
     const map = (await env.req('GET', '/v1/publicite/map', 'pb-superviseur')).json().items;
-    expect(map).toHaveLength(4);
+    expect(map).toHaveLength(8);
   });
 });
 
@@ -223,13 +225,14 @@ describe('KIN PUB CONTROL — inspection, constat et décision (RW1)', () => {
     const env = await setupPub([parkingPlugin, publicitePlugin] as MosoloPlugin<any>[]);
     expect((await env.req('GET', '/v1/publicite/indicators', 'pb-annonceur')).statusCode).toBe(403);
     const ind = (await env.req('GET', '/v1/publicite/indicators', 'pb-autorite')).json();
-    expect(ind.totals).toMatchObject({ devices: 4, authorized: 2, undeclared: 1, declaredPending: 1, authorizedRate: '50.0', inspections: 3, casesOpen: 2, expiringSoon: 1 });
-    expect(ind.totals.revenue).toEqual([{ amount: '480000.00', currency: 'CDF' }]);
-    // Surface autorisée : 12 × 2 + 18 × 1 = 42 m² ; 480 000 / 42 = 11 428,57 CDF/m².
-    expect(ind.totals.authorizedSurfaceM2).toBe('42');
-    expect(ind.totals.revenuePerM2).toEqual([{ amount: '11428.57', currency: 'CDF' }]);
+    expect(ind.totals).toMatchObject({ devices: 8, authorized: 5, undeclared: 2, declaredPending: 1, authorizedRate: '62.5', inspections: 4, casesOpen: 3, expiringSoon: 1 });
+    // Recettes : panneau 12 m² × 2 faces × (15 000 + 5 000 éclairé) = 480 000 ; enseigne 2,4 m² × (15 000 + 5 000) = 48 000.
+    expect(ind.totals.revenue).toEqual([{ amount: '528000.00', currency: 'CDF' }]);
+    // Surface autorisée : 12 × 2 + 18 × 1 + 2,4 × 1 + 0,6 × 2 + 4,8 × 2 = 55,2 m² ; 528 000 / 55,2 = 9 565,22 CDF/m².
+    expect(ind.totals.authorizedSurfaceM2).toBe('55.2');
+    expect(ind.totals.revenuePerM2).toEqual([{ amount: '9565.22', currency: 'CDF' }]);
     expect(ind.taxRule).toMatchObject({ code: 'DEMO-PUB-SURFACE', status: 'ACTIVE', demo: true });
-    expect(ind.inspectors[0]).toMatchObject({ inspectorId: 'pb-inspecteur', inspections: 3, casesVerified: 1, casesConfirmed: 1, accuracyRate: '100.0' });
+    expect(ind.inspectors[0]).toMatchObject({ inspectorId: 'pb-inspecteur', inspections: 4, casesVerified: 1, casesConfirmed: 1, accuracyRate: '100.0' });
     expect(JSON.stringify(ind)).not.toContain('Affiches du Fleuve');
     expect(env.app.ctx.audit.verify().ok).toBe(true);
   });

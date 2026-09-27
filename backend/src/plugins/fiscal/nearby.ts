@@ -32,6 +32,21 @@ const AREA_OBJECT_RADIUS_M = 1500;
 /** Catégories non rattachées à un lieu fixe : exclues. */
 const MOBILE_CATEGORIES = new Set(['VEHICULE']);
 
+/**
+ * Commune où se trouve une position : celle du plus proche objet connu (1,5 km au plus), sinon du centre de commune
+ * le plus proche. Sert à vérifier qu'un agent est « dans la zone » de son secteur.
+ */
+export function estimateCommune(points: { lat: number; lon: number; commune: string }[], here: { lat: number; lon: number }): { commune: string; basis: 'OBJET_PROCHE' | 'CENTRE_DE_COMMUNE' } {
+  let nearest: { commune: string; m: number } | null = null;
+  for (const p of points) { const m = distanceM(here, p); if (!nearest || m < nearest.m) nearest = { commune: p.commune, m }; }
+  if (nearest && nearest.m <= AREA_OBJECT_RADIUS_M) return { commune: nearest.commune, basis: 'OBJET_PROCHE' };
+  const c = Object.entries(COMMUNE_CENTROIDS).reduce((best, [name, [lat, lon]]) => {
+    const m = distanceM(here, { lat, lon });
+    return m < best.m ? { c: name, m } : best;
+  }, { c: '', m: Infinity }).c;
+  return { commune: c, basis: 'CENTRE_DE_COMMUNE' };
+}
+
 export interface NearbyItem {
   id: string; reference: string; label: string; category: string; categoryLabel: string; vertical: string | null;
   commune: string; quartier: string; avenue: string | null; lat: number; lon: number; distanceM: number;
@@ -49,18 +64,7 @@ export function buildNearby(d: FiscalDeps, properties: PropertyService, user: Us
   const here = { lat: q.lat, lon: q.lon };
   const all = d.ctx.objects.objects.all().filter((o) => !MOBILE_CATEGORIES.has(o.category) && Number.isFinite(o.lat) && Number.isFinite(o.lon));
 
-  // Commune où se trouve l'agent : celle du plus proche objet connu, sinon du centre de commune le plus proche.
-  let nearest: { o: FiscalObject; m: number } | null = null;
-  for (const o of all) { const m = distanceM(here, o); if (!nearest || m < nearest.m) nearest = { o, m }; }
-  let commune: string;
-  let communeBasis: 'OBJET_PROCHE' | 'CENTRE_DE_COMMUNE';
-  if (nearest && nearest.m <= AREA_OBJECT_RADIUS_M) { commune = nearest.o.commune; communeBasis = 'OBJET_PROCHE'; } else {
-    commune = Object.entries(COMMUNE_CENTROIDS).reduce((best, [c, [lat, lon]]) => {
-      const m = distanceM(here, { lat, lon });
-      return m < best.m ? { c, m } : best;
-    }, { c: '', m: Infinity }).c;
-    communeBasis = 'CENTRE_DE_COMMUNE';
-  }
+  const { commune, basis: communeBasis } = estimateCommune(all, here);
   const inArea = !user.territory?.length || user.territory.includes(commune);
 
   const vx = d.ctx.ext.verticales as VerticalesService | undefined;

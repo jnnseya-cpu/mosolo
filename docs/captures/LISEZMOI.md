@@ -107,3 +107,14 @@ L'agent ne reçoit jamais d'espèces ; il fait payer sur place par canal numéri
 - paiement confirmé par le prestataire : quittance envoyée à l'usager.
 
 Régénération : `tools/captures/paiement-assiste.cjs`.
+
+## Partie 10 — Publicité sur le terrain (`galerie/publicite-terrain/`)
+
+Dans le module KIN PUB CONTROL existant :
+
+- « Autour de moi » de l'inspecteur : supports proches en rouge (banderole sans autorisation, chevalet impayé), vert (panneau, enseigne autorisés) ;
+- droits impayés d'un chevalet devant un commerce : paiement numérique assisté, jamais d'espèces ;
+- commerces enregistrés sans enseigne déclarée (à vérifier) et constat pré-rempli d'une enseigne ;
+- publicité sur véhicule contrôlée par la plaque : taxi-bus déclaré (barème non publié), véhicule non déclaré et constat pré-rempli.
+
+Régénération : `tools/captures/publicite-terrain.cjs`.

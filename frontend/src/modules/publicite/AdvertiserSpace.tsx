@@ -14,7 +14,7 @@ import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { sha256Hex } from '../../lib/crypto';
 import { DemoTag, ErrorLine, GpsField, Money, PAYMENT_STATE, PayButton, PhotoHashes, useAction } from '../parking/shared';
-import { AD_TYPE, CASE_STATUS, DEVICE_STATUS, FINDING, LIGHTING, PIECE, REQUEST_STATUS, RIGHTS, type AuthRequest, type Case, type Device, type Notice } from './types';
+import { AD_TYPE, CASE_STATUS, DEVICE_STATUS, FINDING, LIGHTING, PIECE, PLACEMENT, REQUEST_STATUS, RIGHTS, VEHICLE_KIND, type AuthRequest, type Case, type Device, type Notice } from './types';
 import '../parking/parking.css';
 
 type Tab = 'devices' | 'declare' | 'requests' | 'notices' | 'cases';
@@ -87,16 +87,36 @@ function DeclareForm({ onDone }: { onDone: () => void }) {
   const [lat, setLat] = useState('-4.3050');
   const [lon, setLon] = useState('15.3100');
   const [photos, setPhotos] = useState<string[]>([]);
+  const [placement, setPlacement] = useState('SUPPORT_DEDIE');
+  const [vehiclePlate, setVehiclePlate] = useState('');
+  const [vehicleKind, setVehicleKind] = useState('TAXI');
+  const [businessName, setBusinessName] = useState('');
   const act = useAction();
+  const mobile = placement === 'VEHICULE';
+  const shop = placement === 'FACADE_COMMERCE' || placement === 'DEVANT_COMMERCE';
   function submit(e: FormEvent) {
     e.preventDefault();
     if (photos.length === 0) { act.setError('Au moins une photographie du support est requise.'); return; }
-    void act.run(() => api('/v1/publicite/devices', { method: 'POST', body: { ...f, lat: Number(lat), lon: Number(lon), photos } }), onDone);
+    const extra = { placement, ...(mobile ? { vehiclePlate, vehicleKind } : {}), ...(shop && businessName.trim() ? { businessName: businessName.trim() } : {}) };
+    void act.run(() => api('/v1/publicite/devices', { method: 'POST', body: { ...f, ...extra, lat: Number(lat), lon: Number(lon), photos } }), onDone);
   }
   return (
     <section className="panel">
       <header className="panel-head"><div><h2 className="panel-title"><Icon name="megaphone" size={18} /> Déclarer un support</h2><p className="panel-sub">La surface est calculée par le serveur ; un identifiant unique et une plaque QR sont attribués.</p></div></header>
       <form className="form" onSubmit={submit}>
+        <label className="field"><span className="label">Emplacement</span>
+          <select value={placement} onChange={(e) => { setPlacement(e.target.value); if (e.target.value === 'VEHICULE') setF({ ...f, type: 'HABILLAGE_VEHICULE' }); if (e.target.value === 'FACADE_COMMERCE') setF({ ...f, type: 'ENSEIGNE' }); if (e.target.value === 'DEVANT_COMMERCE') setF({ ...f, type: 'CHEVALET' }); }}>
+            {Object.entries(PLACEMENT).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <span className="hint">Enseignes sur façade ou porte, publicités devant un commerce et publicités sur véhicule sont aussi assujetties.</span>
+        </label>
+        {mobile && (
+          <div className="field-row">
+            <label className="field"><span className="label">Plaque du véhicule</span><input className="mono" value={vehiclePlate} onChange={(e) => setVehiclePlate(e.target.value.toUpperCase())} required /></label>
+            <label className="field"><span className="label">Véhicule</span><select value={vehicleKind} onChange={(e) => setVehicleKind(e.target.value)}>{Object.entries(VEHICLE_KIND).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+          </div>
+        )}
+        {shop && <label className="field"><span className="label">Commerce (nom affiché)</span><input value={businessName} onChange={(e) => setBusinessName(e.target.value)} required /></label>}
         <div className="field-row">
           <label className="field"><span className="label">Type</span><select value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })}>{Object.entries(AD_TYPE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
           <label className="field"><span className="label">Éclairage</span><select value={f.lighting} onChange={(e) => setF({ ...f, lighting: e.target.value })}>{Object.entries(LIGHTING).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
@@ -114,6 +134,7 @@ function DeclareForm({ onDone }: { onDone: () => void }) {
           <label className="field"><span className="label">Quartier</span><input value={f.quartier} onChange={(e) => setF({ ...f, quartier: e.target.value })} required /></label>
         </div>
         <label className="field"><span className="label">Adresse ou repère</span><input value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} required /></label>
+        {mobile && <p className="small muted">Position : lieu de stationnement habituel du véhicule (la publicité se contrôle ensuite par la plaque, où qu’il soit).</p>}
         <GpsField lat={lat} lon={lon} onChange={(a, b) => { setLat(a); setLon(b); }} />
         <PhotoHashes value={photos} onChange={setPhotos} label="Photographies du support" />
         <ErrorLine error={act.error} />

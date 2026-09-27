@@ -4,7 +4,8 @@ import type { AppContext } from '../../context.js';
 import { requireUser } from '../../core/auth.js';
 import { isoDateString, parse } from '../../core/http.js';
 import { sha256Hex64 } from '../parking/support.js';
-import { AD_TYPES, FINDINGS, LIGHTING, PIECE_KINDS, type PubliciteService } from './service.js';
+import { AD_TYPES, FINDINGS, LIGHTING, PIECE_KINDS, PLACEMENTS, VEHICLE_KINDS, type PubliciteService } from './service.js';
+import { adNearby, adVehicleCheck } from './terrain.js';
 import { withOverdue } from '../sanctions/service.js';
 
 const decimal = z.string().regex(/^\d{1,4}(\.\d{1,2})?$/, 'dimension en mètres, ex. "4.00"');
@@ -15,6 +16,8 @@ const rank = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]);
 const deviceSpec = {
   type: z.enum(AD_TYPES), widthM: decimal, heightM: decimal, faces: z.number().int().min(1).max(4), lighting: z.enum(LIGHTING),
   commune: z.string().min(2), quartier: z.string().trim().min(2).max(120), address: z.string().trim().min(3).max(240), localityRank: rank,
+  placement: z.enum(PLACEMENTS).optional(), vehiclePlate: z.string().trim().min(4).max(20).optional(), vehicleKind: z.enum(VEHICLE_KINDS).optional(),
+  businessName: z.string().trim().min(2).max(160).optional(), businessObjectId: z.string().max(80).optional(),
 };
 const pieces = z.array(z.object({ kind: z.enum(PIECE_KINDS), name: z.string().trim().min(1).max(160), sha256: sha }).strict()).min(1).max(20);
 
@@ -52,6 +55,15 @@ export function registerPubliciteRoutes(app: FastifyInstance, ctx: AppContext, s
   app.get<{ Querystring: { commune?: string; status?: string } }>('/v1/publicite/inventory', async (req) => ({ items: svc.inventory(requireUser(req), req.query) }));
   app.get('/v1/publicite/map', async (req) => ({ items: svc.map(requireUser(req)) }));
   app.get<{ Querystring: { q?: string } }>('/v1/publicite/lookup', async (req) => svc.lookup(requireUser(req), String(req.query.q ?? '')));
+  // Terrain : « Autour de moi » de la publicité et contrôle de la publicité mobile par plaque.
+  app.get<{ Querystring: Record<string, string> }>('/v1/publicite/nearby', async (req) => {
+    const q = parse(z.object({
+      lat: z.coerce.number().min(-5.2).max(-3.9), lon: z.coerce.number().min(15).max(16.6),
+      accuracyM: z.coerce.number().positive().max(100_000), radiusM: z.coerce.number().positive().max(100_000).optional(),
+    }), req.query);
+    return adNearby(ctx, svc, requireUser(req), q);
+  });
+  app.get<{ Params: { plate: string } }>('/v1/publicite/vehicles/:plate', async (req) => adVehicleCheck(ctx, svc, requireUser(req), req.params.plate));
   app.post('/v1/publicite/inspections', async (req, reply) => {
     const body = parse(z.object({
       deviceId: z.string().optional(), newDevice: z.object(deviceSpec).strict().optional(), finding: z.enum(FINDINGS), photos: z.array(sha).min(1).max(6),

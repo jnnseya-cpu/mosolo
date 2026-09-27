@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **581 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **582 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -12,7 +12,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **581 routes** dans 35
 | extension parking | 36 |
 | extension pilotage | 15 |
 | extension preuves | 13 |
-| extension publicite | 27 |
+| extension publicite | 28 |
 | extension rakapay | 23 |
 | extension recouvrement | 33 |
 | extension sanctions | 3 |
@@ -393,6 +393,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **581 routes** dans 35
 | GET | `/v1/publicite/public/badges/:userId` |
 | GET | `/v1/publicite/public/devices/:token` |
 | POST | `/v1/publicite/reminders/run` |
+| GET | `/v1/publicite/vehicles/:plate` |
 
 ## Extension rakapay
 
