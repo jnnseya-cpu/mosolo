@@ -313,6 +313,8 @@ export interface AccessReviewItem {
   reason?: string;
   decidedBy?: string;
   decidedAt?: string;
+  /** Revue des accès privilégiés : élévations juste-à-temps de la période obtenues par cette personne. */
+  elevations?: { id: string; role: RoleCode; motif: string; approvedBy?: string; startedAt?: string; endedAt?: string; actions: number }[];
 }
 
 export interface AccessReviewCampaign {
@@ -326,4 +328,8 @@ export interface AccessReviewCampaign {
   items: AccessReviewItem[];
   closedBy?: string;
   closedAt?: string;
+  /** Portée : revue complète (historique, défaut) ou revue MENSUELLE des accès privilégiés (§ 12.5). */
+  scope?: 'COMPLETE' | 'PRIVILEGIES';
+  /** Mois revu (AAAA-MM) pour une revue des accès privilégiés. */
+  period?: string;
 }

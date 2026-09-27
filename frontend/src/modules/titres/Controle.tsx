@@ -20,7 +20,7 @@ import { QrScanner } from '../../components/QrScanner';
 import { OverduePenalties } from '../../components/OverduePenalties';
 import { GpsQualityLine } from '../../components/GpsQuality';
 import { usePreciseGps } from '../../lib/geo';
-import { queueKey, readQueue, updateQueue } from '../../lib/offlineQueue';
+import { onQueueChange, queueKey, readQueue, updateQueue } from '../../lib/offlineQueue';
 
 type Mode = 'qr' | 'plate' | 'vest';
 type Scope = '81' | 'tous';
@@ -144,6 +144,7 @@ export default function Controle() {
 
   useEffect(() => { if (user?.territory?.length && !user.territory.includes(commune)) setCommune(user.territory[0]!); }, [user, commune]);
   useEffect(() => { setQueue(readQueue<QueuedControl>(qKey)); }, [qKey]);
+  useEffect(() => onQueueChange(qKey, () => setQueue(readQueue<QueuedControl>(qKey))), [qKey]);
   useEffect(() => {
     const on = () => setOffline(false); const off = () => setOffline(true);
     window.addEventListener('online', on); window.addEventListener('offline', off);

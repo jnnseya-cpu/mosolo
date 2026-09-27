@@ -28,6 +28,7 @@ import {
   type ModuleConfig, type ModuleStatus, type ModuleVisa, type Organisation, type OtpChallenge, type ProofType,
   type Representative, type SandboxMessage, type TaxableFact, type ValidationRequest, type ValidatorRequirement, type WorkAccount,
 } from './model.js';
+import { ElevationService } from './elevations.js';
 
 export const INVITATION_TTL_MS = 72 * HOUR_MS;
 export const OTP_TTL_MS = 5 * 60_000;
@@ -82,7 +83,11 @@ export class AccesService {
   /** Clé d'empreinte des pièces d'identité, dérivée du secret serveur (jamais le secret lui-même, jamais le numéro). */
   private readonly personKey: string;
 
+  /** Accès privilégié juste-à-temps (élévation motivée, approuvée, expirante, session enregistrée). */
+  readonly elevations: ElevationService;
+
   constructor(private readonly ctx: AppContext) {
+    this.elevations = new ElevationService(ctx, this);
     this.smsWired = ctx.comms.channelStatus().some((c) => c.channel === 'sms' && c.wired);
     this.personKey = hmacSha256Hex(ctx.secrets.auditHmacKey, 'mosolo:acces:empreinte-personne:v1');
     // Source des liens agent ↔ contribuables pour le contrôle de conflit d'intérêts (vérifier, décider, accorder).
@@ -1674,6 +1679,38 @@ export class AccesService {
     const mu = this.ctx.users.get(m.mandataireUserId);
     this.ctx.comms.publish('mandate.revoked', [taxpayerRecipient(t), ...(mu ? [userRecipient(mu)] : [])], { reference: id }, { entity: 'GOUVERNORAT' });
     return this.mandateView(out);
+  }
+
+  /**
+   * § 13.5 « Chaque acte du mandataire est notifié au mandant » : après une requête d'écriture réussie d'un mandataire,
+   * les enregistrements d'audit de la requête (même identifiant de corrélation) désignent le ou les mandants concernés ;
+   * chacun reçoit l'événement `mandate.action_performed`, et l'acte est journalisé. Aucun acte n'est inféré : sans
+   * mandant identifiable dans le journal, rien n'est notifié.
+   */
+  notifyMandateActs(user: User, input: { correlationId?: string; method: string; route: string }): string[] {
+    if (!user.roles.includes('R31') || user.roles.includes('R30') || !input.correlationId) return [];
+    const mandants = new Set(user.mandants ?? []);
+    if (!mandants.size) return [];
+    const records = this.ctx.audit.list({ correlationId: input.correlationId, limit: 500 }).items.filter((r) => r.actor.id === user.id && r.outcome === 'SUCCESS' && !r.action.startsWith('acces.mandate.'));
+    if (!records.length) return [];
+    const concerned = new Set<string>();
+    const consider = (v: unknown) => { if (typeof v === 'string' && mandants.has(v)) concerned.add(v); };
+    for (const r of records) {
+      for (const k of ['taxpayerId', 'mandant', 'taxpayer', 'ownerTaxpayerId']) consider(r.details[k]);
+      if (r.resourceType === 'taxpayer') consider(r.resourceId);
+      const obligationId = typeof r.details.obligationId === 'string' ? r.details.obligationId : r.resourceType === 'obligation' ? r.resourceId : null;
+      if (obligationId) {
+        try { consider(this.ctx.assessment.get(obligationId).taxpayerId); } catch { /* obligation inconnue */ }
+      }
+    }
+    const actions = [...new Set(records.map((r) => r.action))];
+    for (const tpId of concerned) {
+      const t = this.ctx.taxpayers.taxpayers.get(tpId);
+      if (!t) continue;
+      this.ctx.comms.publish('mandate.action_performed', [taxpayerRecipient(t)], { mandataire: user.name, action: actions.join(', ') }, { entity: 'GOUVERNORAT' });
+      this.log(this.actor(user), 'mandate.action_performed', 'taxpayer', tpId, { mandant: tpId, mandataire: user.id, method: input.method, route: input.route, actions });
+    }
+    return [...concerned];
   }
 
   /** Périmètre d'un mandat : action et objet (utilisable par les autres modules avant un acte du mandataire). */

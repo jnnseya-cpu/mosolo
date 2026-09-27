@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { AppContext } from '../../context.js';
 import { isDemoMode, requireUser } from '../../core/auth.js';
 import { conflict, notFound } from '../../core/errors.js';
-import { isoDateString, parse } from '../../core/http.js';
+import { currentAuditContext, isoDateString, parse } from '../../core/http.js';
 import { authorize } from '../../core/policy.js';
 import {
   ACCESS_LEVELS, CHANNELS, CONSULTATION_PURPOSES, ENTITY_KIND_LABELS, ENTITY_KINDS, LEGAL_FORMS, LEVEL_INFO, LEVEL_RIGHTS, MANDATE_ACTIONS,
@@ -498,6 +498,54 @@ export function registerAccesRoutes(app: FastifyInstance, ctx: AppContext, svc: 
     authorize(user, ACCES.mandateRead);
     return svc.revokeMandate(user, req.params.id, parse(z.object({ motif: z.string().trim().min(3).max(300) }).strict(), req.body).motif);
   });
+  // ─────────────── Accès privilégié juste-à-temps (§ 12.1, § 12.3, Annexe C) ───────────────
+  app.get('/v1/acces/elevations', async (req) => svc.elevations.list(requireUser(req)));
+  app.post('/v1/acces/elevations', async (req, reply) => {
+    const user = requireUser(req);
+    authorize(user, ACCES.elevationRequest);
+    const b = parse(z.object({
+      role: roleCode, motif: z.string().trim().min(10, 'motif précis obligatoire (10 caractères minimum)').max(1000),
+      durationMinutes: z.number().int().min(5).max(24 * 60), ticketRef: z.string().trim().min(2).max(120).optional(),
+    }).strict(), req.body);
+    return reply.code(201).send(svc.elevations.request(user, b));
+  });
+  app.post<P>('/v1/acces/elevations/:id/decision', async (req) => {
+    const user = requireUser(req);
+    authorize(user, ACCES.elevationApprove);
+    return svc.elevations.decide(user, req.params.id, parse(z.object({ approve: z.boolean(), motif: z.string().trim().min(5).max(1000) }).strict(), req.body));
+  });
+  app.post<P>('/v1/acces/elevations/:id/end', async (req) => svc.elevations.end(requireUser(req), req.params.id, parse(z.object({ motif: motif }).strict(), req.body).motif));
+  app.get<P>('/v1/acces/elevations/:id/session', async (req) => svc.elevations.session(requireUser(req), req.params.id));
+
+  // Élévation active : le rôle temporaire s'ajoute à la requête (jamais à l'annuaire) et la session est enregistrée.
+  app.addHook('onRequest', async (req) => {
+    if (!req.user) return;
+    const e = svc.elevations.active(req.user.id);
+    if (!e) return;
+    req.user = { ...req.user, roles: [...new Set([...req.user.roles, e.role])] };
+    const store = currentAuditContext();
+    if (store) store.elevationId = e.id;
+    (req as { elevationId?: string }).elevationId = e.id;
+  });
+  app.addHook('onResponse', async (req, reply) => {
+    const elevationId = (req as { elevationId?: string }).elevationId;
+    if (elevationId && req.user) {
+      // Enregistrement de session au niveau des commandes (§ 12.5) : chaque requête sous élévation est journalisée.
+      ctx.audit.append({
+        actor: { kind: 'user', id: req.user.id, roles: req.user.roles }, action: 'acces.elevation.command', resourceType: 'elevation', resourceId: elevationId,
+        details: { method: req.method, route: req.routeOptions.url ?? null, path: req.url.split('?')[0], statusCode: reply.statusCode },
+        trace: { elevationId, ...(req.correlationId ? { correlationId: req.correlationId } : {}) },
+      });
+    }
+    // § 13.5 : tout acte d'écriture réussi d'un mandataire est notifié au(x) mandant(s) concerné(s).
+    if (req.user && reply.statusCode < 400 && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+      const route = req.routeOptions.url ?? req.url;
+      if (!route.startsWith('/v1/acces/mandates') && !route.startsWith('/v1/auth')) {
+        try { svc.notifyMandateActs(req.user, { ...(req.correlationId ? { correlationId: req.correlationId } : {}), method: req.method, route }); } catch { /* la notification n'annule jamais l'acte */ }
+      }
+    }
+  });
+
   app.get<{ Querystring: { taxpayerId?: string; action?: string; objectId?: string } }>('/v1/acces/mandates/check', async (req) => {
     const user = requireUser(req);
     authorize(user, ACCES.mandateCheck);

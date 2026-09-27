@@ -41,6 +41,9 @@ export const ACCES = {
   mandateManage: 'acces:mandate.manage',
   mandateRead: 'acces:mandate.read',
   mandateCheck: 'acces:mandate.check',
+  elevationRequest: 'acces:elevation.request',
+  elevationApprove: 'acces:elevation.approve',
+  elevationSessionRead: 'acces:elevation.session.read',
 } as const;
 
 /** Lecture des dossiers d'accès d'une entité : son administration, sa direction, l'audit et la sécurité. */
@@ -97,4 +100,9 @@ export function registerAccesPolicies(): void {
   definePolicy(ACCES.mandateManage, { R30: ownTaxpayer });
   definePolicy(ACCES.mandateRead, { R30: always, R31: always });
   definePolicy(ACCES.mandateCheck, { R31: always });
+  // Accès privilégié juste-à-temps (§ 12.1, § 12.3) : le personnel d'exploitation demande ; le responsable sécurité
+  // approuve (personne distincte) ; la session enregistrée est lue par la sécurité et l'audit.
+  definePolicy(ACCES.elevationRequest, { R26: always, R27: always, R28: always });
+  definePolicy(ACCES.elevationApprove, { R28: always });
+  definePolicy(ACCES.elevationSessionRead, { R28: always, R22: always, R23: always });
 }

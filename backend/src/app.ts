@@ -7,6 +7,8 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { createContext, type AppContext, type AppOptions } from './context.js';
 import { assertSafeDeployment, ConfigurationError, isDemoMode, resolveDemoUser } from './core/auth.js';
 import { ApiError } from './core/errors.js';
+import { installRequestCorrelation } from './core/http.js';
+import { httpsOptionsFromEnv } from './plugins/socle/mtls.js';
 import { registerAiRoutes } from './modules/ai/routes.js';
 import { registerAlertRoutes } from './modules/alerts/routes.js';
 import { registerAppealRoutes } from './modules/appeals/routes.js';
@@ -85,7 +87,11 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
   // Sûr par défaut : démonstration refusée en production, secrets de démonstration refusés hors démonstration.
   assertSafeDeployment(process.env);
   const origin = corsOrigins(process.env);
-  const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 1_048_576, trustProxy: trustProxyFromEnv(process.env) });
+  // TLS mutuel direct (§ 30.1) : certificat client demandé si MOSOLO_TLS_CERT_FILE / MOSOLO_TLS_KEY_FILE sont fournis.
+  const https = httpsOptionsFromEnv(process.env);
+  const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 1_048_576, trustProxy: trustProxyFromEnv(process.env), ...(https ? { https } : {}) }) as unknown as FastifyInstance;
+  // Corrélation (X-Request-Id) et contexte d'audit : PREMIER crochet, avant l'authentification.
+  installRequestCorrelation(app);
   const ctx = createContext(opts);
   const plugins = opts.plugins ?? DEFAULT_PLUGINS;
   for (const p of plugins) ctx.ext[p.name] = p.create(ctx);
@@ -103,7 +109,7 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
 
   void app.register(cors, {
     origin,
-    exposedHeaders: ['idempotent-replayed', 'x-mosolo-subject', 'content-language', 'retry-after', 'x-mosolo-sha256', 'x-mosolo-signature', 'x-mosolo-server-time'],
+    exposedHeaders: ['idempotent-replayed', 'x-mosolo-subject', 'content-language', 'retry-after', 'x-mosolo-sha256', 'x-mosolo-signature', 'x-mosolo-server-time', 'x-request-id'],
   });
 
   // Heure de référence = heure du SERVEUR (§ H.11.6) : chaque réponse la porte ; le client s'y cale pour ses comptes à rebours.

@@ -15,6 +15,7 @@ import { canauxPlugin } from './canaux/plugin.js';
 import { terrainPlugin } from './terrain/plugin.js';
 import { integritePlugin } from './integrite/plugin.js';
 import { integriteGouvernancePlugin } from './integrite/gouvernance/plugin.js';
+import { integriteSecuritePlugin } from './integrite/securite/plugin.js';
 import { pilotagePlugin } from './pilotage/plugin.js';
 import { repartitionPlugin } from './pilotage/repartition/plugin.js';
 import { iaPlugin } from './ia/plugin.js';
@@ -45,6 +46,7 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   terrainPlugin,
   integritePlugin,
   integriteGouvernancePlugin,
+  integriteSecuritePlugin,
   pilotagePlugin,
   repartitionPlugin,
   iaPlugin,

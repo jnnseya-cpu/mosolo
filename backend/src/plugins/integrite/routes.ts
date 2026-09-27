@@ -281,6 +281,12 @@ export function registerIntegriteRoutes(app: FastifyInstance, ctx: AppContext, s
     const user = pre(req, 'integrite:access-review.launch');
     return reply.code(201).send(svc.launchReview(user, parse(z.object({ label: text(3, 120) }).strict(), req.body).label));
   });
+  // Revue MENSUELLE des accès privilégiés (rôles privilégiés + élévations juste-à-temps du mois).
+  app.post('/v1/integrite/access-reviews/privileged', async (req, reply) => {
+    const user = pre(req, 'integrite:access-review.launch');
+    const b = parse(z.object({ period: z.string().regex(/^\d{4}-\d{2}$/).optional() }).strict(), req.body ?? {});
+    return reply.code(201).send(svc.launchPrivilegedReview(user, b.period));
+  });
   app.post<{ Params: { id: string; itemId: string } }>('/v1/integrite/access-reviews/:id/items/:itemId/decision', async (req) => {
     const user = pre(req, 'integrite:access-review.decide');
     return svc.decideReviewItem(user, req.params.id, req.params.itemId, parse(z.object({ decision: z.enum(['MAINTENU', 'RETRAIT_A_EXECUTER']), reason: z.string().trim().max(1000) }).strict(), req.body));

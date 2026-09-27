@@ -182,6 +182,14 @@ export const CIRCUITS: Circuit[] = [
   {
     code: 'REGLE_PROROGATION', label: 'Prorogation d’échéance enregistrée sur une fiche de règle',
     proposals: ['rule.due_extension.proposed'], approvals: ['rule.due_extension.recorded'], refusals: ['rule.due_extension.rejected'],
+  {
+    code: 'ACCES_ELEVATION', label: 'Élévation d’accès privilégié juste-à-temps (demande motivée → approbation sécurité)',
+    proposals: ['acces.elevation.requested'], approvals: ['acces.elevation.approved'], refusals: ['acces.elevation.refused'],
+    guard: { url: '/v1/acces/elevations/:id/decision', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'SOCLE_EXTRACTION_MASSIVE', label: 'Extraction massive de données (demandeur → responsable des données → comité des données)',
+    proposals: ['socle.export.bulk_requested'], approvals: ['socle.export.bulk_data_owner_signed', 'socle.export.bulk_approved'], refusals: ['socle.export.bulk_refused'],
   },
 ];
 

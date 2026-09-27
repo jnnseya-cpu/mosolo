@@ -1,5 +1,7 @@
 import { CURRENCY_CODES, isLanguageCode, REFERENCE_LANGUAGE, type LanguageCode } from '@mosolo/shared';
-import type { FastifyRequest } from 'fastify';
+import { randomUUID } from 'node:crypto';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { auditContext, type AuditRequestContext } from './audit.js';
 import { z, type ZodTypeAny } from 'zod';
 import { badRequest } from './errors.js';
 
@@ -43,4 +45,56 @@ export function requestLang(req: FastifyRequest): LanguageCode {
 export function header(req: FastifyRequest, name: string): string | undefined {
   const v = req.headers[name.toLowerCase()];
   return Array.isArray(v) ? v[0] : v;
+}
+
+/* ------------------------------------------------------------------ */
+/* Corrélation des requêtes (§ 30.1 X-Request-Id) et contexte d'audit  */
+/* ------------------------------------------------------------------ */
+
+/** Identifiant de corrélation accepté tel quel : 8 à 128 caractères sûrs ; sinon un identifiant est généré. */
+const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{8,128}$/;
+/** En-têtes d'appareil (terminal enrôlé, empreinte du navigateur) repris dans l'audit (§ 29.1 appareil et session). */
+export const DEVICE_ID_HEADER = 'x-mosolo-device-id';
+export const DEVICE_FINGERPRINT_HEADER = 'x-mosolo-device-fingerprint';
+const DEVICE_RE = /^[A-Za-z0-9._:-]{3,128}$/;
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    /** Identifiant de corrélation (X-Request-Id reçu ou généré), propagé à chaque enregistrement d'audit. */
+    correlationId?: string;
+  }
+}
+
+export function requestIdOf(value: unknown): string {
+  const v = Array.isArray(value) ? value[0] : value;
+  return typeof v === 'string' && REQUEST_ID_RE.test(v.trim()) ? v.trim() : `req-${randomUUID()}`;
+}
+
+/** Appareil déclaré par la requête (jamais une preuve : l'intégrité passe par la signature du terminal). */
+export function deviceOf(req: FastifyRequest): { deviceId?: string; deviceFingerprint?: string } {
+  const id = header(req, DEVICE_ID_HEADER)?.trim();
+  const fp = header(req, DEVICE_FINGERPRINT_HEADER)?.trim();
+  return { ...(id && DEVICE_RE.test(id) ? { deviceId: id } : {}), ...(fp && DEVICE_RE.test(fp) ? { deviceFingerprint: fp } : {}) };
+}
+
+/**
+ * Premier crochet de requête : X-Request-Id accepté (ou généré), renvoyé dans la réponse, et contexte d'audit ouvert
+ * pour toute la requête (AsyncLocalStorage) — corrélation, session et appareil de chaque enregistrement.
+ */
+export function installRequestCorrelation(app: FastifyInstance): void {
+  app.addHook('onRequest', (req, reply, done) => {
+    const id = requestIdOf(req.headers['x-request-id']);
+    req.correlationId = id;
+    void reply.header('x-request-id', id);
+    const store: AuditRequestContext = {
+      correlationId: id,
+      resolve: () => ({ ...(req.user?.auth?.sessionId ? { sessionId: req.user.auth.sessionId } : {}), ...deviceOf(req) }),
+    };
+    auditContext.run(store, done);
+  });
+}
+
+/** Contexte d'audit de la requête en cours (pour y rattacher une élévation privilégiée active). */
+export function currentAuditContext(): AuditRequestContext | undefined {
+  return auditContext.getStore();
 }

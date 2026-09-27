@@ -23,6 +23,8 @@ import {
   type JwtClaims, type PasswordHash,
 } from './tokens.js';
 import { createHash } from 'node:crypto';
+import { securityBool } from '../integrite/gouvernance/parametres-securite.js';
+import type { PasskeyService } from './passkeys.js';
 
 export const ISSUER_DEFAULT = 'urn:mosolo:idp:local';
 export const AUDIENCE = 'mosolo-api';
@@ -38,6 +40,21 @@ const SESSION_TTL_MS = { agent: 8 * 3_600_000, sensitive: 4 * 3_600_000, taxpaye
 
 /** Rôles sensibles (DM 28 § 31 : Trésor, coffre, juristes publicateurs, administrateurs, direction). */
 export const SENSITIVE_ROLES: RoleCode[] = ['R01', 'R02', 'R05', 'R06', 'R13', 'R14', 'R15', 'R16', 'R17', 'R19', 'R21', 'R26', 'R27', 'R28'];
+
+/**
+ * Portées (scopes) des comptes partenaires (§ 30.1 « portées ») : aucune clé d'API partenaire n'existe dans le socle ;
+ * les partenaires s'authentifient par jeton de session, qui porte la revendication `scope`. Portées PAR DÉFAUT — à
+ * confirmer avec chaque convention de partenariat.
+ */
+export const PARTNER_SCOPES: Partial<Record<RoleCode, string[]>> = {
+  R32: ['points:encaissement', 'points:lecture'],
+  R33: ['paiements:rappels', 'reglements:releves'],
+  R34: ['donnees:partage'],
+  R37: ['quitus:verification'],
+};
+export function scopesOf(roles: RoleCode[]): string[] {
+  return [...new Set(roles.flatMap((r) => PARTNER_SCOPES[r] ?? []))];
+}
 
 /** Mot de passe de DÉMONSTRATION des comptes de travail fictifs (jamais en production : MOSOLO_DEMO_MODE=false). */
 export const DEMO_PASSWORD = 'Mosolo-Demo-2026';
@@ -71,6 +88,8 @@ export interface Challenge {
   ip: string;
   /** Empreinte du numéro (connexion par téléphone) : limite par numéro, jamais le numéro en clair. */
   subject?: string;
+  /** Connexion TOTP de SECOURS d'un rôle sensible détenteur d'une clé d'accès : motif déclaré (journalisé, alerté). */
+  fallbackReason?: string;
 }
 
 export interface Session {
@@ -195,8 +214,34 @@ export class IdentityProviderService {
 
   // ------------------------------------------------------------------------------------------ Connexion
 
+  /** Clés d'accès (plugin socle) : fonction et non objet, pour que la découverte des dépôts les nomme `ext.socle.passkeys`. */
+  private passkeyService?: () => PasskeyService;
+
+  attachPasskeys(svc: PasskeyService): void {
+    this.passkeyService = () => svc;
+  }
+
+  /** Clés d'accès actives d'un compte (0 si le service n'est pas chargé). */
+  activePasskeys(userId: string): number {
+    return this.passkeyService?.().active(userId).length ?? 0;
+  }
+
+  /**
+   * Clé d'accès exigée pour cette connexion ? Rôle sensible, au moins une clé enregistrée et paramètre du registre
+   * `socle.cle_acces_obligatoire` actif (défaut : oui — à confirmer). Sans clé : période d'enrôlement (TOTP admis).
+   */
+  passkeyEnforced(user: User): boolean {
+    return isSensitive(user) && this.activePasskeys(user.id) > 0 && securityBool(this.ctx, 'socle.cle_acces_obligatoire');
+  }
+
+  /** Connexion par clé d'accès vérifiée : session au niveau PHR (résistant au hameçonnage). */
+  loginWithPasskey(user: User, credentialId: string, req: FastifyRequest): TokenResponse {
+    this.auditAuth('auth.passkey.verified', user.id, 'SUCCESS', req, { credentialId: credentialId.slice(0, 16) });
+    return this.openSession(user, ACR.PHR, ['hwk', 'user', 'mfa'], false, req);
+  }
+
   /** Étape 1, compte de travail : identifiant + mot de passe → défi TOTP. */
-  loginWithPassword(login: string, password: string, req: FastifyRequest): LoginChallengeResponse {
+  loginWithPassword(login: string, password: string, req: FastifyRequest, fallbackReason?: string): LoginChallengeResponse {
     const cred = this.credentials.findOne((c) => c.login === login);
     const user = cred ? this.ctx.users.get(cred.id) : undefined;
     const now = this.now();
@@ -213,7 +258,14 @@ export class IdentityProviderService {
       throw unauthorized('INVALID_CREDENTIALS', 'Identifiant ou mot de passe incorrect.');
     }
     if (!cred.totpSecret) throw forbidden('MFA_NOT_ENROLLED', 'Second facteur non enrôlé : un compte de travail exige la MFA. Contactez l’administrateur de votre entité.');
+    // Rôle sensible muni d'une clé d'accès : le TOTP n'est plus qu'un secours motivé (§ 31, résistance au hameçonnage).
+    const fallback = fallbackReason?.trim();
+    if (this.passkeyEnforced(user) && (!fallback || fallback.length < 10)) {
+      this.auditAuth('auth.login.passkey_required', user.id, 'DENIED', req, {});
+      throw forbidden('PASSKEY_REQUIRED', 'Rôle sensible : connectez-vous avec votre clé d’accès (FIDO2). En cas d’indisponibilité, déclarez un motif de secours (10 caractères minimum) : la connexion par code sera journalisée et signalée à la sécurité.');
+    }
     const ch = this.newChallenge('totp', user.id, req);
+    if (fallback && this.passkeyEnforced(user)) this.challenges.update({ ...ch, fallbackReason: fallback.slice(0, 300) });
     this.auditAuth('auth.password.verified', user.id, 'SUCCESS', req, { challengeId: ch.id });
     return { challengeId: ch.id, method: 'totp', expiresAt: ch.expiresAt };
   }
@@ -285,6 +337,15 @@ export class IdentityProviderService {
     }
     const acr: AcrValue = ch.method === 'totp' ? ACR.MFA : ACR.OTP;
     const amr = ch.method === 'totp' ? ['pwd', 'otp', 'mfa'] : ['sms', 'otp'];
+    const fallback = this.challenges.get(ch.id)?.fallbackReason;
+    if (fallback) {
+      amr.push('secours');
+      this.auditAuth('auth.login.totp_fallback', user!.id, 'SUCCESS', req, { reason: fallback });
+      this.ctx.alerts.raise({
+        type: 'CONNEXION_SECOURS_TOTP', severity: 'MEDIUM', source: 'socle:passkeys', actor: { kind: 'user', id: user!.id, roles: user!.roles },
+        detail: `Rôle sensible ${user!.id} connecté par code de secours au lieu de sa clé d’accès (motif : ${fallback}).`, context: { userId: user!.id, automaticEffect: 'AUCUN' },
+      });
+    }
     return this.openSession(user!, acr, amr, opts.sharedDevice === true, req);
   }
 
@@ -313,6 +374,8 @@ export class IdentityProviderService {
       ...(user.territory ? { territory: user.territory } : {}),
       ...(user.taxpayerId ? { taxpayer_id: user.taxpayerId } : {}),
       ...(passkeyRequired ? { passkey_required: true } : {}),
+      // Portées de type OAuth des comptes partenaires (§ 30.1) : bornent l'usage du jeton à leur interface.
+      ...(scopesOf(user.roles).length ? { scope: scopesOf(user.roles).join(' ') } : {}),
     };
     return {
       accessToken: this.signer.sign(claims), tokenType: 'Bearer', expiresIn: exp - iat, session: this.publicSession(session),

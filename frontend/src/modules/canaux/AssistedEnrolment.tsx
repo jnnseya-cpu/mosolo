@@ -7,7 +7,7 @@ import { Icon } from '../../components/Icon';
 import { StatusBadge } from '../../components/StatusBadge';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { api, describeError } from '../../lib/api';
-import { queueKey, readQueue, updateQueue } from '../../lib/offlineQueue';
+import { onQueueChange, queueKey, readQueue, updateQueue } from '../../lib/offlineQueue';
 import { hmacSha256Hex, sha256Hex, uid } from '../../lib/crypto';
 import { hasRole, Pictogram } from './shared';
 import { GpsQualityLine, MapCheck } from '../../components/GpsQuality';
@@ -66,6 +66,7 @@ export default function AssistedEnrolment() {
   const qKey = queueKey(QUEUE_KEY, user?.id);
   const [queue, setQueue] = useState<QueuedRecord[]>(() => readQueue<QueuedRecord>(qKey));
   useEffect(() => { setQueue(readQueue<QueuedRecord>(qKey)); }, [qKey]);
+  useEffect(() => onQueueChange(qKey, () => setQueue(readQueue<QueuedRecord>(qKey))), [qKey]);
   const [device, setDevice] = useState(() => DEVICES[user?.id ?? ''] ?? DEVICES['canaux-agent-enrol']!);
   const [results, setResults] = useState<RecordResult[] | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
