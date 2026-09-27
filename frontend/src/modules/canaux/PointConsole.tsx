@@ -9,7 +9,7 @@ import { QrCode } from '../../components/QrCode';
 import { StatusBadge } from '../../components/StatusBadge';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { api, describeError, newIdempotencyKey } from '../../lib/api';
-import { hasRole, kinshasaToday, Pictogram, POINT_STATUS, POINT_TYPE_LABEL, type ReceiptPrint } from './shared';
+import { DAY_STATUS, hasRole, kinshasaToday, Pictogram, POINT_STATUS, POINT_TYPE_LABEL, type ReceiptPrint } from './shared';
 import './canaux.css';
 
 interface MyPoint { id: string; name: string; type: string; operator: string; commune: string; status: string; hours: string; settlementDelayHours: number; limits: { perTransaction: MoneyJSON[]; perDay: MoneyJSON[] }; approval: { reference: string } }
@@ -21,12 +21,6 @@ interface CashDay {
   collections: { id: string; paymentReference: string; amount: MoneyJSON; collectedAt: string; receiptNumber: string; shortCode: string; orderStatus: string; receiptStatus: string | null }[];
   reconciledCount: number; exceptions: { id: string; type: string; detail: string }[];
 }
-
-const DAY_STATUS: Record<string, { tone: 'good' | 'warning' | 'critical' | 'info'; label: string }> = {
-  OUVERTE: { tone: 'info', label: 'Caisse ouverte' }, CLOTUREE: { tone: 'warning', label: 'Clôturée — versement à déclarer' },
-  DECLAREE: { tone: 'warning', label: 'Versement déclaré — en attente du relevé bancaire' },
-  VERSEE: { tone: 'good', label: 'Versée au compte public (relevé bancaire rapproché)' }, ECART: { tone: 'critical', label: 'Écart — exception ouverte' },
-};
 
 export function PrintableReceipt({ r }: { r: ReceiptPrint }) {
   const { fmtDate } = useApp();

@@ -198,3 +198,8 @@
 .cx-cell { display: grid; gap: 2px; justify-items: start; }
 td.num .cx-cell { justify-items: end; }
 .cx-kpis .kpi { display: grid; align-content: start; gap: 2px; }
+/* Revue d'un jour de caisse (Trésor) : fiches clôture, versement, constatation au relevé. */
+.cx-dl { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); gap: 6px 12px; margin: 8px 0 0; font-size: 14px; }
+.cx-dl dt { color: var(--ink-2); }
+.cx-dl dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.cx-lines { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }

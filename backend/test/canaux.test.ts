@@ -575,6 +575,11 @@ describe('canaux — points de paiement agréés (R32)', () => {
     const view = (await c.env.req('GET', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}`, 'canaux-op-limete')).json();
     await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/close`, 'canaux-op-limete', { counted: view.expected });
     c.clock.advanceHours(1);
+    // Relevés importés AVANT la déclaration du versement : crédits orphelins, constatés ensuite par le circuit manuel.
+    const line = view.expectedByAccount[0];
+    const tresor = ctx.users.get('u-tresor')!;
+    ctx.treasury.importStatement(tresor, { statementId: 'REL-PT-0', lines: [{ accountAlias: line.accountAlias, amount: { amount: '1.00', currency: line.amount.currency }, valueDate: day, paymentReference: 'BORD-777' }] });
+    ctx.treasury.importStatement(tresor, { statementId: 'REL-PT-1', lines: [{ accountAlias: line.accountAlias, amount: line.amount, valueDate: day, paymentReference: 'BORD-777' }] });
     await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/deposit`, 'canaux-op-limete', {
       bankSlipRef: 'BORD-777', depositedAt: c.clock.now().toISOString(), lines: view.expectedByAccount,
     });
@@ -584,12 +589,8 @@ describe('canaux — points de paiement agréés (R32)', () => {
       bankSlipRef: ' bord-777 ', depositedAt: c.clock.now().toISOString(), lines: view.expectedByAccount,
     });
     expect(reuse.json().code).toBe('BANK_SLIP_ALREADY_USED');
-    const line = view.expectedByAccount[0];
-    const tresor = ctx.users.get('u-tresor')!;
-    ctx.treasury.importStatement(tresor, { statementId: 'REL-PT-0', lines: [{ accountAlias: line.accountAlias, amount: { amount: '1.00', currency: line.amount.currency }, valueDate: day, paymentReference: 'BORD-777' }] });
     const short = await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/bank-match`, 'u-tresor', { statementId: 'REL-PT-0' });
     expect(short.json().code).toBe('STATEMENT_AMOUNT_MISMATCH');
-    ctx.treasury.importStatement(tresor, { statementId: 'REL-PT-1', lines: [{ accountAlias: line.accountAlias, amount: line.amount, valueDate: day, paymentReference: 'BORD-777' }] });
     expect((await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/bank-match`, 'canaux-op-limete', { statementId: 'REL-PT-1' })).statusCode).toBe(403);
     const prop = await c.env.req('POST', `/v1/payment-points/PA-LIMETE-MM01/cash-days/${day}/bank-match`, 'u-tresor', { statementId: 'REL-PT-1' });
     expect(prop.statusCode).toBe(200);

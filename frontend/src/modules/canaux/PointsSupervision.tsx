@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import type { MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
@@ -116,7 +117,7 @@ export default function PointsSupervision() {
             {sup.data.exceptions.length === 0 ? <EmptyState title="Aucune exception" icon="check" /> : (
               <ul className="list-rows">{sup.data.exceptions.map((e) => (
                 <li key={e.id} className="list-row list-row-stack">
-                  <span className="row-title">{e.pointId} · {e.day} · {e.type.replace(/_/g, ' ').toLowerCase()}</span>
+                  <span className="row-between"><span className="row-title">{e.pointId} · {e.day} · {e.type.replace(/_/g, ' ').toLowerCase()}</span><Link className="btn btn-ghost btn-sm" to={`/canaux/jour-de-caisse?point=${encodeURIComponent(e.pointId)}&day=${e.day}`}>Jour de caisse</Link></span>
                   <span className="small">{e.detail}</span>
                   <span className="small muted">Attendu : {e.expected.map((m) => <MoneyText key={m.currency} money={m} showIndicative={false} />)} · constaté : {e.observed.length ? e.observed.map((m) => <MoneyText key={m.currency} money={m} showIndicative={false} />) : 'rien'}</span>
                 </li>

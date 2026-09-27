@@ -248,6 +248,8 @@ export interface CashDay {
     bankMatch?: {
       statementId: string; exceptionIds: string[]; valueDate: string; lines: { accountAlias: string; amount: MoneyJSON }[];
       proposedBy: string; proposedAt: string; approvedBy?: string; approvedAt?: string;
+      /** Appariement automatique à l'import (bordereau, montants et comptes identiques) : aucune décision humaine requise. */
+      auto?: true;
     };
   };
   exceptionIds: string[];

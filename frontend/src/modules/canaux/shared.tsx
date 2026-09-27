@@ -44,6 +44,13 @@ export const POINT_STATUS: Record<string, { tone: 'good' | 'warning' | 'critical
   RETIRE: { tone: 'neutral', label: 'Retiré' },
 };
 
+/** Statuts d'un jour de caisse (console du point, revue du Trésor). */
+export const DAY_STATUS: Record<string, { tone: 'good' | 'warning' | 'critical' | 'info'; label: string }> = {
+  OUVERTE: { tone: 'info', label: 'Caisse ouverte' }, CLOTUREE: { tone: 'warning', label: 'Clôturée — versement à déclarer' },
+  DECLAREE: { tone: 'warning', label: 'Versement déclaré — en attente du relevé bancaire' },
+  VERSEE: { tone: 'good', label: 'Versée au compte public (relevé bancaire rapproché)' }, ECART: { tone: 'critical', label: 'Écart — exception ouverte' },
+};
+
 export interface PublicPoint {
   id: string; name: string; type: string; operator: string; commune: string; quartier: string; address: string;
   lat: number; lon: number; hours: string; status: 'ACTIF' | 'SUSPENDU'; guichetId: string | null; demo: boolean;

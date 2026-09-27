@@ -50,6 +50,8 @@ export const canauxPlugin = definePlugin({
     // Balayage périodique des retards de versement des points agréés (MOSOLO_POINTS_SCAN_MS, défaut : 1 h ; 0 = désactivé).
     const every = Number.parseInt(process.env.MOSOLO_POINTS_SCAN_MS ?? '3600000', 10);
     if (Number.isFinite(every) && every >= 60_000) svc.points.startScheduler(every);
+    // Import de relevé au Trésor : les lignes portant un bordereau de versement déclaré sont appariées automatiquement.
+    ctx.treasury.addStatementClaimant((statementId, lines) => svc.points.claimStatementLines(statementId, lines));
     return svc;
   },
   seed: (_ctx, svc) => svc.seedDemo(),

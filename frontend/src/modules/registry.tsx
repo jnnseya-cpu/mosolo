@@ -56,6 +56,7 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/canaux/carte/:number', element: lazy(() => import('./canaux/CardPrint')) },
   { path: '/canaux/point-agree', element: lazy(() => import('./canaux/PointConsole')), nav: { label: 'Console du point agréé', short: 'Encaisser', icon: 'cash', group: 'operations', roles: ['R32'] } },
   { path: '/canaux/points-supervision', element: lazy(() => import('./canaux/PointsSupervision')), nav: { label: 'Points agréés (Trésor)', short: 'Points', icon: 'store', group: 'pilotage', roles: ['R17', 'R18', 'R22', 'R24'] } },
+  { path: '/canaux/jour-de-caisse', element: lazy(() => import('./canaux/CashDayReview')), nav: { label: 'Jours de caisse des points', short: 'Caisses', icon: 'ledger', group: 'pilotage', roles: ['R17', 'R18', 'R22', 'R24'] } },
 
   // Titres, RakaPay, pass wewa
   { path: '/titres/controle', element: lazy(() => import('./titres/Controle')), nav: { label: 'Contrôle des titres', short: 'Contrôle', icon: 'qr', group: 'operations', roles: ['R10', 'R11', 'R35'] } },

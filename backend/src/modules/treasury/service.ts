@@ -83,6 +83,21 @@ export interface StatementResult {
   /** Lignes ayant réglé un paiement non affecté (doublon, retard) : fonds arrivés, restitution unique ensuite. */
   settledUnapplied: { unappliedId: string; paymentReference: string; amount: MoneyJSON; ledgerEntryId: string }[];
   exceptions: ReconciliationException[];
+  /** Lignes réclamées par un module (bordereau de versement d'un point agréé…) et appariées automatiquement. */
+  claimed?: Record<string, unknown>[];
+}
+
+/**
+ * Réclamation, SANS ÉCRITURE (phase 1), des lignes de relevé dont la référence n'est pas une référence de paiement
+ * (ex. bordereau de versement d'un point agréé). Ligne réclamée : appariée par `apply` (phase 2), ou exception typée
+ * (`exceptions`) à la place du « crédit orphelin » générique — jamais ignorée en silence.
+ */
+export interface StatementClaimant {
+  (statementId: string, lines: StatementLine[]): {
+    matched: StatementLine[];
+    exceptions: { line: StatementLine; type: ExceptionType; detail: string }[];
+    apply: (actor: AuditActor) => Record<string, unknown>[];
+  };
 }
 
 type LinePlan =
@@ -102,6 +117,7 @@ export class TreasuryService {
   private readonly ids = new IdGenerator();
   /** Surcouche de traitement (affectation, statut, résolution) fournie par le module Trésor avancé. */
   private overlay: ((e: ReconciliationException) => ReconciliationException) | undefined;
+  private readonly claimants: StatementClaimant[] = [];
 
   constructor(
     private readonly clock: Clock,
@@ -190,6 +206,22 @@ export class TreasuryService {
       }
       exception('CREDIT_WITHOUT_CONFIRMATION', `Crédit reçu sans confirmation prestataire vérifiée (statut ${order.status}).`);
     }
+    // Crédits orphelins soumis aux modules (bordereaux de versement) : appariés ou requalifiés, toujours sans écriture ici.
+    const applies: ((a: AuditActor) => Record<string, unknown>[])[] = [];
+    for (const claim of this.claimants) {
+      const orphans = plans.filter((p): p is Extract<LinePlan, { kind: 'EXCEPTION' }> => p.kind === 'EXCEPTION' && p.type === 'ORPHAN_CREDIT').map((p) => p.line);
+      if (orphans.length === 0) break;
+      const r = claim(input.statementId, orphans);
+      const matched = new Set(r.matched);
+      const requalified = new Map(r.exceptions.map((e) => [e.line, e]));
+      for (let i = plans.length - 1; i >= 0; i--) {
+        const p = plans[i]!;
+        if (p.kind !== 'EXCEPTION' || p.type !== 'ORPHAN_CREDIT') continue;
+        if (matched.has(p.line)) plans.splice(i, 1);
+        else if (requalified.has(p.line)) plans[i] = { kind: 'EXCEPTION', ...requalified.get(p.line)! };
+      }
+      applies.push(r.apply);
+    }
 
     // Phase 2 — application.
     const result: StatementResult = { statementId: input.statementId, importedAt: now, importedBy: user.id, lines: input.lines.length, matched: [], settledUnapplied: [], exceptions: [] };
@@ -212,6 +244,8 @@ export class TreasuryService {
         result.settledUnapplied.push(this.settleUnapplied(p.u, { statementId: input.statementId, ...(p.line.accountVersion !== undefined ? { accountVersion: p.line.accountVersion } : {}), actor }));
       }
     }
+    const claimed = applies.flatMap((a) => a(actor));
+    if (claimed.length > 0) result.claimed = claimed;
     if (result.exceptions.length > 0) {
       this.comms.publish('reconciliation.exception.opened', this.users.withRole('R18').map(userRecipient), { reference: input.statementId }, { entity: 'TRESOR' });
     }
@@ -279,6 +313,11 @@ export class TreasuryService {
     });
     this.audit.append({ actor: opts.actor, action: 'reconciliation.unapplied_settled', resourceType: 'unapplied_payment', resourceId: u.id, details: { statementId: opts.statementId, paymentReference: u.paymentReference, ledgerEntryId: entry.id } });
     return { unappliedId: u.id, paymentReference: u.paymentReference, amount: u.amount, ledgerEntryId: entry.id };
+  }
+
+  /** Branche un module réclamant des lignes de relevé à référence non-paiement (bordereaux des points agréés). */
+  addStatementClaimant(fn: StatementClaimant): void {
+    this.claimants.push(fn);
   }
 
   /** Branche la surcouche de traitement des exceptions (module Trésor avancé). */

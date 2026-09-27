@@ -12,6 +12,7 @@
 import { randomUUID } from 'node:crypto';
 import { Money, type CurrencyCode, type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
+import type { AuditActor } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { HOUR_MS } from '../../core/clock.js';
 import { checkChar, hmacSha256Hex, randomCode, randomSecret } from '../../core/crypto.js';
@@ -22,6 +23,7 @@ import { PAYABLE_STATUSES } from '../../modules/assessment/service.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
 import type { PaymentOrder, UnappliedPayment } from '../../modules/payments/service.js';
 import { refSuffix } from '../../modules/receipts/service.js';
+import type { ExceptionType, StatementLine } from '../../modules/treasury/service.js';
 import { isCommune } from '../../reference/kinshasa.js';
 import type { CardRegistry } from './cards.js';
 import {
@@ -53,6 +55,8 @@ export function holdsPublicAgentRole(roles: readonly string[]): boolean {
 
 /** Délai laissé au relevé bancaire pour constater un versement déclaré, au-delà du délai contractuel (heures). */
 export const BANK_CONFIRMATION_GRACE_HOURS = 48;
+/** Approbateur inscrit sur une constatation appariée automatiquement à l'import du relevé (aucune personne ne l'a décidée). */
+export const AUTO_MATCH_ACTOR = 'SYSTEME:RAPPROCHEMENT_AUTOMATIQUE';
 /** Encaissement confirmé non rapproché au relevé au-delà de ce nombre de jours : exception de vieillissement. */
 export const UNRECONCILED_AGING_DAYS = 3;
 
@@ -674,26 +678,80 @@ export class PaymentPointService {
     if (bm.approvedAt) throw conflict('DEPOSIT_ALREADY_CONFIRMED', 'Versement déjà constaté au relevé bancaire.');
     assertDistinctPerson(user.id, [bm.proposedBy, cd.deposit.declaredBy], 'Quatre yeux : la constatation est approuvée par une personne distincte du proposant et du déclarant.');
     this.matchDepositFromStatement(cd.deposit.bankSlipRef, bm.lines, bm.valueDate);
-    const now = this.clock().toISOString();
+    const r = this.confirmDeposit(p, cd, { ...bm, approvedBy: user.id, approvedAt: this.clock().toISOString() }, this.actor(user));
+    this.ctx.audit.append({ actor: this.actor(user), action: 'canaux.point.deposit_confirmed', resourceType: 'cash_day', resourceId: cd.id, details: { statementId: bm.statementId, proposedBy: bm.proposedBy, reconciled: r.reconciled, status: r.status } });
+    return this.cashDayView(user, pointId, day);
+  }
+
+  /**
+   * Constatation effective (commune au circuit à quatre yeux et à l'appariement automatique à l'import) : VERSEE, ou
+   * ECART si une exception reste ouverte ; encaissements rapprochés SEULEMENT si le versement couvre exactement l'attendu.
+   */
+  private confirmDeposit(p: PaymentPoint, cd: CashDay, bm: NonNullable<NonNullable<CashDay['deposit']>['bankMatch']>, actor: AuditActor) {
+    const dep = cd.deposit!;
     const ids: string[] = [];
-    if (bm.valueDate > kinshasaDay(this.deadline(p, day)) && !this.exceptions.findOne((e) => e.pointId === p.id && e.day === day && e.type === 'VERSEMENT_EN_RETARD')) {
-      ids.push(this.openException(p, day, 'VERSEMENT_EN_RETARD', `Crédit au relevé (valeur ${bm.valueDate}) après le délai contractuel de ${p.settlementDelayHours} h.`, cd.expected, bm.lines.map((l) => l.amount)).id);
+    if (bm.valueDate > kinshasaDay(this.deadline(p, cd.day)) && !this.exceptions.findOne((e) => e.pointId === p.id && e.day === cd.day && e.type === 'VERSEMENT_EN_RETARD')) {
+      ids.push(this.openException(p, cd.day, 'VERSEMENT_EN_RETARD', `Crédit au relevé (valeur ${bm.valueDate}) après le délai contractuel de ${p.settlementDelayHours} h.`, cd.expected, bm.lines.map((l) => l.amount)).id);
     }
     const exceptionIds = [...cd.exceptionIds, ...ids];
-    const updated = this.cashDays.update({ ...cd, status: exceptionIds.length > 0 ? 'ECART' : 'VERSEE', exceptionIds, deposit: { ...cd.deposit, bankMatch: { ...bm, approvedBy: user.id, approvedAt: now } } });
+    const updated = this.cashDays.update({ ...cd, status: exceptionIds.length > 0 ? 'ECART' : 'VERSEE', exceptionIds, deposit: { ...dep, bankMatch: bm } });
     const reconciled: string[] = [];
     if (sameByAccount(cd.expectedByAccount, bm.lines)) {
-      for (const c of this.collections.find((x) => x.pointId === pointId && x.cashDay === day)) {
+      for (const c of this.collections.find((x) => x.pointId === p.id && x.cashDay === cd.day)) {
         if (this.ctx.payments.orders.get(c.paymentOrderId)?.status !== 'CONFIRME') continue;
         this.ctx.treasury.completeMatch(c.paymentOrderId, {
-          debit: 'COMPTE_PUBLIC_RECETTES', description: `Versement ${cd.deposit.bankSlipRef} du point ${p.id} (${day}), relevé ${bm.statementId}`,
-          actor: this.actor(user), details: { statementId: bm.statementId, bankSlipRef: cd.deposit.bankSlipRef, pointId, day },
+          debit: 'COMPTE_PUBLIC_RECETTES', description: `Versement ${dep.bankSlipRef} du point ${p.id} (${cd.day}), relevé ${bm.statementId}`,
+          actor, details: { statementId: bm.statementId, bankSlipRef: dep.bankSlipRef, pointId: p.id, day: cd.day },
         });
         reconciled.push(c.paymentReference);
       }
     }
-    this.ctx.audit.append({ actor: this.actor(user), action: 'canaux.point.deposit_confirmed', resourceType: 'cash_day', resourceId: cd.id, details: { statementId: bm.statementId, proposedBy: bm.proposedBy, reconciled, status: updated.status } });
-    return this.cashDayView(user, pointId, day);
+    return { status: updated.status, reconciled };
+  }
+
+  /**
+   * Réclamation des lignes d'un relevé importé au Trésor (phase sans écriture) : les lignes portant le bordereau d'un
+   * versement déclaré et non constaté sont appariées par `matchDepositFromStatement`. Montants ou comptes différents,
+   * bordereau déjà constaté, date de valeur incohérente : exception typée dans la file du Trésor, jamais de silence.
+   * Bordereau inconnu : non réclamé (reste « crédit orphelin »). Constatation manuelle à quatre yeux en cours : idem.
+   */
+  claimStatementLines(statementId: string, lines: StatementLine[]) {
+    const bySlip = new Map<string, StatementLine[]>();
+    for (const l of lines) bySlip.set(normalizeSlipRef(l.paymentReference), [...(bySlip.get(normalizeSlipRef(l.paymentReference)) ?? []), l]);
+    const matched: StatementLine[] = [];
+    const exceptions: { line: StatementLine; type: ExceptionType; detail: string }[] = [];
+    const toApply: { cd: CashDay; lines: { accountAlias: string; amount: MoneyJSON }[]; valueDate: string }[] = [];
+    for (const [slip, group] of bySlip) {
+      const cd = this.cashDays.findOne((d) => !!d.deposit && normalizeSlipRef(d.deposit.bankSlipRef) === slip);
+      if (!cd?.deposit) continue;
+      const where = `bordereau ${cd.deposit.bankSlipRef}, point ${cd.pointId}, caisse du ${cd.day}`;
+      const flag = (type: ExceptionType, detail: string) => group.forEach((line) => exceptions.push({ line, type, detail }));
+      if (cd.deposit.bankMatch?.approvedAt) { flag('DUPLICATE_CREDIT', `Crédit en double : versement déjà constaté au relevé ${cd.deposit.bankMatch.statementId} (${where}).`); continue; }
+      if (cd.deposit.bankMatch) { flag('ORPHAN_CREDIT', `Constatation manuelle à quatre yeux en cours sur le relevé ${cd.deposit.bankMatch.statementId} (${where}) : ligne non appariée automatiquement.`); continue; }
+      const got = group.map((l) => ({ accountAlias: l.accountAlias, amount: l.amount }));
+      const valueDate = group.map((l) => l.valueDate).sort().at(-1)!;
+      try {
+        this.matchDepositFromStatement(slip, got, valueDate);
+      } catch (e) {
+        const code = e instanceof ApiError ? e.code : 'ERREUR';
+        if (code === 'STATEMENT_AMOUNT_MISMATCH') {
+          const wrongAccount = sameTotals(cd.deposit.lines.map((l) => l.amount), got.map((l) => l.amount));
+          flag(wrongAccount ? 'WRONG_ACCOUNT' : 'AMOUNT_MISMATCH', `Versement ${where} : ${wrongAccount ? 'comptes crédités' : 'montants crédités'} au relevé différents du versement déclaré (${cd.deposit.lines.map((l) => `${l.accountAlias} ${l.amount.amount} ${l.amount.currency}`).join(', ')}) : aucune constatation.`);
+        } else flag('ORPHAN_CREDIT', `Versement ${where} non apparié automatiquement : ${(e as Error).message}`);
+        continue;
+      }
+      matched.push(...group);
+      toApply.push({ cd, lines: got, valueDate });
+    }
+    const apply = (actor: AuditActor) => toApply.map(({ cd, lines: got, valueDate }) => {
+      const now = this.clock().toISOString();
+      const cur = this.cashDays.get(cd.id)!;
+      const bm = { statementId, exceptionIds: [], valueDate, lines: got, proposedBy: actor.id, proposedAt: now, approvedBy: AUTO_MATCH_ACTOR, approvedAt: now, auto: true as const };
+      const r = this.confirmDeposit(this.get(cd.pointId), cur, bm, actor);
+      this.ctx.audit.append({ actor, action: 'canaux.point.deposit_auto_matched', resourceType: 'cash_day', resourceId: cd.id, details: { statementId, bankSlipRef: cur.deposit!.bankSlipRef, valueDate, lines: got, reconciled: r.reconciled, status: r.status } });
+      return { kind: 'VERSEMENT_POINT_AGREE', pointId: cd.pointId, day: cd.day, bankSlipRef: cur.deposit!.bankSlipRef, status: r.status, reconciled: r.reconciled };
+    });
+    return { matched, exceptions, apply };
   }
 
   /**
