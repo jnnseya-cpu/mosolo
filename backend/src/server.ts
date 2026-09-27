@@ -25,6 +25,12 @@ try {
   process.exit(1);
 }
 
+// Gardes du processus : rejet non géré journalisé et alerté (le processus continue) ; exception non capturée → arrêt propre.
+const { installProcessGuards } = await import('./core/process-guards.js');
+installProcessGuards(process, {
+  ctx: app.ctx, log: (m) => app.log.error(m), exit: (c) => process.exit(c), shutdown: () => app.close(),
+});
+
 app.listen({ port, host }).catch((err: unknown) => {
   app.log.error(err);
   process.exit(1);

@@ -3,6 +3,7 @@
  * bien, déclarations pré-remplies, registre des exonérations et remises, quitus fiscal numérique, attestation de
  * bail, carte à deux couches. Matrice d'habilitations déclarée ici ; ce qui n'est pas listé est refusé.
  */
+import { runScheduledJob } from '../../core/jobs.js';
 import { definePolicy, GRANTS } from '../../core/policy.js';
 import { definePlugin } from '../types.js';
 import { registerFiscalRoutes } from './routes.js';
@@ -67,7 +68,7 @@ export const fiscalPlugin = definePlugin<FiscalService>({
     // Échéance et révision automatiques des exonérations (module 57) : toutes les heures hors tests.
     const flag = (process.env.MOSOLO_EXONERATIONS_ECHEANCIER ?? '').trim().toLowerCase();
     if (flag === 'on' || (flag !== 'off' && !process.env.VITEST)) {
-      const t = setInterval(() => { try { svc.exemptions.runReminders(); } catch { /* journalisé */ } }, 3_600_000);
+      const t = setInterval(() => { runScheduledJob(ctx, 'fiscal.exonerations-echeances', () => { svc.exemptions.runReminders(); }); }, 3_600_000);
       t.unref();
       app.addHook('onClose', async () => clearInterval(t));
     }

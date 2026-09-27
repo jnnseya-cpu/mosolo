@@ -15,6 +15,7 @@
  * une procédure CONTRADICTOIRE, jamais une taxation automatique ; la personne qui décide est distincte de celle qui a
  * rapproché. Réponse de contrôle minimale : ni nom ni adresse.
  */
+import { runScheduledJob } from '../../core/jobs.js';
 import { normalizePlate } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import { actorOf } from '../../core/audit.js';
@@ -589,7 +590,7 @@ export class SecteursService {
   /** Planificateur quotidien de l'avis annuel automatique (idempotent : aucune double facturation). */
   startAntennesScheduler(tickMs = 86_400_000): void {
     this.stopAntennesScheduler();
-    this.antennesTimer = setInterval(() => { try { this.antennesAuto('PLANIFIEE'); } catch { /* journalisé par la liquidation */ } }, tickMs);
+    this.antennesTimer = setInterval(() => { runScheduledJob(this.ctx, 'verticales.antennes-liquidation-auto', () => { this.antennesAuto('PLANIFIEE'); }); }, tickMs);
     this.antennesTimer.unref?.();
   }
   stopAntennesScheduler(): void { if (this.antennesTimer) clearInterval(this.antennesTimer); this.antennesTimer = undefined; }

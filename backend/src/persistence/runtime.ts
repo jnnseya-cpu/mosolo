@@ -40,6 +40,10 @@ export interface PersistenceStats {
   flushes: number;
   lastFlushAt: string | null;
   lastError: string | null;
+  /** Écritures consécutives en échec (0 : stockage sain). */
+  consecutiveFailures: number;
+  /** Stockage en échec : écritures refusées (503) jusqu'à la reprise (voir `degraded`). */
+  degraded: boolean;
   report: AttachReport | null;
   lastAnchor: AuditAnchorRecord | null;
 }
@@ -47,7 +51,12 @@ export interface PersistenceStats {
 interface AttachableContext {
   clock: { now(): Date };
   audit: AuditLog;
+  /** Alerte de l'exploitant quand le stockage est en échec (facultatif : outils hors application). */
+  alerts?: { raise(input: { type: string; severity: 'MEDIUM' | 'HIGH' | 'CRITICAL'; source: string; detail: string; context?: Record<string, unknown> }): unknown };
 }
+
+/** Seuil d'écritures consécutives en échec au-delà duquel le stockage est déclaré en échec — PAR DÉFAUT, à confirmer par l'exploitant. */
+export const PERSISTENCE_DEGRADED_AFTER = 3;
 
 export interface RuntimeOptions {
   /** Délai d'écriture différée (ms) ; 0 = écriture à la prochaine micro-tâche. */
@@ -61,6 +70,12 @@ export interface RuntimeOptions {
   acceptUnverifiedAudit?: boolean;
   /** Ancre externe de la tête du journal d'audit (hors base). Obligatoire hors démonstration (voir boot.ts). */
   anchor?: AuditAnchorStore;
+  /**
+   * Nouvelle tentative après une écriture en échec : délai initial puis doublé à chaque échec, plafonné (défauts
+   * 250 ms et 30 s — PAR DÉFAUT). Jamais de boucle serrée ; les tentatives continuent au plafond jusqu'à la reprise.
+   */
+  retryBaseMs?: number;
+  retryMaxMs?: number;
 }
 
 export class PersistenceRuntime {
@@ -70,9 +85,11 @@ export class PersistenceRuntime {
   private chain: Promise<void> = Promise.resolve();
   private discovery: Discovery | null = null;
   private ctx: AttachableContext | null = null;
-  private stats: Omit<PersistenceStats, 'store' | 'attached' | 'repositories' | 'pendingWrites'> = {
-    writtenRows: 0, flushes: 0, lastFlushAt: null, lastError: null, report: null, lastAnchor: null,
+  private stats: Omit<PersistenceStats, 'store' | 'attached' | 'repositories' | 'pendingWrites' | 'degraded'> = {
+    writtenRows: 0, flushes: 0, lastFlushAt: null, lastError: null, consecutiveFailures: 0, report: null, lastAnchor: null,
   };
+  /** Une alerte par épisode de panne (réarmée à la reprise). */
+  private alerted = false;
 
   constructor(
     readonly store: SnapshotStore,
@@ -242,11 +259,35 @@ export class PersistenceRuntime {
   private enqueue(row: SnapshotRow): void {
     this.pending.set(`${row.kind}\u0000${row.repo}\u0000${row.id}`, row);
     if (this.timer) return;
+    // Pendant une panne, une nouvelle écriture n'accélère pas les tentatives : même délai borné que les reprises.
+    this.schedule(this.stats.consecutiveFailures > 0 ? this.backoffMs() : this.opts.flushDelayMs ?? 25);
+  }
+
+  private backoffMs(): number {
+    const base = this.opts.retryBaseMs ?? 250;
+    const max = this.opts.retryMaxMs ?? 30_000;
+    return Math.min(max, base * 2 ** Math.min(16, Math.max(0, this.stats.consecutiveFailures - 1)));
+  }
+
+  /**
+   * Écriture différée. Un échec n'est JAMAIS un rejet de promesse non géré (qui arrêterait le processus sous Node 22 et
+   * perdrait le lot en attente) : il est compté, signalé, et une nouvelle tentative est planifiée avec un délai
+   * exponentiel plafonné (deuxième passe adverse, 27/09/2026).
+   */
+  private schedule(delayMs: number): void {
     this.timer = setTimeout(() => {
       this.timer = null;
-      void this.flush();
-    }, this.opts.flushDelayMs ?? 25);
+      this.flush().catch(() => {
+        if (this.timer || this.pending.size === 0) return;
+        this.schedule(this.backoffMs());
+      });
+    }, delayMs);
     this.timer.unref?.();
+  }
+
+  /** Stockage en échec : plusieurs écritures consécutives refusées par la base. */
+  get degraded(): boolean {
+    return this.stats.consecutiveFailures >= PERSISTENCE_DEGRADED_AFTER;
   }
 
   /** Écrit les écritures en attente (sérialisées). Toujours appelé à l'arrêt du serveur. */
@@ -265,6 +306,11 @@ export class PersistenceRuntime {
         this.stats.flushes++;
         this.stats.lastFlushAt = new Date().toISOString();
         this.stats.lastError = null;
+        if (this.stats.consecutiveFailures > 0) {
+          this.opts.log?.('info', `Persistance rétablie après ${this.stats.consecutiveFailures} écriture(s) en échec.`);
+          this.stats.consecutiveFailures = 0;
+          this.alerted = false;
+        }
         this.writeAnchor(batch);
       } catch (e) {
         // Rien n'est perdu : le lot est remis en attente (sans écraser une version plus récente).
@@ -273,7 +319,17 @@ export class PersistenceRuntime {
           if (!this.pending.has(k)) this.pending.set(k, r);
         }
         this.stats.lastError = e instanceof Error ? e.message : String(e);
-        this.opts.log?.('error', `Écriture de persistance en échec : ${this.stats.lastError}`);
+        this.stats.consecutiveFailures++;
+        this.opts.log?.('error', `Écriture de persistance en échec (${this.stats.consecutiveFailures}) : ${this.stats.lastError}`);
+        if (this.degraded && !this.alerted && this.ctx?.alerts) {
+          this.alerted = true;
+          // L'alerte (et son audit) entre dans le lot en attente : elle sera persistée à la reprise.
+          this.ctx.alerts.raise({
+            type: 'PERSISTANCE_EN_ECHEC', severity: 'CRITICAL', source: 'persistance',
+            detail: `Stockage persistant (${this.store.kind}) en échec depuis ${this.stats.consecutiveFailures} écritures : écritures refusées (503) jusqu'à la reprise, lectures servies. Vérifier la base.`,
+            context: { store: this.store.kind, pendingWrites: this.pending.size, automaticEffect: 'ECRITURES_REFUSEES' },
+          });
+        }
         throw e;
       }
     });
@@ -305,6 +361,7 @@ export class PersistenceRuntime {
       attached: this.attached,
       repositories: [...(this.discovery?.repos.keys() ?? [])].sort(),
       pendingWrites: this.pending.size,
+      degraded: this.degraded,
       ...structuredClone(this.stats),
     };
   }

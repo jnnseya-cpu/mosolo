@@ -10,6 +10,7 @@
  * - Niveau B : actions à effet sur un tiers, exécutées AU NOM de l'agent public qui valide (un clic), annulables.
  * - Niveau C : recommandation seulement ; jamais exécutée ; renvoi au circuit maker-checker du domaine.
  */
+import { runScheduledJob } from '../../core/jobs.js';
 import { ROLES, type RoleCode } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { AiActor, User } from '../../core/auth.js';
@@ -141,7 +142,7 @@ export class IaService {
 
   startScheduler(intervalMs: number): void {
     this.stopScheduler();
-    this.timer = setInterval(() => { try { this.sweep(); } catch { /* journalisé par l'audit */ } }, intervalMs);
+    this.timer = setInterval(() => { runScheduledJob(this.ctx, 'ia.balayage', () => { this.sweep(); }); }, intervalMs);
     this.timer.unref?.();
   }
   stopScheduler(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; }
@@ -157,7 +158,7 @@ export class IaService {
       decisions: () => this.recommendations.all().map((r) => ({ agentCode: r.agentCode, status: r.status, autonomy: r.autonomy })),
     });
     const opts: AgentRunOptions = { mode, ...(scope.subject ? { subject: scope.subject } : {}), ...(scope.question ? { question: scope.question } : {}) };
-    let drafts = this.provider.run(sheet, gw, opts);
+    let drafts = this.runProvider(sheet, gw, opts, by);
     if (mode === 'balayage') drafts = drafts.filter((d) => !d.quiet);
     const inputHash = gw.inputHash();
     const serialized = drafts.map((d) => JSON.stringify(d));
@@ -199,6 +200,46 @@ export class IaService {
   }
 
   /** Contrôles de la passerelle sur la sortie (fiche de contrôle). */
+  /**
+   * Appel du fournisseur d'IA (deuxième passe adverse, 27/09/2026) : une panne ou une sortie mal formée ne devient
+   * jamais une « erreur interne » opaque ni une recommandation partielle. Refus 503 IA_INDISPONIBLE avec un message
+   * exact, trace d'audit et alerte de l'exploitant (une par agent et par jour) ; le travail continue sans IA.
+   */
+  private runProvider(sheet: AgentSheet, gw: DataGateway, opts: AgentRunOptions, by: Requester): (AgentDraft & { quiet?: boolean })[] {
+    let drafts: unknown;
+    let failure: string | null = null;
+    try {
+      drafts = this.provider.run(sheet, gw, opts);
+      if (!Array.isArray(drafts)) failure = 'SORTIE_MAL_FORMEE';
+      else if (!drafts.every((d) => IaService.wellFormed(d))) failure = 'SORTIE_MAL_FORMEE';
+    } catch (e) {
+      if (e instanceof ApiError) throw e;
+      failure = 'FOURNISSEUR_EN_ERREUR';
+    }
+    if (failure) {
+      this.ctx.audit.append({
+        actor: { kind: 'system', id: 'ia' }, action: 'ia.provider.failed', resourceType: 'ia_agent', resourceId: sheet.code, outcome: 'FAILURE',
+        details: { agent: sheet.code, cause: failure, modelVersion: this.provider.modelVersion, requestedBy: by.id },
+      });
+      this.ctx.alerts.raiseOnce(`ia:${sheet.code}:${failure}:${kinshasaDate(this.ctx.clock.now())}`, {
+        type: 'IA_FOURNISSEUR_EN_ECHEC', severity: 'MEDIUM', source: `ia:${sheet.code}`,
+        detail: `Agent « ${sheet.name} » : ${failure === 'SORTIE_MAL_FORMEE' ? 'sortie mal formée rejetée' : 'fournisseur en erreur'} ; aucune recommandation produite.`,
+        context: { agent: sheet.code, cause: failure, automaticEffect: 'AUCUN' },
+      });
+      throw new ApiError(503, 'IA_INDISPONIBLE', `L’assistant « ${sheet.name} » est momentanément indisponible (${failure === 'SORTIE_MAL_FORMEE' ? 'réponse non conforme rejetée' : 'fournisseur en erreur'}) : aucune recommandation n’a été produite. Poursuivez le traitement sans l’assistant ou réessayez plus tard.`);
+    }
+    return drafts as (AgentDraft & { quiet?: boolean })[];
+  }
+
+  /** Forme minimale d'une sortie d'agent (champs lus par la suite du traitement). */
+  private static wellFormed(d: unknown): boolean {
+    if (!d || typeof d !== 'object') return false;
+    const x = d as Record<string, unknown>;
+    return typeof x.key === 'string' && typeof x.situation === 'string' && typeof x.owner === 'string'
+      && typeof x.autonomy === 'string' && ['A_AUTO', 'B_VALIDATION', 'C_RECOMMANDATION'].includes(x.autonomy) && Array.isArray(x.actions)
+      && x.actions.every((a) => !!a && typeof a === 'object' && typeof (a as Record<string, unknown>).type === 'string' && typeof (a as Record<string, unknown>).level === 'string');
+  }
+
   private checkDraft(sheet: AgentSheet, d: AgentDraft): void {
     for (const a of d.actions) {
       if (!sheet.allowedActions.includes(a.type)) throw forbidden('IA_ACTION_NOT_IN_SHEET', `Action ${a.type} hors de la fiche de l’agent ${sheet.name}.`);

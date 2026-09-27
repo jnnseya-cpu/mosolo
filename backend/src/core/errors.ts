@@ -23,6 +23,7 @@ const TITLES: Record<number, string> = {
   429: 'Trop de requêtes',
   500: 'Erreur interne',
   502: 'Prestataire indisponible',
+  503: 'Service momentanément indisponible',
 };
 
 export class ApiError extends Error {

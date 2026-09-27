@@ -24,6 +24,7 @@
  * (bases, sans montant) est produite. Écarts, constats et pénalités restent décidés par une personne (aucune sanction
  * automatique) ; la personne qui décide est distincte de celle qui propose.
  */
+import { runScheduledJob } from '../../core/jobs.js';
 import { normalizePlate, type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import { actorOf } from '../../core/audit.js';
@@ -720,7 +721,7 @@ export class FichesService {
   startScheduler(ms: number): void {
     this.stopScheduler();
     this.schedulerMs = ms;
-    this.timer = setInterval(() => { try { this.runAutomatic(); } catch { /* passage suivant */ } }, ms);
+    this.timer = setInterval(() => { runScheduledJob(this.ctx, 'verticales.liquidation-automatique', () => { this.runAutomatic(); }); }, ms);
     this.timer.unref?.();
   }
 

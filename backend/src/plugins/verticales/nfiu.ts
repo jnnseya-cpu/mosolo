@@ -16,6 +16,7 @@
  *    poses, remplacements, scans par couleur de situation, présence vérifiée, situations complètes consultées ;
  *    l'agent voit son propre rapport, l'encadrement celui de tous.
  */
+import { runScheduledJob } from '../../core/jobs.js';
 import { Money, type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import { actorOf } from '../../core/audit.js';
@@ -283,7 +284,7 @@ export class NfiuService {
 
   startScheduler(tickMs = 900_000): void {
     this.stopScheduler();
-    this.timer = setInterval(() => { try { this.scheduledTick(); } catch { /* journalisé */ } }, tickMs);
+    this.timer = setInterval(() => { runScheduledJob(this.ctx, 'verticales.nfiu-rapport', () => { this.scheduledTick(); }); }, tickMs);
     this.timer.unref?.();
   }
   stopScheduler(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; }

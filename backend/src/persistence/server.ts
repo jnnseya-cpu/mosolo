@@ -30,6 +30,14 @@ if (runtime && !runtime.attached) {
   app.log.warn('Persistance préparée mais non attachée.');
 }
 
+// Gardes du processus : rejet non géré journalisé et alerté (le processus continue) ; exception non capturée → arrêt
+// propre (les écritures persistantes en attente sont vidées avant la sortie).
+const { installProcessGuards } = await import('../core/process-guards.js');
+installProcessGuards(process, {
+  ctx: app.ctx, log: (m) => app.log.error(m), exit: (c) => process.exit(c),
+  shutdown: async () => { await app.close(); await runtime?.close(); },
+});
+
 app.listen({ port, host }).catch((err: unknown) => {
   app.log.error(err);
   process.exit(1);

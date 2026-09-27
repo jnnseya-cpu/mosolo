@@ -5,6 +5,7 @@
  * et par agent) et ouverture automatique de la revue mensuelle des accès privilégiés. Alertes seulement : aucune
  * sanction ni révocation automatique.
  */
+import { runScheduledJob } from '../../../core/jobs.js';
 import { withCorrelation } from '../../../core/audit.js';
 import { kinshasaDate } from '../../../core/clock.js';
 import { definePolicy, GRANTS } from '../../../core/policy.js';
@@ -69,7 +70,7 @@ export class SecuriteService {
 
   startScheduler(tickMs = 300_000): void {
     this.stopScheduler();
-    this.timer = setInterval(() => { try { this.tick(); } catch { /* chaque étape journalise ses échecs */ } }, tickMs);
+    this.timer = setInterval(() => { runScheduledJob(this.ctx, 'integrite.securite', () => { this.tick(); }); }, tickMs);
     this.timer.unref?.();
   }
   stopScheduler(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; }

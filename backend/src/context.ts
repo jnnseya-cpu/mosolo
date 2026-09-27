@@ -241,6 +241,11 @@ export function createContext(opts: AppOptions = {}) {
      * même de configuration (types de titres « DÉMONSTRATION »), n'est créé — mode production.
      */
     demoData: undefined as boolean | undefined,
+    /**
+     * État du stockage persistant (fixé par le module « socle » quand une base est attachée) : `degraded` vrai après
+     * plusieurs écritures consécutives en échec. Absent : stockage en mémoire (tests, démonstration sans base).
+     */
+    storageHealth: undefined as (() => { degraded: boolean; consecutiveFailures: number }) | undefined,
   };
 }
 

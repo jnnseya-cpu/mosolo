@@ -6,6 +6,7 @@
  * données de démonstration de tous les modules) ; recommandé EN DERNIER pour que la limitation de débit s'ajoute
  * après tous les crochets des autres modules.
  */
+import { ApiError } from '../../core/errors.js';
 import type { AppContext } from '../../context.js';
 import { registerBearerVerifier } from '../../core/auth.js';
 import { getActivePersistence, type PersistenceRuntime } from '../../persistence/runtime.js';
@@ -60,6 +61,15 @@ export function createSoclePlugin(opts: SocleOptions = {}): MosoloPlugin<SocleSe
       // Persistance : après les données de démonstration de TOUS les modules (les `routes` suivent tous les `seed`).
       if (svc.persistence && !svc.persistence.attached) {
         svc.persistence.attach(ctx);
+        const rt = svc.persistence;
+        ctx.storageHealth = () => ({ degraded: rt.degraded, consecutiveFailures: rt.status().consecutiveFailures });
+        // Stockage en échec (deuxième passe adverse, 27/09/2026) : toute écriture est refusée (503, RFC 9457) au lieu
+        // d'être acceptée puis perdue au prochain arrêt ; un prestataire recevant 503 renverra son rappel plus tard.
+        app.addHook('onRequest', async (req, reply) => {
+          if (!rt.degraded || req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return;
+          const e = new ApiError(503, 'STOCKAGE_INDISPONIBLE', 'Enregistrement momentanément impossible : le stockage est indisponible. Aucune opération n’a été effectuée ; réessayez dans quelques minutes.');
+          return reply.code(503).header('retry-after', '60').type('application/problem+json').send(e.toProblem(req.url));
+        });
         app.addHook('onClose', async () => {
           await svc.persistence?.flush().catch(() => undefined);
         });

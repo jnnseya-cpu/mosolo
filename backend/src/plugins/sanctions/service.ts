@@ -8,6 +8,7 @@
  * d'ouvrage du 27/09/2026) : c'est le montant fixé par la décision, non négociable ; l'agent invite l'usager à payer
  * par les canaux officiels avec sa référence, il n'encaisse rien et ne prend aucune mesure sur place.
  */
+import { runScheduledJob } from '../../core/jobs.js';
 import { kinshasaDate } from '../../core/clock.js';
 import { AgentReserveService } from './reserve-agents.js';
 import type { MoneyJSON } from '@mosolo/shared';
@@ -83,7 +84,7 @@ export class SanctionsService {
   /** Calcul périodique de la surveillance : les signaux « à examiner » ouvrent des alertes (dédoublonnées). */
   startScheduler(intervalMs: number): void {
     this.stopScheduler();
-    this.timer = setInterval(() => { try { this.monitoring.report(); } catch { /* journalisé par l'audit */ } }, intervalMs);
+    this.timer = setInterval(() => { runScheduledJob(this.ctx, 'sanctions.surveillance', () => { this.monitoring.report(); }); }, intervalMs);
     this.timer.unref?.();
   }
   stopScheduler(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; }

@@ -23,6 +23,7 @@
  *  - Aucune sanction : les mesures du § 11C.4 (billet non validable, suspension, retrait d'agrément) restent décidées
  *    au cas par cas par l'autorité compétente (`avia-cadre.ts`) ; aucune interférence avec Go-Pass.
  */
+import { runScheduledJob } from '../../core/jobs.js';
 import { isRuleExecutable, Money, type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import { actorOf } from '../../core/audit.js';
@@ -295,7 +296,7 @@ export class AviaAutoService {
 
   startScheduler(tickMs = 3_600_000): void {
     this.stopScheduler();
-    this.timer = setInterval(() => { try { this.scheduledTick(); } catch { /* journalisé par scheduledTick */ } }, tickMs);
+    this.timer = setInterval(() => { runScheduledJob(this.ctx, 'verticales.avia-facturation-auto', () => { this.scheduledTick(); }); }, tickMs);
     this.timer.unref?.();
   }
   stopScheduler(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; }

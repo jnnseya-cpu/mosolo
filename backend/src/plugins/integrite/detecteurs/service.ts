@@ -8,6 +8,7 @@
  * détection de la collusion (setInterval + unref, désactivée sous les tests).
  * Chaque exécution est journalisée ; chaque signal est une alerte à examiner par un humain, jamais une sanction.
  */
+import { runScheduledJob } from '../../../core/jobs.js';
 import { Money, type CurrencyCode } from '@mosolo/shared';
 import type { AppContext } from '../../../context.js';
 import { actorOf, type AuditActor } from '../../../core/audit.js';
@@ -211,7 +212,7 @@ export class DetecteursService {
 
   startScheduler(tickMs = 300_000): void {
     this.stopScheduler();
-    this.timer = setInterval(() => { try { this.scheduledTick(); } catch { /* échec journalisé par scheduledTick */ } }, tickMs);
+    this.timer = setInterval(() => { runScheduledJob(this.ctx, 'integrite.detecteurs', () => { this.scheduledTick(); }); }, tickMs);
     this.timer.unref?.();
   }
   stopScheduler(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; }

@@ -17,6 +17,7 @@
  *  - Harmonisation avec la commission des agents (sanctions/commissions, 10 %, validation par un superviseur) : les
  *    commissions sont imputées sur la réserve « agents et sous-traitants » ; le rapport montre sa consommation.
  */
+import { runScheduledJob } from '../../../core/jobs.js';
 import { createHash } from 'node:crypto';
 import { isRuleExecutable, Money, type CurrencyCode, type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../../context.js';
@@ -1017,7 +1018,7 @@ export class RepartitionService implements RepartitionGate {
   /** Planification du traitement quotidien (idempotent : chaque tick ne traite que ce qui n'a pas été traité). */
   startScheduler(intervalMs: number): void {
     this.stopScheduler();
-    this.timer = setInterval(() => { try { this.runAutomatic(); } catch { /* chaque étape est journalisée */ } }, intervalMs);
+    this.timer = setInterval(() => { runScheduledJob(this.ctx, 'pilotage.repartition-automatique', () => { this.runAutomatic(); }); }, intervalMs);
     this.timer.unref?.();
   }
   stopScheduler(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; }

@@ -12,6 +12,7 @@
  *   suspension CONSERVATOIRE automatique (encaissement bloqué, audit et opérateur alertés) ; la levée et la pénalité
  *   finale restent décidées par des personnes (rétablissement à quatre yeux, pénalité du contrat).
  */
+import { runScheduledJob } from '../../core/jobs.js';
 import { Money, type CurrencyCode, type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { AuditActor } from '../../core/audit.js';
@@ -898,7 +899,7 @@ export class PaymentPointService {
   /** Balayage périodique des retards de versement et du vieillissement (sans dépendre d'une consultation). */
   startScheduler(intervalMs: number): void {
     this.stopScheduler();
-    this.timer = setInterval(() => { try { this.scanOverdue(); } catch { /* exceptions journalisées par l'audit */ } }, intervalMs);
+    this.timer = setInterval(() => { runScheduledJob(this.ctx, 'canaux.points-retards', () => { this.scanOverdue(); }); }, intervalMs);
     this.timer.unref?.();
   }
   stopScheduler(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; }

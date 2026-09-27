@@ -6,6 +6,7 @@
  *  - santé des clés : empreintes, âge, avertissements, sans jamais révéler un secret.
  * Le système propose, un humain décide : aucune sanction automatique, aucun seuil présenté comme définitif.
  */
+import { runScheduledJob } from '../../../core/jobs.js';
 import type { AppContext } from '../../../context.js';
 import type { User } from '../../../core/auth.js';
 import { badRequest, conflict, notFound, unprocessable } from '../../../core/errors.js';
@@ -316,7 +317,7 @@ export class GouvernanceService {
   /** Planificateur léger : vérifie périodiquement (défaut : toutes les 5 minutes) si une exécution est due. */
   startScheduler(tickMs = 300_000): void {
     this.stopScheduler();
-    this.timer = setInterval(() => { try { this.scheduledTick(); } catch { /* échec journalisé par scheduledTick */ } }, tickMs);
+    this.timer = setInterval(() => { runScheduledJob(this.ctx, 'integrite.gouvernance-detection', () => { this.scheduledTick(); }); }, tickMs);
     this.timer.unref?.();
   }
   stopScheduler(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; }

@@ -19,6 +19,7 @@
  *  - Idempotent (une évaluation par zone, par jour et par heure), journalisé avant/après (`parking.pricing.auto_adjusted`),
  *    planificateur horaire (désactivé sous les tests, `MOSOLO_PARKSMART_PRICING_SCHEDULER`). Jamais une sanction.
  */
+import { runScheduledJob } from '../../core/jobs.js';
 import type { AppContext } from '../../context.js';
 import { actorOf } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
@@ -227,7 +228,7 @@ export class TarificationDynamique {
 
   startScheduler(tickMs = 300_000): void {
     this.stopScheduler();
-    this.timer = setInterval(() => { try { this.scheduledTick(); } catch { /* journalisé */ } }, tickMs);
+    this.timer = setInterval(() => { runScheduledJob(this.ctx, 'parking.tarification-dynamique', () => { this.scheduledTick(); }); }, tickMs);
     this.timer.unref?.();
   }
   stopScheduler(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; }

@@ -2,6 +2,7 @@
  * Module d'extension « equipements » — Gestion des équipements terrain (module 58). Voir service.ts.
  * Échéancier d'expiration des données : toutes les heures hors tests (MOSOLO_EQUIPEMENTS_ECHEANCIER=off / on).
  */
+import { runScheduledJob } from '../../core/jobs.js';
 import { z } from 'zod';
 import type { RoleCode } from '@mosolo/shared';
 import { requireUser } from '../../core/auth.js';
@@ -27,9 +28,9 @@ const report = z.object({
 export const equipementsPlugin = definePlugin<EquipementService>({
   name: 'equipements',
   create: (ctx) => new EquipementService(ctx),
-  routes: (app, _ctx, svc) => {
+  routes: (app, ctx, svc) => {
     if (echeancierEnabled(process.env.MOSOLO_EQUIPEMENTS_ECHEANCIER)) {
-      const t = setInterval(() => { try { svc.expireData(); } catch { /* journalisé */ } }, 3_600_000);
+      const t = setInterval(() => { runScheduledJob(ctx, 'equipements.expiration-donnees', () => { svc.expireData(); }); }, 3_600_000);
       t.unref();
       app.addHook('onClose', async () => clearInterval(t));
     }

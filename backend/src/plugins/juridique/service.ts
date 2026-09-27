@@ -8,6 +8,7 @@
  * encore éligibles. Tout est journalisé ; rien n'est supprimé du journal ; aucune donnée financière, d'audit ou de
  * preuve n'est jamais purgée.
  */
+import { runScheduledJob } from '../../core/jobs.js';
 import type { PointJuridiqueStatut } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
@@ -297,7 +298,7 @@ export class JuridiqueService {
 
   startScheduler(ms: number): void {
     this.stopScheduler();
-    this.timer = setInterval(() => { try { this.runScheduled(); } catch { /* aperçu suivant */ } }, ms);
+    this.timer = setInterval(() => { runScheduledJob(this.ctx, 'juridique.execution-planifiee', () => { this.runScheduled(); }); }, ms);
     this.timer.unref?.();
   }
 

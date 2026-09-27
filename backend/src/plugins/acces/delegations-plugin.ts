@@ -3,6 +3,7 @@
  * conflits d'intérêts, privilèges excessifs et comptes partagés, révocation automatique à la fin d'une affectation.
  * Échéancier : toutes les heures hors tests (MOSOLO_ACCES_ECHEANCIER=off le désactive, =on le force).
  */
+import { runScheduledJob } from '../../core/jobs.js';
 import { z } from 'zod';
 import type { RoleCode } from '@mosolo/shared';
 import { requireUser } from '../../core/auth.js';
@@ -33,9 +34,9 @@ const roleCode = z.string().regex(/^R\d{2}$/);
 export const accesDelegationsPlugin = definePlugin<DelegationService>({
   name: 'acces-delegations',
   create: (ctx) => new DelegationService(ctx, () => ctx.ext.acces as AccesService),
-  routes: (app, _ctx, svc) => {
+  routes: (app, ctx, svc) => {
     if (echeancierEnabled(process.env.MOSOLO_ACCES_ECHEANCIER)) {
-      const t = setInterval(() => { try { svc.sweep(); svc.detect(); } catch { /* journalisé par l'audit */ } }, 3_600_000);
+      const t = setInterval(() => { runScheduledJob(ctx, 'acces.delegations-echeances', () => { svc.sweep(); svc.detect(); }); }, 3_600_000);
       t.unref();
       app.addHook('onClose', async () => clearInterval(t));
     }

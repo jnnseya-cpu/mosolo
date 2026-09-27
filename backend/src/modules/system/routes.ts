@@ -7,7 +7,15 @@ import type { AppContext } from '../../context.js';
 import { COMMUNES, ENTITIES } from '../../reference/kinshasa.js';
 
 export function registerSystemRoutes(app: FastifyInstance, ctx: AppContext): void {
-  app.get('/health', async () => ({ status: 'ok', service: 'kinshasa-mosolo-backend', time: ctx.clock.now().toISOString() }));
+  // Sonde de vie : toujours 200 (le processus répond) ; « degraded » quand le stockage persistant est en échec
+  // (les écritures sont alors refusées en 503 par le module « socle », les lectures restent servies).
+  app.get('/health', async () => {
+    const storage = ctx.storageHealth?.();
+    return {
+      status: storage?.degraded ? 'degraded' : 'ok', service: 'kinshasa-mosolo-backend', time: ctx.clock.now().toISOString(),
+      ...(storage ? { storage: storage.degraded ? 'EN_ECHEC' : 'OK' } : {}),
+    };
+  });
 
   app.get('/v1/meta', async () => ({
     name: 'KINSHASA MOSOLO',
