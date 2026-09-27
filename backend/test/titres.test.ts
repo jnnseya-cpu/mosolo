@@ -201,6 +201,26 @@ describe('Moteur de titres — émission adossée au paiement confirmé', () => 
     expect(() => s.svc.purchase(u, { payerTaxpayerId: DEMO.taxpayerId, channel: 'MOBILE_MONEY', items: [{ typeCode: 'TST-JOUR', subject: { plate: 'aa 3' }, place: SERVICE_PLACE }] })).toThrow(/en attente/);
   });
 
+  it('commande annulée ⇒ référence INITIE fermée (ECHOUE, OBLIGATION_NON_PAYABLE) : plus aucun encaissement possible dessus', async () => {
+    const s = await setup();
+    defineType(s.svc, 'TST-JOUR', { model: 'JOURNALIER' });
+    const u = s.ctx.users.get('u-contribuable')!;
+    const a = s.svc.purchase(u, { payerTaxpayerId: DEMO.taxpayerId, channel: 'MOBILE_MONEY', items: [{ typeCode: 'TST-JOUR', subject: { plate: 'CX1' }, place: SERVICE_PLACE }] });
+    s.svc.cancelIssuance(u, a.id);
+    const order = s.ctx.payments.byReference(a.payments[0]!.paymentReference)!;
+    expect(order.status).toBe('ECHOUE');
+    expect(order.closedReason).toBe('OBLIGATION_NON_PAYABLE');
+    // Un paiement tardif sur la référence close n'est jamais imputé : non affecté, à restituer.
+    const late = await pay(s.env, order.paymentReference);
+    expect(late.json().status).toBe('NON_AFFECTE');
+    expect(s.ctx.receipts.receipts.find((r) => r.paymentReference === order.paymentReference)).toHaveLength(0);
+    // Référence expirée sans paiement : fermée avec le motif d'expiration.
+    const b = s.svc.purchase(u, { payerTaxpayerId: DEMO.taxpayerId, channel: 'MOBILE_MONEY', items: [{ typeCode: 'TST-JOUR', subject: { plate: 'CX2' }, place: SERVICE_PLACE }] });
+    s.clock.advanceHours(49);
+    s.svc.sync();
+    expect(s.ctx.payments.byReference(b.payments[0]!.paymentReference)!.closedReason).toBe('REFERENCE_EXPIREE');
+  });
+
   it('paiement contrepassé ⇒ titre révoqué (noir) et titulaire notifié (ARB-22)', async () => {
     const s = await setup();
     defineType(s.svc, 'TST-JOUR', { model: 'JOURNALIER' });

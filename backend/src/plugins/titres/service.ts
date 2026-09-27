@@ -371,6 +371,13 @@ export class TitresService {
       this.ctx.ledger.reverse(o.ledgerEntryId, reason, { kind: 'system', id: 'systeme-titres' });
     }
     this.ctx.assessment.setStatus(obligationId, 'ANNULEE');
+    // Les références non payées de l'obligation annulée sont fermées (INITIE → ECHOUE, motif) : aucune espèce ne
+    // peut plus être reçue sur elles (point agréé, monnaie mobile). Fermeture par l'assistant commun des paiements.
+    const now = this.ctx.clock.now();
+    const closeOrder = this.ctx.payments['closeOrder'].bind(this.ctx.payments);
+    for (const order of this.ctx.payments.byObligation(obligationId).filter((x) => x.status === 'INITIE')) {
+      closeOrder(order, new Date(order.expiresAt) <= now ? 'REFERENCE_EXPIREE' : 'OBLIGATION_NON_PAYABLE', { kind: 'system', id: 'systeme-titres' });
+    }
     this.ctx.audit.append({ actor: { kind: 'system', id: 'systeme-titres' }, action: 'titres.issuance.obligation_cancelled', resourceType: 'obligation', resourceId: obligationId, details: { reason, requestedBy: by } });
   }
 
