@@ -16,6 +16,8 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
+import { AnalyseQuotidienneVisuel } from './visuels';
+import { ConstatsVisuel, constatLabel } from '../titres/visuels';
 
 interface Group { key: string; count: number; amounts: MoneyJSON[]; commissions?: MoneyJSON[]; blocked?: boolean }
 interface Limits { commissionMaxPct: string; priceBands: { offerId: string; min: MoneyJSON; max: MoneyJSON }[]; motif: string; approvedAt: string }
@@ -54,6 +56,7 @@ export function OperatorTools({ operatorId, viewer, offers, agents }: { operator
   return (
     <div className="stack-sm" aria-label="Analyse et limites de l’opérateur">
       <div className="panel-head"><h3><Icon name="chart" size={16} /> Analyse quotidienne</h3><input type="date" className="input-sm" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Jour analysé" /></div>
+      <AnalyseQuotidienneVisuel a={a} />
       <p className="small">{a.sales} vente(s) · <Amounts list={a.amounts} /> · {a.cancellations} annulation(s) · moyenne des 7 jours précédents : {a.previous7DaysAverage} ({a.trend === 'HAUSSE' ? 'en hausse' : a.trend === 'BAISSE' ? 'en baisse' : 'stable'})</p>
       <p className="small">Commissions des agents : {a.commissions.count} · <Amounts list={a.commissions.amounts} /> — {a.commissions.payer}</p>
       <p className="small muted">Par heure : {a.byHour.map((g) => `${g.key} h (${g.count})`).join(', ') || '—'} · par offre : {a.byOffer.map((g) => `${g.key} (${g.count})`).join(', ') || '—'}</p>
@@ -145,12 +148,13 @@ export function ConstatsPanel({ module }: { module: '76' | '81' }) {
         <input value={ref} onChange={(e) => setRef(e.target.value)} aria-label="Ticket de référence" placeholder="Ticket de référence" />
         <input value={holder} onChange={(e) => setHolder(e.target.value)} aria-label="Redevable identifié" placeholder="Redevable (si aucun titre)" />
       </div>
+      {list.length > 0 && <ConstatsVisuel constats={list} title={`Constats du module ${module}`} />}
       {!list.length ? <EmptyState title="Aucun constat" icon="check" /> : (
         <ul className="list-rows">{list.map((k) => (
           <li key={k.id} className="list-row">
             <div className="min0"><p className="row-title">{k.id} · {k.reason}</p><p className="small muted">{k.at}{k.duringGrace ? ' · période de grâce (pédagogique)' : ''}{k.penalty ? ` · pénalité ${k.penalty.percentage} % : ${k.penalty.amount.amount} ${k.penalty.amount.currency}` : ''}</p></div>
             <div className="row-side">
-              <StatusBadge tone={k.status === 'OUVERT' ? 'warning' : 'neutral'} label={k.status} />
+              <StatusBadge tone={k.status === 'OUVERT' ? 'warning' : 'neutral'} label={constatLabel(k.status)} />
               {k.status === 'OUVERT' && <>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => { const m = window.prompt('Motif du classement'); if (m) void p.run(`/v1/titres/constats/${k.id}/decision`, { outcome: 'CLASSE', motif: m }, 'Constat classé.'); }}>Classer</button>
                 {!k.duringGrace && <button type="button" className="btn btn-ghost btn-sm" onClick={() => { const m = window.prompt('Motif de la pénalité (pourcentage réglementaire du ticket)'); if (m) void p.run(`/v1/titres/constats/${k.id}/decision`, { outcome: 'RETENU', motif: m, referenceTypeCode: ref, ...(holder ? { holderTaxpayerId: holder } : {}) }, 'Pénalité retenue, contestable par le redevable.'); }}>Retenir la pénalité</button>}

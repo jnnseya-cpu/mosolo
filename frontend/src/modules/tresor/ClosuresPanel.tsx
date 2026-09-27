@@ -9,6 +9,7 @@ import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components
 import { Icon } from '../../components/Icon';
 import { API_URL, api, authHeaders, describeError } from '../../lib/api';
 import { hasRole, Message, shortHash, useAction, type Closures } from './shared';
+import { ClosuresVisuel, ComptabiliteVisuel } from './visuels';
 
 interface Accounting {
   rows: { paymentReference: string; paymentStatus: string; amount: MoneyJSON; receiptNumber: string | null; state: 'RAPPROCHE' | 'COMPTABILISE'; code: string | null; demoCode: boolean | null; dayClosed: boolean }[];
@@ -35,6 +36,7 @@ function ClosureBlock({ onChanged }: { onChanged?: () => void }) {
       {c.error !== null && <ErrorState error={c.error} onRetry={c.reload} />}
       {c.data && (
         <>
+          <ClosuresVisuel c={c.data} />
           <dl className="kv kv-dense">
             <div><dt>Dernière journée clôturée</dt><dd>{c.data.lastClosedDate ? fmtDate(c.data.lastClosedDate) : 'Aucune'}</dd></div>
             <div><dt>Écritures non clôturées</dt><dd>{c.data.unclosedEntries}{c.data.oldestUnclosedDate ? ` (depuis le ${fmtDate(c.data.oldestUnclosedDate)})` : ''}</dd></div>
@@ -129,6 +131,7 @@ function AccountingBlock({ onChanged }: { onChanged?: () => void }) {
       )}
       {acc.loading && <Loading />}
       {acc.error !== null && <ErrorState error={acc.error} onRetry={acc.reload} />}
+      {acc.data && <ComptabiliteVisuel rows={acc.data.rows} />}
       {acc.data && (
         <DataTable rows={acc.data.rows} rowKey={(r) => r.paymentReference} caption="État comptable"
           empty={<EmptyState title="Aucun paiement rapproché pour l’instant." />}

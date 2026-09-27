@@ -1123,3 +1123,22 @@ graphiques de la trousse), dérivé des données déjà servies, sans droit éla
 
 Détail écran par écran : `couverture-visuelle-verticales.md`. Tests : `visuels-verticales` (frontend),
 `verticales-fiche-catalogue` (backend). Captures : `docs/captures/visualisation/verticales/`.
+
+## I.26 Périmètre « trésor » rendu visuel et vérifié (27/09/2026)
+
+Trésor, recouvrement, canaux inclusifs, RakaPay et titres : chaque écran reçoit, **en plus** de l'existant (tableaux,
+formulaires et boutons conservés), une synthèse visuelle construite avec la trousse partagée, à partir des données
+réelles qu'il charge déjà (aucune route nouvelle, aucun droit élargi). Détail écran par écran :
+[`couverture-visuelle-tresor.md`](couverture-visuelle-tresor.md).
+
+| Ajout | Emplacement | Règle |
+|---|---|---|
+| Visuels du Trésor (synthèse de page, files d'exception, suspens, double validation, clôtures, comptabilisation, vérifications publiques, appariements, points agréés, grand livre, coffre, relevés) | `frontend/src/modules/tresor/visuels.tsx` | Soldes : un graphique par devise ; lignes de relevés comptées par devise |
+| Visuels du recouvrement (file, espace contribuable, recours, remises, non-valeurs, campagnes, rendement, chronologie d'un avis) | `frontend/src/modules/recouvrement/visuels.tsx` | Balance âgée par devise ; jauges « Suivi (sans cible) » |
+| Visuels des canaux (supervision du réseau, jour de caisse, « Où payer ? », enrôlement assisté, carte et avis, USSD/SVI, contestation au guichet) | `frontend/src/modules/canaux/visuels.tsx` | Indicateurs des canaux affichés aux seuls rôles d'agent (`canaux:indicators`) ; données de démonstration marquées EXEMPLE |
+| Visuels RakaPay (pilotage, coopérative, opérateurs, analyse quotidienne) et titres (catalogue, indicateurs, constats) | `frontend/src/modules/rakapay/visuels.tsx`, `frontend/src/modules/titres/visuels.tsx` | Cible du paiement numérique lue telle que servie ; estimations du recensement marquées EXEMPLE ; aucun montant de constat |
+| Appels voués au refus 403 évités (message clair à la place) | `/tresor` (balance, grand livre, coffre, analyse IA selon le rôle), `/rakapay/pilotage` (signalements), `/rakapay/operateurs` (deux circuits) | Mêmes règles que le serveur ; `useInsight` reçoit un paramètre facultatif `enabled` |
+| Libellés d'état en français | Constats (`OUVERT` → « À instruire »…) dans `ConstatsPanel` et le contrôle terrain | Noms français d'abord |
+| Débordement à 360 px corrigé | `/recouvrement/campagnes` (bouton des prorogations) | Retour à la ligne |
+
+Tests : `frontend/test/visuels-tresor.test.tsx`. Captures : `docs/captures/visualisation/tresor/`.

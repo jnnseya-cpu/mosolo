@@ -11,6 +11,7 @@ import { DataTable } from '../../components/DataTable';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { api, describeError } from '../../lib/api';
 import { hasRole, pointDecisionGuard, POINT_STATUS, POINT_TYPE_LABEL, type FourEyesRequest } from './shared';
+import { SupervisionVisuel } from './visuels';
 import './canaux.css';
 
 interface SupPoint {
@@ -106,6 +107,7 @@ export default function PointsSupervision() {
           <Kpi label="Sessions USSD / SVI" value={`${ind.data.channels.ussdSessions} / ${ind.data.channels.ivrSessions}`} sub={`${ind.data.channels.referencesIssued} référence(s) émise(s)`} />
         </div>
       )}
+      {(sup.data || ind.data) && <SupervisionVisuel points={sup.data?.points ?? null} ind={ind.data} />}
       {ind.data && <InclusionIndicators ind={ind.data} />}
       {msg && <p className="notice notice-ok">{msg}</p>}
       {err && <p className="notice notice-err" role="alert">{err}</p>}

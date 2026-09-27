@@ -14,6 +14,7 @@ import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { useApp } from '../../context';
 import { hasRole, Message, useAction } from './shared';
+import { PointsAgreesVisuel } from './visuels';
 import './tresor.css';
 
 interface Contract { id: string; pointId: string; reference: string; sha256: string; status: string; proposedBy: string; terms: { commission: { basis: string; value: string; currency?: string }; penalty: { basis: string; value: string; currency?: string; capPct?: string } } }
@@ -71,6 +72,7 @@ export function PointsAgreesView({ board, canWrite, canPropose, onChanged }: { b
   const decide = (path: string, id: string, approve: boolean) => void run(path, { approve, motif: motif[id] }, approve ? 'Décision enregistrée.' : 'Écarté.', onChanged);
   return (
     <>
+      <PointsAgreesVisuel board={board} />
       <p className="callout callout-info">{board.notice}</p>
       <Message msg={msg} />
       <section className="panel" aria-labelledby="pa-points"><h2 className="panel-title" id="pa-points">Contrats des points</h2>

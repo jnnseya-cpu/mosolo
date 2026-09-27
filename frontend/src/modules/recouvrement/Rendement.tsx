@@ -14,6 +14,7 @@ import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { useApp } from '../../context';
 import { hasRole, Message, useAction } from '../tresor/shared';
+import { RendementVisuel } from './visuels';
 import './recouvrement.css';
 
 type Totals = Record<string, string>;
@@ -74,6 +75,7 @@ export function RendementView({ board, priorities, roles, onChanged }: { board: 
         <div className="kpi"><p className="kpi-label caps-sm">Dossiers chiffrés</p><p className="kpi-value">{s.costedCases} / {s.cases}</p></div>
       </div>
       <p className="callout callout-info">{s.detail}</p>
+      <RendementVisuel summary={s} guarantees={board.guarantees} priorities={priorities?.items ?? []} />
       <Message msg={msg} />
       {priorities && (
         <section className="panel" aria-labelledby="rd-prio"><h2 className="panel-title" id="rd-prio">File priorisée par rendement net estimé</h2>

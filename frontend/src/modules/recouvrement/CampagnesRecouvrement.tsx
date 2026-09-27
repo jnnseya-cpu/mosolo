@@ -9,6 +9,7 @@ import { useApp } from '../../context';
 import { StatusBadge, type Tone } from '../../components/StatusBadge';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { useApi } from '../../hooks/useApi';
+import { CampagnesRecouvrementVisuel } from './visuels';
 import { api, describeError } from '../../lib/api';
 import { ReasonAction } from '../fiscal/common';
 
@@ -197,6 +198,7 @@ export default function CampagnesRecouvrement() {
       <p className="small muted">Segmentation équitable du § 21.2 ; la campagne commence par un test comparé à un groupe témoin, est mesurée (taux de régularisation, coût par franc récupéré) et peut être arrêtée : l’arrêt est proposé par le système, décidé par une personne.</p>
       {q.loading && <Loading />}
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
+      {q.data && <CampagnesRecouvrementVisuel campaigns={q.data} />}
       {q.data && q.data.length === 0 && <EmptyState title="Aucune campagne de recouvrement." />}
       <ul className="stack">{(q.data ?? []).map((c) => <RecoveryCampaignCard key={c.id} c={c} onChanged={q.reload} />)}</ul>
       {roles.some((r) => r === 'R06' || r === 'R07') && (creating

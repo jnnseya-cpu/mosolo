@@ -42,6 +42,8 @@ export function TimelineStrip(p: TimelineStripProps) {
   };
   // Sans événement (bornes absentes), aucune graduation : l'état vide de la trousse s'affiche (correctif 27/09/2026 : plus d'erreur « Invalid time value »).
   const ticks = Number.isFinite(t0) && Number.isFinite(t1) ? [0, 0.5, 1].map((f) => new Date(t0 + f * (span - DAY)).toISOString().slice(0, 10)) : [];
+  // Liste vide (aucune borne) : pas de graduation — sinon new Date(NaN).toISOString() lève RangeError et l'état vide plante.
+  const ticks = Number.isFinite(t0) && Number.isFinite(span) ? [0, 0.5, 1].map((f) => new Date(t0 + f * (span - DAY)).toISOString().slice(0, 10)) : [];
   const table = { columns: ['Date (Kinshasa)', 'Catégorie', 'Événement'], rows: events.map((e) => [e.day, e.category, e.label]) };
   return (
     <VizFrame frame={p} table={table} legend={cats.length >= 2 ? cats.map((c) => ({ label: c, color: colorOf(c) })) : undefined} empty={events.length === 0} role="group">

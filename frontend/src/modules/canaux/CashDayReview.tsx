@@ -15,6 +15,8 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { api, describeError } from '../../lib/api';
 import { DAY_STATUS, hasRole, kinshasaToday } from './shared';
+import { CaisseVisuel, RelevesVisuel, SupervisionVisuel } from './visuels';
+import { ChartGrid } from '../../components/viz';
 import './canaux.css';
 
 type Line = { accountAlias: string; amount: MoneyJSON };
@@ -125,7 +127,7 @@ export default function CashDayReview() {
   const [params, setParams] = useSearchParams();
   const pointId = params.get('point') ?? '';
   const day = params.get('day') ?? kinshasaToday();
-  const pts = useApi(() => api<{ points: { id: string; name: string }[] }>('/v1/payment-points'), [user?.id]);
+  const pts = useApi(() => api<{ points: { id: string; name: string; type: string; commune: string; status: string; collectionsToday: number; openExceptions: number }[] }>('/v1/payment-points'), [user?.id]);
   const cash = useApi(pointId ? () => api<ReviewCashDay>(`/v1/payment-points/${pointId}/cash-days/${day}`) : null, [user?.id, pointId, day]);
   // Relevés importés (lecture du rapprochement : R17, R18, R22) ; relevés ayant encore des lignes non appariées d'abord.
   const canRead = hasRole(user?.roles, 'R17', 'R18', 'R22');
@@ -158,6 +160,9 @@ export default function CashDayReview() {
       {msg && <p className="notice notice-ok">{msg}</p>}
       {err && <p className="notice notice-err" role="alert">{err}</p>}
       {!pointId && <EmptyState title="Choisissez un point et un jour de caisse" icon="store" />}
+      {!pointId && pts.data && <SupervisionVisuel points={pts.data.points} ind={null} />}
+      {cash.data && <CaisseVisuel cd={cash.data} />}
+      {statements && statements.length > 0 && <ChartGrid min={300}><RelevesVisuel statements={statements} /></ChartGrid>}
       {cash.loading && <Loading />}
       {cash.error !== null && <ErrorState error={cash.error} onRetry={cash.reload} />}
       {cash.data && (

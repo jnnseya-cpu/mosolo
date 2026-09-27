@@ -5,6 +5,8 @@ import { PageHead } from '../../components/Shell';
 import { Icon } from '../../components/Icon';
 import { ErrorState, Loading } from '../../components/States';
 import { api } from '../../lib/api';
+import { CartesEtat, IndicateursAgent } from './visuels';
+import { ChartGrid, KpiTile } from '../../components/viz';
 import './canaux.css';
 
 interface Result { status: 'CARTE_VALIDE' | 'CARTE_BLOQUEE' | 'CARTE_REVOQUEE' | 'INVALIDE'; message: string; commune?: string; issuedOn?: string; verifiedAt: string }
@@ -39,6 +41,13 @@ export default function CardVerify() {
         </div>
       )}
       <p className="small muted cx-mt cx-inl"><Icon name="lock" size={14} /> Vérifications limitées en fréquence contre l’énumération.</p>
+      {/* Agents seulement (canaux:indicators) : état du registre des cartes et vérifications ; le public ne voit que le verdict. */}
+      <IndicateursAgent>{(ind) => (
+        <ChartGrid min={260}>
+          <CartesEtat ind={ind} />
+          <KpiTile label="Vérifications par code court" value={ind.verification.total} state={{ label: `${ind.verification.suspectedEnumeration} tentative(s) suspecte(s)`, tone: ind.verification.suspectedEnumeration ? 'critical' : 'good' }} />
+        </ChartGrid>
+      )}</IndicateursAgent>
     </div>
   );
 }

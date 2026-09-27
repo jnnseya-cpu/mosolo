@@ -15,3 +15,7 @@ if (!window.matchMedia) {
   })) as unknown as typeof window.matchMedia;
 }
 
+// jsdom n'a pas ResizeObserver (trousse de visualisation, Recharts) : bouchon inerte, sans effet sur les tests existants.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
+}

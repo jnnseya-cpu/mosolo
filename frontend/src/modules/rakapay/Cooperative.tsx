@@ -17,6 +17,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError, newIdempotencyKey } from '../../lib/api';
 import { ISSUANCE_LABEL, type Issuance } from '../titres/common';
 import '../titres/titres.css';
+import { CooperativeVisuel } from './visuels';
 import './rakapay.css';
 
 type Duration = 'JOUR' | 'SEMAINE' | 'MOIS';
@@ -158,6 +159,7 @@ export default function Cooperative() {
             <div className="kpi"><p className="kpi-label">Pas en règle</p><p className="kpi-value">{v.compliance.red}</p><div className="kpi-foot"><span className="kpi-sub">aucun pass valide</span></div></div>
             <div className="kpi"><p className="kpi-label">À renouveler</p><p className="kpi-value">{v.renewalAlerts.length}</p><div className="kpi-foot"><span className="kpi-sub">phase ambre</span></div></div>
           </div>
+          <CooperativeVisuel v={v} />
           <div className="callout callout-info"><Icon name="info" size={18} /><p>{v.limits}</p></div>
 
           <div className="rkx-grid">

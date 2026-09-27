@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { StatusBadge, type Tone } from '../../components/StatusBadge';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
+import { ImportsParEtat } from './visuels';
 import { api } from '../../lib/api';
 import { hasRole, Message, shortHash, useAction } from './shared';
 import './tresor.css';
@@ -67,6 +68,7 @@ export function ImportsRelevesView({ imports, indicators, suspense, userId, canP
           <div className="kpi"><p className="kpi-label">Imports à valider</p><p className="kpi-value">{indicators?.imports.enAttente ?? '—'}</p>
             <p className="small muted">{indicators ? `${indicators.imports.valides} validé(s), ${indicators.imports.rejetes} rejeté(s), ${indicators.imports.integriteKo} en échec d’intégrité` : ''}</p></div>
         </div>
+        <ImportsParEtat imports={imports} framed={false} />
       </section>
       <Message msg={msg} />
       {canPropose && (

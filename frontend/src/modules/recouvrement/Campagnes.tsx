@@ -12,6 +12,8 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { ReasonAction } from '../fiscal/common';
 import CampagnesRecouvrement from './CampagnesRecouvrement';
+import { CampagnesVisuel } from './visuels';
+import './recouvrement.css';
 
 interface Simulation {
   at: string; targets: number; taxpayers: number; expectedNotices: number; totalMessages: number; unreachable: number;
@@ -126,7 +128,7 @@ function Prorogations() {
           </div>
           <div className="field"><label className="label" htmlFor="pr-rs">Motif</label><input id="pr-rs" required minLength={3} value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} /></div>
           {err && <p className="notice notice-err" role="alert">{err}</p>}
-          <button type="submit" className="btn btn-primary btn-sm">Proposer (enregistrement par une seconde personne)</button>
+          <button type="submit" className="btn btn-primary btn-sm rc-btn-wrap">Proposer (enregistrement par une seconde personne)</button>
         </form>
       )}
     </section>
@@ -144,6 +146,7 @@ export default function Campagnes() {
         lead="Le calendrier commande : chaque entité planifie ses campagnes (pré-remplissage, relances), simule avant de lancer — sur les seules données du registre — puis une seconde personne décide du lancement. Une campagne peut être arrêtée si son coût, ses erreurs ou son impact social sont disproportionnés." />
       {(list.loading || cal.loading) && <Loading />}
       {list.error !== null && <ErrorState error={list.error} onRetry={reload} />}
+      {list.data && cal.data && <CampagnesVisuel campaigns={list.data} calendar={cal.data} />}
       {cal.data && (
         <section className="stack-sm">
           <h2 className="h-sub">Calendrier par entité</h2>

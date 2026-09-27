@@ -13,6 +13,7 @@ import { Icon } from '../../components/Icon';
 import { MoneyText } from '../../components/MoneyText';
 import { StatusBadge } from '../../components/StatusBadge';
 import { useApi } from '../../hooks/useApi';
+import { GrandLivreVisuel } from './visuels';
 import { api, describeError } from '../../lib/api';
 
 export interface ChainCheck { valid: boolean; entries: number; headHash: string | null; brokenAt?: string; reason?: string }
@@ -65,6 +66,7 @@ export function GrandLivrePanel() {
         <div className="kpi"><span className="kpi-label">Journée non clôturée la plus ancienne</span><span className="kpi-value">{c.backlog.oldestUnclosedDate ?? 'aucune'}</span><span className="kpi-sub">{c.backlog.hoursSinceEnd ? `${c.backlog.hoursSinceEnd} h depuis sa fin` : 'à jour'}</span></div>
         <div className="kpi"><span className="kpi-label">Comptes d’attente ouverts</span><span className="kpi-value">{d.suspense.open}</span><span className="kpi-sub">plus ancien : {d.suspense.oldestDays} j</span></div>
       </div>
+      <GrandLivreVisuel d={d} />
       {!d.chain.valid && <p className="notice notice-err" role="alert">Rupture du scellement à l’écriture {d.chain.brokenAt} : {CHAIN_REASON[d.chain.reason ?? ''] ?? d.chain.reason}. Aucune correction automatique — l’audit est alerté.</p>}
       {check && (
         <p className={check.valid && check.closures.valid ? 'notice notice-ok' : 'notice notice-err'} role="status">

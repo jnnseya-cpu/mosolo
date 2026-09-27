@@ -3,6 +3,8 @@ import { PageHead } from '../../components/Shell';
 import { Icon } from '../../components/Icon';
 import { ErrorState, ExampleNotice } from '../../components/States';
 import { api } from '../../lib/api';
+import { CanauxUsage, IndicateursAgent } from './visuels';
+import { ChartGrid, KpiGrid, KpiTile } from '../../components/viz';
 import './canaux.css';
 
 interface ScreenOut {
@@ -97,6 +99,12 @@ export default function UssdSimulator() {
     <div className="page page-wide">
       <PageHead eyebrow="Canaux sans Internet — modules 6 et 64" title="Simulateur USSD et SVI" lead="Consulter, payer, vérifier sans smartphone ni Internet : menus numérotés courts, code secret, aucune donnée sensible à l’écran. Gratuit pour l’appelant (sous réserve des conventions opérateurs, J29)." />
       <ExampleNotice text="Simulateur de la passerelle opérateur. Code court et numéro vert [À RACCORDER — convention opérateur requise] ; contribuables et montants fictifs (règle de démonstration)." />
+      <KpiGrid max={4} label="Session en cours">
+        <KpiTile label="Canal" value={channel === 'USSD' ? 'USSD' : 'Serveur vocal'} state={{ label: screen && !screen.end ? 'En ligne' : screen?.end ? 'Session terminée' : 'Prêt', tone: screen && !screen.end ? 'good' : 'neutral' }} />
+        <KpiTile label="Messages de MOSOLO" value={transcript.filter((t) => t.who === 'mosolo').length} />
+        <KpiTile label="Vos saisies" value={transcript.filter((t) => t.who === 'moi').length} sub="code secret jamais affiché" />
+        <KpiTile label="Choix proposés" value={screen?.options.length ?? 0} />
+      </KpiGrid>
       <div className="cx-sim">
         <section className="cx-phone-col" aria-label="Téléphone simulé">
           <div className="cx-phone">
@@ -176,6 +184,8 @@ export default function UssdSimulator() {
           </section>
         </div>
       </div>
+      {/* Usage réel des canaux sans Internet : visible des agents (canaux:indicators), jamais du public. */}
+      <IndicateursAgent>{(ind) => <ChartGrid min={280}><CanauxUsage ind={ind} /></ChartGrid>}</IndicateursAgent>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
 import { hasRole, WRITE_OFF_STATUS, type Arrear, type WriteOff } from './types';
 import { Msg, useAction } from './actions';
+import { NonValeursVisuel } from './visuels';
 import './recouvrement.css';
 
 async function load() {
@@ -124,6 +125,7 @@ export default function NonValeurs() {
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
       {d && (
         <>
+          <NonValeursVisuel writeOffs={d.writeOffs} />
           {hasRole(roles, 'R20') && <ProposeForm arrears={d.arrears} onDone={q.reload} />}
           <div className="seg seg-wrap" role="group" aria-label="Statut">
             {(['PROPOSEE', 'ADMISE', 'REJETEE'] as const).map((s) => (
