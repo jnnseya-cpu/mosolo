@@ -21,6 +21,11 @@
  *  - Clé 65 % Ville / 35 % Groupe Nseya (§ 11C.6) : conservée comme clé ALTERNATIVE, statut ACTE_REQUIS, simulation
  *    seulement, à côté de la clé du § 37A (ARB-07 inchangé : elle exige une décision et un acte distincts).
  *  - Chiffres du § 11C.1 et scénario prudent du § 11C.5 : affichés comme données source [À VÉRIFIER], jamais calculés.
+ *
+ * Décision du maître d'ouvrage (27/09/2026, « Exécution automatique après acte ») — ajoutée PAR-DESSUS ce circuit :
+ * UNE FOIS l'arrêté enregistré (`avia-cadre.ts`), la facturation ou la compensation des écarts mensuels est exécutée
+ * automatiquement par `avia-auto.ts` (planificateur mensuel, idempotent, audité, procédure contradictoire maintenue
+ * après l'avis). Avant l'arrêté, ce circuit reste inchangé : proposition, décision et facturation humaines ci-dessous.
  */
 import { isRuleExecutable } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';

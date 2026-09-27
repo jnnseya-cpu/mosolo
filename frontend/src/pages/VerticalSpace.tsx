@@ -20,6 +20,8 @@ import {
 import RakaPay from './RakaPay';
 import '../modules/verticales/verticales.css';
 import { PrintProofLink } from '../modules/preuves/PrintLink';
+import { AviaAutoAirline } from '../modules/verticales/AviaAuto';
+import { ParcoursPanel } from '../modules/verticales/Parcours';
 
 export { OBLIGATION_TONE as DUE_TONE };
 
@@ -407,6 +409,7 @@ function VerticalSpaceInner({ slug }: { slug: string }) {
     <div className="page page-wide">
       <Hero v={v} />
       <ExampleNotice text="Démonstration : objets et références fictifs. Les montants proviennent de règles fictives de démonstration, non opposables." />
+      {v.parcours && <ParcoursPanel parcours={v.parcours} />}
       {v.managedBy && (
         <div className="callout callout-info"><Icon name="info" size={18} /><p>Les démarches et titres de ce service sont servis par son module dédié. Vos objets et obligations rattachés apparaissent ci-dessous depuis votre compte unique.</p></div>
       )}
@@ -450,6 +453,7 @@ function VerticalSpaceInner({ slug }: { slug: string }) {
               {s.stalls && s.stalls.length > 0 && <Stalls stalls={s.stalls} onChange={space.reload} />}
               {slug === 'evenements' && <Ticketing objects={objects} ticketing={s.ticketing ?? []} onChange={space.reload} />}
               {slug === 'avia' && <AviaPanel objects={objects} />}
+              {slug === 'avia' && <AviaAutoAirline />}
 
               <section className="panel" aria-labelledby="vx-due">
                 <div className="panel-head"><h2 className="panel-title" id="vx-due">Mes obligations</h2><span className="count">{s.obligations.length}</span></div>

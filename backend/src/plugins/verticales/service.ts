@@ -36,6 +36,7 @@ import { SecteursService } from './secteurs.js';
 import { P } from './policies.js';
 import { PARCOURS } from './parcours.js';
 import type { ActifsService } from './actifs.js';
+import type { AviaAutoService } from './avia-auto.js';
 import type { EnvironnementService } from './environnement.js';
 import type { EntreprisesService } from './entreprises.js';
 import { distanceM, presenceOk } from '../parking/field.js';
@@ -239,6 +240,8 @@ export class VerticalesService {
   environnement?: EnvironnementService;
   /** Partie V — Entreprises (détermination des obligations d'un établissement) : branché par le plugin. */
   entreprises?: EntreprisesService;
+  /** AVIA — exécution automatique des écarts mensuels après arrêté (modules 62, 78) : branchée par le plugin. */
+  aviaAuto?: AviaAutoService;
 
   constructor(readonly ctx: AppContext) {
     this.avia = new AviaService(ctx);

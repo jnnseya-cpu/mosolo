@@ -18,6 +18,7 @@ import { GpsQualityLine } from '../../components/GpsQuality';
 import { usePreciseLocation, withPresence } from '../../lib/geo';
 import { CASE_TONE, fetchCatalogue, OBLIGATION_LABEL, TITLE_LABEL, TITLE_TONE, verifyPath, type AviaDeclaration, type CaseView, type VObligation } from '../../verticals/catalogue';
 import { AviaCadreSection, AviaIfaControlSection, AviaRrhSection } from './AviaRrh';
+import { AviaAutoSection } from './AviaAuto';
 import './verticales.css';
 
 type Tab = 'demarches' | 'plaques' | 'avia' | 'telecom' | 'indicateurs';
@@ -290,12 +291,13 @@ function PlatesTab() {
 
 // ------------------------------------------------------------------------------------------------ AVIA
 
-type AviaSub = 'declarations' | 'rrh' | 'ifa' | 'cadre';
+type AviaSub = 'declarations' | 'rrh' | 'ifa' | 'cadre' | 'auto';
 const AVIA_SUBS: { id: AviaSub; label: string; icon: string }[] = [
   { id: 'declarations', label: 'Déclarations mensuelles', icon: 'file' },
   { id: 'rrh', label: 'Pôle de rapprochement des recettes (RRH)', icon: 'table' },
   { id: 'ifa', label: 'Contrôle IFA (QR)', icon: 'qr' },
   { id: 'cadre', label: 'Arrêté, mesures et clés', icon: 'scale' },
+  { id: 'auto', label: 'Écarts mensuels : exécution après arrêté', icon: 'clock' },
 ];
 
 /** AVIA : déclarations mensuelles (circuit d'origine) + pôle de rapprochement, contrôle IFA et cadre (§ 11C). */
@@ -310,6 +312,7 @@ function AviaTab() {
       {sub === 'rrh' && <AviaRrhSection />}
       {sub === 'ifa' && <AviaIfaControlSection />}
       {sub === 'cadre' && <AviaCadreSection />}
+      {sub === 'auto' && <AviaAutoSection />}
     </div>
   );
 }

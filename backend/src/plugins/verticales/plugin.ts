@@ -6,6 +6,8 @@
  */
 import { definePlugin } from '../types.js';
 import { ActifsService, registerActifsPolicies } from './actifs.js';
+import { AviaAutoService } from './avia-auto.js';
+import { aviaAutoSchedulerEnabled, registerAviaAutoRoutes } from './avia-auto-routes.js';
 import { CalcuControlService } from './calcu-controle.js';
 import { registerCalcuControlRoutes } from './calcu-routes.js';
 import { EntreprisesService, registerEntreprisesPolicies } from './entreprises.js';
@@ -29,6 +31,10 @@ export const verticalesPlugin = definePlugin<VerticalesService>({
     svc.actifs = new ActifsService(ctx, svc);
     svc.environnement = new EnvironnementService(ctx, svc);
     svc.entreprises = new EntreprisesService(ctx, svc);
+    // AVIA (modules 62, 78) : facturation ou compensation automatique des écarts mensuels APRÈS l'arrêté (décision du
+    // maître d'ouvrage) ; avant l'arrêté, proposition seulement. Planificateur mensuel (vérification horaire).
+    svc.aviaAuto = new AviaAutoService(ctx, svc.avia, svc.aviaRrh, svc.aviaCadre);
+    if (aviaAutoSchedulerEnabled(process.env)) svc.aviaAuto.startScheduler();
     return svc;
   },
   seed: (ctx, svc) => {
@@ -39,6 +45,8 @@ export const verticalesPlugin = definePlugin<VerticalesService>({
     registerVerticalRoutes(app, ctx, svc);
     registerCalcuControlRoutes(app, svc.calcu.controle!);
     registerPartie5Routes(app, { actifs: svc.actifs!, environnement: svc.environnement!, entreprises: svc.entreprises! });
+    registerAviaAutoRoutes(app, svc.aviaAuto!);
+    app.addHook('onClose', async () => svc.aviaAuto?.stopScheduler());
   },
 });
 

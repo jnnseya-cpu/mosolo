@@ -422,7 +422,7 @@ export const OBJECT_TYPE_VERTICAL: Record<string, string> = {
   ETABLISSEMENT: 'entreprises', ETAL: 'marches', EMPRISE: 'marches', SITE_TELECOM: 'telecom', METTEUR_EN_MARCHE: 'environnement',
   POINT_COLLECTE: 'environnement', EMBARCATION: 'ports', EVENEMENT: 'evenements', CHANTIER: 'construction', AERONEF: 'avia',
   EMPRISE_TEMPORAIRE: 'domaine-public', EMPRISE_PERMANENTE: 'domaine-public', CARRIERE: 'construction', CONCESSION_FORESTIERE: 'environnement',
-  CONCESSION_ACTIF: 'actifs',
+  CONCESSION_ACTIF: 'actifs', EXPLOITATION_AERIENNE: 'avia',
 };
 
 /** Position indicative (centre approximatif) de chaque commune — à préciser sur le terrain. */
