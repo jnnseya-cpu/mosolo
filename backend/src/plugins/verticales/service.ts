@@ -37,6 +37,7 @@ import { P } from './policies.js';
 import { PARCOURS } from './parcours.js';
 import type { ActifsService } from './actifs.js';
 import type { AviaAutoService } from './avia-auto.js';
+import type { NfiuService } from './nfiu.js';
 import type { EnvironnementService } from './environnement.js';
 import type { EntreprisesService } from './entreprises.js';
 import { distanceM, presenceOk } from '../parking/field.js';
@@ -242,6 +243,8 @@ export class VerticalesService {
   entreprises?: EntreprisesService;
   /** AVIA — exécution automatique des écarts mensuels après arrêté (modules 62, 78) : branchée par le plugin. */
   aviaAuto?: AviaAutoService;
+  /** Module 79 — habilitation NFIU, situation complète, rapports journaliers des agents : branché par le plugin. */
+  nfiu?: NfiuService;
 
   constructor(readonly ctx: AppContext) {
     this.avia = new AviaService(ctx);
@@ -901,9 +904,12 @@ export class VerticalesService {
       stallTitle: stall ? this.currentTitle(stall.id) : null,
       notice: 'Lecture seule : aucun montant ne peut être modifié, négocié ou estimé sur place. Aucun encaissement par l’agent.',
     };
-    if (access === 'minimal') return base;
+    // Module 79 (décision du maître d'ouvrage) : l'agent HABILITÉ NFIU, comme le contrôleur, voit la situation complète
+    // d'une plaque fiscale immobilière (lecture seule) ; l'agent non habilité garde l'accès minimal, inchangé.
+    const full = p.kind === 'NFIU' && this.nfiu?.canSeeFull(user, p.commune) ? this.nfiu.fullSituation(user, p) : null;
+    if (access === 'minimal' && !full) return base;
     const obligations = this.ctx.assessment.obligations.find((ob) => ob.objectId === o.id && ob.status !== 'ANNULEE').map((ob) => this.obligationView(ob));
-    return { ...base, obligations };
+    return { ...base, access: 'full' as const, obligations, ...(full ? { situationComplete: full } : {}) };
   }
 
   /** Guichet / banque sans smartphone : obligations payables d'un objet sur présentation de la plaque. */
@@ -927,6 +933,9 @@ export class VerticalesService {
       platesReplaced: issued.filter((p) => p.issuedBy === id && this.plates.findOne((x) => x.replacedBy === p.code)).length,
       scans: scans.filter((s) => s.by === id).length,
       communes: [...new Set(issued.filter((p) => p.issuedBy === id).map((p) => p.commune))],
+      // Module 79 : situations révélées au scan et présence attestée (sans montant).
+      bySituation: (['red', 'amber', 'green', 'grey'] as const).reduce((m, c) => ({ ...m, [c]: scans.filter((s) => s.by === id && (s.situation ?? 'grey') === c).length }), {} as Record<'red' | 'amber' | 'green' | 'grey', number>),
+      presenceVerified: scans.filter((s) => s.by === id && s.presenceVerified).length,
     }));
     return { date, generatedAt: this.now().toISOString(), totals: { platesIssued: issued.length, scans: scans.length }, agents: rows };
   }

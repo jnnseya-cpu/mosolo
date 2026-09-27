@@ -13,6 +13,8 @@ import { registerCalcuControlRoutes } from './calcu-routes.js';
 import { EntreprisesService, registerEntreprisesPolicies } from './entreprises.js';
 import { EnvironnementService, registerEnvironnementPolicies } from './environnement.js';
 import { registerPartie5Routes } from './partie5-routes.js';
+import { NfiuService, nfiuReportSchedulerEnabled, registerNfiuPolicies } from './nfiu.js';
+import { registerNfiuRoutes } from './nfiu-routes.js';
 import { registerVerticalPolicies } from './policies.js';
 import { registerVerticalRoutes } from './routes.js';
 import { seedActifs, seedVerticales } from './seed.js';
@@ -25,6 +27,7 @@ export const verticalesPlugin = definePlugin<VerticalesService>({
     registerActifsPolicies();
     registerEnvironnementPolicies();
     registerEntreprisesPolicies();
+    registerNfiuPolicies();
     const svc = new VerticalesService(ctx);
     // CALCU — compléments du § 27A (registre des fournisseurs, conformité budgétaire, organe de contrôle).
     svc.calcu.controle = new CalcuControlService(ctx, svc.calcu);
@@ -35,6 +38,9 @@ export const verticalesPlugin = definePlugin<VerticalesService>({
     // maître d'ouvrage) ; avant l'arrêté, proposition seulement. Planificateur mensuel (vérification horaire).
     svc.aviaAuto = new AviaAutoService(ctx, svc.avia, svc.aviaRrh, svc.aviaCadre);
     if (aviaAutoSchedulerEnabled(process.env)) svc.aviaAuto.startScheduler();
+    // Module 79 : habilitation NFIU, situation complète pour l'agent habilité, rapports journaliers automatiques.
+    svc.nfiu = new NfiuService(ctx, svc);
+    if (nfiuReportSchedulerEnabled(process.env)) svc.nfiu.startScheduler();
     return svc;
   },
   seed: (ctx, svc) => {
@@ -46,7 +52,8 @@ export const verticalesPlugin = definePlugin<VerticalesService>({
     registerCalcuControlRoutes(app, svc.calcu.controle!);
     registerPartie5Routes(app, { actifs: svc.actifs!, environnement: svc.environnement!, entreprises: svc.entreprises! });
     registerAviaAutoRoutes(app, svc.aviaAuto!);
-    app.addHook('onClose', async () => svc.aviaAuto?.stopScheduler());
+    registerNfiuRoutes(app, svc);
+    app.addHook('onClose', async () => { svc.aviaAuto?.stopScheduler(); svc.nfiu?.stopScheduler(); });
   },
 });
 

@@ -19,6 +19,7 @@ import { usePreciseLocation, withPresence } from '../../lib/geo';
 import { CASE_TONE, fetchCatalogue, OBLIGATION_LABEL, TITLE_LABEL, TITLE_TONE, verifyPath, type AviaDeclaration, type CaseView, type VObligation } from '../../verticals/catalogue';
 import { AviaCadreSection, AviaIfaControlSection, AviaRrhSection } from './AviaRrh';
 import { AviaAutoSection } from './AviaAuto';
+import { NfiuHabilitations, NfiuRapports, NfiuSituation, type NfiuFullSituation } from './Nfiu';
 import './verticales.css';
 
 type Tab = 'demarches' | 'plaques' | 'avia' | 'telecom' | 'indicateurs';
@@ -206,6 +207,8 @@ interface ScanResult {
   stallTitle: { status: string; statusLabel: string; validFrom?: string | null; validUntil: string | null } | null; lastFinding: { date: string; result: string } | null;
   obligations?: VObligation[]; notice: string;
   penalitesImpayees?: OverduePenaltiesData;
+  /** Module 79 : situation complète pour l'agent habilité NFIU (lecture seule). */
+  situationComplete?: NfiuFullSituation;
 }
 
 function PlatesTab() {
@@ -261,6 +264,7 @@ function PlatesTab() {
             <p className="hint"><Icon name="lock" size={13} /> {scan.notice}</p>
             {(scan.situation.color === 'red' || scan.situation.color === 'amber') && <AssistedPay objectId={scan.object.id} title="Faire payer ce bien maintenant (numérique)" />}
             <OverduePenalties data={scan.penalitesImpayees} />
+            {scan.situationComplete && <NfiuSituation s={scan.situationComplete} />}
           </section>
         )}
         {counter && (
@@ -285,6 +289,8 @@ function PlatesTab() {
         )}
         <p className="hint">Rapport automatique, sans montant : aucun agent ne peut modifier, négocier ni estimer un montant.</p>
       </section>
+      <NfiuRapports />
+      {user?.roles.some((r) => r === 'R06' || r === 'R07') && <NfiuHabilitations />}
     </div>
   );
 }
