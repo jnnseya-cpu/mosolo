@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1531 routes** dans 49 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1532 routes** dans 49 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -12,7 +12,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1531 routes** dans 4
 | extension citoyen | 60 |
 | extension communication | 13 |
 | extension decision | 30 |
-| extension documents | 16 |
+| extension documents | 17 |
 | extension equipements | 11 |
 | extension fiscal | 91 |
 | extension ia | 40 |
@@ -389,6 +389,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1531 routes** dans 4
 | POST | `/v1/documents/filigranes/verification` |
 | GET | `/v1/documents/indicateurs` |
 | POST | `/v1/documents/integrite/verification` |
+| GET | `/v1/documents/purges` |
 | POST | `/v1/documents/purges` |
 | POST | `/v1/documents/purges/:id/decision` |
 | GET | `/v1/documents/purges/apercu` |

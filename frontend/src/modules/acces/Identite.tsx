@@ -13,6 +13,7 @@ import { Icon } from '../../components/Icon';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { hasRole, PROOF_LABEL, REASON_LABEL, Status, Tabs, useAction, type Proof } from './common';
+import { IdentiteVisuels } from './visuels';
 import './acces.css';
 
 type Tab = 'pieces' | 'doublons' | 'fusions' | 'assiste';
@@ -109,6 +110,7 @@ export default function Identite() {
         ...(canDup ? [['doublons', 'Doublons probables', dups.data?.items.filter((c) => !c.merge).length] as [Tab, string, number?], ['fusions', 'Fusions', dups.data?.merges.filter((m) => ['PROPOSEE', 'VERIFIEE'].includes(m.status)).length] as [Tab, string, number?]] : []),
         ...(hasRole(roles, 'R10', 'R12') ? [['assiste', 'Enrôlement assisté'] as [Tab, string, number?]] : []),
       ]} />
+      {(canReview || canDup) && <IdentiteVisuels proofs={canReview ? proofs.data?.items ?? null : null} candidates={canDup ? dups.data?.items ?? null : null} merges={canDup ? dups.data?.merges ?? null : null} />}
       {!canReview && !canDup && !hasRole(roles, 'R10', 'R12') && <EmptyState title="Espace réservé au registre d’identité (guichet, contrôle, supervision)" icon="lock" />}
 
       {tab === 'pieces' && canReview && (

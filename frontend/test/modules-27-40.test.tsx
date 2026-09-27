@@ -130,7 +130,7 @@ describe('Modules 27 à 40 — écrans', () => {
     ] }] };
     renderApp(<ModulesTable data={data} />);
     expect(screen.getByText('12')).toBeTruthy();
-    expect(screen.getByText('Non mesuré')).toBeTruthy();
+    expect(screen.getAllByText('Non mesuré').length).toBeGreaterThan(0);
   });
 
   it('module 40 : suspension proposée visible au responsable sécurité, exécution motivée', async () => {

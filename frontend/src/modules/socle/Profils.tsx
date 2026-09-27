@@ -14,6 +14,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError, safeGet, safeSet } from '../../lib/api';
 import { ReasonAction } from '../fiscal/common';
 import './socle.css';
+import { ProfilsVisuels } from './visuels';
 
 interface Space { taxpayerId: string; iuc: string; name: string; kind: string; type: 'PERSONNEL' | 'ORGANISATION' | 'MANDANT' }
 interface Spaces { personal: Space | null; spaces: Space[]; notice: string }
@@ -76,10 +77,12 @@ function AgentQueue() {
   if (q.loading) return <Loading />;
   if (q.error) return <ErrorState error={q.error} onRetry={q.reload} />;
   const items = (q.data?.items ?? []).filter((r) => r.status === 'EN_INSTRUCTION' || r.status === 'COMPLEMENT_DEMANDE');
+  const all = q.data?.items ?? [];
   const decide = (id: string, decision: string) => (reason: string) => api(`/v1/enrolement/roles/${id}/instruction`, { method: 'POST', body: { decision, reason } }).then(q.reload);
   return (
     <section className="stack-sm">
       <h2 className="h-sub">Rôles déclarés à instruire</h2>
+      <ProfilsVisuels roles={all} statuts={ROLE_STATUS} titre="Déclarations de rôle par état (file d’instruction)" />
       {items.length === 0 && <EmptyState title="Aucune déclaration en instruction." />}
       <ul className="stack-sm">{items.map((r) => (
         <li key={r.id} className="panel stack-sm">
@@ -113,6 +116,7 @@ export default function Profils() {
       {prof.loading && <Loading />}
       {prof.error !== null && <ErrorState error={prof.error} onRetry={prof.reload} />}
       {prof.data && <p className="small muted">{prof.data.notice}</p>}
+      {prof.data && <ProfilsVisuels profiles={prof.data.profiles} roles={mine.data?.items} statuts={ROLE_STATUS} titre="Mes rôles déclarés par état" />}
       <ul className="stack-sm">{(prof.data?.profiles ?? []).map((p) => (
         <li key={p.code} className="panel stack-sm">
           <div className="panel-head">

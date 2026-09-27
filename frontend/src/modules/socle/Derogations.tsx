@@ -13,6 +13,7 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { api, describeError } from '../../lib/api';
 import './socle.css';
+import { DerogationsVisuels } from './visuels';
 
 export interface BaseOverride {
   id: string; ruleId: string; taxpayerId: string; objectId: string; inputs: Record<string, string>;
@@ -93,6 +94,7 @@ export default function Derogations() {
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
       {q.data && (
         <>
+          <DerogationsVisuels items={all} statuts={STATUS} />
           <div className="seg seg-wrap socle-seg" role="group" aria-label="Statut">
             {(Object.keys(STATUS) as BaseOverride['status'][]).map((s) => (
               <button key={s} type="button" aria-pressed={status === s} onClick={() => setStatus(s)}>{STATUS[s].label} <span className="count">{all.filter((b) => b.status === s).length}</span></button>

@@ -10,7 +10,11 @@ import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/StatusBadge';
 import { Section } from '../pilotage/shared';
 import { Area, Choice, Field, hasRole } from '../pilotage/planif';
-import { date, Ecran, Indicateurs, Statut, useRunner, useVue, type Indicator } from '../decision/commun';
+import { date, Ecran, Statut, useRunner, useVue, type Indicator } from '../decision/commun';
+import { IndicateursVisuels } from './visuels';
+import { AdministrationVisuels, CALL_OUTCOME, CHANGE_KIND, CHANGE_STATUS, CLIENT_STATUS, INCIDENT_STATUS, PartenairesVisuels, SupervisionVisuels } from './visuelsPlateforme';
+
+const DELIVERY_STATUS: Record<string, string> = { LIVRE: 'Livré', ECHEC: 'Échec', JOURNALISE: 'Journalisé' };
 
 // ───────────────────────────── module 52 ─────────────────────────────
 interface Contract { id: string; code: string; partnerName: string; partnerKind: string; object: string; scopes: string[]; protocol: { reference: string; sha256: string; signedAt: string }; validFrom: string; validTo: string; status: string; proposedBy: string }
@@ -46,7 +50,7 @@ export function Partenaires() {
   return (
     <Ecran eyebrow="Plateforme et accès · module 52" title="Intégration et API partenaires" lead="Interfaces versionnées (REST/JSON, événements) ; OAuth2, TLS mutuel, portées limitées à l’objet contracté ; protocole signé pour chaque échange." q={q} msg={r.msg}>
       {(d) => (<>
-        <Section title="Indicateurs" sub={`Jeton : ${d.defaults.tokenTtlSeconds} s ; quota par défaut : ${d.defaults.quota.perMinute}/min, ${d.defaults.quota.perDay}/jour (${d.defaults.status}). Rappels : ${d.delivery}.`}><Indicateurs items={d.indicators} /></Section>
+        <Section title="Indicateurs" sub={`Jeton : ${d.defaults.tokenTtlSeconds} s ; quota par défaut : ${d.defaults.quota.perMinute}/min, ${d.defaults.quota.perDay}/jour (${d.defaults.status}). Rappels : ${d.delivery}.`}><IndicateursVisuels items={d.indicators} /><PartenairesVisuels d={d} /></Section>
         <Section title="Registre des interfaces (contrats et protocoles signés)">
           <Field label="Motif (approbation, suspension, révocation — 10 caractères minimum)" value={motif} onChange={setMotif} />
           <DataTable caption="Contrats" rows={d.contracts} rowKey={(c) => c.id} empty={<p className="muted">Aucun contrat.</p>} columns={[
@@ -90,7 +94,7 @@ export function Partenaires() {
             { key: 'm', label: 'TLS mutuel', render: (c) => c.certFingerprint ?? 'non lié' },
             { key: 'n', label: 'Appels / erreurs / hors objet', num: true, render: (c) => `${c.calls} / ${c.errors} / ${c.outOfObject}` },
             { key: 'd', label: 'Disponibilité', num: true, render: (c) => (c.availabilityPct ? `${c.availabilityPct} %` : 'non mesurée') },
-            { key: 's', label: 'Statut', render: (c) => (c.status === 'ACTIF' && approve ? <button type="button" className="btn btn-ghost btn-sm" disabled={r.busy || motif.length < 10} onClick={() => void r.run(`/v1/plateforme/partenaires/clients/${c.id}/revocation`, { motif }, 'Client révoqué.')}>Révoquer</button> : c.status) },
+            { key: 's', label: 'Statut', render: (c) => (c.status === 'ACTIF' && approve ? <button type="button" className="btn btn-ghost btn-sm" disabled={r.busy || motif.length < 10} onClick={() => void r.run(`/v1/plateforme/partenaires/clients/${c.id}/revocation`, { motif }, 'Client révoqué.')}>Révoquer</button> : CLIENT_STATUS[c.status] ?? c.status) },
           ]} />
         </Section>
         <Section title="Journal des appels (chaque appel est journalisé)">
@@ -98,7 +102,7 @@ export function Partenaires() {
             { key: 'a', label: 'Heure', render: (c) => date(c.at) },
             { key: 'c', label: 'Client', render: (c) => c.clientId ?? '—' },
             { key: 'r', label: 'Route', primary: true, render: (c) => `${c.method} ${c.route}` },
-            { key: 'o', label: 'Résultat', render: (c) => <StatusBadge tone={c.outcome === 'OK' ? 'good' : c.outcome === 'HORS_OBJET' ? 'critical' : 'warning'} label={`${c.status} ${c.outcome}`} /> },
+            { key: 'o', label: 'Résultat', render: (c) => <StatusBadge tone={c.outcome === 'OK' ? 'good' : c.outcome === 'HORS_OBJET' ? 'critical' : 'warning'} label={CALL_OUTCOME[c.outcome] ? `${c.status} ${CALL_OUTCOME[c.outcome]!.label} (${c.outcome})` : `${c.status} ${c.outcome}`} /> },
             { key: 'l', label: 'Latence', num: true, render: (c) => `${c.latencyMs} ms` },
           ]} />
         </Section>
@@ -111,7 +115,7 @@ export function Partenaires() {
           <DataTable caption="Livraisons" rows={d.deliveries.slice(0, 20)} rowKey={(x) => x.id} empty={<p className="muted">Aucune livraison.</p>} columns={[
             { key: 'a', label: 'Heure', render: (x) => date(x.at) },
             { key: 'e', label: 'Événement', primary: true, render: (x) => x.event },
-            { key: 's', label: 'Statut', render: (x) => `${x.status}${x.httpStatus ? ` (${x.httpStatus})` : ''}` },
+            { key: 's', label: 'Statut', render: (x) => `${DELIVERY_STATUS[x.status] ?? x.status}${x.httpStatus ? ` (${x.httpStatus})` : ''}` },
           ]} />
         </Section>
       </>)}
@@ -139,7 +143,7 @@ export function Administration() {
   return (
     <Ecran eyebrow="Plateforme et accès · module 53" title="Administration de la plateforme" lead="Environnements, déploiements et retours arrière validés par le comité de contrôle des changements ; aucun pouvoir fiscal ni financier." q={q} msg={r.msg}>
       {(d) => (<>
-        <Section title="Indicateurs" sub={`${d.rule} Quorum du comité : ${d.params.cabQuorum} ; fenêtre post-déploiement : ${d.params.postDeployWindowHours} h (${d.params.status}).`}><Indicateurs items={d.indicators} /></Section>
+        <Section title="Indicateurs" sub={`${d.rule} Quorum du comité : ${d.params.cabQuorum} ; fenêtre post-déploiement : ${d.params.postDeployWindowHours} h (${d.params.status}).`}><IndicateursVisuels items={d.indicators} /><AdministrationVisuels d={d} /></Section>
         <Section title="Environnements">
           <DataTable caption="Environnements" rows={d.environments} rowKey={(e) => e.id} columns={[
             { key: 'e', label: 'Environnement', primary: true, render: (e) => e.label },
@@ -162,9 +166,9 @@ export function Administration() {
         )}
         <Section title="Demandes de changement">
           <DataTable caption="Changements" rows={d.changes} rowKey={(c) => c.id} empty={<p className="muted">Aucune demande.</p>} columns={[
-            { key: 'c', label: 'Demande', primary: true, render: (c) => `${c.id} — ${c.kind} ${c.environment} ${c.version ?? (c.config ? `${c.config.key}=${c.config.value}` : '')}` },
+            { key: 'c', label: 'Demande', primary: true, render: (c) => `${c.id} — ${CHANGE_KIND[c.kind] ?? c.kind} ${c.environment} ${c.version ?? (c.config ? `${c.config.key}=${c.config.value}` : '')}` },
             { key: 'a', label: 'Avis du comité', num: true, render: (c) => `${c.approvals.length} / ${d.params.cabQuorum}` },
-            { key: 's', label: 'Statut', render: (c) => `${c.status}${c.execution ? ` (${c.execution.result})` : ''}` },
+            { key: 's', label: 'Statut', render: (c) => <StatusBadge tone={CHANGE_STATUS[c.status]?.tone ?? 'neutral'} label={`${CHANGE_STATUS[c.status]?.label ?? c.status}${c.execution ? ` (${c.execution.result === 'SUCCES' ? 'succès' : 'échec'})` : ''}`} /> },
             { key: 'x', label: 'Actions', render: (c) => (
               <div className="btn-row">
                 {c.status === 'DEMANDEE' && cab && c.requestedBy !== user?.id && !c.approvals.some((a) => a.by === user?.id) && <button type="button" className="btn btn-primary btn-sm" disabled={r.busy} onClick={() => void r.run(`/v1/plateforme/changements/${c.id}/avis`, { approve: true, motif: 'Avis favorable du comité de contrôle des changements' }, 'Avis enregistré.')}>Avis favorable</button>}
@@ -207,7 +211,7 @@ export function SupervisionSante() {
   return (
     <Ecran eyebrow="Plateforme et accès · module 55" title="Supervision et santé du système" lead="Observabilité (métriques, journaux, traces), alertes de disponibilité, latence et erreurs, incidents et astreinte." q={q} msg={r.msg}>
       {(d) => (<>
-        <Section title="Indicateurs" sub={`Cibles ${d.targets.source} : disponibilité ${d.targets.availabilityPct} % ; RTO ${d.targets.rtoHours[d.targets.phase]} h (phase ${d.targets.phase}).`}><Indicateurs items={d.indicators} /></Section>
+        <Section title="Indicateurs" sub={`Cibles ${d.targets.source} : disponibilité ${d.targets.availabilityPct} % ; RTO ${d.targets.rtoHours[d.targets.phase]} h (phase ${d.targets.phase}).`}><IndicateursVisuels items={d.indicators} /><SupervisionVisuels d={d} /></Section>
         <Section title="Fenêtre glissante et alertes" sub={`Seuils : latence p95 ${d.thresholds.latencyP95Ms} ms sur ${d.thresholds.windowMinutes} min (${d.thresholds.status}). Métriques : ${d.metricsEndpoint}.`}>
           <p>Requêtes : {d.window15.requests} · erreurs serveur : {d.window15.errors5xx} · disponibilité : {d.window15.availabilityPct ?? '—'} % · p95 : {d.window15.p95Ms ?? '—'} ms</p>
           {d.alerts.length ? d.alerts.map((a) => <p key={a.code}><StatusBadge tone="critical" label={a.code} /> {a.detail}</p>) : <p className="muted">Aucune alerte dans la fenêtre.</p>}
@@ -243,7 +247,7 @@ export function SupervisionSante() {
           )}
           <DataTable caption="Incidents" rows={d.incidents} rowKey={(i) => i.id} empty={<p className="muted">Aucun incident.</p>} columns={[
             { key: 'i', label: 'Incident', primary: true, render: (i) => `${i.id} — ${i.title} (${i.service})` },
-            { key: 's', label: 'Sévérité / statut', render: (i) => `${i.severity} — ${i.status}` },
+            { key: 's', label: 'Sévérité / statut', render: (i) => <>{i.severity} — <StatusBadge tone={INCIDENT_STATUS[i.status]?.tone ?? 'neutral'} label={INCIDENT_STATUS[i.status]?.label ?? i.status} /></> },
             { key: 'd', label: 'Détecté / rétabli', render: (i) => `${date(i.detectedAt)} → ${i.restored ? date(i.restored.at) : '…'}` },
             { key: 'a', label: 'Étape', render: (i) => (ops ? (
               <div className="btn-row">

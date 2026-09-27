@@ -9,6 +9,7 @@ import { ErrorState, Loading } from '../../components/States';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { hasRole } from './common';
+import { Indicateurs72Visuels, Indicateurs74Visuels } from './visuels';
 
 interface AccesIndicators {
   generatedAt: string;
@@ -56,6 +57,7 @@ export function AccesIndicatorsPanel({ part }: { part: '72' | '74' }) {
           <Kpi label="Arbitrages" value={m.arbitrages.total} sub={`${m.arbitrages.ouverts} ouvert(s) · ${m.arbitrages.instruits} instruit(s) · ${m.arbitrages.decides} décidé(s)`} />
           <Kpi label="Délai moyen de décision d’arbitrage" value={hours(m.arbitrages.delaiDecisionHeures)} />
         </div>
+        <Indicateurs72Visuels m={m} />
       </section>
     );
   }
@@ -71,6 +73,7 @@ export function AccesIndicatorsPanel({ part }: { part: '72' | '74' }) {
         <Kpi label="Révocations" value={c.revoques} sub={`comptes révoqués · ${i.revoquees} invitation(s) révoquée(s)`} />
         <Kpi label="Secondes validations" value={v.enAttente} sub={`en attente · ${v.approuvees} approuvée(s), ${v.rejetees} rejetée(s) · délai ${hours(v.delaiDecisionHeures)}`} />
       </div>
+      <Indicateurs74Visuels i={i} c={c} />
     </section>
   );
 }

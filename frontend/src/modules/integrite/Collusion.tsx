@@ -2,6 +2,7 @@
  * Collusion sous « quatre yeux » : paires proposant → valideur, validations express, hors heures, valideurs qui ne
  * refusent jamais, plafond de rotation. Signaux à examiner — jamais de sanction automatique.
  */
+import { useState } from 'react';
 import { PageHead } from '../../components/Shell';
 import { DataTable } from '../../components/DataTable';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
@@ -11,6 +12,7 @@ import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { useApp } from '../../context';
 import { ActionError, hasRole, Kpi, useAction } from './shared';
+import { CollusionVisuels } from './visuels';
 import './integrite.css';
 
 export interface CollusionFinding {
@@ -57,6 +59,7 @@ export function CollusionView({ report }: { report: CollusionReport }) {
           sub={`${report.rotation.maxPerPair} validations / paire / ${report.rotation.windowDays} j`} />
       </div>
       <p className="callout callout-info ig-note"><Icon name="info" size={18} /><span>{report.note} Seuils : {p.statut}.</span></p>
+      <CollusionVisuels r={report} />
 
       <section className="panel" aria-labelledby="col-findings">
         <h2 className="panel-title" id="col-findings">Signaux</h2>
@@ -132,6 +135,7 @@ export default function Collusion() {
   const canRun = hasRole(user?.roles, ...RUN);
   const rep = useApi(allowed ? () => api<CollusionReport>('/v1/integrite/collusion') : null, [user?.id]);
   const a = useAction();
+  const [done, setDone] = useState<string | null>(null);
 
   if (!allowed) {
     return <div className="page"><PageHead eyebrow="Intégrité" title="Collusion sous quatre yeux" /><EmptyState title="Accès réservé" icon="lock">Réservé à l’audit, à l’anti-fraude, à la sécurité et à la direction de la régie.</EmptyState></div>;
@@ -141,12 +145,13 @@ export default function Collusion() {
       <PageHead eyebrow="Intégrité" title="Collusion sous quatre yeux"
         lead="Qui valide qui, à quelle vitesse, à quelle heure et avec quel taux de refus : des signaux explicables, examinés par un humain.">
         {canRun && (
-          <button type="button" className="btn btn-primary" disabled={a.busy} onClick={async () => { if (await a.run(() => api('/v1/integrite/collusion/run', { method: 'POST', body: {} }))) rep.reload(); }}>
+          <button type="button" className="btn btn-primary" disabled={a.busy} onClick={async () => { setDone(null); const r = await a.run(() => api<{ findings: number; raised: number }>('/v1/integrite/collusion/run', { method: 'POST', body: {} })); if (r) { setDone(`Analyse exécutée : ${r.findings} signal(aux), ${r.raised} nouvelle(s) alerte(s) — aucune sanction automatique.`); rep.reload(); } }}>
             <Icon name="alert" size={18} /> Lever les alertes
           </button>
         )}
       </PageHead>
       <ActionError error={a.error} />
+      {done && <p className="notice notice-ok" role="status">{done}</p>}
       {rep.loading && <Loading />}
       {rep.error !== null && <ErrorState error={rep.error} onRetry={rep.reload} />}
       {rep.data && <CollusionView report={rep.data} />}

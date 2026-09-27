@@ -12,6 +12,7 @@ import {
   ActionError, CATEGORY_LABELS, CHANNEL_LABELS, DECISION_LABELS, EvidencePicker, FINDING_LABELS, hasRole, Kpi, SEVERITY_LABELS, SeverityBadge,
   StateBadge, Tabs, useAction, type Evidence,
 } from './shared';
+import { ConsoleVisuels } from './visuels';
 import './integrite.css';
 
 interface ReportRow {
@@ -64,8 +65,11 @@ export default function ConsoleEnquete() {
   const reloadAll = () => { ind.reload(); reports.reload(); alerts.reload(); cases.reload(); };
 
   const detect = useAction();
+  const [detected, setDetected] = useState<string | null>(null);
   const runDetection = async () => {
-    await detect.run(() => api('/v1/integrite/detection/run', { method: 'POST', body: {} }));
+    setDetected(null);
+    const r = await detect.run(() => api<{ raised: number }>('/v1/integrite/detection/run', { method: 'POST', body: {} }));
+    if (r) setDetected(`Détection exécutée : ${r.raised} nouvelle(s) alerte(s) à examiner — aucun effet automatique.`);
     reloadAll();
   };
 
@@ -94,7 +98,10 @@ export default function ConsoleEnquete() {
         )}
       </PageHead>
       <ActionError error={detect.error} />
+      {detected && <p className="notice notice-ok" role="status">{detected}</p>}
+      <ConsoleVisuels ind={ind.data} reports={reports.data} alerts={alerts.data} cases={cases.data} />
       {ind.data && (
+        <details className="viz-details"><summary className="small">Détail des indicateurs de la console</summary>
         <div className="kpi-row ig-kpis">
           <Kpi label="Signalements ouverts" value={ind.data.signalements.ouverts} sub={`${ind.data.signalements.enRetard} hors délai`} />
           <Kpi label="Délai moyen de traitement" value={ind.data.signalements.delaiMoyenJours === null ? '—' : `${ind.data.signalements.delaiMoyenJours} j`} sub={`Part confirmée : ${ind.data.signalements.partConfirmee ?? '—'}`} />
@@ -102,6 +109,7 @@ export default function ConsoleEnquete() {
           <Kpi label="Dossiers en cours" value={ind.data.dossiers.ouverts} sub={`${ind.data.dossiers.decides} décidés`} />
           <Kpi label="Délai d’instruction" value={ind.data.dossiers.delaiInstructionMoyenJours === null ? '—' : `${ind.data.dossiers.delaiInstructionMoyenJours} j`} sub="moyenne des dossiers décidés" />
         </div>
+        </details>
       )}
       <ExampleNotice text="Données de démonstration fictives : signalements, alertes et dossiers illustrent le circuit." />
       <Tabs label="Files de travail" value={tab} onChange={setTab} items={tabs} />

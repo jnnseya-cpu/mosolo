@@ -12,6 +12,7 @@ import { Icon } from '../../components/Icon';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { useApp } from '../../context';
+import { ElevationsVisuels } from './visuels';
 
 export interface Elevation {
   id: string; userId: string; role: string; roleLabel: string; motif: string; ticketRef?: string; durationMinutes: number;
@@ -67,6 +68,7 @@ export default function Elevations() {
       {list.loading && <Loading />}
       {list.error !== null && <ErrorState error={list.error} onRetry={list.reload} />}
       {msg && <p className={`notice ${msg.ok ? 'notice-ok' : 'notice-err'}`} role="status">{msg.text}</p>}
+      {list.data && <ElevationsVisuels items={list.data.items} statuts={ELEVATION_STATUS} />}
       {list.data && canRequest && (
         <section className="panel">
           <div className="panel-head"><h2 className="panel-title">Demander une élévation</h2></div>

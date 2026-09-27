@@ -12,6 +12,7 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { ReasonAction } from '../fiscal/common';
+import { RenseignementTuiles, RenseignementVisuels } from './visuels';
 
 export interface ScoreItem {
   id: string; alertId: string; ruleLabel: string; status: string; raisedAt: string; score: number; band: string; confidence: string;
@@ -63,6 +64,8 @@ export default function Renseignement() {
     <div className="page page-wide">
       <PageHead eyebrow="Intégrité" title="Renseignement anti-fraude"
         lead="Les signaux sont classés par un score explicable (gravité, confiance, variables et sources) : il ordonne l’examen, il ne décide rien. Une suspension d’accès technique n’est qu’une mesure conservatoire, décidée et levée par des personnes distinctes ; la qualification et la sanction relèvent de l’autorité compétente." />
+      {ind.data && <RenseignementTuiles ind={ind.data} />}
+      <RenseignementVisuels scores={scores.data?.items ?? []} susp={susp.data ?? []} trans={trans.data ?? []} />
       {ind.data && (
         <section className="panel stack-sm" aria-label="Indicateurs du renseignement">
           <p className="small">Alertes ouvertes : <strong>{ind.data.alertes.ouvertes}</strong> · résolues : <strong>{ind.data.alertes.resolues}</strong> · signalements citoyens : {ind.data.signalementsCitoyens}</p>

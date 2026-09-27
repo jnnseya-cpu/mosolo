@@ -10,7 +10,9 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { api, describeError } from '../../lib/api';
 import { Section } from '../pilotage/shared';
 import { Choice, Field, hasRole } from '../pilotage/planif';
-import { Ecran, Indicateurs, useRunner, useVue, type Indicator } from '../decision/commun';
+import { Ecran, useRunner, useVue, type Indicator } from '../decision/commun';
+import { IndicateursVisuels } from '../plateforme/visuels';
+import { DELEGATION_STATUS, DelegationsVisuels } from './visuels';
 
 interface Delegation { id: string; delegatorId: string; delegateId: string; roles: string[]; from: string; to: string; motif: string; status: string }
 interface Vue {
@@ -43,7 +45,7 @@ export default function Delegations() {
   return (
     <Ecran eyebrow="Plateforme et accès · module 51" title="Accès et délégations" lead="Rôles et attributs, délégations temporaires, accès juste-à-temps motivé, revues ; comptes partagés interdits." q={q} msg={r.msg}>
       {(d) => (<>
-        <Section title="Indicateurs" sub={d.rule}><Indicateurs items={d.indicators} /></Section>
+        <Section title="Indicateurs" sub={d.rule}><IndicateursVisuels items={d.indicators} /><DelegationsVisuels delegations={d.delegations} detections={d.detections} /></Section>
         <Section title="Déléguer temporairement un de mes rôles" sub={`Durée maximale ${d.params.maxDays} jours ; rôles non délégables : ${d.params.nonDelegable.join(', ')} (${d.params.status}). Approbation par une autre personne.`}>
           <div className="form">
             <Field label="Délégataire (identifiant, même entité)" value={delegate} onChange={setDelegate} />
@@ -58,7 +60,7 @@ export default function Delegations() {
           <DataTable caption="Délégations" rows={d.delegations} rowKey={(x) => x.id} empty={<p className="muted">Aucune délégation.</p>} columns={[
             { key: 'd', label: 'Délégation', primary: true, render: (x) => `${x.id} — ${x.delegatorId} → ${x.delegateId} (${x.roles.join(', ')})` },
             { key: 'p', label: 'Période', render: (x) => `${x.from} → ${x.to}` },
-            { key: 's', label: 'Statut', render: (x) => <StatusBadge tone={x.status === 'ACTIVE' ? 'good' : x.status === 'PROPOSEE' ? 'warning' : 'neutral'} label={x.status} /> },
+            { key: 's', label: 'Statut', render: (x) => <StatusBadge tone={x.status === 'ACTIVE' ? 'good' : x.status === 'PROPOSEE' ? 'warning' : 'neutral'} label={DELEGATION_STATUS[x.status]?.label ?? x.status} /> },
             { key: 'a', label: 'Actions', render: (x) => (
               <div className="btn-row">
                 {x.status === 'PROPOSEE' && approver && x.delegatorId !== user?.id && x.delegateId !== user?.id && <button type="button" className="btn btn-primary btn-sm" disabled={r.busy} onClick={() => void r.run(`/v1/acces/delegations/${x.id}/decision`, { approve: true, motif: 'Intérim validé par l’administrateur' }, 'Délégation active.')}>Approuver</button>}

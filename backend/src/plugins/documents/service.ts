@@ -37,6 +37,9 @@ definePolicy('documents:export', { R06: always, R07: always, R11: always, R17: a
 definePolicy('documents:hold', { R22: always, R24: always });
 definePolicy('documents:purge.propose', { R25: always });
 definePolicy('documents:purge.approve', { R22: always, R28: always });
+// Liste des demandes de purge (27/09/2026) : le proposant (DPO) et les approbateurs (audit, sécurité) voient les
+// demandes en cours, pour décider depuis la liste plutôt qu'en saisissant un identifiant.
+definePolicy('documents:purge.read', { R25: always, R22: always, R28: always });
 definePolicy('documents:integrity', { R22: always, R23: always, R26: always, R27: always, R28: always });
 
 /** Fournisseur de clé de chiffrement au repos (interface) ; l'implémentation locale dérive la clé de la clé serveur. */
@@ -275,6 +278,12 @@ export class DocumentService {
     const r = this.purges.insert({ id: this.ids.next('PURG', 6), documentIds: input.documentIds, motif: input.motif, proposedBy: u.id, proposedAt: this.now(), status: 'PROPOSEE' });
     this.ctx.audit.append({ actor: actorOf(u), action: 'document.purge.proposed', resourceType: 'document_purge', resourceId: r.id, details: { documentIds: r.documentIds, motif: r.motif } });
     return r;
+  }
+
+  /** Demandes de purge, les plus récentes d'abord (lecture seule ; la décision reste à deux personnes). */
+  listPurges(u: User): PurgeRequest[] {
+    authorize(u, 'documents:purge.read');
+    return this.purges.all().sort((a, b) => b.proposedAt.localeCompare(a.proposedAt));
   }
 
   decidePurge(u: User, id: string, input: { approve: boolean; motif: string }): PurgeRequest {

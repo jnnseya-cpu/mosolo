@@ -7,6 +7,7 @@ import { ErrorState, Loading } from '../../components/States';
 import { api, asList, describeError } from '../../lib/api';
 import { AUTONOMY_LABEL, AUTONOMY_SHORT, DOMAIN_LABEL, latency } from './labels';
 import type { IaAgent, IaRec } from './types';
+import { AgentsVisuels } from './visuels';
 
 /** Catalogue des agents (fiches de contrôle), sollicitation à la demande et coupe-circuit (R28/R29). */
 export default function IaAgents({ onRan }: { onRan?: (recs: IaRec[]) => void }) {
@@ -36,6 +37,7 @@ export default function IaAgents({ onRan }: { onRan?: (recs: IaRec[]) => void })
       )}
       {q.loading && <Loading />}
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
+      {q.data && <AgentsVisuels agents={q.data} />}
       <div className="ia-agent-grid">
         {(q.data ?? []).map((a) => <AgentCard key={a.code} agent={a} canKill={canKill} onChanged={q.reload} {...(onRan ? { onRan } : {})} />)}
       </div>

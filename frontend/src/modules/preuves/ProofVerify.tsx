@@ -15,6 +15,7 @@ import { BLOCKING, proofPrintUrl, type ProofResult } from './shared';
 import { scanTarget } from './scan';
 import { QrScanner } from '../../components/QrScanner';
 import './preuves.css';
+import { fmtNombre, ProgressMeter } from '../../components/viz';
 
 export default function ProofVerify() {
   const params = useParams<{ code?: string }>();
@@ -91,6 +92,9 @@ function HowToRead() {
   );
 }
 
+/** Couleur de la jauge de validité : mêmes bandes que le compte à rebours (vert ≥ 50 %, orange ≥ 1 %, rouge < 1 %). */
+const BAND_TONE: Record<string, 'good' | 'warning' | 'critical' | 'neutral'> = { VERT: 'good', ORANGE: 'warning', ROUGE: 'critical', EXPIRE: 'critical', PAS_ACTIF: 'neutral' };
+
 const SITUATION_TONE: Record<string, 'good' | 'warning' | 'critical' | 'neutral' | 'info'> = { green: 'good', amber: 'warning', red: 'critical', grey: 'neutral', blue: 'info' };
 
 export function ProofCard({ r, onRefresh }: { r: ProofResult; onRefresh?: () => void }) {
@@ -112,6 +116,10 @@ export function ProofCard({ r, onRefresh }: { r: ProofResult; onRefresh?: () => 
 
       {r.found && (r.validity || blocked) && (
         <ValidityCountdown label="Validité" from={r.validity?.from ?? null} until={r.validity?.until ?? null} blocked={blocked} />
+      )}
+      {r.found && r.validity && r.validity.pct !== null && !blocked && r.validity.band !== 'PERMANENT' && (
+        <ProgressMeter label="Part de validité restante (heure du serveur)" value={Math.max(0, Math.min(100, r.validity.pct))} unit="%" format={(v) => fmtNombre(v, v < 1 ? 1 : 0)}
+          tone={BAND_TONE[r.validity.band] ?? 'neutral'} toneLabel={r.validity.text} />
       )}
       {r.found && !r.validity && !blocked && <p className="pv-state"><Icon name="check" size={16} /> {r.stateLabel}</p>}
       {r.situation && (

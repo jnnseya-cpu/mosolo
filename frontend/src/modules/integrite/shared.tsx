@@ -21,14 +21,14 @@ export const CHANNEL_LABELS: Record<string, string> = {
 };
 
 export const SEVERITY_LABELS: Record<string, string> = { FAIBLE: 'Faible', MOYENNE: 'Moyenne', ELEVEE: 'Élevée', CRITIQUE: 'Critique' };
-const SEVERITY_TONE: Record<string, Tone> = { FAIBLE: 'neutral', MOYENNE: 'warning', ELEVEE: 'serious', CRITIQUE: 'critical' };
+export const SEVERITY_TONE: Record<string, Tone> = { FAIBLE: 'neutral', MOYENNE: 'warning', ELEVEE: 'serious', CRITIQUE: 'critical' };
 
 export function SeverityBadge({ value }: { value?: string }) {
   if (!value) return <span className="muted small">—</span>;
   return <StatusBadge tone={SEVERITY_TONE[value] ?? 'neutral'} label={SEVERITY_LABELS[value] ?? value} />;
 }
 
-const STATUS: Record<string, [string, Tone]> = {
+export const STATUS: Record<string, [string, Tone]> = {
   // signalements
   RECU: ['Reçu', 'info'], QUALIFIE: ['Qualifié', 'warning'], TRANSMIS: ['Transmis', 'warning'], CLOS: ['Clos', 'good'],
   // alertes

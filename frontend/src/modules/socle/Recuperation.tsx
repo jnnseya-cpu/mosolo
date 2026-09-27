@@ -11,6 +11,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { ReasonAction } from '../fiscal/common';
 import './socle.css';
+import { RecuperationsVisuels } from './visuels';
 
 interface Recovery { id: string; taxpayerId: string | null; status: string; requestedAt: string; newPhoneMasked: string; verification?: { by: string; note: string }; decision?: { reason: string } }
 
@@ -43,6 +44,7 @@ function AgentQueue() {
   return (
     <section className="stack-sm">
       <h2 className="h-sub">Demandes à traiter</h2>
+      <RecuperationsVisuels items={q.data ?? []} />
       {(q.data ?? []).length === 0 && <EmptyState title="Aucune demande en cours." />}
       <ul className="stack-sm">{(q.data ?? []).map((r) => (
         <li key={r.id} className="panel stack-sm">
