@@ -25,4 +25,10 @@ describe('MoneyText', () => {
     expect(ind.textContent).toContain('🇨🇩 CDF');
     expect(ind.textContent).toContain(formatMoney(indicative, { locale: 'fr' }));
   });
+
+  it('montant masqué au profil (null, p. ex. agent de terrain) : « — », jamais d’erreur de rendu', () => {
+    const { container } = renderWithApp(<MoneyText money={null} />);
+    expect(container.textContent).toBe('—');
+    expect(container.querySelector('.money-main')).toBeNull();
+  });
 });
