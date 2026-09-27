@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1006 routes** dans 40 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -14,7 +14,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | extension juridique | 11 |
 | extension opportunites | 29 |
 | extension parking | 64 |
-| extension pilotage | 67 |
+| extension pilotage | 81 |
 | extension preuves | 14 |
 | extension publicite | 52 |
 | extension rakapay | 41 |
@@ -550,6 +550,15 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | GET | `/v1/pilotage/echelle` |
 | GET | `/v1/pilotage/exports/:kind` |
 | POST | `/v1/pilotage/exports/verify` |
+| GET | `/v1/pilotage/feuille-de-route` |
+| POST | `/v1/pilotage/feuille-de-route/actions/:code` |
+| POST | `/v1/pilotage/feuille-de-route/demarrage` |
+| POST | `/v1/pilotage/feuille-de-route/phases/:code/demarrage` |
+| POST | `/v1/pilotage/feuille-de-route/phases/:code/porte` |
+| POST | `/v1/pilotage/feuille-de-route/phases/:code/preuves` |
+| POST | `/v1/pilotage/feuille-de-route/portes/:id/decision` |
+| GET | `/v1/pilotage/gouvernance` |
+| POST | `/v1/pilotage/gouvernance/reunions` |
 | GET | `/v1/pilotage/indicateurs` |
 | GET | `/v1/pilotage/instructions` |
 | POST | `/v1/pilotage/instructions` |
@@ -557,6 +566,10 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | POST | `/v1/pilotage/instructions/:id/cloture` |
 | POST | `/v1/pilotage/instructions/:id/rapport` |
 | POST | `/v1/pilotage/instructions/:id/reouverture` |
+| GET | `/v1/pilotage/modele-operationnel` |
+| POST | `/v1/pilotage/modele-operationnel/postes` |
+| POST | `/v1/pilotage/modele-operationnel/postes/:id/binome` |
+| POST | `/v1/pilotage/modele-operationnel/postes/:id/jalons/:jalon` |
 | GET | `/v1/pilotage/pilote` |
 | POST | `/v1/pilotage/pilote/configuration` |
 | POST | `/v1/pilotage/pilote/revues/:jalon` |
@@ -580,6 +593,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **992 routes** dans 40
 | POST | `/v1/pilotage/repartition/propositions` |
 | GET | `/v1/pilotage/satisfaction` |
 | GET | `/v1/pilotage/scenarios` |
+| GET | `/v1/pilotage/scenarios/exemple-illustratif` |
 | GET | `/v1/pilotage/scenarios/hypotheses` |
 | POST | `/v1/pilotage/scenarios/hypotheses` |
 | POST | `/v1/pilotage/scenarios/simulation` |

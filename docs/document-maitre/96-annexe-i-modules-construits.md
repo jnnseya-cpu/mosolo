@@ -386,6 +386,10 @@ La **piste d'audit par dossier** (auditeurs internes et externes, enquêteur ant
 | Transparence (aperçu, publication) | `GET /v1/pilotage/transparence/{AAAA-Tn}` ; `POST …/publier` | aperçu R01, R05, R22, R23 ; publication R01, R05 | Test anti-ré-identification bloquant ; décision motivée ; versions |
 | Transparence publique | `GET /v1/public/transparency[/{AAAA-Tn}]` | public | Aucune donnée personnelle ; seuil 5, dominance 85 %, masquage complémentaire |
 
+#### Conduite du programme : feuille de route, modèle opérationnel, gouvernance (module « programme », ajout du 27/09/2026)
+
+Écran « Feuille de route et modèle opérationnel » (`/pilotage/feuille-de-route`) : phases 0 à 6 du Cahier nouvelle version (§ 35.1) avec preuves des livrables (référence + SHA-256) et portes de sortie à deux personnes (demande par l'une, décision motivée du comité de pilotage par une autre, rattachée à une réunion consignée ; garde de séquence ; porte refusée sans preuve de chaque livrable ; porte bloquée sans binôme provincial ou avec jalon de transfert en retard) ; plans d'action datés à 30 jours → 24 mois à partir d'une date de démarrage saisie par une personne, actions en retard signalées (jour de Kinshasa) ; modèle opérationnel (huit fonctions, effectifs indicatifs au pilote, postes « à pourvoir », binômes et calendriers de transfert, indicateur d'autonomie) ; gouvernance du programme (cinq instances, réunions consignées avec procès-verbal SHA-256, réunion en retard selon la fréquence — délais PAR_DÉFAUT à confirmer —, versions de règles en revue rattachées au comité juridique et tarifaire). Exemple illustratif du § 39.3 en lecture seule sur l'écran des scénarios. Détail : § 36.1 et § 38.3 du document maître. Tests : `backend/test/programme.test.ts`, `frontend/test/programme.test.tsx`.
+
 ## I.13 Système d’exploitation de l’IA (AI OS)
 
 #### Couche d’intelligence (module « ia ») — état construit

@@ -236,6 +236,35 @@ export function tenths(pct: string): bigint {
 
 export const moneyOfMinor = (minor: bigint, c: CurrencyCode): MoneyJSON => Money.fromMinor(minor, c).toJSON();
 
+/**
+ * Recette additionnelle brute (§ 38.2) = potentiel × (conformité cible − conformité actuelle) × (mois utiles / 12),
+ * en unités mineures ; l'écart de conformité est exprimé en points × 10 (voir `tenths`). Fonction unique, utilisée
+ * par le simulateur de scénarios et par l'exemple illustratif (§ 39.3) ; le coût marginal est retranché à part.
+ */
+export function additionalGrossMinor(potentialMinor: bigint, deltaTenths: bigint, monthsUseful = 12n): bigint {
+  return (potentialMinor * deltaTenths / 1000n) * monthsUseful / 12n;
+}
+
+// ————————————————————————— exemple illustratif (Cahier nouvelle version § 39.3) —————————————————————————
+
+/**
+ * « Exemple illustratif, à remplacer par les données du pilote » : tableau du Cahier repris mot pour mot. Données de
+ * lecture seule, jamais enregistrées comme hypothèses, jamais utilisées par les scénarios ni par les tableaux de bord.
+ */
+export const EXEMPLE_ILLUSTRATIF = {
+  titre: 'Exemple illustratif, à remplacer par les données du pilote',
+  source: 'Cahier nouvelle version § 39.3',
+  colonnes: ['Ligne', 'Objets (hypothèse)', 'Montant annuel moyen (hypothèse)', 'Conformité actuelle → cible (hypothèse)', 'Gain illustratif'],
+  lignes: [
+    { ligne: 'Revenus locatifs', objetsTexte: '2 000 000 unités louées', objets: '2000000', montantTexte: '158 USD (22 % d\'un loyer de 60 USD par mois)', montantAnnuel: '158', conformiteTexte: '8 % → 35 %', actuelle: '8', cible: '35', gainTexte: '≈ 85 M USD', gainMillionsCahier: 85 },
+    { ligne: 'Impôt foncier', objetsTexte: '1 200 000 parcelles', objets: '1200000', montantTexte: '40 USD', montantAnnuel: '40', conformiteTexte: '15 % → 50 %', actuelle: '15', cible: '50', gainTexte: '≈ 17 M USD', gainMillionsCahier: 17 },
+    { ligne: 'Véhicules et circulation', objetsTexte: '600 000 véhicules', objets: '600000', montantTexte: '60 USD', montantAnnuel: '60', conformiteTexte: '35 % → 70 %', actuelle: '35', cible: '70', gainTexte: '≈ 13 M USD', gainMillionsCahier: 13 },
+    { ligne: 'Patente et débits de boissons', objetsTexte: '400 000 établissements', objets: '400000', montantTexte: '50 USD', montantAnnuel: '50', conformiteTexte: '10 % → 40 %', actuelle: '10', cible: '40', gainTexte: '≈ 6 M USD', gainMillionsCahier: 6 },
+    { ligne: 'Publicité et antennes', objetsTexte: '15 000 objets', objets: '15000', montantTexte: '900 USD', montantAnnuel: '900', conformiteTexte: '30 % → 80 %', actuelle: '30', cible: '80', gainTexte: '≈ 7 M USD', gainMillionsCahier: 7 },
+  ],
+  avertissement: 'Les valeurs du tableau ci-dessus sont des hypothèses de travail destinées à illustrer la mécanique de calcul. Elles ne constituent ni une prévision, ni un engagement. Elles doivent être remplacées par les comptages du recensement pilote et par les tarifs officiels des arrêtés en vigueur avant toute présentation budgétaire.',
+} as const;
+
 // ————————————————————————— assignations, instructions, accords, projets —————————————————————————
 
 export interface TargetEntry { commune: string; category: string; amount: MoneyJSON }
