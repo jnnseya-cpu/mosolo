@@ -19,13 +19,6 @@ const DEMO_CDF_PER_UNIT: Record<CurrencyCode, string> = {
   BIF: '0.97', CNY: '396', AED: '776',
 };
 
-export interface FxRate {
-  currency: CurrencyCode;
-  flag: string;
-  name: string;
-  cdfPerUnit: string;
-}
-
 export interface FxConversion {
   amount: MoneyJSON;
   rate: string;

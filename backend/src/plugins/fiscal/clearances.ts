@@ -18,8 +18,6 @@ import { actorOf, addDays, CATEGORY_LABELS, formatShortCode, maskIuc, newShortCo
 
 /** Durée de validité et seuil ambre — [paramètres de DÉMONSTRATION ; « période fixée par la règle », acte J6]. */
 export const CLEARANCE_VALIDITY_DAYS = 90;
-/** @deprecated remplacé par la règle 50 % / 1 % (core/validity.ts) ; conservé pour les fiches existantes. */
-export const CLEARANCE_AMBER_DAYS = 15;
 
 export interface ClearanceBlocker { obligationId: string; label: string; dueDate: string; reason: 'IMPAYEE' | 'EN_ATTENTE_DE_RAPPROCHEMENT' | 'CONTESTEE_SANS_EFFET_SUSPENSIF' }
 

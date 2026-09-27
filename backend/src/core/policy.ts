@@ -228,11 +228,6 @@ let personResolver: PersonResolver = () => undefined;
 export function registerPersonResolver(fn: PersonResolver): void {
   personResolver = fn;
 }
-/** Identifiant de la personne derrière un compte (à défaut, le compte lui-même). */
-export function personOf(userId: string): string {
-  return personResolver(userId) ?? `compte:${userId}`;
-}
-
 /**
  * Séparation des tâches sur un même dossier : la PERSONNE (et non seulement le compte) ne doit pas déjà être
  * intervenue. Deux comptes d'une même personne (autre téléphone, même pièce d'identité) sont une seule personne.
@@ -255,9 +250,4 @@ export function registerRelatedTaxpayersResolver(fn: RelatedResolver): void {
 export function assertNotRelated(user: User, taxpayerId: string | null | undefined, detail: string): void {
   if (!taxpayerId) return;
   if (relatedResolver(user).has(taxpayerId)) throw forbidden('CONFLICT_OF_INTEREST', detail);
-}
-
-/** Rôles qui ne doivent jamais voir de montant nominatif (agrégats seulement). */
-export function isAggregateOnly(user: User): boolean {
-  return !hasAnyGrant(user, 'obligation.read');
 }

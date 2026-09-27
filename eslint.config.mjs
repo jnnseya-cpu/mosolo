@@ -8,7 +8,7 @@ import globals from 'globals';
 
 export default tseslint.config(
   // Artefacts de construction, dépendances et scripts d'outillage hors paquets (captures, présentation).
-  { ignores: ['**/node_modules/**', '**/dist/**', '**/dev-dist/**', '**/coverage/**', 'tools/**', 'docs/**', 'specs/**'] },
+  { ignores: ['**/node_modules/**', '**/dist/**', '**/dev-dist/**', '**/coverage/**', 'frontend/public/**', 'backend/data/**', 'tools/**', 'docs/**', 'specs/**'] },
   // TODO(temporaire) : fichiers en cours de modification sur une branche parallèle (canaux, intégrité) ; retirer cette
   // exclusion après la fusion et corriger leurs erreurs (import inutilisé, affectation inutile).
   { ignores: ['backend/src/plugins/canaux/cards.ts', 'backend/src/plugins/canaux/points.ts', 'backend/src/plugins/integrite/service.ts'] },

@@ -112,5 +112,3 @@ export const verifyPath = (code: string) => `/verifier-plaque/${encodeURICompone
 /** Montant en CDF, chaîne décimale (jamais de flottant pour un montant) — utilisé par la page RakaPay. */
 export const cdf = (n: number) => ({ amount: `${n}.00`, currency: 'CDF' as const });
 
-/** Chaîne décimale → nombre entier pour l'affichage d'un compteur (jamais pour un montant). */
-export const fmtCount = (n: number) => new Intl.NumberFormat('fr-FR').format(n);

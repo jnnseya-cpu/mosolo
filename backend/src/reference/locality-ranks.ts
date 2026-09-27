@@ -50,7 +50,3 @@ export function clearCertifiedLocalityRanks(): void {
 export function certifiedRankOf(commune: string, quartier: string): CertifiedLocalityRank | undefined {
   return table.get(keyOf(commune, quartier));
 }
-
-export function certifiedLocalityRanksCount(): number {
-  return table.size;
-}

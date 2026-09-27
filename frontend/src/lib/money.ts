@@ -1,4 +1,4 @@
-import { Money, parseScaled, type CurrencyCode, type MoneyJSON, CURRENCIES } from '@mosolo/shared';
+import { Money, parseScaled, type CurrencyCode, type MoneyJSON } from '@mosolo/shared';
 import type { ExchangeRates } from './types';
 
 const SCALE = 12;
@@ -56,11 +56,6 @@ export function compact(n: number, lang = 'fr'): string {
   if (abs >= 1e6) return `${fmt(n / 1e6, 1)} M`;
   if (abs >= 1e3) return `${fmt(n / 1e3, 1)} k`;
   return fmt(n);
-}
-
-/** Montant compact avec drapeau et code ISO : « 🇨🇩 CDF 4,82 Md ». */
-export function compactMoney(m: MoneyJSON, lang = 'fr'): string {
-  return `${CURRENCIES[m.currency].flag} ${m.currency} ${compact(Number(m.amount), lang)}`;
 }
 
 /** Exemple de taux (source déclarée) utilisé seulement si l'API est injoignable. */

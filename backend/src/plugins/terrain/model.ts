@@ -9,7 +9,7 @@
  *  - la rémunération des sous-traitants est un calcul INDICATIF sur livrables vérifiés, aux prix unitaires
  *    du contrat (RW6), jamais un pourcentage des recettes ni un montant lié à ce qu'ont payé les contribuables.
  */
-import type { MoneyJSON, RoleCode } from '@mosolo/shared';
+import type { MoneyJSON } from '@mosolo/shared';
 
 /** Modules ouverts à la sous-traitance (§ 15A.1 ; H.8.2, sous réserve de J19). */
 export const TERRAIN_MODULES = [
@@ -274,5 +274,3 @@ export const MIN_SAMPLE_RATE = 5;
 
 /** Nombre maximal d'agents sur un lot probatoire (paramètre de démonstration). */
 export const PROBATION_MAX_AGENTS = 5;
-
-export const REGIE_ROLES: RoleCode[] = ['R06', 'R07'];

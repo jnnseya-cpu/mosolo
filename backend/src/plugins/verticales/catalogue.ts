@@ -367,8 +367,6 @@ export const VERTICALS: VerticalDef[] = [
   },
 ];
 
-export const VERTICAL_SLUGS = VERTICALS.map((v) => v.slug);
-
 export function findVertical(slug: string): VerticalDef | undefined {
   return VERTICALS.find((v) => v.slug === slug);
 }

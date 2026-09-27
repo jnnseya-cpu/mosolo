@@ -5,8 +5,8 @@
  */
 import type {
   MoneyJSON, CurrencyCode, LanguageCode, MapStatusColor, ObligationStatus, PaymentStatus, ReceiptStatus,
-  PublicReceiptCheck, ProbativeStatus, VerificationLevel, RuleSheet, AIRecommendation, Channel, Severity,
-  CommunicationEvent, ResidentialSituation, TerritorialAttribution,
+  PublicReceiptCheck, ProbativeStatus, VerificationLevel, Channel, Severity,
+  ResidentialSituation, TerritorialAttribution,
 } from '@mosolo/shared';
 
 export interface DemoUser { id: string; name: string; roles: string[]; entity?: string; taxpayerId?: string; territory?: string[] }
@@ -64,23 +64,6 @@ export interface DraftDoc<T = unknown> { key?: string; data: T; version?: number
 
 export interface ExchangeRates { date: string; source?: string; example?: boolean; /** CDF pour 1 unité */ rates: Partial<Record<CurrencyCode, string>> }
 
-export interface GovernorTile { key: string; label?: string; value: MoneyJSON | number | string; hint?: string; tone?: 'good' | 'warning' | 'serious' | 'critical' }
-export interface GovernorDashboard {
-  example?: boolean; asOf?: string; currency?: CurrencyCode;
-  tiles: {
-    confirmedToday: MoneyJSON; settled: MoneyJSON; reconciled: MoneyJSON; reconciliationRate: number;
-    criticalAlerts: number; confirmedDelta?: number; reconTarget?: number;
-  };
-  communes: { commune: string; amount: MoneyJSON; compliance?: number; target?: number }[];
-  categories: { category: string; amount: MoneyJSON }[];
-  ladder: { level: string; amount: MoneyJSON }[];
-  trend: { day: number | string; actual: number; target: number }[];
-  scenarios: { period: string; pessimistic: number; central: number; optimistic: number }[];
-  alerts: { id: string; severity: 'critical' | 'serious' | 'warning' | 'good'; title: string; detail?: string; age?: string }[];
-  actions?: AIRecommendation[];
-  exchange?: { rate: string; date: string; source?: string };
-}
-
 export type DeliveryStatus = 'en_file' | 'envoye' | 'delivre' | 'lu' | 'echoue' | 'journalise' | 'supprime_par_preference' | string;
 export interface Delivery {
   id: string; eventCode: string; channel: Channel | string; status: DeliveryStatus; provider?: string; at?: string;
@@ -94,16 +77,13 @@ export interface CommunicationsOverview {
   coverage: { channel: Channel; events: number; sent?: number }[];
   recent: Delivery[];
 }
-export type CatalogueEvent = CommunicationEvent;
 
 export interface Approval { role: string; userId: string; at: string }
-export type LegalRule = RuleSheet;
 
 export interface ReconciliationException {
   id: string; type?: string; reason?: string; paymentReference?: string; amount?: MoneyJSON; ageHours?: number;
   createdAt?: string; status?: string; statementId?: string;
 }
-export interface LedgerBalance { balanced: boolean; debit?: MoneyJSON | MoneyJSON[]; credit?: MoneyJSON | MoneyJSON[]; byCurrency?: Record<string, { debit: string; credit: string }> }
 
 export interface VaultChangeRequest {
   id: string; alias: string; proposed?: { bankName?: string; accountNumber?: string; holderName?: string }; reason?: string;

@@ -106,18 +106,6 @@ export const ISSUANCE_LABEL: Record<string, string> = {
   EXPIREE: 'Référence expirée — rien n’est dû', ANNULEE: 'Annulée — rien n’est dû',
 };
 
-/** Compte à rebours lisible (heure serveur au chargement, décompté localement pour l'affichage seulement). */
-export function formatRemaining(seconds: number): string {
-  const s = Math.abs(Math.round(seconds));
-  const d = Math.floor(s / 86400);
-  const h = Math.floor((s % 86400) / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  if (d > 0) return `${d} j ${h} h`;
-  if (h > 0) return `${h} h ${String(m).padStart(2, '0')} min`;
-  return `${m} min ${String(sec).padStart(2, '0')} s`;
-}
-
 export function useCountdown(initialSeconds: number | undefined): number | undefined {
   const [left, setLeft] = useState(initialSeconds);
   useEffect(() => {

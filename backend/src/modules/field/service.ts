@@ -61,7 +61,6 @@ export const batchSchema = z.object({
     observedAt: z.string().datetime({ offset: true }),
   })).max(500),
 });
-export type Batch = z.infer<typeof batchSchema>;
 
 export interface BatchResult {
   batchId: string;

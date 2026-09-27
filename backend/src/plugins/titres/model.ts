@@ -7,7 +7,6 @@ import type { MoneyJSON, TerritorialAttribution } from '@mosolo/shared';
 
 /** Fuseau de référence : Kinshasa (UTC+1, sans heure d'été). L'heure du terminal n'est jamais prise en compte. */
 export const KINSHASA_OFFSET_MS = 3_600_000;
-export const KINSHASA_TZ = 'Africa/Kinshasa';
 
 /** Les neuf modèles de validité du § 19A.3 / § H.11.3. */
 export const VALIDITY_MODELS = [

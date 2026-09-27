@@ -115,8 +115,6 @@ export function matchesDims(x: Dim, f: Filters): boolean {
 }
 export const matchesChannel = (x: { channel: string }, f: Filters) => !f.channel || f.channel === x.channel;
 
-/** Obligations « vivantes » (non annulées, non remplacées). */
-export const liveObligations = (facts: Facts) => facts.obligations.filter((o) => !o.cancelled);
 export const isDue = (o: ObligationFact, asOf: string) => !o.cancelled && !o.contested && o.dueDate <= kinshasaDay(asOf);
 export const isOverdue = (o: ObligationFact, asOf: string) => isDue(o, asOf) && !o.paidAt && o.status !== 'SOLDEE';
 export const isConfirmed = (o: OrderFact) => !!o.confirmedAt && ['CONFIRME', 'REGLE', 'RAPPROCHE', 'CONTESTE'].includes(o.status);

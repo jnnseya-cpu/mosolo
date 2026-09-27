@@ -40,8 +40,6 @@ export function newTicketCode(): string {
   return `PKT${core}${checkChar(`PKT${core}`)}`;
 }
 
-/** @deprecated la couleur suit désormais la règle 50 % / 1 % (core/validity.ts). */
-export const REMINDER_MINUTES = 10;
 /** Validité d'une référence non payée avant abandon de la demande de session. */
 const UNPAID_ABANDON_MS = 48 * HOUR_MS;
 const MINUTE = 60_000;

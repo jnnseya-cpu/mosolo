@@ -35,12 +35,6 @@ export class CurrencyTotals {
   }
 }
 
-export function totalsOf(items: MoneyJSON[]): CurrencyTotals {
-  const t = new CurrencyTotals();
-  for (const m of items) t.add(m);
-  return t;
-}
-
 /**
  * Ratio en pourcentage, une décimale, arithmétique entière (demi-supérieur). Variante volontairement distincte de
  * `core/percent.ts` : BigInt, donc exacte pour les grands montants en unités mineures (au-delà de 2^53 / 1000).
