@@ -84,8 +84,10 @@ export function usePreciseLocation(opts: { targetM?: number; maxWaitMs?: number;
     };
     const opts = { enableHighAccuracy: true, maximumAge: 0, timeout: maxWaitMs };
     watch.current = navigator.geolocation.watchPosition(onPos, onErr, opts);
-    // Relevé immédiat en plus du suivi : certains navigateurs ne notifient le suivi qu'au premier déplacement.
-    navigator.geolocation.getCurrentPosition((p) => { if (watch.current !== null) onPos(p); }, () => undefined, opts);
+    // Relevé immédiat en plus du suivi : certains navigateurs ne notifient le suivi qu'au premier déplacement, et une
+    // nouvelle demande « toute fraîche » peut rester sans réponse tant qu'un autre suivi est actif (terminal immobile).
+    // Ce premier relevé accepte donc une mesure de moins de 10 s ; le suivi, lui, n'accepte que des mesures fraîches.
+    navigator.geolocation.getCurrentPosition((p) => { if (watch.current !== null) onPos(p); }, () => undefined, { ...opts, maximumAge: 10_000 });
     // Certains appareils n'envoient qu'un relevé tant qu'ils ne bougent pas : cible tenue 6 s = position retenue.
     last.current = null;
     const t0 = Date.now();
