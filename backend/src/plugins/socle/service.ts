@@ -257,6 +257,10 @@ export class IdentityProviderService {
       else this.auditAuth('auth.login.failed', `login:${sha256b64u(login).slice(0, 12)}`, 'FAILURE', req, { reason: 'UNKNOWN_OR_BAD_PASSWORD' });
       throw unauthorized('INVALID_CREDENTIALS', 'Identifiant ou mot de passe incorrect.');
     }
+    if (this.accountClosed(user.id)) {
+      this.auditAuth('auth.login.failed', user.id, 'DENIED', req, { reason: 'ACCOUNT_REVOKED' });
+      throw forbidden('ACCOUNT_REVOKED', 'Compte révoqué ou expiré : connexion refusée. Contactez l’administrateur de votre entité.');
+    }
     if (!cred.totpSecret) throw forbidden('MFA_NOT_ENROLLED', 'Second facteur non enrôlé : un compte de travail exige la MFA. Contactez l’administrateur de votre entité.');
     // Rôle sensible muni d'une clé d'accès : le TOTP n'est plus qu'un secours motivé (§ 31, résistance au hameçonnage).
     const fallback = fallbackReason?.trim();
@@ -399,11 +403,21 @@ export class IdentityProviderService {
     const tpId = typeof claims.taxpayer_id === 'string' ? claims.taxpayer_id : undefined;
     const user = this.ctx.users.get(claims.sub) ?? (tpId && claims.sub === `u-tp-${tpId}` ? this.taxpayerUser(tpId) : undefined);
     if (!user) throw unauthorized('TOKEN_INVALID', 'Utilisateur inconnu.');
+    // Compte de travail révoqué ou expiré (module accès) : toute session encore ouverte est refusée immédiatement
+    // (deuxième passe adverse, 27/09/2026 : le jeton restait accepté jusqu'à son expiration).
+    if (this.accountClosed(user.id)) throw unauthorized('ACCOUNT_REVOKED', 'Compte révoqué ou expiré : accès refusé. Contactez l’administrateur de votre entité.');
     const auth: AuthContext = {
       method: 'bearer', sessionId: session.id, acr: session.acr, amr: session.amr, authTime: session.createdAt,
       expiresAt: new Date(claims.exp * 1000).toISOString(),
     };
     return { ...user, auth };
+  }
+
+  /** Compte de travail clos (révoqué ou expiré) selon le module « accès » (absent : aucun compte de travail géré). */
+  private accountClosed(userId: string): boolean {
+    const acces = this.ctx.ext.acces as { accounts?: { get(id: string): { status: string } | undefined } } | undefined;
+    const status = acces?.accounts?.get(userId)?.status;
+    return status === 'REVOQUE' || status === 'EXPIRE';
   }
 
   /** Renouvelle le jeton d'accès d'une session active (hors appareil partagé : reconnexion exigée). */
