@@ -717,6 +717,7 @@ export class Vues {
     return n;
   }
 
+  // Conversion justifiée : le dépôt des notes est déclaré sous un type générique par le service ; contenu NoteHebdo.
   notesRepo() { return this.s.notes as unknown as InMemoryAppendOnlyRepository<NoteHebdo>; }
   notesDe(userId: string) { return this.notesRepo().find((n) => n.userId === userId); }
 
@@ -747,6 +748,7 @@ export class Vues {
       if (Array.isArray(v)) { v.forEach(visit); return; }
       if (v && typeof v === 'object') {
         const o = v as Record<string, unknown>;
+        // Conversion justifiée : forme d'un chiffre vérifiée champ par champ juste avant (garde de type manuelle).
         if (typeof o.etat === 'string' && 'comparaison' in o && 'source' in o && typeof o.code === 'string') { out.push(o as unknown as Chiffre); return; }
         Object.values(o).forEach(visit);
       }
