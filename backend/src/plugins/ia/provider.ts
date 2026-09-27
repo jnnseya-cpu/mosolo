@@ -7,6 +7,7 @@ import { Money, ROLES, type CurrencyCode, type MoneyJSON, type RoleCode } from '
 import { PROVIDER_MODEL_VERSION, type AgentSheet } from './catalogue.js';
 import { KNOWLEDGE_BASE, pseudo, type DataGateway } from './gateway.js';
 import type { AgentCode, AgentDraft } from './types.js';
+import { kinshasaDay } from '../../core/clock.js';
 
 export interface AgentRunOptions {
   mode: 'demande' | 'balayage';
@@ -211,7 +212,7 @@ export class DeterministicAgentProvider implements IaAgentProvider {
       if (ob) gw.cite('OBLIGATIONS', ob.id, `Obligation ${ob.id} — règle ${ob.ruleCode}`);
       const age = daysBetween(a.submittedAt, gw.today);
       const step = a.status === 'DEPOSEE' ? 'instruction par l’agent de contentieux (R20)' : 'décision motivée par l’autorité (R21)';
-      const summary = `Réclamation ${a.id} déposée le ${a.submittedAt.slice(0, 10)} (${plural(age, 'jour')}) sur l’obligation ${a.obligationId}${ob ? ` de ${Money.fromJSON(ob.amount).toDecimalString()} ${ob.amount.currency}` : ''}. Motif classé : ${label}. Étape : ${step}.`;
+      const summary = `Réclamation ${a.id} déposée le ${kinshasaDay(a.submittedAt)} (${plural(age, 'jour')}) sur l’obligation ${a.obligationId}${ob ? ` de ${Money.fromJSON(ob.amount).toDecimalString()} ${ob.amount.currency}` : ''}. Motif classé : ${label}. Étape : ${step}.`;
       return {
         key: `COPILOTE:${a.id}:${a.status}`, autonomy: 'C_RECOMMANDATION' as const, example: false, subject: { type: 'appeal', id: a.id },
         situation: summary,
@@ -219,7 +220,7 @@ export class DeterministicAgentProvider implements IaAgentProvider {
         risk: age > 30 ? 'Délai d’instruction dépassant 30 jours : risque de recours hiérarchique.' : 'Décision non motivée ou pièces manquantes : fragilité juridique.',
         recommendation: a.status === 'DEPOSEE' ? 'Instruire le dossier à partir du résumé et du projet préparés.' : 'Relire la proposition et arrêter la décision motivée.',
         nextAction: `Ouvrir le dossier ${a.id} et vérifier les pièces.`,
-        owner: a.status === 'DEPOSEE' ? roleLabel('R20') : roleLabel('R21'), deadline: addDays(a.submittedAt.slice(0, 10), 30), confidence: 'MEDIUM' as const,
+        owner: a.status === 'DEPOSEE' ? roleLabel('R20') : roleLabel('R21'), deadline: addDays(kinshasaDay(a.submittedAt), 30), confidence: 'MEDIUM' as const,
         sources: ['Dossier de réclamation', 'Obligation contestée (trace de calcul)'],
         recommendedStep: step,
         circuit: 'POST /v1/appeals/:id/instruct (R20) puis POST /v1/appeals/:id/decide (R21) : l’IA ne clôt jamais un recours.',

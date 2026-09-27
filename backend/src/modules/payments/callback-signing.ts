@@ -14,6 +14,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { hmacSha256Hex, safeEqualHex } from '../../core/crypto.js';
+import { InMemoryRepository } from '../../core/repository.js';
 
 export interface ProviderKey {
   kid: string;
@@ -84,34 +85,88 @@ export function verifyCallbackSignature(keys: ProviderKey[], signature: string, 
   return matched;
 }
 
+/** Case persistante de la mémoire anti-rejeu (dépôt `payments.nonces.slots`, instantané PostgreSQL). */
+export interface NonceSlot {
+  id: string;
+  /** `<prestataire>:<nonce>`. */
+  key: string;
+  /** Fin de rétention (ms depuis l'époque) : horodatage signé + fenêtre. */
+  expiresAt: number;
+}
+
 /**
- * Mémoire anti-rejeu bornée : un nonce est retenu jusqu'à la fin de la fenêtre de son horodatage signé (au-delà, le
- * rappel est de toute façon refusé comme périmé). Plafond atteint ⇒ purge des expirés puis éviction des plus anciens
- * (signalée à l'appelant : une éviction forcée rouvre une fenêtre de rejeu, à surveiller).
+ * Mémoire anti-rejeu bornée ET persistée : un nonce est retenu jusqu'à la fin de la fenêtre de son horodatage signé
+ * (au-delà, le rappel est de toute façon refusé comme périmé). Les dépôts n'ont pas de suppression : la mémoire est
+ * un anneau d'au plus `max` cases réécrites (update) — la plus ancienne est recyclée dès qu'elle a expiré, de sorte
+ * que la table reste à la taille du trafic d'une fenêtre. Le dépôt est découvert et persisté comme les autres
+ * (runtime de persistance) : un rejeu reste refusé après redémarrage. Plafond atteint sans case expirée ⇒ éviction
+ * d'une entrée vivante (signalée à l'appelant : elle rouvre une fenêtre de rejeu, à surveiller).
  */
 export class NonceStore {
-  private readonly entries = new Map<string, number>();
+  readonly slots = new InMemoryRepository<NonceSlot>();
+  /** Index clé → case et anneau de recyclage (le plus ancien au curseur), reconstruits après une restauration. */
+  private byKey = new Map<string, string>();
+  private ring: string[] = [];
+  private cursor = 0;
+  private indexed = -1;
+
   constructor(private readonly max = 100_000) {}
 
+  /** Nombre de cases (vivantes ou expirées en attente de recyclage). */
   get size(): number {
-    return this.entries.size;
+    return this.slots.count();
+  }
+
+  /** Index reconstruit si le dépôt a été restauré (nombre de cases différent de l'index) : ordre = expiration. */
+  private sync(): void {
+    if (this.indexed === this.slots.count()) return;
+    const all = this.slots.all().sort((a, b) => a.expiresAt - b.expiresAt || a.id.localeCompare(b.id));
+    this.byKey = new Map(all.map((s) => [s.key, s.id]));
+    this.ring = all.map((s) => s.id);
+    this.cursor = 0;
+    this.indexed = all.length;
+  }
+
+  private write(id: string, key: string, expiresAt: number, fresh: boolean): void {
+    const prev = fresh ? undefined : this.slots.get(id);
+    if (prev && prev.key !== key && this.byKey.get(prev.key) === id) this.byKey.delete(prev.key);
+    if (fresh) this.slots.insert({ id, key, expiresAt });
+    else this.slots.update({ id, key, expiresAt });
+    this.byKey.set(key, id);
+    this.indexed = this.slots.count();
   }
 
   /** Enregistre le nonce ; false s'il est déjà connu et non expiré. `evicted` : nombre d'entrées vivantes sacrifiées. */
   remember(key: string, expiresAt: number, now: number): { fresh: boolean; evicted: number } {
-    const known = this.entries.get(key);
-    if (known !== undefined && known > now) return { fresh: false, evicted: 0 };
-    this.entries.delete(key);
-    let evicted = 0;
-    if (this.entries.size >= this.max) {
-      for (const [k, exp] of this.entries) if (exp <= now) this.entries.delete(k);
-      for (const k of this.entries.keys()) {
-        if (this.entries.size < this.max) break;
-        this.entries.delete(k);
-        evicted++;
+    this.sync();
+    const own = this.byKey.get(key);
+    if (own !== undefined) {
+      if (this.slots.get(own)!.expiresAt > now) return { fresh: false, evicted: 0 };
+      this.write(own, key, expiresAt, false);
+      return { fresh: true, evicted: 0 };
+    }
+    // Case la plus ancienne expirée ⇒ recyclée (devient la plus récente) ; sinon nouvelle case sous le plafond ;
+    // sinon n'importe quelle case expirée ; à défaut, éviction de la plus ancienne.
+    if (this.ring.length) {
+      const oldest = this.ring[this.cursor]!;
+      if (this.slots.get(oldest)!.expiresAt <= now) {
+        this.cursor = (this.cursor + 1) % this.ring.length;
+        this.write(oldest, key, expiresAt, false);
+        return { fresh: true, evicted: 0 };
       }
     }
-    this.entries.set(key, expiresAt);
-    return { fresh: true, evicted };
+    if (this.ring.length < this.max) {
+      const id = `NONCE-${String(this.ring.length + 1).padStart(6, '0')}`;
+      // Insérée juste avant le curseur : la plus récente de l'anneau, la dernière recyclée.
+      this.ring.splice(this.cursor, 0, id);
+      this.cursor = (this.cursor + 1) % this.ring.length;
+      this.write(id, key, expiresAt, true);
+      return { fresh: true, evicted: 0 };
+    }
+    const expired = this.slots.findOne((s) => s.expiresAt <= now);
+    const victim = expired?.id ?? this.ring[this.cursor]!;
+    if (!expired) this.cursor = (this.cursor + 1) % this.ring.length;
+    this.write(victim, key, expiresAt, false);
+    return { fresh: true, evicted: expired ? 0 : 1 };
   }
 }

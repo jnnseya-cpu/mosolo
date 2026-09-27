@@ -291,8 +291,8 @@ export class PaymentService {
   readonly unappliedPayments = new InMemoryAppendOnlyRepository<UnappliedPayment>();
   readonly unappliedStates = new InMemoryRepository<UnappliedState>();
   private readonly unappliedListeners: ((u: UnappliedPayment) => void)[] = [];
-  /** Nonces des rappels génériques (mémoire bornée, purgée à l'expiration de la fenêtre de l'horodatage signé). */
-  private readonly nonces = new NonceStore();
+  /** Nonces des rappels génériques (anneau borné persisté : `payments.nonces.slots`, rejeu refusé après redémarrage). */
+  readonly nonces = new NonceStore();
   /** Obligations dont une intention prestataire est en cours de création (verrou anti-concurrence). */
   private readonly pendingIntents = new Set<string>();
   private readonly ids = new IdGenerator();

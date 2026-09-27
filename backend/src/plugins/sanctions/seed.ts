@@ -11,6 +11,7 @@ import type { ParkingService } from '../parking/service.js';
 import { demoEvidencePhotos, PARKING_DEMO } from '../parking/seed.js';
 import { demoPay } from '../parking/support.js';
 import type { VerticalesService } from '../verticales/service.js';
+import { kinshasaDate } from '../../core/clock.js';
 
 export function seedSanctions(ctx: AppContext): void {
   const svc = ctx.ext.parking as ParkingService | undefined;
@@ -55,7 +56,7 @@ export function seedSanctions(ctx: AppContext): void {
     for (const p of vx.plates.all()) {
       const agent = agents.find((a) => a.territory!.includes(p.commune));
       // Dette ÉCHUE (situation rouge au scan) : seul un scan qui révèle un défaut fonde une commission.
-      const today = ctx.clock.now().toISOString().slice(0, 10);
+      const today = kinshasaDate(ctx.clock.now());
       const ob = ctx.assessment.obligations.find((o) => o.objectId === p.objectId && o.status !== 'SOLDEE' && o.status !== 'ANNULEE' && o.status !== 'CONTESTEE' && (o.dueDate < today || o.status === 'EN_RETARD'))[0];
       const payer = ob ? ctx.users.all().find((u) => u.taxpayerId === ob.taxpayerId) : undefined;
       if (!agent || !ob || !payer) continue;

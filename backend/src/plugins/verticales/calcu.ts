@@ -14,6 +14,7 @@ import { assertDistinctPerson, authorize } from '../../core/policy.js';
 import { conflict, forbidden, notFound } from '../../core/errors.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { P } from './policies.js';
+import { kinshasaDay } from '../../core/clock.js';
 
 export const ACCOUNT_TYPES = ['FONCTIONNEMENT', 'INVESTISSEMENT', 'PROJET', 'SPECIAL'] as const;
 export const DOCUMENT_TYPES = ['DEVIS', 'BON_COMMANDE', 'ENGAGEMENT', 'CONTRAT', 'FOURNISSEUR'] as const;
@@ -157,13 +158,13 @@ export class CalcuService {
         }
       }
       if (!docs.some((d) => norm(d.supplier) === norm(tx.beneficiary))) { findings.push('Bénéficiaire différent du fournisseur des justificatifs : dépense hors objet présumée.'); worst('AMBRE'); }
-      if (docs.some((d) => d.date > tx.at.slice(0, 10))) { findings.push('Justificatif daté après le paiement.'); worst('AMBRE'); }
+      if (docs.some((d) => d.date > kinshasaDay(tx.at))) { findings.push('Justificatif daté après le paiement.'); worst('AMBRE'); }
     }
     const previous = this.transactions.find((t) => t.accountNumberHash === tx.accountNumberHash);
     if (previous.some((t) => t.reference === tx.reference && norm(t.beneficiary) === norm(tx.beneficiary) && Money.fromJSON(t.amount).equals(Money.fromJSON(tx.amount)))) {
       findings.push('Paiement répété présumé (même référence, même bénéficiaire, même montant).'); worst('ROUGE');
     }
-    const sameDay = previous.filter((t) => norm(t.beneficiary) === norm(tx.beneficiary) && t.at.slice(0, 10) === tx.at.slice(0, 10));
+    const sameDay = previous.filter((t) => norm(t.beneficiary) === norm(tx.beneficiary) && kinshasaDay(t.at) === kinshasaDay(tx.at));
     if (sameDay.length >= 2) { findings.push('Plusieurs paiements le même jour au même bénéficiaire : fractionnement présumé.'); worst('AMBRE'); }
     if (score === 'VERT') findings.push('Conformité totale : compte enregistré, justificatifs complets et cohérents.');
     return { score, findings };

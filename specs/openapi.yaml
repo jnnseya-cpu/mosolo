@@ -358,16 +358,23 @@ paths:
       tags: [Paiements]
       summary: Confirmation signée d'un prestataire → CONFIRME + quittance provisoire
       description: |
-        Vérifications : `x-signature` = HMAC-SHA256 hexadécimal du corps brut avec le secret du prestataire ;
-        `x-timestamp` dans ±5 min ; `x-nonce` unique (sinon 409 `NONCE_REPLAYED` + alerte) ; `providerTxnId` unique
+        Signature v2 : `x-signature` = `v2=` + HMAC-SHA256 hexadécimal (préfixe `sha256=` ou aucun admis) de la chaîne
+        canonique `mosolo-callback-v2\n<x-timestamp>\n<x-nonce>\n<corps brut>` avec une clé active du prestataire :
+        horodatage et nonce sont couverts (réécrits ⇒ 401 `INVALID_SIGNATURE`) ; la signature du seul corps est refusée.
+        `x-key-id` (facultatif) désigne la clé du trousseau (rotation sans interruption : clé courante + anciennes
+        clés encore actives ; sans `x-key-id`, chaque clé active est essayée à temps constant ; kid inconnu ⇒ 401).
+        `x-timestamp` dans ±5 min de l'heure serveur (sinon 401 `TIMESTAMP_OUT_OF_WINDOW`) ; `x-nonce` de 8 à 128
+        caractères `[A-Za-z0-9._:-]` (sinon 401 `INVALID_NONCE`), unique par prestataire pendant la fenêtre de son
+        horodatage, y compris après redémarrage (mémoire persistée ; sinon 409 `NONCE_REPLAYED` + alerte) ; `providerTxnId` unique
         (rejeu → 200 avec `replayed: true`, sans double effet) ; montant et référence identiques à l'ordre
         (sinon 422 `AMOUNT_MISMATCH` / `UNKNOWN_PAYMENT_REFERENCE` + alerte). Aucune quittance par un autre moyen.
       security: []
       parameters:
         - { name: provider, in: path, required: true, schema: { type: string, examples: [mm-operator-a] } }
-        - { name: x-signature, in: header, required: true, schema: { type: string, pattern: '^(sha256=)?[0-9a-f]{64}$' } }
-        - { name: x-nonce, in: header, required: true, schema: { type: string } }
-        - { name: x-timestamp, in: header, required: true, schema: { type: string, format: date-time } }
+        - { name: x-signature, in: header, required: true, description: 'HMAC-SHA256 v2 de la chaîne canonique', schema: { type: string, pattern: '^((v2|sha256)=)?[0-9a-f]{64}$' } }
+        - { name: x-nonce, in: header, required: true, schema: { type: string, pattern: '^[A-Za-z0-9._:-]{8,128}$' } }
+        - { name: x-timestamp, in: header, required: true, description: 'Signé ; ±5 min', schema: { type: string, format: date-time } }
+        - { name: x-key-id, in: header, required: false, description: 'kid de la clé employée (trousseau MOSOLO_PROVIDER_SECRET_<PRESTATAIRE> = « kid:secret,kid:secret »)', schema: { type: string, pattern: '^[a-z0-9][a-z0-9_-]{0,31}$' } }
       requestBody:
         required: true
         content:
@@ -1260,7 +1267,18 @@ components:
           type: object
           properties:
             algorithm: { type: string, const: Ed25519 }
-            publicKeyPem: { type: string }
+            keyId: { type: string, description: Identifiant de la clé courante }
+            publicKeyPem: { type: string, description: Clé publique COURANTE }
+            keys: { type: array, items: { $ref: '#/components/schemas/ReceiptVerificationKey' } }
+
+    ReceiptVerificationKey:
+      type: object
+      description: Trousseau de vérification des quittances (clé courante + clés retirées encore acceptées, MOSOLO_RECEIPT_VERIFY_KEYS).
+      required: [keyId, publicKeyPem, current]
+      properties:
+        keyId: { type: string, pattern: '^[0-9a-f]{16}$', description: 16 premiers hexadécimaux du SHA-256 de la clé publique SPKI (DER) }
+        publicKeyPem: { type: string }
+        current: { type: boolean }
 
     DemoUser:
       type: object
@@ -1867,6 +1885,7 @@ components:
         mention: { type: string }
         signature: { type: string, description: Ed25519, base64url }
         signatureAlgorithm: { type: string, const: Ed25519 }
+        keyId: { type: string, pattern: '^[0-9a-f]{16}$', description: 'Clé de signature (voir ReceiptVerificationKey) ; absente sur les quittances antérieures à la rotation (toutes les clés du trousseau sont alors essayées)' }
         qrPayload: { type: string, examples: ['MOSOLO1|Q26KIN0000000017|<signature>'] }
         verificationPath: { type: string }
     PublicReceiptCheck:

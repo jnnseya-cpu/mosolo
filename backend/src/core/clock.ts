@@ -39,3 +39,10 @@ export const KINSHASA_OFFSET_MS = HOUR_MS;
 export function kinshasaDate(d: Date): string {
   return new Date(d.getTime() + KINSHASA_OFFSET_MS).toISOString().slice(0, 10);
 }
+
+/** Jour calendaire à Kinshasa d'un horodatage ISO ; une date seule (AAAA-MM-JJ) ou illisible est rendue telle quelle. */
+export function kinshasaDay(iso: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? iso.slice(0, 10) : kinshasaDate(new Date(t));
+}

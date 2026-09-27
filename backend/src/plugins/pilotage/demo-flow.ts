@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import type { AppContext } from '../../context.js';
 import { signedCallbackHeaders } from '../../modules/payments/callback-signing.js';
 import type { PaymentChannel } from '../../modules/payments/service.js';
+import { kinshasaDate } from '../../core/clock.js';
 
 const PLAN: { commune: string; quartier: string; rank: 1 | 2 | 3 | 4; count: number; reconcile: number; lat: number; lon: number }[] = [
   { commune: 'Gombe', quartier: 'Batetela', rank: 1, count: 7, reconcile: 6, lat: -4.305, lon: 15.305 },
@@ -57,8 +58,8 @@ export function runDemoFlow(ctx: AppContext, provider = 'mm-operator-a'): { obli
     }
   });
   const statement = ctx.treasury.importStatement(tresor, {
-    statementId: `REL-DEMO-PILOTAGE-${ctx.clock.now().toISOString().slice(0, 10)}`,
-    lines: toReconcile.map((l) => ({ accountAlias: l.alias, amount: l.amount, valueDate: ctx.clock.now().toISOString().slice(0, 10), paymentReference: l.ref })),
+    statementId: `REL-DEMO-PILOTAGE-${kinshasaDate(ctx.clock.now())}`,
+    lines: toReconcile.map((l) => ({ accountAlias: l.alias, amount: l.amount, valueDate: kinshasaDate(ctx.clock.now()), paymentReference: l.ref })),
   });
   return { obligations: n, confirmed, reconciled: statement.result.matched.length };
 }
