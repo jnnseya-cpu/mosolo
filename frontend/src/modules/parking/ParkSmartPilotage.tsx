@@ -16,6 +16,7 @@ import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { DemoTag, ErrorLine, hasRole, Kpis, Money, pctText, ReasonForm, useAction } from './shared';
 import './parking.css';
+import { TarificationDynamiqueTab } from './TarificationDynamique';
 
 // ------------------------------------------------------------------ Types (contrat /v1/parking, chapitre 11A)
 
@@ -50,9 +51,9 @@ const RECONFIG_KIND: Record<string, string> = {
   STATIONNEMENT_EN_EPI: 'Stationnement en épi', NOUVELLES_BAIES: 'Nouvelles baies', ZONE_LIVRAISON: 'Zone de livraison', ZONE_ROTATION_RAPIDE: 'Rotation rapide', LONGUE_DUREE_PERIPHERIE: 'Longue durée en périphérie',
 };
 
-type Tab = 'tarifs' | 'occupation' | 'recettes' | 'plaques' | 'surreservation' | 'espaces' | 'affectation' | 'deploiement';
+type Tab = 'tarifs' | 'dynamique' | 'occupation' | 'recettes' | 'plaques' | 'surreservation' | 'espaces' | 'affectation' | 'deploiement';
 const TABS: [Tab, string][] = [
-  ['tarifs', 'Grilles tarifaires'], ['occupation', 'Occupation et recommandations'], ['recettes', 'Recettes et données urbaines'], ['plaques', 'Plaques (priorisation)'],
+  ['tarifs', 'Grilles tarifaires'], ['dynamique', 'Tarification automatique (fourchettes de l’acte)'], ['occupation', 'Occupation et recommandations'], ['recettes', 'Recettes et données urbaines'], ['plaques', 'Plaques (priorisation)'],
   ['surreservation', 'Surréservation'], ['espaces', 'Reconfigurations'], ['affectation', 'Affectation'], ['deploiement', 'Déploiement'],
 ];
 
@@ -76,6 +77,7 @@ export default function ParkSmartPilotage() {
         {TABS.map(([k, l]) => <button key={k} type="button" role="tab" aria-pressed={tab === k} aria-selected={tab === k} onClick={() => setTab(k)}>{l}</button>)}
       </div>
       {tab === 'tarifs' && <Tariffs />}
+      {tab === 'dynamique' && <TarificationDynamiqueTab />}
       {tab === 'occupation' && <OccupancyTab />}
       {tab === 'recettes' && <RevenueTab />}
       {tab === 'plaques' && <PlatesTab />}

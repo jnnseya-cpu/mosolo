@@ -20,6 +20,13 @@ const money = z.object({ amount: z.string().regex(/^\d+(\.\d{1,2})?$/), currency
 export function registerParkSmartRoutes(app: FastifyInstance, svc: ParkingService): void {
   const s = svc.smart;
 
+  // Module 75 — tarification dynamique AUTOMATIQUE dans les fourchettes de l'acte (15 à 25 % de places libres) ;
+  // hors fourchette ou sans acte : recommandation seulement.
+  app.get('/v1/parking/tarification-dynamique', async (req) => svc.tarification.view(requireUser(req)));
+  app.post('/v1/parking/tarification-dynamique/run', async (req, reply) => reply.code(201).send(svc.tarification.run(requireUser(req), parse(z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), hour: z.number().int().min(0).max(23).optional(),
+  }).strict(), req.body ?? {}))));
+
   // § 11A.2 — Modes tarifaires et grilles (règles du registre ; jamais de montant saisi)
   app.get('/v1/parking/tariff-modes', async (req) => {
     authorize(requireUser(req), 'parking:zone.read');

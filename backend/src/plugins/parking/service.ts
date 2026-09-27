@@ -23,6 +23,7 @@ import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../
 import { assertDistinctPerson, assertNotRelated, authorize, evaluate, hasAnyGrant } from '../../core/policy.js';
 import { validityView } from '../../core/validity.js';
 import { distanceToZoneM, ParkingField, PHOTO_WINDOW_MINUTES, presenceOk, type AgentFix } from './field.js';
+import { TarificationDynamique } from './tarification-dynamique.js';
 import { ParkSmart, type PREMIUM_CATEGORIES } from './smart.js';
 import { sampleForCounterCheck, withOverdue } from '../sanctions/service.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
@@ -264,10 +265,13 @@ export class ParkingService {
   readonly field: ParkingField;
   /** Compléments du chapitre 11A : grilles tarifaires, occupation, surréservation, plaque, affectation, déploiement (smart.ts). */
   readonly smart: ParkSmart;
+  /** Module 75 : tarification dynamique automatique dans les fourchettes de l'acte (tarification-dynamique.ts). */
+  readonly tarification: TarificationDynamique;
 
   constructor(private readonly ctx: AppContext) {
     this.field = new ParkingField(ctx, this);
     this.smart = new ParkSmart(ctx, this);
+    this.tarification = new TarificationDynamique(ctx, this, this.smart);
   }
 
   now(): Date {
@@ -449,7 +453,7 @@ export class ParkingService {
   private liquidate(user: User, z: ParkingZone, taxpayerId: string, objectId: string, minutes: number, places: number) {
     const rule = this.openZoneRule(z);
     // Entrées déduites de la situation et limitées à celles de la formule (heure de pointe lue dans la table de la règle).
-    const inputs = this.smart.tariffInputs(rule, { minutes, places, at: this.now() });
+    const inputs = this.smart.tariffInputs(rule, { minutes, places, at: this.now(), zone: z });
     const { obligation } = this.ctx.assessment.calculate(user, { ruleId: rule.id, taxpayerId, objectId, inputs, simulate: false });
     return obligation!;
   }
