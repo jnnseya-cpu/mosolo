@@ -36,6 +36,15 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/fiscal/corrections', element: lazy(() => import('./fiscal/Corrections')), nav: { label: 'Corrections d’objets', short: 'Corrections', icon: 'replace', group: 'operations', roles: ['R06', 'R07', 'R11'] } },
   { path: '/autour-de-moi', element: lazy(() => import('./fiscal/AutourDeMoi')), nav: { label: 'Autour de moi', short: 'Autour', icon: 'gps', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24', 'R35'] } },
   { path: '/fiscal/carte', element: lazy(() => import('./fiscal/Carte')), nav: { label: 'Carte fiscale', short: 'Carte', icon: 'pin', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R22'] } },
+  // Fiscal (extensions) : anomalies locatives § 16.4, assiette 2026 § 16.3, conditions des services § 10A.3, recensement § 17.4, reprise e-DGRK § 7.5
+  { path: '/fiscal/anomalies-locatives', element: lazy(() => import('./fiscal/Anomalies')), nav: { label: 'Anomalies locatives', short: 'Anomalies', icon: 'analysis', group: 'operations', roles: ['R06', 'R07', 'R11', 'R22', 'R24', 'R09'] } },
+  { path: '/fiscal/assiette-2026', element: lazy(() => import('./fiscal/Assiette2026')), nav: { label: 'Assiette 2026 (édit budgétaire)', short: 'Assiette 2026', icon: 'file', group: 'public', roles: ['R30', 'R31', 'R06', 'R07', 'R11', 'R12', 'R22'] } },
+  { path: '/fiscal/dependances', element: lazy(() => import('./fiscal/Dependances')), nav: { label: 'Conditions des services (quitus, vignette)', short: 'Conditions', icon: 'check', group: 'public', roles: [] } },
+  { path: '/fiscal/recensement', element: lazy(() => import('./fiscal/Recensement')), nav: { label: 'Vagues de recensement', short: 'Recensement', icon: 'grid', group: 'operations', roles: ['R06', 'R07', 'R11', 'R22', 'R09', 'R10'] } },
+  { path: '/fiscal/reprise', element: lazy(() => import('./fiscal/Reprise')), nav: { label: 'Reprise e-DGRK et import par lots', short: 'Reprise', icon: 'upload', group: 'operations', roles: ['R06', 'R07', 'R11', 'R12', 'R22', 'R23'] } },
+  // Compte unique : profils et espaces § 9.3, récupération contrôlée
+  { path: '/mon-espace/profils', element: lazy(() => import('./socle/Profils')), nav: { label: 'Mes profils et espaces', short: 'Profils', icon: 'user', group: 'public', roles: ['R30', 'R31', 'R07', 'R11', 'R12'] } },
+  { path: '/recuperation-compte', element: lazy(() => import('./socle/Recuperation')), nav: { label: 'Récupérer mon compte', short: 'Récupérer', icon: 'lock', group: 'public', roles: [] } },
   { path: '/fiscal/verifier', element: lazy(() => import('./fiscal/Verifier')) },
   { path: '/fiscal/verifier/:type', element: lazy(() => import('./fiscal/Verifier')) },
   { path: '/fiscal/verifier/:type/:code', element: lazy(() => import('./fiscal/Verifier')) },
@@ -46,6 +55,8 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/recouvrement/avis/:id', element: lazy(() => import('./recouvrement/NoticeView')) },
   // Remises (demande et instruction R20, décision R21) et admission en non-valeur (proposition R20, décision R21) ; lecture : recouvrement:read.
   { path: '/recouvrement/remises', element: lazy(() => import('./recouvrement/Remises')), nav: { label: 'Remises gracieuses', short: 'Remises', icon: 'scale', group: 'operations', roles: ['R06', 'R07', 'R11', 'R20', 'R21', 'R22', 'R23'] } },
+  // Campagnes (§ 8, § 45) et prorogations d'échéance (§ 6.2)
+  { path: '/recouvrement/campagnes', element: lazy(() => import('./recouvrement/Campagnes')), nav: { label: 'Campagnes et calendrier', short: 'Campagnes', icon: 'clock', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R11', 'R13', 'R16', 'R22', 'R23'] } },
   { path: '/recouvrement/non-valeurs', element: lazy(() => import('./recouvrement/NonValeurs')), nav: { label: 'Admissions en non-valeur', short: 'Non-valeurs', icon: 'ban', group: 'operations', roles: ['R06', 'R07', 'R11', 'R20', 'R21', 'R22', 'R23'] } },
 
   // Liquidation : dérogations à la base connue (lecture liquidation R06/R07/R11 et audit R22/R23 ; approbation R06/R07)
@@ -59,6 +70,7 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/canaux/ussd', element: lazy(() => import('./canaux/UssdSimulator')), nav: { label: 'USSD et SVI', short: 'USSD', icon: 'keypad', group: 'public', roles: [] } },
   { path: '/points-de-paiement', element: lazy(() => import('./canaux/PaymentPointsPublic')), nav: { label: 'Où payer ?', short: 'Payer', icon: 'store', group: 'public', roles: [] } },
   { path: '/canaux/verifier-carte', element: lazy(() => import('./canaux/CardVerify')) },
+  { path: '/canaux/contestation', element: lazy(() => import('./canaux/ContestationAssistee')), nav: { label: 'Contestation sans écrit (guichet)', short: 'Contester', icon: 'scale', group: 'operations', roles: ['R12'] } },
   { path: '/canaux/enrolement', element: lazy(() => import('./canaux/AssistedEnrolment')), nav: { label: 'Enrôlement assisté', short: 'Enrôler', icon: 'user', group: 'operations', roles: ['R09', 'R10', 'R12'] } },
   { path: '/canaux/carte/:number', element: lazy(() => import('./canaux/CardPrint')) },
   { path: '/canaux/point-agree', element: lazy(() => import('./canaux/PointConsole')), nav: { label: 'Console du point agréé', short: 'Encaisser', icon: 'cash', group: 'operations', roles: ['R32'] } },

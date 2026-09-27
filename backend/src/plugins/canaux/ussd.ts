@@ -60,6 +60,17 @@ const MAIN_OPTIONS: Opt[] = [
   { key: '5', label: 'Points de paiement', voice: 'connaître les points de paiement agréés' },
   { key: '6', label: 'Langue', voice: 'changer de langue' },
   { key: '7', label: 'Carte perdue / volée', voice: 'bloquer une carte perdue ou volée' },
+  // Contester sans écrit (§ 13A.6), comme le promet l'avis à pictogrammes.
+  { key: '8', label: 'Contester', voice: 'contester une obligation, sans écrit' },
+];
+
+/** Motifs de contestation par touche (types de réclamation du circuit commun). */
+const CONTEST_REASONS: { key: string; type: 'MONTANT_ERRONE' | 'BIEN_NON_DETENU' | 'DOUBLE_IMPOSITION' | 'ACTIVITE_FERMEE' | 'AUTRE'; label: string }[] = [
+  { key: '1', type: 'MONTANT_ERRONE', label: 'Montant erroné' },
+  { key: '2', type: 'BIEN_NON_DETENU', label: 'Bien qui n’est pas à moi' },
+  { key: '3', type: 'DOUBLE_IMPOSITION', label: 'Déjà payé / double imposition' },
+  { key: '4', type: 'ACTIVITE_FERMEE', label: 'Activité fermée' },
+  { key: '5', type: 'AUTRE', label: 'Autre motif' },
 ];
 const BACK: Opt[] = [{ key: '9', label: 'Menu', voice: 'revenir au menu' }, { key: '0', label: 'Quitter', voice: 'quitter' }];
 
@@ -183,6 +194,12 @@ export class ChannelEngine {
         return this.onLang(s, input);
       case 'CARD_LOST_CONFIRM':
         return this.onCardLost(s, input);
+      case 'CONTEST_SELECT':
+        return this.onContestSelect(s, input);
+      case 'CONTEST_REASON':
+        return this.onContestReason(s, input);
+      case 'CONTEST_CONFIRM':
+        return this.onContestConfirm(s, input);
       default:
         return this.mainMenu();
     }
@@ -208,6 +225,8 @@ export class ChannelEngine {
         return { node: 'LANG', title: 'Langue / Lokota', options: LANG_ORDER.map((l, i) => ({ key: String(i + 1), label: LANGUAGES[l].nativeName, voice: LANGUAGES[l].name })) };
       case '7':
         return this.requireAuth(s, 'CARD_LOST');
+      case '8':
+        return this.requireAuth(s, 'CONTEST');
       default:
         return this.invalid(this.mainMenu());
     }
@@ -290,6 +309,18 @@ export class ChannelEngine {
         options: BACK,
       };
     }
+    if (intent === 'CONTEST') {
+      const dues = this.points.payableObligations(tpId).slice(0, 3);
+      if (dues.length === 0) return { node: 'BALANCE', title: 'Aucune obligation à contester. Au guichet MOSOLO, un agent peut aussi vous aider.', options: BACK };
+      const data: Record<string, string> = {};
+      dues.forEach((d, i) => { data[`c${i + 1}`] = d.obligationId; });
+      this.sessions.update({ ...this.sessions.get(s.id)!, data });
+      return {
+        node: 'CONTEST_SELECT', title: 'Quelle obligation contestez-vous ?',
+        voiceLines: ['Vous pouvez contester sans écrit. Votre contestation sera enregistrée à votre nom et instruite par un agent.'],
+        options: [...dues.map((d, i) => ({ key: String(i + 1), label: `${d.revenue} ${ussdAmount(d.amount)}`, voice: `contester ${moneyToFrenchWords(d.amount)}, ${d.revenue}` })), ...BACK],
+      };
+    }
     if (intent === 'CARD_LOST') {
       const card = s.cardNumber ? this.cards.byNumber(s.cardNumber) : this.cards.activeFor(tpId);
       if (!card || card.status !== 'ACTIVE') return { node: 'BALANCE', title: 'Aucune carte active à bloquer.', options: BACK };
@@ -330,6 +361,45 @@ export class ChannelEngine {
         `Montant : ${moneyToFrenchWords(order.amount)}, valable jusqu’au ${shortDate(order.expiresAt)}.`,
         'Payez par monnaie mobile ou chez un point de paiement agréé. Aucun agent ne vous demandera d’espèces.',
       ],
+    };
+  }
+
+  private onContestSelect(s: ChannelSession, input: string): Screen {
+    const obligationId = s.data[`c${input}`];
+    if (!obligationId) return this.invalid(this.goIntent(s, 'CONTEST'));
+    this.sessions.update({ ...s, data: { ...s.data, contest: obligationId } });
+    return { node: 'CONTEST_REASON', title: 'Motif de la contestation', options: [...CONTEST_REASONS.map((r) => ({ key: r.key, label: r.label, voice: r.label.toLowerCase() })), ...BACK] };
+  }
+
+  private onContestReason(s: ChannelSession, input: string): Screen {
+    const r = CONTEST_REASONS.find((x) => x.key === input);
+    if (!r || !s.data.contest) return this.invalid(this.mainMenu());
+    this.sessions.update({ ...s, data: { ...s.data, contestType: r.type } });
+    const summary = `Contestation de l’obligation se terminant par ${s.data.contest.slice(-6)} — motif : ${r.label.toLowerCase()}.`;
+    return {
+      node: 'CONTEST_CONFIRM', title: `Confirmer : ${r.label} ?`,
+      lines: ['Enregistrée à votre nom, sans écrit. Un agent vous rappellera si besoin.'],
+      voiceLines: [`Résumé : ${summary}`, 'Elle sera enregistrée à votre nom, sans écrit, et instruite par un agent. Aucun paiement n’est demandé.'],
+      options: [{ key: '1', label: 'Confirmer', voice: 'confirmer la contestation' }, { key: '2', label: 'Annuler', voice: 'annuler' }],
+    };
+  }
+
+  private onContestConfirm(s: ChannelSession, input: string): Screen {
+    if (input === '2') return this.mainMenu();
+    const type = CONTEST_REASONS.find((r) => r.type === s.data.contestType)?.type;
+    if (input !== '1' || !s.data.contest || !type || !s.authenticated) return this.invalid(this.mainMenu());
+    // Principal de canal : la session authentifiée par code secret vaut identification ; la touche vaut consentement.
+    const principal = { kind: 'user' as const, id: `canal-${s.channel.toLowerCase()}:${s.id}`, name: `${s.channel} MOSOLO`, roles: [], entity: 'PUBLIC' };
+    const appeal = this.ctx.appeals.submit(principal, {
+      obligationId: s.data.contest, type,
+      grounds: `Contestation sans écrit par ${s.channel} (${CONTEST_REASONS.find((r) => r.type === type)!.label}) — session ${s.id}, confirmée par touche après lecture du résumé.`,
+    }, { channel: s.channel === 'USSD' ? 'USSD' : 'SVI', consent: { method: 'CONFIRMATION_CLAVIER', summaryReadBack: true, at: this.ctx.clock.now().toISOString(), sessionId: s.id } });
+    this.ctx.audit.append({ actor: { kind: 'public', id: `canal-${s.channel.toLowerCase()}` }, action: 'canaux.session.appeal_submitted', resourceType: 'appeal', resourceId: appeal.id, details: { sessionId: s.id, obligationId: s.data.contest, type } });
+    const ack = appeal.acknowledgement?.number ?? appeal.id;
+    return {
+      node: 'CONTEST_DONE', end: true, title: `Contestation enregistrée : ${ack}`,
+      lines: ['Aucune mesure pendant l’instruction si l’effet suspensif est accordé. Suivi au guichet ou dans votre espace.'],
+      voiceLines: [`Votre contestation est enregistrée. Numéro d’accusé : ${spell(ack)}.`, 'Un agent instruit votre dossier. Aucun paiement n’est demandé pour contester.'],
     };
   }
 

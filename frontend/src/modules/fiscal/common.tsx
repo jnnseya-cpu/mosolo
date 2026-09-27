@@ -64,6 +64,11 @@ export function FiscalTabs() {
     { to: '/fiscal/quitus', label: 'Quitus', icon: 'shieldCheck', show: true },
     { to: '/fiscal/baux', label: 'Attestations de bail', icon: 'ticket', show: isTaxpayer },
     { to: '/fiscal/carte', label: 'Carte', icon: 'pin', show: true },
+    { to: '/fiscal/dependances', label: 'Conditions des services', icon: 'check', show: true },
+    { to: '/fiscal/assiette-2026', label: 'Assiette 2026', icon: 'file', show: isTaxpayer || has('R06', 'R07', 'R11', 'R12', 'R22') },
+    { to: '/fiscal/anomalies-locatives', label: 'Anomalies locatives', icon: 'analysis', show: has('R06', 'R07', 'R11', 'R22', 'R24', 'R09') },
+    { to: '/fiscal/recensement', label: 'Recensement', icon: 'grid', show: has('R06', 'R07', 'R11', 'R22', 'R09', 'R10') },
+    { to: '/fiscal/reprise', label: 'Reprise e-DGRK', icon: 'upload', show: has('R06', 'R07', 'R11', 'R12', 'R22', 'R23') },
   ];
   return (
     <nav className="fs-tabs" aria-label="Démarches fiscales">

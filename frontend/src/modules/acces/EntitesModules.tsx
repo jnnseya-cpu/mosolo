@@ -71,7 +71,7 @@ function NewEntity({ entities, kinds, onDone, act }: { entities: EntityRow[]; ki
 function NewModule({ entities, userEntity, onDone, act }: { entities: EntityRow[]; userEntity: string; onDone: (m: ModuleConfig) => void; act: ReturnType<typeof useAction> }) {
   const [f, setF] = useState({
     code: '', label: '', revenueScope: '', responsibleEntity: userEntity, beneficiaryAliases: '', ruleCodes: '', objectTypes: '', credentialTypes: '',
-    validityModel: 'SANS_TITRE', proofMechanisms: [] as string[], channels: ['APPLICATION', 'USSD', 'POINT_PAIEMENT_AGREE'] as string[], dependencies: '', usageRules: '',
+    validityModel: 'SANS_TITRE', proofMechanisms: [] as string[], channels: ['APPLICATION', 'USSD', 'POINT_PAIEMENT_AGREE'] as string[], dependencies: '', dependencyRefs: '', usageRules: '',
   });
   const toggle = (k: 'proofMechanisms' | 'channels', v: string) => setF({ ...f, [k]: f[k].includes(v) ? f[k].filter((x) => x !== v) : [...f[k], v] });
   async function submit(e: FormEvent) {
@@ -81,7 +81,7 @@ function NewModule({ entities, userEntity, onDone, act }: { entities: EntityRow[
       body: {
         code: f.code.trim().toUpperCase(), label: f.label.trim(), revenueScope: f.revenueScope.trim().toUpperCase().replace(/\s+/g, '_'), responsibleEntity: f.responsibleEntity,
         beneficiaryAliases: splitList(f.beneficiaryAliases), ruleCodes: splitList(f.ruleCodes), objectTypes: splitList(f.objectTypes), credentialTypes: splitList(f.credentialTypes),
-        validityModel: f.validityModel, proofMechanisms: f.proofMechanisms, channels: f.channels, dependencies: splitList(f.dependencies), usageRules: f.usageRules,
+        validityModel: f.validityModel, proofMechanisms: f.proofMechanisms, channels: f.channels, dependencies: splitList(f.dependencies), ...(splitList(f.dependencyRefs).length ? { dependencyRefs: splitList(f.dependencyRefs).map((x) => x.toUpperCase()) } : {}), usageRules: f.usageRules,
       },
     }), (r) => (r.blocked ? `Compétence déjà revendiquée par une autre entité : fiche bloquée, dossier d’arbitrage ${r.arbitrationId} ouvert.` : 'Fiche enregistrée en brouillon.'));
     if (r) onDone(r.module);
@@ -113,6 +113,7 @@ function NewModule({ entities, userEntity, onDone, act }: { entities: EntityRow[
       <fieldset className="field"><legend className="label">Canaux</legend>
         <div className="ac-checks">{CHANNELS.map((p) => <label key={p} className="ac-check"><input type="checkbox" checked={f.channels.includes(p)} onChange={() => toggle('channels', p)} /> {human(p)}</label>)}</div></fieldset>
       <div className="field"><label className="label" htmlFor="nm-dep">Dépendances (quitus, vignette…)</label><input id="nm-dep" value={f.dependencies} onChange={(e) => setF({ ...f, dependencies: e.target.value })} /></div>
+      <div className="field"><label className="label" htmlFor="nm-depref">Dépendances structurées (codes du moteur, ex. DEP-PERMIS-QUITUS — voir « Conditions des services »)</label><input id="nm-depref" value={f.dependencyRefs} onChange={(e) => setF({ ...f, dependencyRefs: e.target.value })} /></div>
       <div className="field"><label className="label" htmlFor="nm-use">Règles d’usage</label><textarea id="nm-use" rows={2} value={f.usageRules} onChange={(e) => setF({ ...f, usageRules: e.target.value })} /></div>
       <button type="submit" className="btn btn-primary" disabled={act.busy}><Icon name="file" size={18} /> Enregistrer la fiche</button>
     </form>
@@ -135,7 +136,7 @@ function ModuleDetail({ m, roles, userEntity, entities, onChanged, act }: {
     ['Règles', m.ruleCodes.join(', ') || '— (tarif : acte requis)'], ['Types d’objets', m.objectTypes.join(', ') || '—'], ['Types de titres', m.credentialTypes.join(', ') || '—'],
     ['Modèle de validité', human(m.validityModel)], ['Mécanismes de preuve', m.proofMechanisms.map(human).join(', ') || '—'], ['Canaux', m.channels.map(human).join(', ') || '—'],
     ['Règles d’usage', m.usageRules || '—'], ['Workflows terrain', m.fieldWorkflows.join(', ') || '—'], ['Tableaux de bord', m.dashboards.join(', ') || '—'],
-    ['Dépendances', m.dependencies.join(', ') || '—'], ['Partage en lecture', m.sharedReadWith.join(', ') || '—'], ['Références d’actes', m.actReferences.join(' ; ') || '—'],
+    ['Dépendances', m.dependencies.join(', ') || '—'], ['Dépendances structurées', (m.dependencyRefs ?? []).join(', ') || '—'], ['Partage en lecture', m.sharedReadWith.join(', ') || '—'], ['Références d’actes', m.actReferences.join(' ; ') || '—'],
   ];
   return (
     <div className="stack">

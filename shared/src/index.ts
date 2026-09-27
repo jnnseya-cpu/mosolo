@@ -11,3 +11,4 @@ export * from './proofs.js';
 export * from './geo.js';
 export * from './plates.js';
 export * from './recettes.js';
+export * from './profiles.js';

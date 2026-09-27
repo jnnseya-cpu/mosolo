@@ -4,6 +4,7 @@ import { accesPlugin } from './acces/plugin.js';
 import { fiscalPlugin } from './fiscal/plugin.js';
 import { tresorPlugin } from './tresor/plugin.js';
 import { recouvrementPlugin } from './recouvrement/plugin.js';
+import { campagnesPlugin } from './recouvrement/campagnes-plugin.js';
 import { titresPlugin } from './titres/plugin.js';
 import { rakapayPlugin } from './rakapay/plugin.js';
 import { parkingPlugin } from './parking/plugin.js';
@@ -33,6 +34,7 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   fiscalPlugin,
   tresorPlugin,
   recouvrementPlugin,
+  campagnesPlugin,
   titresPlugin,
   rakapayPlugin,
   parkingPlugin,

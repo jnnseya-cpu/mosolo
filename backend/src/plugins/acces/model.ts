@@ -82,7 +82,10 @@ export interface ModuleConfig {
   channels: (typeof CHANNELS)[number][];
   fieldWorkflows: string[];
   dashboards: string[];
+  /** Dépendances en texte libre (historique, conservé). */
   dependencies: string[];
+  /** Dépendances STRUCTURÉES (§ 10A.3) : codes des règles de dépendance versionnées (ex. DEP-PERMIS-QUITUS), évaluées par le moteur. */
+  dependencyRefs?: string[];
   sharedReadWith: string[];
   actReferences: string[];
   status: ModuleStatus;

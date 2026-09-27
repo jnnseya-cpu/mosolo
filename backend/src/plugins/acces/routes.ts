@@ -51,6 +51,7 @@ const moduleSchema = z.object({
   fieldWorkflows: z.array(z.string()).max(20).default([]),
   dashboards: z.array(z.string()).max(20).default([]),
   dependencies: z.array(z.string()).max(20).default([]),
+  dependencyRefs: z.array(z.string().regex(/^DEP-[A-Z0-9-]{3,60}$/)).max(20).optional(),
   sharedReadWith: z.array(z.string()).max(20).default([]),
   actReferences: z.array(z.string()).max(20).default([]),
 }).strict();

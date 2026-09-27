@@ -85,7 +85,8 @@ export class ClearanceService {
         continue;
       }
       if (!PAYABLE_STATUSES.includes(o.status)) continue;
-      const exigible = o.status === 'EXIGIBLE' || o.status === 'EN_RETARD' || o.dueDate < today;
+      // Exigibilité appréciée à l'échéance effective (prorogation, tolérance de la fiche de règle, § 6.2).
+      const exigible = o.status === 'EXIGIBLE' || o.status === 'EN_RETARD' || this.d.ctx.assessment.isPastDue(o, today);
       if (!exigible) { notYetDue.push(o.id); continue; }
       const confirmed = this.d.ctx.payments.byObligation(o.id).some((p) => ['CONFIRME', 'REGLE', 'RAPPROCHE'].includes(p.status));
       blockers.push({ obligationId: o.id, label: o.label, dueDate: o.dueDate, reason: confirmed ? 'EN_ATTENTE_DE_RAPPROCHEMENT' : 'IMPAYEE' });

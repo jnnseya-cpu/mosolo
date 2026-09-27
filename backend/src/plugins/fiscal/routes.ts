@@ -12,6 +12,7 @@ import type { GeoLevel } from './geo.js';
 import { CLOSE_REASONS, PROOF_TYPES, RELATION_ROLES, ROLE_LABELS } from './relations.js';
 import type { FiscalService } from './service.js';
 import { buildNearby } from './nearby.js';
+import { registerFiscalExtraRoutes } from './routes-extra.js';
 
 const proofSchema = z.object({ type: z.enum(PROOF_TYPES), reference: z.string().trim().min(3).max(200), sha256: z.string().regex(/^[0-9a-f]{64}$/).optional() }).strict();
 const reasonSchema = z.object({ reason: z.string().trim().min(3).max(1000) }).strict();
@@ -391,4 +392,7 @@ export function registerFiscalRoutes(app: FastifyInstance, ctx: AppContext, svc:
     if (req.query.commune && !(COMMUNES as readonly string[]).includes(req.query.commune)) throw badRequest('UNKNOWN_COMMUNE', 'Commune inconnue.');
     return svc.map(optionalUser(req), layer, req.query.commune);
   });
+
+  // ——— Extensions : anomalies locatives, assiette 2026, dépendances, recensement, reprise e-DGRK, enrôlement par profil ———
+  registerFiscalExtraRoutes(app, ctx, svc);
 }

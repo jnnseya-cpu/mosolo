@@ -40,7 +40,7 @@ export function situationOf(d: FiscalDeps, obj: FiscalObject): ColorResult {
   if (obj.probativeStatus === 'CONTESTE' || obligations.some((o) => o.status === 'CONTESTEE')) return mk('blue', 'Donnée ou obligation contestée : instruction en cours.');
   if (obj.status !== 'VALIDE' && obligations.length === 0) return mk('grey', 'Objet recensé, non encore validé ni liquidé.');
   const payable = obligations.filter((o) => PAYABLE_STATUSES.includes(o.status));
-  const overdue = payable.filter((o) => o.status === 'EN_RETARD' || o.dueDate < today);
+  const overdue = payable.filter((o) => o.status === 'EN_RETARD' || d.ctx.assessment.isPastDue(o, today));
   if (overdue.length) {
     return obj.status === 'VALIDE'
       ? mk('red', `${overdue.length} obligation(s) échue(s) non régularisée(s) sur un objet vérifié.`)

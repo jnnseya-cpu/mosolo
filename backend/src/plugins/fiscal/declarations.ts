@@ -167,10 +167,14 @@ export class DeclarationService {
     return { total, leases: used, skipped };
   }
 
-  prefill(user: User, input: { objectId: string; kind: DeclarationKind; period: string }): Prefill {
+  /**
+   * Pré-remplissage. `'systeme'` : lot de pré-remplissage d'une campagne approuvée (§ 8, § 45) — aucun dépôt, aucune
+   * liquidation ; le contribuable confirme ou corrige ensuite lui-même.
+   */
+  prefill(user: User | 'systeme', input: { objectId: string; kind: DeclarationKind; period: string }): Prefill {
     const obj = this.d.ctx.objects.get(input.objectId);
     const holder = this.holderOf(obj);
-    authorize(user, 'fiscal:declaration.file', { taxpayerId: holder, communes: [obj.commune] });
+    if (user !== 'systeme') authorize(user, 'fiscal:declaration.file', { taxpayerId: holder, communes: [obj.commune] });
     this.checkPeriod(input.period);
     if (!KIND_OBJECTS[input.kind].includes(obj.category)) {
       throw unprocessable('KIND_NOT_APPLICABLE', `Déclaration ${input.kind} non applicable à un objet ${obj.category}.`);
@@ -195,7 +199,7 @@ export class DeclarationService {
       }
       return { name, label, value: null, source: 'À saisir par le contribuable', probativeStatus: null, editable: true };
     });
-    this.d.ctx.audit.append({ actor: actorOf(user), action: 'declaration.prefilled', resourceType: 'fiscal_object', resourceId: obj.id, details: { kind: input.kind, period: input.period, ruleCode: rule.code } });
+    this.d.ctx.audit.append({ actor: user === 'systeme' ? { kind: 'system', id: 'campagne' } : actorOf(user), action: 'declaration.prefilled', resourceType: 'fiscal_object', resourceId: obj.id, details: { kind: input.kind, period: input.period, ruleCode: rule.code } });
     return {
       objectId: obj.id, igf: obj.igf?.code ?? null, kind: input.kind, kindLabel: KIND_LABELS[input.kind], period: input.period,
       rule: {

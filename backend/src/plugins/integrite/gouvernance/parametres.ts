@@ -21,6 +21,7 @@ import { ASSIST_MAX_ACCURACY_M, ASSIST_ON_SITE_M } from '../../canaux/assisted.j
 import { MAX_PIN_ATTEMPTS, VERIFY_MAX_FAILURES_PER_WINDOW, VERIFY_MAX_PER_WINDOW } from '../../canaux/model.js';
 import { BANK_CONFIRMATION_GRACE_HOURS, UNRECONCILED_AGING_DAYS } from '../../canaux/points.js';
 import { NEARBY_MAX_ACCURACY_M, NEARBY_MAX_RADIUS_M } from '../../fiscal/nearby.js';
+import { MULTIPLE_METERS_MIN, NEW_BUILDING_NO_UNIT_MONTHS } from '../../fiscal/anomalies.js';
 import { AGENT_COMMISSION_PCT, CLOCK_SKEW_WARN_SECONDS, PHOTO_WINDOW_MINUTES, PRESENCE_MAX_ACCURACY_M, PRESENCE_MAX_DISTANCE_M } from '../../parking/field.js';
 import { AD_NEARBY_MAX_ACCURACY_M, AD_NEARBY_MAX_RADIUS_M } from '../../publicite/terrain.js';
 import { ATTRIBUTION_WINDOWS_MINUTES, DECLARED_TIME_TOLERANCE_MINUTES } from '../../sanctions/commissions.js';
@@ -163,6 +164,9 @@ export const PARAMETRES_CODE: ParamDefinition[] = [
   C('rakapay.ventes_atypiques_facteur', 'RakaPay : ventes d’un agent au-delà de … fois la médiane des autres agents de l’opérateur', 'Détection (Intégrité)', ATYPICAL_SALES_FACTOR, 'fois', code('plugins/rakapay/operateurs.ts', 'ATYPICAL_SALES_FACTOR')),
   C('rakapay.ventes_atypiques_min', 'RakaPay : nombre minimal de ventes journalières d’un agent avant signal', 'Détection (Intégrité)', ATYPICAL_SALES_MIN, 'ventes', code('plugins/rakapay/operateurs.ts', 'ATYPICAL_SALES_MIN')),
   C('rakapay.annulations_repetees_min', 'RakaPay : annulations journalières d’un agent avant signal', 'Détection (Intégrité)', ATYPICAL_CANCELLATIONS_MIN, 'annulations', code('plugins/rakapay/operateurs.ts', 'ATYPICAL_CANCELLATIONS_MIN')),
+  // Anomalies locatives (§ 16.4) : listes de travail pour vérification humaine, jamais une dette.
+  C('anomalies.compteurs_multiples_min', 'Anomalies locatives : nombre de compteurs constituant « plusieurs compteurs »', 'Détection (Intégrité)', MULTIPLE_METERS_MIN, 'compteurs', code('plugins/fiscal/anomalies.ts', 'MULTIPLE_METERS_MIN'), 'Cahier § 16.4 : « plusieurs compteurs ».'),
+  C('anomalies.immeuble_neuf_mois', 'Anomalies locatives : délai sans unité déclarée après réception d’un immeuble', 'Détection (Intégrité)', NEW_BUILDING_NO_UNIT_MONTHS, 'mois', code('plugins/fiscal/anomalies.ts', 'NEW_BUILDING_NO_UNIT_MONTHS'), 'Cahier § 16.4 : « après douze mois ».'),
 ];
 
 export const ALL_PARAMETERS: ParamDefinition[] = [...REGISTRE_DEFAUTS, ...PARAMETRES_CODE];

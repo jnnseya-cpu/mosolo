@@ -354,6 +354,10 @@ export class AccesService {
     const known = new Set(this.ctx.rules.list().map((r) => r.code));
     const unknown = input.ruleCodes.filter((c) => !known.has(c));
     if (unknown.length) throw unprocessable('UNKNOWN_RULE', `Règles absentes du registre : ${unknown.join(', ')}.`);
+    // Dépendances structurées : codes connus du moteur de dépendances (module fiscal), s'il est chargé.
+    const depEngine = this.ctx.ext['fiscal'] as { dependencies?: { current(): { code: string }[] } } | undefined;
+    const unknownDeps = depEngine?.dependencies ? (input.dependencyRefs ?? []).filter((c) => !depEngine.dependencies!.current().some((d) => d.code === c)) : [];
+    if (unknownDeps.length) throw unprocessable('UNKNOWN_DEPENDENCY', `Dépendances inconnues du moteur : ${unknownDeps.join(', ')}.`);
     if (input.moduleManagerId) {
       const mgr = this.ctx.users.get(input.moduleManagerId);
       if (!mgr || !this.subtree(ent.id).has(mgr.entity)) throw unprocessable('MANAGER_OUT_OF_ENTITY', 'Le responsable de module doit appartenir à l’entité responsable.');

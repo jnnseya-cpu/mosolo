@@ -55,6 +55,51 @@ export interface RuleSheet {
    * d'une version antérieure (simulations non opposables comprises) tant qu'elle n'est pas certifiée et ACTIVE.
    */
   promoterPosition?: boolean;
+  /**
+   * Tolérance d'échéance (§ 6.2), en jours, fixée par le texte : aucun constat de retard, avis J+1 ni pénalité avant
+   * l'échéance (éventuellement prorogée) augmentée de cette tolérance. Absente ⇒ aucune tolérance (comportement historique).
+   */
+  dueToleranceDays?: number;
+  /**
+   * Prorogations d'échéance (§ 6.2, doc 06 § 6.4) : acte daté qui reporte les échéances d'une plage de dates sans nouvelle
+   * version de la règle (ex. 1er → 28 février). Ajout seul : une prorogation n'est jamais effacée.
+   */
+  dueDateExtensions?: DueDateExtension[];
+}
+
+/** Acte de prorogation d'échéance attaché à une fiche de règle. */
+export interface DueDateExtension {
+  id: string;
+  /** Échéances concernées : de `appliesFrom` à `appliesTo` inclus (AAAA-MM-JJ). */
+  appliesFrom: string;
+  appliesTo: string;
+  /** Nouvelle échéance. */
+  extendedTo: string;
+  /** Référence de l'acte (arrêté, décision) et date de l'acte. */
+  actReference: string;
+  actDate: string;
+  reason: string;
+  recordedBy: string[];
+  recordedAt: string;
+}
+
+const addDaysIso = (d: string, n: number): string => {
+  const t = new Date(`${d.slice(0, 10)}T00:00:00.000Z`);
+  t.setUTCDate(t.getUTCDate() + n);
+  return t.toISOString().slice(0, 10);
+};
+
+/**
+ * Échéance effective d'une obligation au regard de sa fiche de règle : prorogation (la plus tardive applicable), puis
+ * tolérance. `graceUntil` est le dernier jour sans retard : un retard n'est constaté que si `graceUntil < aujourd'hui`.
+ */
+export function effectiveDue(rule: Pick<RuleSheet, 'dueToleranceDays' | 'dueDateExtensions'> | undefined, dueDate: string): { dueDate: string; graceUntil: string; toleranceDays: number; extension: DueDateExtension | null } {
+  const ext = (rule?.dueDateExtensions ?? [])
+    .filter((e) => e.appliesFrom <= dueDate && dueDate <= e.appliesTo && e.extendedTo > dueDate)
+    .sort((a, b) => b.extendedTo.localeCompare(a.extendedTo))[0] ?? null;
+  const due = ext ? ext.extendedTo : dueDate;
+  const tol = Math.max(0, Math.floor(rule?.dueToleranceDays ?? 0));
+  return { dueDate: due, graceUntil: tol ? addDaysIso(due, tol) : due, toleranceDays: tol, extension: ext };
 }
 
 export const REQUIRED_APPROVALS: Approval['role'][] = [

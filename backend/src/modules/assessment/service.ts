@@ -3,7 +3,7 @@
  * Déterministe : mêmes règle, version, entrées ⇒ même montant. Chaque obligation fige la version de règle
  * appliquée et porte son explication complète (AC-ASS-01). Aucune obligation sans règle exécutable (AC-LEG-01).
  */
-import { isRuleExecutable, Money, type MoneyJSON, type ObligationStatus, type RevenueCategory, type TerritorialAttribution } from '@mosolo/shared';
+import { effectiveDue, isRuleExecutable, Money, type MoneyJSON, type ObligationStatus, type RevenueCategory, type TerritorialAttribution } from '@mosolo/shared';
 import type { AuditLog } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { DAY_MS, kinshasaDate, type Clock } from '../../core/clock.js';
@@ -522,6 +522,19 @@ export class AssessmentService {
 
   byTaxpayer(taxpayerId: string): Obligation[] {
     return this.obligations.find((o) => o.taxpayerId === taxpayerId);
+  }
+
+  /**
+   * Échéance effective (§ 6.2) : prorogation datée et tolérance portées par la fiche de règle. Aucun retard n'est constaté,
+   * aucun avis J+1 ni pénalité proposé tant que `graceUntil` n'est pas dépassé. Sans ces champs : l'échéance d'origine.
+   */
+  dueInfo(o: Pick<Obligation, 'ruleId' | 'dueDate'>) {
+    return effectiveDue(this.rules.rules.get(o.ruleId), o.dueDate);
+  }
+
+  /** L'obligation est-elle en retard à la date `today` (AAAA-MM-JJ), tolérance et prorogation comprises ? */
+  isPastDue(o: Pick<Obligation, 'ruleId' | 'dueDate'>, today: string): boolean {
+    return this.dueInfo(o).graceUntil < today;
   }
 
   /**

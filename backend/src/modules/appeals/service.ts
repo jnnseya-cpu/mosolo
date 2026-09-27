@@ -12,7 +12,7 @@ import type { User, UserDirectory } from '../../core/auth.js';
 import { DAY_MS, isoDate, kinshasaDate, type Clock } from '../../core/clock.js';
 import { canonicalJson, sha256Hex } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
-import { assertDistinctPerson, assertNotRelated, authorize } from '../../core/policy.js';
+import { assertDistinctPerson, assertNotRelated, authorize, definePolicy, GRANTS } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import { recordReductionGranted } from '../assessment/reductions.js';
 import { PAYABLE_STATUSES, type AssessmentService } from '../assessment/service.js';
@@ -22,6 +22,28 @@ import type { TaxpayerService } from '../identity/service.js';
 import { APPEAL_PROCEDURE, type AppealType } from './procedure.js';
 
 export type AppealDecision = 'ACCEPTEE' | 'PARTIELLEMENT_ACCEPTEE' | 'REJETEE';
+
+/**
+ * Contestation sans écrit (§ 13A.6) : dépôt assisté au guichet (l'agent enregistre au nom de la personne, avec son
+ * consentement oral enregistré ou devant témoin, après lecture du résumé) ou par le SVI (session authentifiée par code
+ * secret, confirmation par touche). Le circuit d'instruction et de décision est inchangé.
+ */
+definePolicy('appeals:submit.assisted', { R12: GRANTS.always });
+
+export interface AssistedSubmission {
+  channel: 'GUICHET' | 'SVI' | 'USSD';
+  consent: {
+    method: 'ORAL_ENREGISTRE' | 'TEMOIN' | 'CONFIRMATION_CLAVIER';
+    /** Résumé lu à la personne avant enregistrement (obligatoire). */
+    summaryReadBack: boolean;
+    at: string;
+    /** Empreinte de l'enregistrement du consentement oral (guichet). */
+    evidenceSha256?: string;
+    witnessName?: string;
+    /** Session SVI authentifiée (code secret) et son journal. */
+    sessionId?: string;
+  };
+}
 
 export interface AppealDocument {
   sha256: string;
@@ -88,6 +110,8 @@ export interface Appeal {
   /** Voie de recours suivante, indiquée avec la décision. */
   nextRemedy?: { hierarchical: string; judicial: string; status: 'A_VERIFIER' };
   slaBreachNotifiedAt?: string;
+  /** Dépôt sans écrit (guichet ou SVI) : canal, agent et preuve du consentement. */
+  assisted?: AssistedSubmission & { agentId?: string };
 }
 
 export type AppealView = Appeal & { deadlines: AppealDeadlines };
@@ -166,9 +190,21 @@ export class AppealService {
     return { sha256: sha, name: d.name, mediaType: d.mediaType, ...(d.sizeBytes !== undefined ? { sizeBytes: d.sizeBytes } : {}), addedBy: user.id, addedAt: this.clock.now().toISOString() };
   }
 
-  submit(user: User, input: { obligationId: string; grounds: string; requestedAmount?: MoneyJSON; type?: AppealType; requestSuspensiveEffect?: boolean; suspensiveReason?: string; documents?: DocumentInput[] }): AppealView {
+  submit(user: User, input: { obligationId: string; grounds: string; requestedAmount?: MoneyJSON; type?: AppealType; requestSuspensiveEffect?: boolean; suspensiveReason?: string; documents?: DocumentInput[] }, assisted?: AssistedSubmission): AppealView {
     const obligation = this.assessment.get(input.obligationId);
-    authorize(user, 'appeal.submit', { taxpayerId: obligation.taxpayerId });
+    if (!assisted) authorize(user, 'appeal.submit', { taxpayerId: obligation.taxpayerId });
+    else {
+      if (!assisted.consent.summaryReadBack) throw unprocessable('CONSENT_REQUIRED', 'Le résumé de la contestation doit être lu à la personne avant l’enregistrement.');
+      if (assisted.channel === 'GUICHET') {
+        authorize(user, 'appeals:submit.assisted', { taxpayerId: obligation.taxpayerId });
+        assertNotRelated(user, obligation.taxpayerId, 'Un agent n’enregistre pas la contestation d’un contribuable auquel il est lié.');
+        if (assisted.consent.method === 'ORAL_ENREGISTRE' && !assisted.consent.evidenceSha256) throw unprocessable('CONSENT_REQUIRED', 'Consentement oral : l’empreinte de l’enregistrement est requise.');
+        if (assisted.consent.method === 'TEMOIN' && !assisted.consent.witnessName) throw unprocessable('CONSENT_REQUIRED', 'Consentement devant témoin : le nom du témoin est requis.');
+        if (assisted.consent.method === 'CONFIRMATION_CLAVIER') throw badRequest('INVALID_CONSENT', 'Mode de consentement réservé au SVI et à l’USSD.');
+      } else if (assisted.consent.method !== 'CONFIRMATION_CLAVIER' || !assisted.consent.sessionId) {
+        throw forbidden('FORBIDDEN', 'Contestation par SVI ou USSD : session authentifiée requise.');
+      }
+    }
     if (this.appeals.findOne((a) => a.obligationId === obligation.id && (a.status === 'DEPOSEE' || a.status === 'PROPOSITION'))) {
       throw conflict('APPEAL_ALREADY_OPEN', 'Une réclamation est déjà en cours sur cette obligation.');
     }
@@ -204,13 +240,14 @@ export class AppealService {
       documents,
       suspensiveEffect,
       acknowledgement: { number: `AR-${id}`, at: now, contentHash: sha256Hex(canonicalJson(ackContent)) },
+      ...(assisted ? { assisted: { ...assisted, ...(assisted.channel === 'GUICHET' ? { agentId: user.id } : {}) } } : {}),
       history: [
-        { at: now, action: 'appeal.submitted', by: user.id, detail: `Type : ${input.type ?? 'AUTRE'}${documents.length ? ` — ${documents.length} pièce(s)` : ''}` },
+        { at: now, action: 'appeal.submitted', by: user.id, detail: `Type : ${input.type ?? 'AUTRE'}${documents.length ? ` — ${documents.length} pièce(s)` : ''}${assisted ? ` — sans écrit (${assisted.channel === 'GUICHET' ? 'guichet, consentement ' + (assisted.consent.method === 'TEMOIN' ? 'devant témoin' : 'oral enregistré')   : `${assisted.channel}, confirmation par touche`})` : ''}` },
         ...(input.requestSuspensiveEffect ? [{ at: now, action: 'appeal.suspensive_effect.requested', by: user.id }] : []),
       ],
     });
     this.assessment.setStatus(obligation.id, 'CONTESTEE');
-    this.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'appeal.submitted', resourceType: 'appeal', resourceId: appeal.id, details: { obligationId: obligation.id, type: appeal.type, documents: documents.length, suspensiveEffectRequested: !!input.requestSuspensiveEffect } });
+    this.audit.append({ actor: assisted && assisted.channel !== 'GUICHET' ? { kind: 'public', id: user.id } : { kind: 'user', id: user.id, roles: user.roles }, action: 'appeal.submitted', resourceType: 'appeal', resourceId: appeal.id, details: { obligationId: obligation.id, type: appeal.type, documents: documents.length, suspensiveEffectRequested: !!input.requestSuspensiveEffect, ...(assisted ? { channel: assisted.channel, consentMethod: assisted.consent.method, sessionId: assisted.consent.sessionId ?? null } : {}) } });
     this.comms.publish('appeal.submitted', [taxpayerRecipient(this.taxpayers.get(obligation.taxpayerId))], { reference: appeal.id }, { entity: 'CONTENTIEUX' });
     return this.view(appeal);
   }

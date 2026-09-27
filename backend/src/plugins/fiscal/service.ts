@@ -7,7 +7,13 @@ import type { User } from '../../core/auth.js';
 import { evaluate } from '../../core/policy.js';
 import type { AppContext } from '../../context.js';
 import type { FiscalObject } from '../../modules/objects/service.js';
+import { AnomalyService } from './anomalies.js';
+import { Assiette2026Service } from './assiette2026.js';
+import { CENSUS_STAGE_LABELS, CensusService, provenanceView, stageOf } from './census.js';
 import { ClearanceService } from './clearances.js';
+import { DependencyService } from './dependencies.js';
+import { EnrolmentService } from './enrolment.js';
+import { ImportService } from './imports.js';
 import { CATEGORY_LABELS, makeDeps, type FiscalDeps } from './common.js';
 import { DeclarationService } from './declarations.js';
 import { ExemptionService } from './exemptions.js';
@@ -25,6 +31,18 @@ export class FiscalService {
   readonly declarations: DeclarationService;
   readonly exemptions: ExemptionService;
   readonly clearances: ClearanceService;
+  /** § 16.4 : détection d'anomalies locatives (listes de travail, protocole requis). */
+  readonly anomalies: AnomalyService;
+  /** § 16.3 : élargissement d'assiette de l'édit 2026 (règles À VÉRIFIER, formulaires propres). */
+  readonly assiette2026: Assiette2026Service;
+  /** § 8.1, § 10A.3 : dépendances entre services (quitus, vignette), informatives jusqu'à l'acte. */
+  readonly dependencies: DependencyService;
+  /** § 17.4 : vagues de recensement et provenance des données. */
+  readonly census: CensusService;
+  /** § 2, § 7.5 : reprise e-DGRK et import par lots. */
+  readonly imports: ImportService;
+  /** § 9.3 : enrôlement par profil, espaces, NIF provisoire, récupération de compte. */
+  readonly enrolment: EnrolmentService;
 
   constructor(readonly ctx: AppContext) {
     this.geo = new GeoRegistry(() => ctx.clock.now().toISOString());
@@ -34,8 +52,16 @@ export class FiscalService {
     this.declarations = new DeclarationService(this.d);
     this.exemptions = new ExemptionService(this.d);
     this.clearances = new ClearanceService(this.d);
+    this.anomalies = new AnomalyService(this.d);
+    this.assiette2026 = new Assiette2026Service(this.d);
+    this.dependencies = new DependencyService(this.d, this.clearances);
+    this.census = new CensusService(this.d);
+    this.imports = new ImportService(this.d, this.relations);
+    this.enrolment = new EnrolmentService(this.d);
     // Les exonérations approuvées s'appliquent à toute liquidation (trace dans l'explication).
     ctx.assessment.registerAdjuster(this.exemptions.adjuster());
+    // Référentiels (idempotents) : fiches À VÉRIFIER de l'édit 2026, dépendances informatives.
+    this.seedReference();
   }
 
   /** Vue d'un bien pour un lecteur donné : relations nominatives seulement pour soi ou un agent habilité. */
@@ -71,6 +97,9 @@ export class FiscalService {
         role: viewerTaxpayers.includes(l.lessorId ?? '') ? 'BAILLEUR' : viewerTaxpayers.includes(l.lesseeId ?? '') ? 'LOCATAIRE' : agent ? 'AGENT' : null,
       })).filter((l) => l.role !== null),
       example: o.id.includes('DEMO') || o.attributes['demo'] === true,
+      census: { stage: stageOf(this.d, o), label: CENSUS_STAGE_LABELS[stageOf(this.d, o)].label, history: agent ? o.censusHistory ?? [] : [] },
+      provenance: provenanceView(o),
+      importedFrom: o.importedFrom ?? null,
     };
   }
 
@@ -79,7 +108,14 @@ export class FiscalService {
   }
 
   // ——————————————————— Données de démonstration (fictives, non opposables) ———————————————————
+  /** Référentiels (hors démonstration) : fiches À VÉRIFIER de l'édit 2026 et dépendances informatives. */
+  seedReference(): void {
+    this.assiette2026.seedRules();
+    this.dependencies.seed();
+  }
+
   seedDemo(): void {
+    this.seedReference();
     const { ctx } = this;
     const u = (id: string) => ctx.users.get(id)!;
     ctx.users.add({ id: 'u-fiscal-chef-service', name: 'Chef de service d’assiette DGIPK (démo)', roles: ['R07'], entity: 'DGIPK' });
@@ -180,5 +216,18 @@ export class FiscalService {
     this.declarations.file(owner, { objectId: 'OBJ-DEMO-UNITE-01', kind: 'IRL', period: pre.period, inputs: {}, attest: true });
     this.clearances.request(owner);
     this.clearances.issueLeaseAttestation(tenant, 'BAIL-DEMO-0001');
+
+    // 8. Anomalies locatives (§ 16.4) — protocole FICTIF de démonstration (aucune valeur juridique), données fictives.
+    const dg = u('u-fiscal-directeur');
+    const proto = this.anomalies.proposeProtocol(u('u-fiscal-chef-service'), {
+      source: 'COMPTEURS', partner: 'Distributeur fictif (démo)', actReference: 'PROTOCOLE-FICTIF-DEMO-01 (aucune valeur juridique)',
+      purpose: 'Démonstration du rapprochement compteurs ↔ déclarations locatives', validFrom: this.d.today(), validTo: `${Number(this.d.today().slice(0, 4)) + 1}-12-31`,
+    });
+    this.anomalies.decideProtocol(dg, proto.id, { approve: true, reason: 'Démonstration : protocole fictif.' });
+    this.anomalies.ingest(dg, 'COMPTEURS', [
+      { objectRef: 'OBJ-FISC-DEMO-COPRO-01', meters: 4, utility: 'ELECTRICITE', period: `${this.d.today().slice(0, 4)}-T2` },
+      { objectRef: 'OBJ-FISC-DEMO-002', meters: 1, utility: 'EAU', period: `${this.d.today().slice(0, 4)}-T2` },
+    ]);
+    this.anomalies.detect(controller);
   }
 }

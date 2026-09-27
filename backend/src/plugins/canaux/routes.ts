@@ -231,4 +231,21 @@ export function registerCanauxRoutes(app: FastifyInstance, ctx: AppContext, svc:
 
   // ---------- Indicateurs d'inclusion (agrégats) ----------
   app.get('/v1/channels/indicators', async (req) => svc.indicators(requireUser(req)));
+
+  // ---------- Contestation sans écrit au guichet (§ 13A.6) ----------
+  // L'agent (R12) enregistre au nom de la personne, après lecture du résumé, avec son consentement oral enregistré
+  // (empreinte) ou devant témoin. Même circuit de réclamation (instruction R20, décision R21).
+  app.post('/v1/canaux/contestations-assistees', async (req, reply) => {
+    const user = requireUser(req);
+    const b = parse(z.object({
+      obligationId: z.string().min(1), type: z.enum(['BIEN_NON_DETENU', 'ACTIVITE_FERMEE', 'VEHICULE_VENDU', 'INFORMATION_ERRONEE', 'DOUBLE_IMPOSITION', 'MONTANT_ERRONE', 'AUTRE']),
+      grounds: z.string().trim().min(5).max(5000), requestSuspensiveEffect: z.boolean().optional(),
+      consent: z.object({ method: z.enum(['ORAL_ENREGISTRE', 'TEMOIN']), summaryReadBack: z.boolean(), evidenceSha256: z.string().regex(/^[0-9a-f]{64}$/).optional(), witnessName: z.string().trim().min(3).max(120).optional() }).strict(),
+    }).strict(), req.body);
+    const { consent, requestSuspensiveEffect, ...rest } = b;
+    const appeal = ctx.appeals.submit(user, { ...rest, grounds: `${rest.grounds} — enregistrée au guichet par ${user.name}, sans écrit.`, ...(requestSuspensiveEffect ? { requestSuspensiveEffect, suspensiveReason: 'Demandé oralement au guichet.' } : {}) }, {
+      channel: 'GUICHET', consent: { method: consent.method, summaryReadBack: consent.summaryReadBack, at: ctx.clock.now().toISOString(), ...(consent.evidenceSha256 ? { evidenceSha256: consent.evidenceSha256 } : {}), ...(consent.witnessName ? { witnessName: consent.witnessName } : {}) },
+    });
+    return reply.code(201).send(appeal);
+  });
 }
