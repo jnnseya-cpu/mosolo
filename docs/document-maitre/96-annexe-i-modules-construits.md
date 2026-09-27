@@ -946,3 +946,14 @@ réels. Matrice de couverture phrase par phrase : `couverture-ch27-postes-de-dec
 `backend/test/postes.test.ts`, `backend/test/postes-decision-acceptation.test.ts` (critères C42-11 à C42-15),
 `frontend/test/postes.test.tsx`.
 
+
+## I.23 Préparation à la mise en production (audit du 27/09/2026)
+
+Audit complet de préparation à la production (hygiène du dépôt, dépendances, hébergement, sécurité OWASP, PWA et mobile,
+parcours fonctionnels par rôle, invariants financiers, sauvegarde et restauration, injection d'instructions contre l'IA,
+charge) : rapport et verdict dans `docs/production-readiness.md` (NO-GO production tant que les conditions externes ne
+sont pas réunies ; GO démonstration). Ajouts, sans rien retirer : mode production exigeant PostgreSQL et refusant le point
+d'entrée en mémoire, aucun élément fictif en production (données de démonstration conservées et inchangées en mode
+démonstration), en-têtes de sécurité (CSP, HSTS, COOP, Permissions-Policy), limitation de débit étendue, image Docker non
+privilégiée. Tests : `mode-production`, `durcissement-http`, `refus-par-defaut`, `invariants-financiers`,
+`sauvegarde-restauration`, `ia-injection` (backend) ; `api-url` (frontend).
