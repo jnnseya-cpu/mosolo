@@ -7,7 +7,7 @@ import { createPrivateKey } from 'node:crypto';
 import { ConfigurationError, isDemoMode, isProduction } from '../core/auth.js';
 import { loadReceiptSigningKey, loadReceiptVerificationKeys } from '../modules/receipts/service.js';
 import { FileAuditAnchor } from './anchor.js';
-import { openPgStore } from './store.js';
+import { openPgStore, type SnapshotStore } from './store.js';
 import { PersistenceRuntime, setActivePersistence } from './runtime.js';
 
 export interface BootLog {
@@ -68,7 +68,15 @@ export function assertBootSecrets(env: NodeJS.ProcessEnv = process.env): void {
   }
 }
 
-export async function preparePersistence(env: NodeJS.ProcessEnv = process.env, log: BootLog = consoleLog): Promise<PersistenceRuntime | undefined> {
+/**
+ * `openStore` : ouverture du magasin (défaut : pilote `pg` sur DATABASE_URL) ; injectable pour rejouer le démarrage
+ * de production complet sur PostgreSQL simulé (test/deploiement.test.ts).
+ */
+export async function preparePersistence(
+  env: NodeJS.ProcessEnv = process.env,
+  log: BootLog = consoleLog,
+  openStore: (url: string) => Promise<SnapshotStore> = openPgStore,
+): Promise<PersistenceRuntime | undefined> {
   assertBootSecrets(env);
   const url = env.DATABASE_URL?.trim();
   if (!url) {
@@ -87,7 +95,7 @@ export async function preparePersistence(env: NodeJS.ProcessEnv = process.env, l
   const anchorPath = env.MOSOLO_AUDIT_ANCHOR_PATH?.trim();
   const auditKey = env.MOSOLO_AUDIT_HMAC_KEY?.trim() ? env.MOSOLO_AUDIT_HMAC_KEY : undefined;
   if (!anchorPath || !auditKey) log.warn('Ancre externe de la chaîne d’audit inactive (MOSOLO_AUDIT_ANCHOR_PATH / MOSOLO_AUDIT_HMAC_KEY absentes) : une troncature ou un retour arrière de la base ne serait pas détecté.');
-  const store = await openPgStore(url);
+  const store = await openStore(url);
   const runtime = await PersistenceRuntime.open(store, {
     log: (level, msg) => log[level](msg),
     ...(anchorPath && auditKey ? { anchor: new FileAuditAnchor(anchorPath, auditKey) } : {}),

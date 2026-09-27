@@ -263,6 +263,9 @@ Rejouer exactement la même requête renvoie 200 avec `"replayed": true`, sans s
 | `MOSOLO_COLLUSION_SCHEDULER`, `MOSOLO_COLLUSION_TICK_MS` | détection planifiée de la collusion sous quatre yeux : active par défaut (désactivée sous les tests), `off` la coupe, `on` la force ; intervalle entre deux exécutions = paramètre du registre `collusion.detection_intervalle_h` (24 h par défaut, PAR_DEFAUT — à confirmer par le maître d'ouvrage ; 0 = désactivée) ; passage de contrôle toutes les 5 min par défaut. Chaque exécution est journalisée (`integrite.collusion.run`, `trigger: PLANIFIEE`) ; alertes seulement, aucune sanction |
 | `MOSOLO_BOOTSTRAP_FILE` | fichier JSON d'amorçage hors démonstration (`mosolo-amorcage/1`) : comptes de travail et comptes du coffre ; ignoré si des données de démonstration sont semées, refusé en démonstration |
 | `MOSOLO_BOOTSTRAP_CREDENTIALS_OUT` | fichier (créé en exclusivité, droits 0600) où sont écrits les identifiants initiaux des comptes `enrol: true` sans identifiant ; à remettre puis **détruire** |
+| `MOSOLO_DB_APP_ROLE`, `MOSOLO_DB_APP_PASSWORD`, `MOSOLO_DB_RESTORE_ROLE` | **tâche de migration seulement** (`npm run db:migrate -w backend`, jamais le serveur) : rôle applicatif créé à droits minimaux, rôle d'exploitation membre de `mosolo_restore` (voir `db/README.md`) |
+| `MOSOLO_MODE` | image Docker : mode par défaut du point d'entrée (`demo` si absent ; `production`, `migrate`, `backup-once`, `backup-cron`…), voir `infra/docker/entrypoint.sh` |
+| `MOSOLO_BACKUP_DIR`, `MOSOLO_BACKUP_HOUR`, `MOSOLO_BACKUP_RETENTION_DAYS` | image Docker, modes `backup-once` / `backup-cron` : dossier, heure quotidienne (Kinshasa) et rotation locale des sauvegardes signées |
 | `MOSOLO_PROVIDER_SECRET_MM_OPERATOR_A`, `…_BANK_A`, `…_CARD_GATEWAY` | secrets HMAC des prestataires : **obligatoires hors démonstration** (16 caractères minimum par clé, jamais une valeur `demo-…`) ; défauts publics `demo-secret-…` en démonstration seulement. Secret seul (kid `default`) ou trousseau de rotation `kid:secret,kid:secret` (kid `[a-z0-9_-]`, 32 caractères max) : la première clé est la courante, les suivantes restent acceptées ; le prestataire peut désigner sa clé par l'en-tête `x-key-id`. Rappel signé v2 : `x-signature: v2=<hex HMAC-SHA256("mosolo-callback-v2\n<x-timestamp>\n<x-nonce>\n<corps brut>")>`, horodatage ±5 min, nonce unique |
 | `MOSOLO_DEVICE_KEYS` | clés HMAC des terminaux terrain, `id=clé,id=clé` ; hors démonstration, un terminal semé sans clé reçoit une clé aléatoire |
 | `MOSOLO_CORS_ORIGINS` | origines autorisées, séparées par des virgules ; sans liste : toutes en démonstration, **aucune** hors démonstration (`*` refusé hors démonstration) |
@@ -271,6 +274,10 @@ Rejouer exactement la même requête renvoie 200 avec `"replayed": true`, sans s
 | `SMS_GATEWAY_SECRET`, `SVI_GATEWAY_SECRET` | signature HMAC (`x-mosolo-signature`) des passerelles SMS / SVI entrantes (`/v1/sms/inbound`, `/v1/public/integrite/reports/sms` et `/svi`) ; sans secret : simulateur en démonstration, refus (403) sinon |
 | `KODA_*`, `BITRIPAY_*` | connecteurs de prestataires (voir « Connecteurs de prestataires : BitriPay et KODA ») ; hors démonstration, un connecteur sans `…_WEBHOOK_SECRET` réel n'est pas enregistré |
 | `MOSOLO_EMAIL_PROVIDER_KEY`, `MOSOLO_SMS_PROVIDER_KEY`, `MOSOLO_PUSH_PROVIDER_KEY`, `MOSOLO_WHATSAPP_PROVIDER_KEY`, `MOSOLO_USSD_PROVIDER_KEY`, `MOSOLO_SVI_PROVIDER_KEY`, `MOSOLO_COURRIER_PROVIDER_KEY` | clés fournisseurs ; absente ⇒ canal en bac à sable (`journalise`) |
+
+Liste complète et documentée des variables d'un déploiement de production (obligatoires, recommandées,
+facultatives) : [`infra/vps/.env.example`](../infra/vps/.env.example) ; kits de déploiement (Google Cloud, VPS,
+Vercel / Firebase) : [`infra/`](../infra/).
 
 ## Amorçage hors démonstration
 

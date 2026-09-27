@@ -149,3 +149,40 @@ jobs:
           if npx tsx src/persistence/backup-cli.ts restore /tmp/sauvegarde.json --confirm; then
             echo "Retour arrière accepté sans confirmation" && exit 1
           fi
+      # Kit de déploiement (infra/) : migrations rejouables sur PostgreSQL réel, rôle applicatif à droits minimaux,
+      # bail de l'instance active (chevauchement de révisions Cloud Run).
+      - name: Migrations rejouables et rôle applicatif (tâche de migration, deux exécutions)
+        working-directory: backend
+        env:
+          MOSOLO_DB_APP_ROLE: mosolo_app_kit
+          MOSOLO_DB_APP_PASSWORD: mot-de-passe-ci-non-secret-0123456789
+        run: |
+          npm run db:migrate
+          npm run db:migrate | grep -q "Aucune migration en attente"
+          npm run db:migrate -- --check
+          APP_URL=postgres://mosolo_app_kit:mot-de-passe-ci-non-secret-0123456789@localhost:5432/mosolo
+          if psql "$APP_URL" -v ON_ERROR_STOP=1 -c "UPDATE append_only_journal SET doc = '{}'::jsonb"; then
+            echo "UPDATE du journal accepté pour le rôle applicatif" && exit 1
+          fi
+          psql "$APP_URL" -v ON_ERROR_STOP=1 -tAc "SELECT count(*) FROM instance_lease" > /dev/null
+      - name: Kit de déploiement — tests sur PostgreSQL réel (migrations concurrentes, fichiers rejoués, bail)
+        working-directory: backend
+        env:
+          MOSOLO_TEST_PG_URL: postgres://mosolo:mosolo-ci@localhost:5432/mosolo
+        run: npx vitest run test/deploiement.test.ts
+
+  kit-deploiement:
+    name: Kit de déploiement (scripts, simulations DRY_RUN, YAML/JSON, Compose)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      # Aucun compte cloud : uniquement syntaxe, shellcheck, hadolint, simulations et chargement des fichiers.
+      - name: Hadolint
+        run: |
+          mkdir -p "$HOME/bin"
+          curl -fsSL -o "$HOME/bin/hadolint" https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
+          chmod +x "$HOME/bin/hadolint"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Validation hors ligne (infra/valider.sh)
+        run: ./infra/valider.sh

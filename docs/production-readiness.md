@@ -38,7 +38,7 @@ conditions externes ne sont pas remplies et prouvées, le verdict reste **NO-GO*
 | B1 | Prestataires de paiement réels (mobile money, banques, cartes : BitriPay, KODA ou autres) non raccordés — secrets, URL, certificats, contrats | EXTERNE | Maître d'ouvrage, prestataires | Hors démonstration, un connecteur sans secret réel n'est pas enregistré (`securite.test.ts`) : aucun paiement réel possible |
 | B2 | Compte public de recettes (BCC / banque) et relevés bancaires réels | EXTERNE | Trésor provincial, banque | Relevés importés uniquement en démonstration |
 | B3 | Clés de signature (quittances, clôtures, jetons, audit, sauvegardes) générées et gardées dans un HSM ou coffre de clés | EXTERNE | Exploitant, sécurité | Démarrage refusé sans clés (preuve § 8) ; aucun HSM disponible |
-| B4 | Hébergement souverain (national) avec PostgreSQL géré, sauvegardes hors site, volume WORM pour l'ancre d'audit | EXTERNE | Maître d'ouvrage | Seul un hébergement de démonstration (Render, plan gratuit) existe |
+| B4 | Hébergement souverain (national) avec PostgreSQL géré, sauvegardes hors site, volume WORM pour l'ancre d'audit | EXTERNE | Maître d'ouvrage | Seul un hébergement de démonstration (Render, plan gratuit) existe ; **kits de déploiement prêts** (`infra/` : Google Cloud transitoire, VPS / centre national, Vercel / Firebase), exécution EXTERNE / NON TESTÉE (§ 19) |
 | B5 | Nom de domaine officiel, certificat TLS, `MOSOLO_PUBLIC_URL`, `MOSOLO_CORS_ORIGINS` | EXTERNE | Maître d'ouvrage | Non fourni |
 | B6 | Actes juridiques (tarifs, taux, redevables) : les règles restent « acte requis » ou « à vérifier » | EXTERNE / JURIDIQUE | Gouvernement provincial | Règles de démonstration marquées fictives ; valeurs PAR_DEFAUT à confirmer |
 | B7 | Test d'intrusion indépendant (pentest) et revue de code sécurité par un tiers | EXTERNE | Maître d'ouvrage | NON FAIT |
@@ -83,7 +83,7 @@ conditions externes ne sont pas remplies et prouvées, le verdict reste **NO-GO*
 | Supervision (monitoring) | PASS WITH NON-BLOCKING ISSUES | Métriques et alertes internes ; pas de collecteur ni d'astreinte réels |
 | Sauvegardes (backups) | PASS WITH NON-BLOCKING ISSUES | Sauvegarde signée vérifiée par l'outil ; stockage hors site non défini |
 | Reprise (recovery) | PASS WITH NON-BLOCKING ISSUES | Restauration en base vierge prouvée sur pg-mem ; RTO réel non mesuré |
-| Déploiement (deployment) | PASS WITH NON-BLOCKING ISSUES | Render (démo) et Dockerfile alignés ; image non construite ici (pas de démon Docker) |
+| Déploiement (deployment) | PASS WITH NON-BLOCKING ISSUES | Render (démo) et Dockerfile alignés ; image non construite ici (pas de démon Docker) — **mise à jour § 19** : kit de déploiement prêt (Google Cloud, VPS, Vercel / Firebase), image construite et répétée localement avec Docker Compose et PostgreSQL 16 réels ; exécution sur le cloud et sur un vrai VPS **EXTERNE / NON TESTÉE** |
 | Parcours de bout en bout (end-to-end workflows) | PASS WITH NON-BLOCKING ISSUES | Paiement → quittance → rapprochement en tests ; prestataires réels absents |
 
 ## 4. Couverture des tests en chiffres (Testing Coverage)
@@ -117,7 +117,7 @@ Un seul service sert l'API et l'application web construite (`MOSOLO_STATIC_DIR`)
 | ESLint | `eslint.config.mjs` (racine) | Exclusions TEMPORAIRES de `canaux/cards.ts`, `canaux/points.ts`, `integrite/service.ts` **retirées** après correction (import `randomUUID` inutilisé, `let ok: boolean`, imports `User`/`AlertVariable` inutilisés) |
 | Vite | `frontend/vite.config.ts` | Aucun doublon |
 | Variables d'environnement | `backend/README.md` (tableau) ; aucun fichier `.env` versionné | `.gitignore` couvre `node_modules/`, `dist/`, `.env`, `.env.*`, `coverage/`, journaux |
-| Déploiement | `render.yaml` et `Dockerfile` : même Node (22), même construction (`npm ci` + `npm run build -w frontend`), même démarrage (`tsx backend/src/server.ts --demo`), même sonde (`/health`) | Dockerfile : utilisateur non privilégié et HEALTHCHECK ajoutés ; `.dockerignore` exclut `.env*`, clés, journaux |
+| Déploiement | `render.yaml` et `Dockerfile` : même Node (22), même construction (`npm ci` + `npm run build -w frontend`), même démarrage (`tsx backend/src/server.ts --demo`), même sonde (`/health`) | Dockerfile : utilisateur non privilégié et HEALTHCHECK ajoutés ; `.dockerignore` exclut `.env*`, clés, journaux. § 19 : Dockerfile en deux étapes (tas Node 3 Go à la construction, dépendances de production seules à l'exécution), point d'entrée `demo` (défaut inchangé) / `production` / `migrate` / `backup-once` / `backup-cron` / `restore` |
 | Version de Node | `.nvmrc` = 22 ; `engines` = `>=22 <25` ; `node:22-bookworm-slim` ; Render `NODE_VERSION=22` ; CI 22 et 24 | Node 20 (fin de vie avril 2026) retiré de la matrice CI, remplacé par 24 |
 
 **Fichiers supprimés ou consolidés :** aucun fichier supprimé (règle n° 1 : on ajoute, on ne retire jamais). Seules les
@@ -374,6 +374,10 @@ d'environnement ». Interdits en production : `MOSOLO_DEMO_MODE=true`, `MOSOLO_D
 Démonstration (inchangée) : `render.yaml` / `Dockerfile` — `tsx backend/src/server.ts --demo`, `MOSOLO_DEMO_MODE=true`,
 `MOSOLO_STATIC_DIR=frontend/dist`, sonde `/health`, Node 22.
 
+Kits de déploiement (§ 19) : `infra/gcp/deploy.sh` (Cloud Run + Cloud SQL, variante démonstration `DEMO=true`),
+`infra/vps/` (Docker Compose), `infra/static/` (Vercel / Firebase, application web seule). Liste documentée de toutes
+les variables : `infra/vps/.env.example`. Migrations explicites et rejouables : `npm run db:migrate -w backend`.
+
 ## 17. Décision finale (Final decision)
 
 **NO-GO pour une mise en production réelle** tant que les bloqueurs B1 à B10 ne sont pas levés et prouvés ;
@@ -582,6 +586,59 @@ notifications, limitation de débit). **Verdict inchangé : NO-GO production, GO
 | `npm run build -w frontend` | construction réussie (service worker, 310 entrées pré-cachées) |
 | `python3 tools/gen_routes.py` | 1 514 routes (+ 1) |
 
+## 19. Kit de déploiement (27/09/2026)
+
+Instruction du maître d'ouvrage : publication sur un VPS ou sur Google Cloud (Vercel / Firebase également cités), sans
+réduire la plateforme. Aucun compte cloud n'était disponible : **rien n'a été déployé**. Rien n'a été retiré
+(règle n° 1) : `render.yaml`, le Dockerfile en mode démonstration par défaut et les données de démonstration sont
+inchangés dans leur comportement.
+
+### 19.1 Porte « Déploiement »
+
+| Élément | Résultat |
+|---|---|
+| **Kit** | **PRÊT** : `infra/gcp/` (Cloud Run min = max = 1, CPU toujours alloué, sondes `/health`, Cloud SQL PostgreSQL 16 IP privée + sauvegardes + PITR, Secret Manager, comptes de service à moindre privilège, tâches de migration et de sauvegarde, Cloud Scheduler, domaine, `rollback.sh`, `status.sh`, `restaurer.sh`, variante démonstration séparée) ; `infra/vps/` (Docker Compose, PostgreSQL 16, Caddy HTTPS, sauvegarde quotidienne, `install.sh`, `deploy.sh` avec retour automatique) ; `infra/static/` (Vercel / Firebase) |
+| **Exécution** | **EXTERNE / NON TESTÉE** sur Google Cloud, Vercel, Firebase et sur un vrai VPS avec un vrai domaine |
+| Répétition locale (Docker 29, Compose v5, PostgreSQL 16 réels) | **RÉUSSIE** : construction de l'image, démonstration saine, production refusée sans secrets, déploiement VPS complet (secrets, migrations, rôle applicatif, HTTPS Caddy, santé), sauvegarde CONFORME, redémarrage conforme à l'ancre, restauration (retour arrière refusé sans confirmation puis tracé), image défectueuse → retour automatique, mise à jour d'une base existante |
+| Validation hors ligne (`infra/valider.sh`, aussi en CI) | **RÉUSSIE** : `bash -n` / `sh -n` et shellcheck 0.11 (10 scripts), hadolint 2.15 (Dockerfile), 11 simulations `DRY_RUN=1`, aucune valeur secrète dans les sorties, YAML / JSON stricts, `docker compose config` |
+
+### 19.2 Ajouts logiciels (tous testés, `backend/test/deploiement.test.ts`)
+
+| Ajout | Preuve |
+|---|---|
+| Migrations **rejouables** : `CREATE TABLE IF NOT EXISTS schema_migrations`, verrou consultatif PostgreSQL pendant la migration, contrôle d'existence limité au schéma courant | Deuxième et troisième exécutions sans effet (pg-mem) ; deux migrations **concurrentes** puis chaque fichier rejoué tel quel sur PostgreSQL 16 réel sans erreur ; contrôle statique qui refuse toute future migration non rejouable (dont `CREATE TYPE` non gardé — cause de l'échec d'un autre projet sur Cloud Run) |
+| Tâche de migration `npm run db:migrate -w backend` (`--check`) et rôles PostgreSQL (`db-roles.ts`) : rôle applicatif sans `UPDATE`/`DELETE`/`TRUNCATE` du journal ni droit de création ; rôle d'exploitation membre de `mosolo_restore` ; mot de passe jamais journalisé | PostgreSQL 16 réel : deux exécutions, `UPDATE` du journal, `DELETE` de l'instantané, purge de restauration et `CREATE TABLE` refusés au rôle applicatif ; étape ajoutée à la CI « persistance-postgresql » |
+| **Bail de l'instance active** (migration `004_instance_lease.sql`) : une ancienne révision encore en service (chevauchement Cloud Run) ou un double démarrage n'écrit plus jamais — écritures 503, `/health` « degraded », alerte `INSTANCE_SUPPLANTEE` ; `db:restore` prend aussi le bail | pg-mem, PostgreSQL réel, et deux conteneurs réels sur la même base : l'ancienne instance passe en 503 dès son premier lot après la prise du bail, la nouvelle écrit |
+| Démarrage de production **complet** (`preparePersistence` → application → santé des clés, comme `persistence/server.ts`) avec la liste documentée des variables (`infra/vps/.env.example`, marques « OBLIGATOIRE ») | Réussi sur pg-mem (`/health` 200, mode EXPLOITATION, aucune donnée de démonstration) ; refus explicite **nommant la variable** pour chacune des 10 variables secrètes ou de chemin retirée ; valeur de démonstration refusée ; `infra/gcp/deploy.sh` fournit chaque variable obligatoire |
+| Dockerfile en deux étapes, `NODE_OPTIONS=--max-old-space-size=3072` à la construction, dépendances de production seules, utilisateur `node`, HEALTHCHECK, point d'entrée à modes (`demo` par défaut, `production`, `migrate`, `backup-once`, `backup-cron`, `verify`, `restore`, `bootstrap-check`) ; variables vides retirées au démarrage | Image construite (427 Mo) et exécutée ; hadolint sans avertissement |
+
+### 19.3 Résidus et points NON TESTÉS
+
+| ID | Constat | État |
+|---|---|---|
+| K-1 | Exécution réelle sur Google Cloud (API, Cloud Build régional, Cloud SQL IP privée, montage Cloud Storage et ses options, Cloud Scheduler et Secret Manager dans `africa-south1`, équilibreur et certificat géré, politiques d'organisation) | **NON TESTÉ** (EXTERNE) — points à vérifier listés dans `infra/gcp/README.md` |
+| K-2 | Vercel / Firebase : réécritures vers le backend, région Cloud Run acceptée par Firebase, limites de taille des requêtes mandatées | **NON TESTÉ** (EXTERNE) |
+| K-3 | `install.sh` sur un vrai Ubuntu 22.04 / 24.04 (simulé seulement) ; certificat Let's Encrypt réel (Caddy servait un certificat interne pour `localhost`) ; copie des sauvegardes hors site | **NON TESTÉ** (EXTERNE) |
+| K-4 | Chevauchement de révisions : le dernier lot différé (25 ms) de l'ancienne instance peut avoir été acquitté sans être persisté | Accepté provisoirement : mise à jour en heure creuse ; cible : écriture synchrone / outbox avec le schéma relationnel |
+| K-5 | Une seule instance (état en mémoire) : aucune montée en charge horizontale ; souveraineté : `africa-south1` est hors de la RDC | Décision du maître d'ouvrage (hébergement national préféré, B4) ; Google Cloud = transitoire |
+| K-6 | Coûts Google Cloud : **estimation** (≈ 190 – 390 USD / mois en zonal, ≈ 250 – 480 en haute disponibilité) | À recalculer avec le simulateur officiel avant décision |
+
+### 19.4 Porte finale de cette passe
+
+`npm run typecheck && npm run lint && npm test && npm run build -w frontend` ; `./infra/valider.sh` ;
+`MOSOLO_TEST_PG_URL=… npx vitest run test/deploiement.test.ts` (PostgreSQL 16 réel). Aucune route ajoutée ni modifiée
+(`tools/gen_routes.py` non requis). Résultats :
+
+| Commande | Résultat |
+|---|---|
+| `npm run typecheck` | 3 paquets, 0 erreur |
+| `npm run lint` | 0 erreur, 0 avertissement |
+| `npm test` | **1 391 réussis, 1 ignoré** : shared 32, backend **1 076** (118 fichiers, dont `deploiement` : 22 tests, + 1 ignoré sans PostgreSQL réel), frontend 283 |
+| `MOSOLO_TEST_PG_URL=… npx vitest run test/deploiement.test.ts` | 23 / 23 réussis sur PostgreSQL 16 réel (conteneur jetable) |
+| `npm run build -w frontend` | construction réussie (service worker, 310 entrées pré-cachées) |
+| `./infra/valider.sh` | tout conforme (voir 19.1) |
+| Image Docker (`docker build`, Docker 29) | construite, 427 Mo ; démonstration saine ; production refusée sans secrets (message nommant les variables) |
+
 ---
 
 ## Annexe — Rapport de livraison en 18 points
@@ -598,7 +655,7 @@ notifications, limitation de débit). **Verdict inchangé : NO-GO production, GO
 10. **Durcissement sécurité** : CSP, HSTS, COOP, Permissions-Policy, limitation de débit étendue, service statique robuste, Docker non root.
 11. **Tests de bout en bout** : 499 pages, 9 rôles, 0 erreur JavaScript, 0 réponse 5xx.
 12. **Mobile / PWA** : 0 débordement à 360 px ; manifeste complété ; Capacitor : GO technique conditionnel, NO-GO magasins.
-13. **Déploiement** : Render et Dockerfile alignés (Node 22, même construction, même sonde) ; image non construite ici.
+13. **Déploiement** : Render et Dockerfile alignés (Node 22, même construction, même sonde) ; image non construite ici. Mise à jour § 19 : kit de déploiement prêt (Google Cloud, VPS, Vercel / Firebase) et répété localement ; exécution réelle EXTERNE / NON TESTÉE.
 14. **Données de démonstration** : conservées sur instruction du maître d'ouvrage (27/09/2026) ; absentes en production (testé).
 15. **Problèmes connus non critiques** : menus non alignés sur les droits ; dépendances de développement ; accessibilité non auditée.
 16. **Bloqueurs restants** : B1 – B10.

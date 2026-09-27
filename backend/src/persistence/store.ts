@@ -22,11 +22,25 @@ export interface SnapshotStore {
   readonly kind: string;
   migrate(): Promise<string[]>;
   loadAll(): Promise<SnapshotRow[]>;
-  /** Écrit un lot : UPSERT des documents modifiables, INSERT … DO NOTHING des enregistrements en ajout seul. */
-  write(rows: SnapshotRow[], at: Date): Promise<void>;
+  /**
+   * Écrit un lot : UPSERT des documents modifiables, INSERT … DO NOTHING des enregistrements en ajout seul.
+   * `leaseGeneration` (moteur de persistance du serveur) : le lot échoue par LeaseLostError si une instance plus
+   * récente a pris le bail ; sans elle (outils d'exploitation, tests), aucune vérification.
+   */
+  write(rows: SnapshotRow[], at: Date, leaseGeneration?: number): Promise<void>;
   /** Remplace tout le contenu (restauration d'une sauvegarde vérifiée), dans une transaction. */
   replaceAll(rows: SnapshotRow[], at: Date): Promise<void>;
   close(): Promise<void>;
+  /** Bail de l'instance active (migration 004, facultatif) : incrémente et renvoie la génération (chevauchement de révisions). */
+  acquireLease?(holder: string, at: Date): Promise<number>;
+}
+
+/** Une instance plus récente a pris le bail : cette instance ne doit plus jamais écrire. */
+export class LeaseLostError extends Error {
+  constructor(readonly mine: number, readonly current: number | null) {
+    super(`Instance supplantée : bail de génération ${mine}, génération en base ${current ?? 'absente'} — écritures refusées (une instance plus récente est active).`);
+    this.name = 'LeaseLostError';
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -88,6 +102,10 @@ export interface PgStoreOptions {
 
 const DEFAULT_MIGRATIONS_DIR = fileURLToPath(new URL('../../db/migrations/', import.meta.url));
 const CHUNK = 200;
+/** Clé fixe du verrou consultatif PostgreSQL des migrations (« MOSOLO » en hexadécimal). */
+export const MIGRATION_LOCK_KEY = 0x4d4f534f4c4f;
+/** Identifiant unique de la ligne du bail de l'instance active (migration 004). */
+const LEASE_ID = 'principal';
 
 export class PgSnapshotStore implements SnapshotStore {
   readonly kind = 'postgresql';
@@ -99,26 +117,63 @@ export class PgSnapshotStore implements SnapshotStore {
     this.migrationsDir = opts.migrationsDir ?? DEFAULT_MIGRATIONS_DIR;
   }
 
-  /** Migrations versionnées (fichiers `NNN_nom.sql`, `NNN_nom.pg.sql` pour PostgreSQL seul), appliquées une fois. */
+  /**
+   * Migrations versionnées (fichiers `NNN_nom.sql`, `NNN_nom.pg.sql` pour PostgreSQL seul), appliquées une fois
+   * (journal `schema_migrations`). Idempotentes : une seconde exécution ne rejoue aucun fichier, et chaque fichier est
+   * lui-même rejouable (`IF NOT EXISTS`, `CREATE OR REPLACE`, `DROP … IF EXISTS`, blocs `DO` gardés — contrôlé par
+   * test/deploiement.test.ts). PostgreSQL : verrou consultatif de session pendant toute la migration, pour que deux
+   * démarrages simultanés (deux instances, ou la tâche de migration et le service) ne jouent jamais un fichier deux fois.
+   */
   async migrate(): Promise<string[]> {
-    const exists = await this.pool.query("SELECT table_name FROM information_schema.tables WHERE table_name = 'schema_migrations'");
-    if (exists.rows.length === 0) {
-      await this.pool.query('CREATE TABLE schema_migrations (version TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (version))');
+    if (this.dialect !== 'postgres') return this.migrateWith(this.pool, (fn) => this.tx(fn));
+    const lock = await this.pool.connect();
+    try {
+      await lock.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_KEY]);
+      // Transactions sur la connexion qui détient le verrou (un verrou de session suit sa connexion).
+      return await this.migrateWith(lock, (fn) => this.txOn(lock, fn));
+    } finally {
+      await lock.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_KEY]).catch(() => undefined);
+      lock.release();
     }
-    const done = new Set((await this.pool.query('SELECT version FROM schema_migrations')).rows.map((r) => String(r.version)));
-    const files = readdirSync(this.migrationsDir).filter((f) => /^\d{3}_.+\.sql$/.test(f)).sort();
+  }
+
+  private async migrateWith(q: PgQueryable, tx: <T>(fn: (c: PgQueryable) => Promise<T>) => Promise<T>): Promise<string[]> {
+    // Contrôle d'existence d'abord : un rôle applicatif sans droit CREATE lit le journal sans jamais tenter de créer.
+    const exists = await q.query("SELECT table_name FROM information_schema.tables WHERE table_name = 'schema_migrations' AND table_schema = current_schema()");
+    if (exists.rows.length === 0) {
+      await q.query('CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (version))');
+    }
+    const done = new Set((await q.query('SELECT version FROM schema_migrations')).rows.map((r) => String(r.version)));
     const applied: string[] = [];
-    for (const f of files) {
+    for (const f of this.migrationFiles()) {
       if (done.has(f)) continue;
-      if (f.endsWith('.pg.sql') && this.dialect !== 'postgres') continue;
       const sql = readFileSync(`${this.migrationsDir}/${f}`, 'utf8');
-      await this.tx(async (c) => {
+      await tx(async (c) => {
         await c.query(sql);
         await c.query('INSERT INTO schema_migrations (version, applied_at) VALUES ($1, $2)', [f, new Date().toISOString()]);
       });
       applied.push(f);
     }
     return applied;
+  }
+
+  /** Fichiers de migration applicables à ce dialecte, dans l'ordre. */
+  private migrationFiles(): string[] {
+    return readdirSync(this.migrationsDir)
+      .filter((f) => /^\d{3}_.+\.sql$/.test(f) && (this.dialect === 'postgres' || !f.endsWith('.pg.sql')))
+      .sort();
+  }
+
+  /** Migrations en attente, sans rien appliquer (contrôle d'exploitation, tâche de migration). */
+  async pendingMigrations(): Promise<string[]> {
+    const exists = await this.pool.query("SELECT table_name FROM information_schema.tables WHERE table_name = 'schema_migrations' AND table_schema = current_schema()");
+    const done = exists.rows.length ? new Set((await this.pool.query('SELECT version FROM schema_migrations')).rows.map((r) => String(r.version))) : new Set<string>();
+    return this.migrationFiles().filter((f) => !done.has(f));
+  }
+
+  /** Instruction d'exploitation (rôles et droits, par la tâche de migration) ; jamais utilisée par le serveur. */
+  async exec(sql: string): Promise<void> {
+    await this.pool.query(sql);
   }
 
   async loadAll(): Promise<SnapshotRow[]> {
@@ -131,9 +186,33 @@ export class PgSnapshotStore implements SnapshotStore {
     return sortRows(rows);
   }
 
-  async write(rows: SnapshotRow[], at: Date): Promise<void> {
+  async write(rows: SnapshotRow[], at: Date, leaseGeneration?: number): Promise<void> {
     if (rows.length === 0) return;
-    await this.tx((c) => this.insertRows(c, rows, at));
+    await this.tx(async (c) => {
+      if (leaseGeneration !== undefined) await this.checkLease(c, leaseGeneration);
+      await this.insertRows(c, rows, at);
+    });
+  }
+
+  /** Prend le bail de l'instance active (génération + 1), AVANT le chargement de l'instantané. */
+  async acquireLease(holder: string, at: Date): Promise<number> {
+    const r = await this.pool.query(
+      `INSERT INTO instance_lease (id, generation, holder, acquired_at) VALUES ($1, 1, $2, $3::timestamptz)
+       ON CONFLICT (id) DO UPDATE SET generation = instance_lease.generation + 1, holder = EXCLUDED.holder, acquired_at = EXCLUDED.acquired_at
+       RETURNING generation`,
+      [LEASE_ID, holder.slice(0, 200), at.toISOString()],
+    );
+    return Number(r.rows[0]!.generation);
+  }
+
+  /**
+   * Dans la transaction d'écriture : la génération en base doit être la nôtre. PostgreSQL : verrou partagé sur la
+   * ligne du bail, de sorte qu'une prise de bail concurrente attend la fin des lots en cours (aucun lot après elle).
+   */
+  private async checkLease(c: PgQueryable, mine: number): Promise<void> {
+    const r = await c.query(`SELECT generation FROM instance_lease WHERE id = $1${this.dialect === 'postgres' ? ' FOR SHARE' : ''}`, [LEASE_ID]);
+    const current = r.rows.length ? Number(r.rows[0]!.generation) : null;
+    if (current !== mine) throw new LeaseLostError(mine, current);
   }
 
   async replaceAll(rows: SnapshotRow[], at: Date): Promise<void> {
@@ -194,6 +273,15 @@ export class PgSnapshotStore implements SnapshotStore {
   private async tx<T>(fn: (c: PgQueryable) => Promise<T>): Promise<T> {
     const c = await this.pool.connect();
     try {
+      return await this.txOn(c, fn);
+    } finally {
+      c.release();
+    }
+  }
+
+  /** Transaction sur une connexion déjà ouverte (celle qui détient le verrou de migration). */
+  private async txOn<T>(c: PgQueryable, fn: (c: PgQueryable) => Promise<T>): Promise<T> {
+    try {
       await c.query('BEGIN');
       const res = await fn(c);
       await c.query('COMMIT');
@@ -201,8 +289,6 @@ export class PgSnapshotStore implements SnapshotStore {
     } catch (e) {
       await c.query('ROLLBACK').catch(() => undefined);
       throw e;
-    } finally {
-      c.release();
     }
   }
 }

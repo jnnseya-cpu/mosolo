@@ -28,3 +28,11 @@ docs/document-maitre/_build.md
 presentation-ecrans.html
 gallery/
 liste.json
+
+# Kits de déploiement (infra/) : état local, sauvegardes, amorçage et fichiers rendus — jamais versionnés
+infra/vps/.etat/
+infra/vps/sauvegardes/
+infra/vps/amorcage/
+infra/gcp/.rendu/
+infra/static/.rendu/
+infra/.validation/

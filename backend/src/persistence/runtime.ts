@@ -18,7 +18,8 @@ import type { Entity } from '../core/repository.js';
 import { anchorLogLine, compareWithAnchor, AnchorError, type AuditAnchorRecord, type AuditAnchorStore } from './anchor.js';
 import { decodeDoc, encodeDoc, stableText } from './codec.js';
 import { AUDIT_REPO, collectRows, discover, isAppendOnly, readableIds, type Discovery } from './registry.js';
-import type { SnapshotRow, SnapshotStore } from './store.js';
+import { hostname } from 'node:os';
+import { LeaseLostError, type SnapshotRow, type SnapshotStore } from './store.js';
 
 export interface AttachReport {
   repositories: number;
@@ -44,6 +45,8 @@ export interface PersistenceStats {
   consecutiveFailures: number;
   /** Stockage en échec : écritures refusées (503) jusqu'à la reprise (voir `degraded`). */
   degraded: boolean;
+  /** Instance supplantée (bail repris par une instance plus récente) : écritures refusées définitivement. */
+  superseded: boolean;
   report: AttachReport | null;
   lastAnchor: AuditAnchorRecord | null;
 }
@@ -85,7 +88,11 @@ export class PersistenceRuntime {
   private chain: Promise<void> = Promise.resolve();
   private discovery: Discovery | null = null;
   private ctx: AttachableContext | null = null;
-  private stats: Omit<PersistenceStats, 'store' | 'attached' | 'repositories' | 'pendingWrites' | 'degraded'> = {
+  /** Bail perdu : une instance plus récente écrit désormais ; celle-ci n'écrit plus jamais. */
+  private superseded = false;
+  /** Génération du bail pris à l'ouverture (undefined : magasin sans bail, p. ex. mémoire). */
+  private leaseGeneration: number | undefined;
+  private stats: Omit<PersistenceStats, 'store' | 'attached' | 'repositories' | 'pendingWrites' | 'degraded' | 'superseded'> = {
     writtenRows: 0, flushes: 0, lastFlushAt: null, lastError: null, consecutiveFailures: 0, report: null, lastAnchor: null,
   };
   /** Une alerte par épisode de panne (réarmée à la reprise). */
@@ -101,9 +108,18 @@ export class PersistenceRuntime {
   static async open(store: SnapshotStore, opts: RuntimeOptions = {}): Promise<PersistenceRuntime> {
     const applied = await store.migrate();
     if (applied.length) opts.log?.('info', `Migrations appliquées : ${applied.join(', ')}`);
+    // Bail de l'instance active AVANT le chargement : tout ce qu'une instance précédente a écrit jusque-là est relu,
+    // et elle n'écrira plus rien ensuite (chevauchement de révisions, Cloud Run).
+    let generation: number | undefined;
+    if (store.acquireLease) {
+      generation = await store.acquireLease(`${hostname()}:${process.pid}`, new Date());
+      opts.log?.('info', `Bail de l'instance active acquis (génération ${generation}) : une instance antérieure encore en service n'écrira plus.`);
+    }
     const rows = await store.loadAll();
     opts.log?.('info', `Instantané chargé : ${rows.length} document(s).`);
-    return new PersistenceRuntime(store, rows, opts);
+    const rt = new PersistenceRuntime(store, rows, opts);
+    rt.leaseGeneration = generation;
+    return rt;
   }
 
   get attached(): boolean {
@@ -257,6 +273,8 @@ export class PersistenceRuntime {
   }
 
   private enqueue(row: SnapshotRow): void {
+    // Instance supplantée : plus aucune écriture (les écritures HTTP sont déjà refusées en 503 par le module « socle »).
+    if (this.superseded) return;
     this.pending.set(`${row.kind}\u0000${row.repo}\u0000${row.id}`, row);
     if (this.timer) return;
     // Pendant une panne, une nouvelle écriture n'accélère pas les tentatives : même délai borné que les reprises.
@@ -278,7 +296,7 @@ export class PersistenceRuntime {
     this.timer = setTimeout(() => {
       this.timer = null;
       this.flush().catch(() => {
-        if (this.timer || this.pending.size === 0) return;
+        if (this.superseded || this.timer || this.pending.size === 0) return;
         this.schedule(this.backoffMs());
       });
     }, delayMs);
@@ -287,7 +305,7 @@ export class PersistenceRuntime {
 
   /** Stockage en échec : plusieurs écritures consécutives refusées par la base. */
   get degraded(): boolean {
-    return this.stats.consecutiveFailures >= PERSISTENCE_DEGRADED_AFTER;
+    return this.superseded || this.stats.consecutiveFailures >= PERSISTENCE_DEGRADED_AFTER;
   }
 
   /** Écrit les écritures en attente (sérialisées). Toujours appelé à l'arrêt du serveur. */
@@ -301,7 +319,7 @@ export class PersistenceRuntime {
       const batch = [...this.pending.values()];
       this.pending.clear();
       try {
-        await this.store.write(batch, this.ctx?.clock.now() ?? new Date());
+        await this.store.write(batch, this.ctx?.clock.now() ?? new Date(), this.leaseGeneration);
         this.stats.writtenRows += batch.length;
         this.stats.flushes++;
         this.stats.lastFlushAt = new Date().toISOString();
@@ -313,6 +331,19 @@ export class PersistenceRuntime {
         }
         this.writeAnchor(batch);
       } catch (e) {
+        if (e instanceof LeaseLostError) {
+          // Une instance plus récente a relu la base et écrit désormais : jamais d'écrasement ni de collision.
+          this.superseded = true;
+          this.pending.clear();
+          this.stats.lastError = e.message;
+          this.opts.log?.('error', `${e.message} Lot de ${batch.length} écriture(s) NON persisté (acquitté par cette instance) ; cette instance doit être arrêtée.`);
+          this.ctx?.alerts?.raise({
+            type: 'INSTANCE_SUPPLANTEE', severity: 'CRITICAL', source: 'persistance',
+            detail: `${e.message} ${batch.length} écriture(s) du dernier lot non persistée(s) ; écritures refusées (503) jusqu'à l'arrêt de cette instance.`,
+            context: { store: this.store.kind, lostRows: batch.length, repos: [...new Set(batch.map((r) => r.repo))].slice(0, 20), automaticEffect: 'ECRITURES_REFUSEES' },
+          });
+          throw e;
+        }
         // Rien n'est perdu : le lot est remis en attente (sans écraser une version plus récente).
         for (const r of batch) {
           const k = `${r.kind}\u0000${r.repo}\u0000${r.id}`;
@@ -362,6 +393,7 @@ export class PersistenceRuntime {
       repositories: [...(this.discovery?.repos.keys() ?? [])].sort(),
       pendingWrites: this.pending.size,
       degraded: this.degraded,
+      superseded: this.superseded,
       ...structuredClone(this.stats),
     };
   }

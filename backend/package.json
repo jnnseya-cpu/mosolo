@@ -13,6 +13,7 @@
     "db:backup": "tsx src/persistence/backup-cli.ts backup",
     "db:restore": "tsx src/persistence/backup-cli.ts restore",
     "db:verify": "tsx src/persistence/backup-cli.ts verify",
+    "db:migrate": "tsx src/persistence/migrate-cli.ts",
     "bootstrap:check": "tsx src/persistence/bootstrap-cli.ts check"
   },
   "dependencies": {

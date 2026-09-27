@@ -1,0 +1,26 @@
+# KINSHASA MOSOLO — construction de l'image par Cloud Build (lancée par infra/gcp/deploy.sh).
+# Machine à 8 vCPU / 8 Go (E2_HIGHCPU_8) : la construction du frontend demande ~700 Mo de tas Node ; le Dockerfile
+# fixe NODE_OPTIONS=--max-old-space-size=${_HEAP_MB} dans l'étape de construction.
+steps:
+  - id: construction
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --pull
+      - --build-arg
+      - MOSOLO_BUILD_HEAP_MB=${_HEAP_MB}
+      - --tag
+      - ${_IMAGE}
+      - --file
+      - Dockerfile
+      - .
+images:
+  - ${_IMAGE}
+substitutions:
+  _IMAGE: africa-south1-docker.pkg.dev/PROJET/mosolo/mosolo:manuel
+  _HEAP_MB: "3072"
+options:
+  machineType: E2_HIGHCPU_8
+  # Compte de service dédié (mosolo-build) : journaux dans Cloud Logging uniquement.
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1800s
