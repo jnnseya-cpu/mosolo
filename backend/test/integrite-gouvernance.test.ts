@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,9 +8,10 @@ import { ManualClock } from '../src/core/clock.js';
 import { ASSIST_ON_SITE_M } from '../src/plugins/canaux/assisted.js';
 import { COUNTER_CHECK_RATE_PER_10K } from '../src/plugins/sanctions/counterchecks.js';
 import { integritePlugin } from '../src/plugins/integrite/plugin.js';
-import { integriteGouvernancePlugin } from '../src/plugins/integrite/gouvernance/plugin.js';
+import { collusionSchedulerEnabled, integriteGouvernancePlugin } from '../src/plugins/integrite/gouvernance/plugin.js';
 import { CIRCUITS, reconstruct } from '../src/plugins/integrite/gouvernance/circuits.js';
-import { keyHealth } from '../src/plugins/integrite/gouvernance/cles.js';
+import { assertKeyHealthAtBoot, classifyBootKeyHealth, keyHealth } from '../src/plugins/integrite/gouvernance/cles.js';
+import { ConfigurationError } from '../src/core/auth.js';
 import { isOffHours } from '../src/plugins/integrite/gouvernance/collusion.js';
 import { ALL_PARAMETERS, REPLICATED } from '../src/plugins/integrite/gouvernance/parametres.js';
 import type { GouvernanceService } from '../src/plugins/integrite/gouvernance/service.js';
@@ -22,12 +23,12 @@ const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'src');
 /** Mardi 29/09/2026, 10 h à Kinshasa (heures ouvrables). */
 const START = '2026-09-29T09:00:00.000Z';
 
-async function setupG(start = START): Promise<TestEnv & { svc: GouvernanceService }> {
+async function setupG(start = START, full = false): Promise<TestEnv & { svc: GouvernanceService }> {
   const clock = new ManualClock(start);
   const app = buildApp({
     clock,
     secrets: { auditHmacKey: 'test-audit-key', providerSecrets: { 'mm-operator-a': 'test-secret-mm-operator-a' }, commsProviderKeys: {} },
-    plugins: [integritePlugin, integriteGouvernancePlugin],
+    ...(full ? {} : { plugins: [integritePlugin, integriteGouvernancePlugin] }),
   });
   await app.ready();
   const req: TestEnv['req'] = (method, url, user, body, headers = {}) =>
@@ -299,5 +300,142 @@ describe('Application complète (tous les modules)', () => {
     expect(keys.statusCode).toBe(200);
     expect(keys.json().keys.some((k: { id: string; fingerprint: string | null }) => k.id === 'clotures' && k.fingerprint)).toBe(true);
     expect((await get('/v1/audit/verify', 'u-auditeur')).json().ok).toBe(true);
+  });
+});
+
+describe('Circuits canaux : demande et décision séparées, sous garde de rotation', () => {
+  const priorPairs = (env: TestEnv, n: number) => {
+    for (let i = 0; i < n; i++) {
+      env.app.ctx.audit.append({ actor: { kind: 'user', id: 'u-analyste-rappro', roles: ['R18'] }, action: 'canaux.point.reinstatement_requested', resourceType: 'payment_point', resourceId: `PA-OLD-${i}`, details: {} });
+      env.app.ctx.audit.append({ actor: user('canaux-tresor-2'), action: 'canaux.point.reinstated', resourceType: 'payment_point', resourceId: `PA-OLD-${i}`, details: { requestedBy: 'u-analyste-rappro' } });
+    }
+  };
+
+  it('les deux circuits canaux et la validation des commissions sont gardés ; leurs refus sont reconstitués', () => {
+    const c = (code: string) => CIRCUITS.find((x) => x.code === code)!;
+    expect(c('CANAUX_RETABLISSEMENT').guard?.url).toBe('/v1/payment-points/:id/reinstatement-request/decision');
+    expect(c('CANAUX_ECARTEMENT_SUSPENSION').guard?.url).toBe('/v1/payment-point-proposals/:id/dismissal-request/decision');
+    expect(c('CANAUX_RETABLISSEMENT').refusals).toContain('canaux.point.reinstatement_rejected');
+    expect(c('COMMISSION_VALIDATION').guard?.url).toBe('/v1/agents/commission-validations/:id/decision');
+  });
+
+  it('rotation activée : la paire demandeur → décideur au plafond est bloquée ; le refus ne l’est jamais', async () => {
+    const env = await setupG(START, true);
+    await enableRotation(env, 2);
+    priorPairs(env, 2);
+    const base = '/v1/payment-points/PA-KALAMU-MM01/reinstatement-request';
+    expect((await env.req('POST', base, 'u-analyste-rappro', { motif: 'Écart régularisé, pièces justificatives reçues.' })).statusCode).toBe(201);
+    const blocked = await env.req('POST', `${base}/decision`, 'canaux-tresor-2', { approve: true, motif: 'Rétablissement validé en seconde lecture.' });
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json().code).toBe('ROTATION_REQUIRED');
+    expect(env.app.ctx.audit.list({ action: 'integrite.rotation.blocked' }).items[0]!.resourceId).toBe('CANAUX_RETABLISSEMENT:PA-KALAMU-MM01');
+    const refused = await env.req('POST', `${base}/decision`, 'canaux-tresor-2', { approve: false, motif: 'Refus motivé, pièces insuffisantes.' });
+    expect(refused.statusCode).toBe(200);
+    // Le refus figure au journal comme décision à deux personnes.
+    const { decisions } = reconstruct(env.app.ctx.audit.list({ limit: 1e6 }).items);
+    expect(decisions.filter((d) => d.circuit === 'CANAUX_RETABLISSEMENT' && d.outcome === 'REFUSE').map((d) => [d.proposerId, d.approverId])).toEqual([['u-analyste-rappro', 'canaux-tresor-2']]);
+  });
+});
+
+describe('Détection planifiée de la collusion (journalisée, alertes seulement)', () => {
+  it('s’exécute à l’intervalle du registre (24 h par défaut), chaque exécution journalisée ; 0 la désactive', async () => {
+    const env = await setupG();
+    expect(env.svc.schedulerActive).toBe(false);
+    const def = ALL_PARAMETERS.find((p) => p.id === 'collusion.detection_intervalle_h')!;
+    expect(def).toMatchObject({ value: 24, owner: 'REGISTRE' });
+    expect(env.svc.entry(def).statusLabel).toBe('PAR_DEFAUT — à confirmer par le maître d’ouvrage');
+    for (let i = 0; i < 12; i++) treasuryDecision(env, i, 'u-a', 'u-b', 20);
+    expect(env.svc.scheduledTick()).toMatchObject({ ran: true });
+    const runs = () => env.app.ctx.audit.list({ action: 'integrite.collusion.run' }).items.filter((e) => e.details.trigger === 'PLANIFIEE');
+    expect(runs()).toHaveLength(1);
+    expect(runs()[0]).toMatchObject({ actor: { kind: 'system' }, details: { automaticEffect: 'AUCUN' } });
+    expect(env.app.ctx.alerts.list().some((a) => a.source === 'integrite:collusion')).toBe(true);
+    env.clock.advance(23 * 3_600_000);
+    expect(env.svc.scheduledTick().ran).toBe(false);
+    env.clock.advance(2 * 3_600_000);
+    expect(env.svc.scheduledTick().ran).toBe(true);
+    expect(runs()).toHaveLength(2);
+    // Vue : intervalle, statut et dernière exécution.
+    const view = (await env.req('GET', '/v1/integrite/collusion', 'u-auditeur')).json();
+    expect(view.schedule).toMatchObject({ intervalHours: 24, lastRunAt: env.clock.now().toISOString() });
+    // Désactivation par le registre (circuit à deux personnes).
+    const r = await env.req('POST', '/v1/integrite/thresholds/change-requests', 'u-rssi', { parameterId: 'collusion.detection_intervalle_h', kind: 'MODIFICATION', proposedValue: 0, motif: 'Suspension temporaire décidée en comité (test).' });
+    expect(r.statusCode).toBe(201);
+    await env.req('POST', `/v1/integrite/thresholds/change-requests/${r.json().id}/decision`, 'u-dg-dgipk', { approve: true, motif: 'Approuvé par la direction générale (test).' });
+    env.clock.advance(48 * 3_600_000);
+    expect(env.svc.scheduledTick().ran).toBe(false);
+  });
+
+  it('reprise après redémarrage : la dernière exécution planifiée est relue au journal', async () => {
+    const env = await setupG();
+    env.app.ctx.audit.append({ actor: { kind: 'system', id: 'integrite:collusion' }, action: 'integrite.collusion.run', resourceType: 'collusion', resourceId: '*', details: { trigger: 'PLANIFIEE' } });
+    env.clock.advance(3_600_000);
+    expect(env.svc.scheduledTick().ran).toBe(false);
+  });
+
+  it('désactivée sous les tests, forçable ou coupée par variable', () => {
+    expect(collusionSchedulerEnabled({ VITEST: 'true' })).toBe(false);
+    expect(collusionSchedulerEnabled({})).toBe(true);
+    expect(collusionSchedulerEnabled({ MOSOLO_COLLUSION_SCHEDULER: 'off' })).toBe(false);
+    expect(collusionSchedulerEnabled({ VITEST: 'true', MOSOLO_COLLUSION_SCHEDULER: 'on' })).toBe(true);
+  });
+});
+
+describe('Santé des clés au démarrage (hors démonstration)', () => {
+  const pem = () => generateKeyPairSync('ed25519').privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+  const AUDIT = 'a'.repeat(20) + 'audit-cle-stable-0123456789';
+  async function bootApp() {
+    const app = buildApp({
+      clock: new ManualClock(START),
+      secrets: { auditHmacKey: AUDIT, providerSecrets: { 'mm-operator-a': 'p'.repeat(40) }, deviceKeys: {}, commsProviderKeys: {} },
+      plugins: [integritePlugin, integriteGouvernancePlugin],
+    });
+    await app.ready();
+    return app;
+  }
+  const goodEnv = (): NodeJS.ProcessEnv => ({
+    MOSOLO_DEMO_MODE: 'false', MOSOLO_AUDIT_HMAC_KEY: AUDIT, MOSOLO_RECEIPT_SIGNING_KEY: pem(), MOSOLO_CLOSURE_SIGNING_KEY: pem(), MOSOLO_JWT_PRIVATE_KEY: pem(),
+    MOSOLO_BACKUP_KEY: 'b'.repeat(40), MOSOLO_INTEGRITE_KEY: 'i'.repeat(40), MOSOLO_PAYMENT_POINT_MASTER_KEY: 'm'.repeat(40),
+  });
+  const silent = { info: () => undefined, warn: () => undefined };
+
+  it('en démonstration : aucun contrôle bloquant', async () => {
+    const app = await bootApp();
+    expect(assertKeyHealthAtBoot(app.ctx, { MOSOLO_DEMO_MODE: 'true' }, silent)).toBeNull();
+  });
+
+  it('clés stables et distinctes : démarrage accepté ; âge dépassé journalisé et alerté, jamais bloquant', async () => {
+    const app = await bootApp();
+    const warns: string[] = [];
+    const h = assertKeyHealthAtBoot(app.ctx, { ...goodEnv(), MOSOLO_KEY_DATES: 'MOSOLO_BACKUP_KEY=2024-01-01' }, { info: () => undefined, warn: (m) => warns.push(m) });
+    expect(h?.mode).toBe('EXPLOITATION');
+    expect(warns.some((w) => w.includes('MOSOLO_BACKUP_KEY (AGE_DEPASSE)'))).toBe(true);
+    expect(app.ctx.alerts.list().some((a) => a.type === 'CLE_AGE_DEPASSE' && a.context.automaticEffect === 'AUCUN')).toBe(true);
+    expect(app.ctx.audit.list({ action: 'integrite.keys.boot_checked' }).items[0]).toMatchObject({ outcome: 'SUCCESS' });
+  });
+
+  it('clé absente, éphémère, de démonstration ou réutilisée : démarrage refusé, message clair, aucun secret', async () => {
+    const app = await bootApp();
+    const refuse = (env: NodeJS.ProcessEnv, re: RegExp) => {
+      let err: unknown;
+      try { assertKeyHealthAtBoot(app.ctx, env, silent); } catch (e) { err = e; }
+      expect(err).toBeInstanceOf(ConfigurationError);
+      expect((err as Error).message).toMatch(/^Démarrage refusé hors mode démonstration/);
+      expect((err as Error).message).toMatch(re);
+      expect((err as Error).message).not.toContain(AUDIT);
+    };
+    refuse({ ...goodEnv(), MOSOLO_JWT_PRIVATE_KEY: undefined }, /MOSOLO_JWT_PRIVATE_KEY \(EPHEMERE\)/);
+    refuse({ ...goodEnv(), MOSOLO_BACKUP_KEY: undefined }, /MOSOLO_BACKUP_KEY \(ABSENTE_HORS_DEMONSTRATION\)/);
+    refuse({ ...goodEnv(), MOSOLO_BACKUP_KEY: 'demo-' + 'x'.repeat(40) }, /VALEUR_DEMONSTRATION/);
+    refuse({ ...goodEnv(), MOSOLO_BACKUP_KEY: AUDIT }, /MOSOLO_BACKUP_KEY \(REUTILISEE\)/);
+    refuse({ ...goodEnv(), MOSOLO_AUDIT_HMAC_KEY: undefined }, /MOSOLO_AUDIT_HMAC_KEY \(EPHEMERE\)/);
+    expect(app.ctx.audit.list({ action: 'integrite.keys.boot_checked' }).items.every((e) => e.outcome === 'DENIED')).toBe(true);
+  });
+
+  it('clé éphémère hors audit/quittances/clôtures/jetons : signalée, non bloquante', async () => {
+    const app = await bootApp();
+    const { blocking, reported } = classifyBootKeyHealth(keyHealth(app.ctx, { env: { ...goodEnv(), MOSOLO_PAYMENT_POINT_MASTER_KEY: undefined }, minLength: 32, maxAgeDays: 365 }));
+    expect(blocking).toEqual([]);
+    expect(reported.map((r) => `${r.id}:${r.code}`)).toContain('points-maitresse:EPHEMERE');
   });
 });

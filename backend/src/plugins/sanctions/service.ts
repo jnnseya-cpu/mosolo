@@ -13,6 +13,7 @@ import type { AppContext } from '../../context.js';
 import { CommissionService } from './commissions.js';
 import { AgentMonitoring } from './monitoring.js';
 import { CounterChecks, type CounterCheck } from './counterchecks.js';
+import { CommissionValidations } from './validations.js';
 import type { User } from '../../core/auth.js';
 import type { ParkingService } from '../parking/service.js';
 import { OVERDUE_VISIBILITY_DAYS } from '../parking/field.js';
@@ -57,12 +58,16 @@ export class SanctionsService {
   readonly monitoring: AgentMonitoring;
   /** Contre-vérification aléatoire des constats retenus (stationnement, publicité). */
   readonly counterChecks: CounterChecks;
+  /** Validation à deux personnes des commissions acquises avant versement. */
+  readonly validations: CommissionValidations;
   private timer: NodeJS.Timeout | undefined;
 
   constructor(private readonly ctx: AppContext) {
     this.commissions = new CommissionService(ctx);
     this.monitoring = new AgentMonitoring(ctx, this.commissions);
     this.counterChecks = new CounterChecks(ctx);
+    this.validations = new CommissionValidations(ctx, this.commissions);
+    this.commissions.validationState = (key) => this.validations.stateOf(key);
   }
 
   /** Calcul périodique de la surveillance : les signaux « à examiner » ouvrent des alertes (dédoublonnées). */

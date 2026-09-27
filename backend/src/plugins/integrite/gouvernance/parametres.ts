@@ -80,6 +80,8 @@ export const REGISTRE_DEFAUTS: ParamDefinition[] = [
   R('collusion.heure_fin', 'Fin des heures ouvrables (heure de Kinshasa, lundi au vendredi)', 'Collusion (quatre yeux)', 18, 'h', { min: 1, max: 24 }),
   R('collusion.hors_heures_nombre_min', 'Nombre de validations hors heures ouvrables d’un valideur avant alerte', 'Collusion (quatre yeux)', 3, 'décisions', { min: 1, max: 1000 }),
   R('collusion.jamais_refus_decisions_min', 'Décisions d’un valideur sans aucun refus avant alerte', 'Collusion (quatre yeux)', 10, 'décisions', { min: 2, max: 10_000 }),
+  R('collusion.detection_intervalle_h', 'Détection planifiée de la collusion : intervalle entre deux exécutions (0 = désactivée)', 'Collusion (quatre yeux)', 24, 'h', { min: 0, max: 720 },
+    'Exécution automatique journalisée ; elle lève des alertes à examiner par un humain, jamais de sanction.'),
   R('rotation.blocage_actif', 'Rotation obligatoire : bloquer la paire au-delà du plafond (sinon alerte seulement)', 'Rotation obligatoire', false, 'oui/non', {},
     'Désactivé par défaut : une alerte est levée, aucune validation n’est bloquée tant que le maître d’ouvrage n’a pas décidé l’activation.'),
   R('rotation.max_par_paire', 'Plafond de validations par une même paire proposant → valideur', 'Rotation obligatoire', 5, 'validations', { min: 1, max: 1000 }),

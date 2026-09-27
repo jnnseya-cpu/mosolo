@@ -10,15 +10,15 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { DataTable } from '../../components/DataTable';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { api, describeError } from '../../lib/api';
-import { hasRole, POINT_STATUS, POINT_TYPE_LABEL } from './shared';
+import { hasRole, pointDecisionGuard, POINT_STATUS, POINT_TYPE_LABEL, type FourEyesRequest } from './shared';
 import './canaux.css';
 
 interface SupPoint {
   id: string; name: string; type: string; operator: string; commune: string; status: string; approval: { authority: string; reference: string };
-  referencedBy: string; activatedBy?: string; suspension?: { motif: string; by: string; at: string };
+  referencedBy: string; activatedBy?: string; suspension?: { motif: string; by: string; at: string }; reinstatementRequest?: FourEyesRequest;
   collectionsToday: number; openExceptions: number; pendingProposals: number; habilitated: boolean; settlementDelayHours: number;
 }
-interface Proposal { id: string; pointId: string; reason: string; detail: string; status: string; proposedAt: string; decidedBy?: string; motif?: string }
+interface Proposal { id: string; pointId: string; reason: string; detail: string; status: string; proposedAt: string; decidedBy?: string; motif?: string; dismissalRequest?: FourEyesRequest }
 interface Exc { id: string; pointId: string; day: string; type: string; detail: string; expected: MoneyJSON[]; observed: MoneyJSON[]; openedAt: string }
 interface Indicators {
   enrolments: { total: number; byCommune: { commune: string; total: number; created: number; toReview: number }[]; rejectedAttempts: number };
@@ -79,10 +79,10 @@ export default function PointsSupervision() {
                     <StatusBadge tone={p.status === 'PROPOSEE' ? 'warning' : p.status === 'ECARTEE' ? 'neutral' : 'critical'} label={p.status === 'PROPOSEE' ? 'En attente de décision' : p.status === 'ECARTEE' ? 'Écartée' : 'Suspension décidée'} /></div>
                   <p className="small">{p.detail} <span className="muted">· proposé le {fmtDate(p.proposedAt, true)}</span></p>
                   {p.motif && <p className="small muted">Décision de {p.decidedBy} : {p.motif}</p>}
-                  {tresor && p.status === 'PROPOSEE' && (
+                  {p.status === 'PROPOSEE' && (
                     <div className="btn-row">
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => withMotif('Décider la suspension', (motif) => void act(`/v1/payment-points/${p.pointId}/suspend`, { motif, proposalId: p.id }))}><Icon name="ban" size={16} /> Décider la suspension</button>
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => withMotif('Écarter la proposition', (motif) => void act(`/v1/payment-point-proposals/${p.id}/dismiss`, { motif }))}>Écarter (justifié)</button>
+                      {tresor && <button type="button" className="btn btn-secondary btn-sm" onClick={() => withMotif('Décider la suspension', (motif) => void act(`/v1/payment-points/${p.pointId}/suspend`, { motif, proposalId: p.id }))}><Icon name="ban" size={16} /> Décider la suspension</button>}
+                      <FourEyesActions what="l’écartement" request={p.dismissalRequest} user={user} base={`/v1/payment-point-proposals/${p.id}/dismissal-request`} requestLabel="Demander l’écartement (justifié)" withMotif={withMotif} act={act} />
                     </div>
                   )}
                 </li>
@@ -100,11 +100,11 @@ export default function PointsSupervision() {
                 { key: 'status', label: 'Statut', render: (p) => <span className="cx-cell"><StatusBadge tone={POINT_STATUS[p.status]?.tone ?? 'neutral'} label={POINT_STATUS[p.status]?.label ?? p.status} title={p.suspension?.motif} /><span className="small muted">{p.habilitated ? 'Signature habilitée' : 'Aucune habilitation'}</span></span> },
                 { key: 'today', label: 'Jour', num: true, render: (p) => <span className="cx-cell"><span>{p.collectionsToday} encaiss.</span><span className="small muted">{p.openExceptions} exception(s)</span></span> },
                 {
-                  key: 'act', label: 'Décision', full: true, render: (p) => !tresor ? '—' : (
+                  key: 'act', label: 'Décision', full: true, render: (p) => !hasRole(user?.roles, 'R17', 'R18') ? '—' : (
                     <span className="btn-row">
-                      {p.status === 'REFERENCE' && <button type="button" className="btn btn-secondary btn-sm" onClick={() => void act(`/v1/payment-points/${p.id}/activate`, undefined, 'Point activé (seconde personne).')}>Activer</button>}
-                      {p.status === 'ACTIF' && <button type="button" className="btn btn-ghost btn-sm" onClick={() => withMotif('Suspendre', (motif) => void act(`/v1/payment-points/${p.id}/suspend`, { motif }))}>Suspendre</button>}
-                      {p.status === 'SUSPENDU' && <button type="button" className="btn btn-ghost btn-sm" onClick={() => withMotif('Rétablir', (motif) => void act(`/v1/payment-points/${p.id}/reinstate`, { motif }))}>Rétablir</button>}
+                      {tresor && p.status === 'REFERENCE' && <button type="button" className="btn btn-secondary btn-sm" onClick={() => void act(`/v1/payment-points/${p.id}/activate`, undefined, 'Point activé (seconde personne).')}>Activer</button>}
+                      {tresor && p.status === 'ACTIF' && <button type="button" className="btn btn-ghost btn-sm" onClick={() => withMotif('Suspendre', (motif) => void act(`/v1/payment-points/${p.id}/suspend`, { motif }))}>Suspendre</button>}
+                      {p.status === 'SUSPENDU' && <FourEyesActions what="le rétablissement" request={p.reinstatementRequest} user={user} excluded={p.suspension ? [p.suspension.by] : []} base={`/v1/payment-points/${p.id}/reinstatement-request`} requestLabel="Demander le rétablissement" withMotif={withMotif} act={act} />}
                     </span>
                   ),
                 },
@@ -128,6 +128,31 @@ export default function PointsSupervision() {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Circuit à quatre yeux en deux actes : la demande (R17/R18) puis la décision d'un R17 distinct (approuver ou refuser,
+ * motif obligatoire), chacune sur sa propre route.
+ */
+export function FourEyesActions({ what, request, user, excluded = [], base, requestLabel, withMotif, act }: {
+  what: string; request: FourEyesRequest | undefined; user: { id: string; roles: string[] } | null | undefined; excluded?: string[]; base: string; requestLabel: string;
+  withMotif: (label: string, f: (motif: string) => void) => void; act: (path: string, body?: unknown, ok?: string) => Promise<void>;
+}) {
+  const g = pointDecisionGuard(request, user, excluded);
+  if (!request) {
+    return g.canRequest ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => withMotif(requestLabel, (motif) => void act(base, { motif }, `Demande enregistrée : une seconde personne du Trésor décide ${what}.`))}>{requestLabel}</button> : null;
+  }
+  return (
+    <span className="cx-cell" data-testid="four-eyes-request">
+      <span className="small">Demande de {request.by} : {request.motif}</span>
+      {g.canDecide ? (
+        <span className="btn-row">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => withMotif(`Approuver ${what}`, (motif) => void act(`${base}/decision`, { approve: true, motif }))}>Approuver</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => withMotif(`Refuser ${what}`, (motif) => void act(`${base}/decision`, { approve: false, motif }, 'Demande refusée et journalisée.'))}>Refuser</button>
+        </span>
+      ) : <span className="small muted">{g.block ?? 'En attente d’une seconde personne du Trésor.'}</span>}
+    </span>
   );
 }
 
