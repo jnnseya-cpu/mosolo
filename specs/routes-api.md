@@ -1,25 +1,25 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **586 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **606 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
 | extension acces | 63 |
-| extension canaux | 39 |
-| extension fiscal | 39 |
+| extension canaux | 41 |
+| extension fiscal | 40 |
 | extension ia | 28 |
 | extension integrite | 52 |
 | extension parking | 36 |
-| extension pilotage | 15 |
-| extension preuves | 13 |
-| extension publicite | 28 |
+| extension pilotage | 17 |
+| extension preuves | 14 |
+| extension publicite | 34 |
 | extension rakapay | 23 |
 | extension recouvrement | 33 |
-| extension sanctions | 3 |
+| extension sanctions | 5 |
 | extension socle | 14 |
 | extension terrain | 47 |
 | extension titres | 20 |
-| extension tresor | 23 |
+| extension tresor | 27 |
 | extension verticales | 43 |
 | module ai | 3 |
 | module alerts | 1 |
@@ -35,10 +35,10 @@ Généré depuis le code source (`tools/gen_routes.py`) : **586 routes** dans 35
 | module objects | 2 |
 | module payments | 8 |
 | module receipts | 2 |
-| module rules | 14 |
+| module rules | 15 |
 | module system | 3 |
 | module treasury | 5 |
-| module vault | 3 |
+| module vault | 4 |
 
 ## Extension acces
 
@@ -136,6 +136,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **586 routes** dans 35
 | POST | `/v1/payment-points/:id/card-references` |
 | GET | `/v1/payment-points/:id/cards/:number` |
 | GET | `/v1/payment-points/:id/cash-days/:day` |
+| POST | `/v1/payment-points/:id/cash-days/:day/bank-match` |
+| POST | `/v1/payment-points/:id/cash-days/:day/bank-match/approve` |
 | POST | `/v1/payment-points/:id/cash-days/:day/close` |
 | POST | `/v1/payment-points/:id/cash-days/:day/deposit` |
 | POST | `/v1/payment-points/:id/collections` |
@@ -180,6 +182,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **586 routes** dans 35
 | GET | `/v1/fiscal/leases` |
 | POST | `/v1/fiscal/leases/:id/attestations` |
 | GET | `/v1/fiscal/map` |
+| GET | `/v1/fiscal/nearby` |
 | GET | `/v1/fiscal/objects` |
 | GET | `/v1/fiscal/objects/:id` |
 | POST | `/v1/fiscal/objects/:id/plate/pose` |
@@ -338,6 +341,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **586 routes** dans 35
 | GET | `/v1/pilotage/indicateurs` |
 | GET | `/v1/pilotage/piste-audit` |
 | GET | `/v1/pilotage/piste-audit/:ref` |
+| GET | `/v1/pilotage/reductions` |
+| POST | `/v1/pilotage/reductions/detection` |
 | GET | `/v1/pilotage/serie` |
 | GET | `/v1/pilotage/tableaux` |
 | GET | `/v1/pilotage/tableaux/:profil` |
@@ -363,6 +368,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **586 routes** dans 35
 | GET | `/v1/public/preuves/:code/impression` |
 | POST | `/v1/sms/inbound` |
 | GET | `/v1/whatsapp/simulator/:msisdn` |
+| GET | `/v1/whatsapp/webhook` |
 | POST | `/v1/whatsapp/webhook` |
 
 ## Extension publicite
@@ -376,6 +382,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **586 routes** dans 35
 | POST | `/v1/publicite/authorizations` |
 | POST | `/v1/publicite/authorizations/:id/decide` |
 | POST | `/v1/publicite/authorizations/:id/instruct` |
+| POST | `/v1/publicite/authorizations/:id/liquidation/approve` |
+| POST | `/v1/publicite/authorizations/:id/liquidation/propose` |
 | POST | `/v1/publicite/authorizations/:id/pieces` |
 | GET | `/v1/publicite/authorizations/mine` |
 | GET | `/v1/publicite/cases` |
@@ -386,12 +394,16 @@ Généré depuis le code source (`tools/gen_routes.py`) : **586 routes** dans 35
 | POST | `/v1/publicite/devices` |
 | GET | `/v1/publicite/devices/:id` |
 | GET | `/v1/publicite/devices/mine` |
+| POST | `/v1/publicite/evidence-photos` |
+| GET | `/v1/publicite/evidence-photos/:id` |
 | GET | `/v1/publicite/indicators` |
 | GET | `/v1/publicite/inspections` |
 | POST | `/v1/publicite/inspections` |
 | GET | `/v1/publicite/inventory` |
+| GET | `/v1/publicite/liquidations/pending` |
 | GET | `/v1/publicite/lookup` |
 | GET | `/v1/publicite/map` |
+| GET | `/v1/publicite/nearby` |
 | GET | `/v1/publicite/obligations/mine` |
 | GET | `/v1/publicite/public/badges/:userId` |
 | GET | `/v1/publicite/public/devices/:token` |
@@ -468,6 +480,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **586 routes** dans 35
 
 | Méthode | Chemin |
 |---|---|
+| GET | `/v1/agents/counter-checks` |
+| POST | `/v1/agents/counter-checks/:id/record` |
 | GET | `/v1/agents/earnings` |
 | GET | `/v1/agents/me/earnings` |
 | GET | `/v1/agents/monitoring` |
@@ -576,7 +590,10 @@ Généré depuis le code source (`tools/gen_routes.py`) : **586 routes** dans 35
 | GET | `/v1/tresor/accounting` |
 | GET | `/v1/tresor/closures` |
 | POST | `/v1/tresor/closures/daily` |
+| POST | `/v1/tresor/closures/daily/waivers` |
+| POST | `/v1/tresor/closures/daily/waivers/:id/approve` |
 | POST | `/v1/tresor/closures/monthly` |
+| GET | `/v1/tresor/consistency` |
 | GET | `/v1/tresor/exceptions` |
 | POST | `/v1/tresor/exceptions/:id/assign` |
 | POST | `/v1/tresor/exceptions/:id/evidence` |
@@ -592,6 +609,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **586 routes** dans 35
 | POST | `/v1/tresor/operations/:id/approve` |
 | POST | `/v1/tresor/operations/:id/reject` |
 | GET | `/v1/tresor/overview` |
+| GET | `/v1/tresor/provider-receivables` |
 | GET | `/v1/tresor/receipts/:ref` |
 | GET | `/v1/tresor/suspense` |
 | GET | `/v1/tresor/verification-journal` |
@@ -770,6 +788,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **586 routes** dans 35
 | POST | `/v1/legal-rules/:id/impact-simulations` |
 | POST | `/v1/legal-rules/:id/lift-suspension` |
 | POST | `/v1/legal-rules/:id/suspend` |
+| POST | `/v1/legal-rules/:id/suspension-change/decide` |
 | GET | `/v1/legal-rules/:id/versions` |
 | GET | `/v1/recalculations` |
 | GET | `/v1/recalculations/:id` |
@@ -800,3 +819,4 @@ Généré depuis le code source (`tools/gen_routes.py`) : **586 routes** dans 35
 | GET | `/v1/beneficiary-accounts` |
 | POST | `/v1/beneficiary-accounts/change-requests` |
 | POST | `/v1/beneficiary-accounts/change-requests/:id/approve` |
+| POST | `/v1/beneficiary-accounts/change-requests/:id/veto` |

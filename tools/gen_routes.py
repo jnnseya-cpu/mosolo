@@ -3,7 +3,8 @@ Sortie : specs/routes-api.md. Usage : python3 tools/gen_routes.py"""
 import os, re, collections
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'backend', 'src')
-pat = re.compile(r"app\.(get|post|put|patch|delete)(?:<[^>]*>)?\(\s*[`'\"]([^`'\"]+)[`'\"]", re.S)
+# Paramètres de type éventuellement imbriqués (ex. `<{ Querystring: Record<string, string> }>`), jusqu'à deux niveaux.
+pat = re.compile(r"app\.(get|post|put|patch|delete)(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)?\(\s*[`'\"]([^`'\"]+)[`'\"]", re.S)
 rows = collections.defaultdict(list)
 for dp, _, fs in os.walk(SRC):
     for f in fs:
