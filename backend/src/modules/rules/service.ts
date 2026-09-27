@@ -5,6 +5,8 @@
  * Compléments (§ 6.2, § 6.3, module 26) : suspension motivée (autorité, motif), abrogation datée par un instrument
  * abrogatoire (aucune liquidation après la date), historique des versions, blocage de la rétroactivité non autorisée
  * (une nouvelle version dont la date d'effet précède sa publication exige un acte l'autorisant).
+ * Suspension et levée : quatre yeux (proposition puis approbation par une personne distincte) ; une levée rapide
+ * (≤ SHORT_SUSPENSION_DAYS) et toute décision prise pendant la suspension ouvrent une alerte d'examen humain.
  */
 import {
   REQUIRED_APPROVALS, SAMPLE_RULES, type Approval, type LegalInstrumentStatus, type RoleCode, type RuleSheet, type RuleStatus,
@@ -51,7 +53,44 @@ export interface RuleSuspension {
   liftedAt?: string;
   liftedBy?: string;
   liftReason?: string;
+  /** Quatre yeux : auteur de la proposition de suspension et approbateur distinct (celui qui l'a rendue effective). */
+  proposedBy?: string;
+  approvedBy?: string;
+  /** Quatre yeux sur la levée : proposition puis approbation par une autre personne. */
+  liftProposedBy?: string;
+  liftApprovedBy?: string;
 }
+
+/**
+ * Demande de suspension ou de levée en attente d'approbation (séparation des tâches) : une seule personne ne peut
+ * jamais, seule, ouvrir ni refermer une fenêtre pendant laquelle un barème ne produit plus d'obligations.
+ */
+export interface SuspensionChangeRequest {
+  kind: 'SUSPENSION' | 'LEVEE';
+  reason: string;
+  authority?: string;
+  instrumentRef?: string;
+  proposedBy: string;
+  proposedAt: string;
+}
+
+/** Destinataire des alertes (service d'alertes du socle) — branché après construction. */
+export interface RuleAlertSink {
+  raise(input: { type: string; severity: 'MEDIUM' | 'HIGH' | 'CRITICAL'; source: string; detail: string; context?: Record<string, unknown>; notifyRoles?: RoleCode[] }): unknown;
+}
+
+/** Décision relevée dans le journal d'audit pendant une suspension (pénalité non émise, décision « sans montant »…). */
+export interface DecisionDuringSuspension {
+  auditId: string;
+  at: string;
+  action: string;
+  actorId: string;
+  resourceType: string;
+  resourceId: string | null;
+}
+
+/** Levée « rapide » : une suspension levée en moins de N jours ouvre une alerte (fenêtre possiblement opportuniste). */
+export const SHORT_SUSPENSION_DAYS = 7;
 
 /** Abrogation : date et instrument abrogatoire ; aucune nouvelle liquidation à compter de la date. */
 export interface RuleAbrogation {
@@ -79,6 +118,8 @@ export interface RuleRecord extends RuleSheet {
   /** Règle fictive de démonstration (aucune valeur juridique). */
   demo?: boolean;
   suspension?: RuleSuspension;
+  /** Proposition de suspension ou de levée en attente d'une seconde personne. */
+  pendingSuspensionChange?: SuspensionChangeRequest;
   /** Suspensions antérieures levées. */
   pastSuspensions?: RuleSuspension[];
   abrogation?: RuleAbrogation;
@@ -94,7 +135,10 @@ export type RuleInput = Omit<RuleSheet, 'id' | 'version' | 'status' | 'approvals
 };
 
 /** Actions complémentaires du registre (moindre privilège : non déclaré ⇒ refusé). */
-definePolicy('rules:suspend', { R16: GRANTS.always });
+/** Proposition de suspension / levée : autorité de publication ou juriste vérificateur. */
+definePolicy('rules:suspend', { R14: GRANTS.always, R16: GRANTS.always });
+/** Approbation (seconde personne, distincte de l'auteur de la proposition) : autorité de publication ou validateur financier. */
+definePolicy('rules:suspend.approve', { R15: GRANTS.always, R16: GRANTS.always });
 definePolicy('rules:abrogate', { R16: GRANTS.always });
 definePolicy('rules:instrument.abrogate', { R16: GRANTS.always });
 definePolicy('rules:recalc.simulate', {
@@ -138,7 +182,13 @@ export class RuleService {
     private readonly comms: CommunicationService,
     private readonly users: UserDirectory,
     private readonly aliasExists: (alias: string) => boolean,
+    private alerts?: RuleAlertSink,
   ) {}
+
+  /** Branche le service d'alertes du socle (le registre est construit avant certains services). */
+  attachAlerts(alerts: RuleAlertSink): void {
+    this.alerts = alerts;
+  }
 
   seedSamples(): void {
     for (const r of SAMPLE_RULES) this.rules.insert({ ...structuredClone(r), createdAt: this.clock.now().toISOString(), sample: true });
@@ -329,7 +379,10 @@ export class RuleService {
     return this.get(id);
   }
 
-  /** Suspension motivée (autorité et motif obligatoires) : la règle cesse immédiatement de produire des obligations. */
+  /**
+   * Proposition de suspension motivée (autorité et motif obligatoires). Aucun effet tant qu'une SECONDE personne
+   * habilitée (distincte de l'auteur) ne l'a pas approuvée : `decideSuspensionChange`.
+   */
   suspend(user: User, id: string, input: { reason: string; authority: string; instrumentRef?: string }): RuleRecord {
     authorize(user, 'rules:suspend');
     const rule = this.get(id);
@@ -339,35 +392,161 @@ export class RuleService {
     if (input.instrumentRef && !this.instruments.get(input.instrumentRef)) {
       throw unprocessable('UNKNOWN_LEGAL_INSTRUMENT', `Instrument inconnu du registre : ${input.instrumentRef}`);
     }
-    const now = this.clock.now().toISOString();
-    const suspension: RuleSuspension = {
-      reason: input.reason, authority: input.authority, by: user.id, at: now, previousStatus: rule.status,
-      ...(input.instrumentRef ? { instrumentRef: input.instrumentRef } : {}),
-    };
-    const updated = this.rules.update({
-      ...rule, status: 'SUSPENDUE', suspension,
-      history: this.withHistory(rule, 'rule.suspended', user.id, 'SUSPENDUE', `${input.authority} — ${input.reason}`),
+    return this.proposeChange(user, rule, {
+      kind: 'SUSPENSION', reason: input.reason, authority: input.authority, ...(input.instrumentRef ? { instrumentRef: input.instrumentRef } : {}),
     });
-    this.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'rule.suspended', resourceType: 'rule', resourceId: id, details: { reason: input.reason, authority: input.authority, instrumentRef: input.instrumentRef ?? null, previousStatus: rule.status } });
-    const notify = [...this.users.withRole('R13'), ...this.users.withRole('R16'), ...this.users.withRole('R06')];
-    this.comms.publish('rule.suspended', notify.map(userRecipient), { reference: rule.code }, { entity: rule.administeringEntity });
-    return updated;
   }
 
-  /** Levée motivée de la suspension : la règle retrouve son statut antérieur (puis le cycle normal reprend). */
+  /** Proposition de levée motivée : effective seulement après approbation par une seconde personne. */
   liftSuspension(user: User, id: string, input: { reason: string }): RuleRecord {
     authorize(user, 'rules:suspend');
     const rule = this.get(id);
     if (rule.status !== 'SUSPENDUE' || !rule.suspension) throw conflict('RULE_NOT_SUSPENDED', `La règle ${rule.code} v${rule.version} n'est pas suspendue.`);
-    const now = this.clock.now().toISOString();
-    const lifted: RuleSuspension = { ...rule.suspension, liftedAt: now, liftedBy: user.id, liftReason: input.reason };
-    const { suspension: _s, ...rest } = rule;
-    const updated = this.rules.update({
-      ...rest, status: lifted.previousStatus, pastSuspensions: [...(rule.pastSuspensions ?? []), lifted],
-      history: this.withHistory(rule, 'rule.suspension.lifted', user.id, lifted.previousStatus, input.reason),
+    return this.proposeChange(user, rule, { kind: 'LEVEE', reason: input.reason });
+  }
+
+  private proposeChange(user: User, rule: RuleRecord, change: Omit<SuspensionChangeRequest, 'proposedBy' | 'proposedAt'>): RuleRecord {
+    if (rule.pendingSuspensionChange) {
+      throw conflict('SUSPENSION_CHANGE_PENDING', `Une proposition de ${rule.pendingSuspensionChange.kind === 'SUSPENSION' ? 'suspension' : 'levée'} attend déjà une approbation.`);
+    }
+    const pending: SuspensionChangeRequest = { ...change, proposedBy: user.id, proposedAt: this.clock.now().toISOString() };
+    const action = change.kind === 'SUSPENSION' ? 'rule.suspension.proposed' : 'rule.suspension.lift_proposed';
+    this.rules.update({
+      ...rule, pendingSuspensionChange: pending,
+      history: this.withHistory(rule, action, user.id, rule.status, `${change.authority ? `${change.authority} — ` : ''}${change.reason}`),
     });
-    this.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'rule.suspension.lifted', resourceType: 'rule', resourceId: id, details: { reason: input.reason, restoredStatus: lifted.previousStatus } });
-    return this.get(updated.id);
+    this.audit.append({
+      actor: { kind: 'user', id: user.id, roles: user.roles }, action, resourceType: 'rule', resourceId: rule.id,
+      details: { code: rule.code, reason: change.reason, authority: change.authority ?? null, instrumentRef: change.instrumentRef ?? null },
+    });
+    const notify = [...this.users.withRole('R16'), ...this.users.withRole('R15')].filter((u) => u.id !== user.id);
+    this.comms.publish('approval.requested', notify.map(userRecipient), { reference: rule.code }, { entity: rule.administeringEntity });
+    return this.get(rule.id);
+  }
+
+  /**
+   * Décision sur une proposition de suspension ou de levée : par une personne DISTINCTE de l'auteur (quatre yeux).
+   * Approuvée : la suspension (ou la levée) prend effet ; rejetée : la proposition est close sans effet.
+   */
+  decideSuspensionChange(user: User, id: string, input: { approve: boolean; reason: string }): RuleRecord {
+    authorize(user, 'rules:suspend.approve');
+    const rule = this.get(id);
+    const pending = rule.pendingSuspensionChange;
+    if (!pending) throw conflict('NO_PENDING_SUSPENSION_CHANGE', `Aucune proposition de suspension ou de levée en attente pour ${rule.code} v${rule.version}.`);
+    const actor = { kind: 'user' as const, id: user.id, roles: user.roles };
+    try {
+      assertDistinctPerson(user.id, [pending.proposedBy], 'La suspension ou la levée d’une règle exige deux personnes distinctes : l’auteur de la proposition ne peut pas l’approuver.');
+    } catch (e) {
+      this.audit.append({ actor, action: 'rule.suspension.approval_refused', resourceType: 'rule', resourceId: id, outcome: 'DENIED', details: { kind: pending.kind, reason: 'SEPARATION_OF_DUTIES' } });
+      throw e;
+    }
+    const { pendingSuspensionChange: _p, ...base } = rule;
+    if (!input.approve) {
+      this.rules.update({ ...base, history: this.withHistory(rule, 'rule.suspension.change_rejected', user.id, rule.status, input.reason) });
+      this.audit.append({ actor, action: 'rule.suspension.change_rejected', resourceType: 'rule', resourceId: id, details: { kind: pending.kind, proposedBy: pending.proposedBy, reason: input.reason } });
+      return this.get(id);
+    }
+    const now = this.clock.now().toISOString();
+    if (pending.kind === 'SUSPENSION') {
+      if (rule.status !== 'ACTIVE' && rule.status !== 'PUBLIEE') {
+        throw conflict('INVALID_RULE_STATE', `Seule une règle PUBLIEE ou ACTIVE peut être suspendue (statut ${rule.status}).`);
+      }
+      const suspension: RuleSuspension = {
+        reason: pending.reason, authority: pending.authority ?? '', by: pending.proposedBy, at: now, previousStatus: rule.status,
+        proposedBy: pending.proposedBy, approvedBy: user.id, ...(pending.instrumentRef ? { instrumentRef: pending.instrumentRef } : {}),
+      };
+      this.rules.update({
+        ...base, status: 'SUSPENDUE', suspension,
+        history: this.withHistory(rule, 'rule.suspended', user.id, 'SUSPENDUE', `${pending.authority ?? ''} — ${pending.reason} (proposée par ${pending.proposedBy})`),
+      });
+      this.audit.append({
+        actor, action: 'rule.suspended', resourceType: 'rule', resourceId: id,
+        details: { code: rule.code, reason: pending.reason, authority: pending.authority ?? null, instrumentRef: pending.instrumentRef ?? null, previousStatus: rule.status, proposedBy: pending.proposedBy, approvedBy: user.id },
+      });
+      const notify = [...this.users.withRole('R13'), ...this.users.withRole('R16'), ...this.users.withRole('R06')];
+      this.comms.publish('rule.suspended', notify.map(userRecipient), { reference: rule.code }, { entity: rule.administeringEntity });
+      return this.get(id);
+    }
+    if (rule.status !== 'SUSPENDUE' || !rule.suspension) throw conflict('RULE_NOT_SUSPENDED', `La règle ${rule.code} v${rule.version} n'est pas suspendue.`);
+    const lifted: RuleSuspension = {
+      ...rule.suspension, liftedAt: now, liftedBy: user.id, liftReason: pending.reason, liftProposedBy: pending.proposedBy, liftApprovedBy: user.id,
+    };
+    const { suspension: _s, ...rest } = base;
+    this.rules.update({
+      ...rest, status: lifted.previousStatus, pastSuspensions: [...(rule.pastSuspensions ?? []), lifted],
+      history: this.withHistory(rule, 'rule.suspension.lifted', user.id, lifted.previousStatus, `${pending.reason} (proposée par ${pending.proposedBy})`),
+    });
+    this.audit.append({
+      actor, action: 'rule.suspension.lifted', resourceType: 'rule', resourceId: id,
+      details: { code: rule.code, reason: pending.reason, restoredStatus: lifted.previousStatus, suspendedAt: lifted.at, proposedBy: pending.proposedBy, approvedBy: user.id },
+    });
+    this.alertOnLift(rule, lifted);
+    return this.get(id);
+  }
+
+  /** Alertes à la levée : suspension brève (« fenêtre » ouverte puis refermée) et décisions prises pendant la suspension. */
+  private alertOnLift(rule: RuleRecord, s: RuleSuspension): void {
+    if (!this.alerts || !s.liftedAt) return;
+    const days = (new Date(s.liftedAt).getTime() - new Date(s.at).getTime()) / 86_400_000;
+    const context = {
+      ruleId: rule.id, ruleCode: rule.code, suspendedAt: s.at, liftedAt: s.liftedAt,
+      suspendedBy: [s.proposedBy ?? s.by, s.approvedBy].filter(Boolean), liftedBy: [s.liftProposedBy, s.liftApprovedBy].filter(Boolean),
+    };
+    if (days <= SHORT_SUSPENSION_DAYS) {
+      this.alerts.raise({
+        type: 'RULE_SUSPENSION_SHORT', severity: 'HIGH', source: 'moteur-regles', notifyRoles: ['R22'],
+        detail: `Règle ${rule.code} v${rule.version} suspendue puis rétablie en ${days.toFixed(1)} jour(s) (seuil ${SHORT_SUSPENSION_DAYS} j) : examen humain des décisions prises pendant la fenêtre.`,
+        context,
+      });
+    }
+    const decisions = this.decisionsDuringSuspension(rule.code, s);
+    if (decisions.length) {
+      this.alerts.raise({
+        type: 'RULE_DECISIONS_DURING_SUSPENSION', severity: 'HIGH', source: 'moteur-regles', notifyRoles: ['R22'],
+        detail: `${decisions.length} décision(s) prise(s) pendant la suspension de ${rule.code} (du ${s.at} au ${s.liftedAt}) : pénalités ou droits possiblement non émis — examen humain, aucune sanction automatique.`,
+        context: { ...context, decisions: decisions.slice(0, 50) },
+      });
+    }
+  }
+
+  /** Toutes les suspensions EFFECTIVES (en cours et levées) d'un code de recette, toutes versions confondues. */
+  suspensionsOf(ruleCode: string): RuleSuspension[] {
+    const out: RuleSuspension[] = [];
+    for (const r of this.rules.find((x) => x.code === ruleCode)) {
+      out.push(...(r.pastSuspensions ?? []));
+      if (r.suspension) out.push(r.suspension);
+    }
+    return out.sort((a, b) => a.at.localeCompare(b.at));
+  }
+
+  /**
+   * Vrai si le code de recette a été suspendu à un moment quelconque de l'intervalle [from, to] (ISO).
+   * Destiné aux autres modules (ex. décision de pénalité « sans montant » prise pendant une suspension).
+   */
+  wasSuspendedBetween(ruleCode: string, from: string, to: string): boolean {
+    return this.suspensionsOf(ruleCode).some((s) => s.at <= to && (s.liftedAt ?? '9999') >= from);
+  }
+
+  /**
+   * Décisions relevées dans le journal d'audit pendant une suspension : actes de décision (« decided », « decision »)
+   * dont le détail cite la règle ou constate l'absence de barème (« sans pénalité », « acte requis »).
+   * Écoute passive du journal : les modules n'ont rien à émettre de plus.
+   */
+  decisionsDuringSuspension(ruleCode: string, s?: RuleSuspension): DecisionDuringSuspension[] {
+    const windows = s ? [s] : this.suspensionsOf(ruleCode);
+    if (!windows.length) return [];
+    const ids = [...new Set(this.rules.find((x) => x.code === ruleCode).map((x) => x.id))];
+    const now = this.clock.now().toISOString();
+    const out: DecisionDuringSuspension[] = [];
+    for (const e of this.audit.list({ limit: 1_000_000 }).items) {
+      if (e.actor.kind !== 'user' || !/(decided|decision|\.decide)/i.test(e.action)) continue;
+      if (!windows.some((w) => e.at >= w.at && e.at <= (w.liftedAt ?? now))) continue;
+      const text = JSON.stringify(e.details);
+      const cites = text.includes(ruleCode) || ids.some((id) => text.includes(id)) || /sans pénalité|barème non publié|acte requis/i.test(text);
+      if (!cites) continue;
+      out.push({ auditId: e.id, at: e.at, action: e.action, actorId: e.actor.id, resourceType: e.resourceType, resourceId: e.resourceId });
+    }
+    return out;
   }
 
   /**

@@ -30,6 +30,10 @@ definePolicy('pilotage:profile.ministre', { R04: always, R05: always, R01: alway
 definePolicy('pilotage:drill.payments', { R17: always, R18: always, R22: always, R23: always });
 /** Piste d'audit par dossier : auditeurs et enquêteur anti-fraude. */
 definePolicy('pilotage:audit_trail.read', { R22: always, R23: always, R24: always });
+/** Rapport des réductions de recettes (fuites) : autorités, cabinet, ministre des Finances, audit, anti-fraude. */
+definePolicy('pilotage:reductions.read', { R01: always, R02: always, R05: always, R22: always, R23: always, R24: always });
+/** Rejouer la détection de concentration des réductions : audit interne et anti-fraude. */
+definePolicy('pilotage:reductions.detect', { R22: always, R24: always });
 definePolicy('pilotage:transparency.preview', { R01: always, R05: always, R22: always, R23: always });
 /** Publication trimestrielle : décision humaine de l'autorité (après test anti-ré-identification). */
 definePolicy('pilotage:transparency.publish', { R01: always, R05: always });

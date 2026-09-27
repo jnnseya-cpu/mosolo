@@ -52,6 +52,13 @@ export function registerPilotageRoutes(app: FastifyInstance, _ctx: AppContext, s
     return svc.drill(user, dim, q(req.query));
   });
 
+  // Réductions de recettes (fuites) et recettes potentielles non liquidées.
+  app.get('/v1/pilotage/reductions', async (req) => svc.reductions(requireUser(req), q(req.query)));
+  app.post('/v1/pilotage/reductions/detection', async (req) => {
+    const r = svc.detectReductionSignals(requireUser(req));
+    return { raised: r.raised, signals: r.signals, params: r.params, automaticEffect: r.automaticEffect };
+  });
+
   app.get('/v1/pilotage/tableaux', async (req) => ({ profiles: svc.profilesFor(requireUser(req)) }));
   app.get<{ Params: { profil: string } }>('/v1/pilotage/tableaux/:profil', async (req) => svc.profile(requireUser(req), req.params.profil, q(req.query)));
   // Alias du contrat (C3-508) : GET /v1/tableaux/{profil}.

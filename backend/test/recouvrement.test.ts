@@ -45,13 +45,20 @@ describe('Registre juridique — suspension, abrogation, versions', () => {
     const payload = { reason: 'Contestation de la base légale devant la Cour', authority: 'Ministre provincial des Finances' };
     expect((await env.req('POST', `/v1/legal-rules/${id}/suspend`, 'u-juriste-redacteur', payload)).statusCode).toBe(403);
     expect((await env.req('POST', `/v1/legal-rules/${id}/suspend`, 'u-autorite-publication', { reason: 'court', authority: 'X' })).statusCode).toBe(400);
-    const s = await env.req('POST', `/v1/legal-rules/${id}/suspend`, 'u-autorite-publication', payload);
+    const proposed = await env.req('POST', `/v1/legal-rules/${id}/suspend`, 'u-autorite-publication', payload);
+    expect(proposed.statusCode).toBe(202);
+    expect(proposed.json()).toMatchObject({ status: 'ACTIVE', pendingSuspensionChange: { kind: 'SUSPENSION', proposedBy: 'u-autorite-publication' } });
+    // Quatre yeux : l'auteur de la proposition ne peut pas l'approuver.
+    expect((await env.req('POST', `/v1/legal-rules/${id}/suspension-change/decide`, 'u-autorite-publication', { approve: true, reason: 'Approbation par l’auteur lui-même' })).statusCode).toBe(403);
+    const s = await env.req('POST', `/v1/legal-rules/${id}/suspension-change/decide`, 'u-validateur-financier', { approve: true, reason: 'Suspension conforme à la décision de l’autorité' });
     expect(s.statusCode).toBe(200);
-    expect(s.json()).toMatchObject({ status: 'SUSPENDUE', suspension: { authority: payload.authority, previousStatus: 'ACTIVE' } });
+    expect(s.json()).toMatchObject({ status: 'SUSPENDUE', suspension: { authority: payload.authority, previousStatus: 'ACTIVE', proposedBy: 'u-autorite-publication', approvedBy: 'u-validateur-financier' } });
     const refused = await liquidate(env, id);
     expect(refused.statusCode).toBe(422);
     expect(refused.json().code).toBe('RULE_NOT_EXECUTABLE');
-    const lifted = await env.req('POST', `/v1/legal-rules/${id}/lift-suspension`, 'u-autorite-publication', { reason: 'Arrêt de la Cour confirmant la base légale' });
+    expect((await env.req('POST', `/v1/legal-rules/${id}/lift-suspension`, 'u-autorite-publication', { reason: 'Arrêt de la Cour confirmant la base légale' })).statusCode).toBe(202);
+    expect(env.app.ctx.rules.get(id).status).toBe('SUSPENDUE');
+    const lifted = await env.req('POST', `/v1/legal-rules/${id}/suspension-change/decide`, 'u-validateur-financier', { approve: true, reason: 'Levée conforme à l’arrêt de la Cour' });
     expect(lifted.json().status).toBe('ACTIVE');
     expect(lifted.json().pastSuspensions).toHaveLength(1);
     expect((await liquidate(env, id)).statusCode).toBe(201);

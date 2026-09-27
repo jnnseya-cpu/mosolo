@@ -50,6 +50,7 @@ const ruleSchema = z.object({
 const motive = z.string().trim().min(10, 'motif d’au moins 10 caractères').max(2000);
 const suspendSchema = z.object({ reason: motive, authority: z.string().trim().min(3).max(200), instrumentRef: z.string().optional() }).strict();
 const liftSchema = z.object({ reason: motive }).strict();
+const suspensionDecisionSchema = z.object({ approve: z.boolean(), reason: motive }).strict();
 const abrogateSchema = z.object({ date: isoDateString, instrumentId: z.string().min(1), reason: motive }).strict();
 const instrumentAbrogateSchema = z.object({ date: isoDateString, abrogatedBy: z.string().min(1), reason: motive }).strict();
 const recalcDecisionSchema = z.object({ decision: z.enum(['APPLIQUER', 'REJETER']), reason: motive }).strict();
@@ -57,6 +58,9 @@ const recalcDecisionSchema = z.object({ decision: z.enum(['APPLIQUER', 'REJETER'
 const approveSchema = z.object({ role: z.enum(REQUIRED_APPROVALS as [string, ...string[]]) }).strict();
 
 export function registerRuleRoutes(app: FastifyInstance, ctx: AppContext): void {
+  // Alertes du registre (suspension brève, décisions pendant une suspension) : service d'alertes du socle.
+  ctx.rules.attachAlerts(ctx.alerts);
+
   app.get('/v1/legal-rules', async (req) => {
     authorize(requireUser(req), 'rule.read');
     return ctx.rules.list();
@@ -88,16 +92,24 @@ export function registerRuleRoutes(app: FastifyInstance, ctx: AppContext): void 
   });
 
   // ── Cycle de vie complémentaire : suspension, abrogation, versions ──
-  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/suspend', async (req) => {
+  // Quatre yeux : suspension et levée sont PROPOSÉES (202), puis approuvées par une seconde personne distincte.
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/suspend', async (req, reply) => {
     const user = requireUser(req);
     authorize(user, 'rules:suspend');
-    return ctx.rules.suspend(user, req.params.id, parse(suspendSchema, req.body));
+    return reply.code(202).send(ctx.rules.suspend(user, req.params.id, parse(suspendSchema, req.body)));
   });
 
-  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/lift-suspension', async (req) => {
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/lift-suspension', async (req, reply) => {
     const user = requireUser(req);
     authorize(user, 'rules:suspend');
-    return ctx.rules.liftSuspension(user, req.params.id, parse(liftSchema, req.body));
+    return reply.code(202).send(ctx.rules.liftSuspension(user, req.params.id, parse(liftSchema, req.body)));
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/suspension-change/decide', async (req) => {
+    const user = requireUser(req);
+    authorize(user, 'rules:suspend.approve');
+    requireAcr(user, ACR.MFA); // acte sensible : effet immédiat sur la production d'obligations
+    return ctx.rules.decideSuspensionChange(user, req.params.id, parse(suspensionDecisionSchema, req.body));
   });
 
   app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/abrogate', async (req) => {

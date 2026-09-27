@@ -19,6 +19,9 @@ import {
   selectLevel, selectionTotals, type DrillDimension, type Filters, type LadderContext,
 } from './ladder.js';
 import { CurrencyTotals } from './money.js';
+import {
+  buildReductionReport, collectReductions, potentialUnassessed, REDUCTION_ALERT_PARAMS, reductionSignals, type ReductionFilters,
+} from './reductions.js';
 import { buildTransparency, reidentificationCheck, type ReidentificationCheck, type TransparencyContent } from './transparency.js';
 import { buildGraph, buildTrail, resolveDossier } from './trail.js';
 
@@ -151,6 +154,54 @@ export class PilotageService {
 
   private gate(user: User, action: string) {
     authorize(user, `pilotage:${action}`);
+  }
+
+  // ————————————————————————— réductions de recettes (fuites) —————————————————————————
+
+  /**
+   * Rapport « réductions de recettes » : brut liquidé, réductions par voie, net attendu, encaissé — par devise, par
+   * commune, par module et par décideur ; rapprochement brut − réductions = net (≤ 0,01 par devise). Complété par les
+   * « recettes potentielles non liquidées » (assiette sans règle ACTIVE, sans montant). La lecture rejoue aussi la
+   * détection de concentration (signaux idempotents, examen humain).
+   */
+  reductions(user: User, q: Query) {
+    this.gate(user, 'reductions.read');
+    const { filters, scope } = this.filtersFor(user, q);
+    const rf: ReductionFilters = {
+      ...(filters.commune ? { commune: filters.commune } : {}), ...(filters.communes ? { communes: filters.communes } : {}),
+      ...(filters.entity ? { entity: filters.entity } : {}), ...(filters.from ? { from: filters.from } : {}), ...(filters.to ? { to: filters.to } : {}),
+    };
+    this.viewed(user, 'reductions', filters);
+    const data = collectReductions(this.ctx, rf);
+    const detection = this.detectReductionSignals();
+    return {
+      generatedAt: this.now(), scope, filters,
+      method: 'Obligations liquidées sur la période (date de l’obligation d’origine) et toutes leurs réductions ; montants par devise, jamais additionnés entre devises.',
+      formula: 'brut liquidé − réductions = net attendu ; net attendu − encaissé = reste à recouvrer',
+      ...buildReductionReport(data),
+      potentialUnassessed: potentialUnassessed(this.ctx, rf),
+      signals: { raised: detection.raised, open: detection.signals.length, params: REDUCTION_ALERT_PARAMS },
+    };
+  }
+
+  /**
+   * Détection de concentration des réductions sur l'ensemble du socle : un décideur > 50 % des réductions d'une
+   * commune sur un mois (nombre ou montant), ou cumul par contribuable au-delà du seuil. Chaque signal lève une alerte
+   * du socle (R22, R24 notifiés) une seule fois par empreinte. Aucune mesure automatique.
+   */
+  detectReductionSignals(user?: User) {
+    if (user) this.gate(user, 'reductions.detect');
+    const signals = reductionSignals(collectReductions(this.ctx).lines);
+    let raised = 0;
+    for (const s of signals) {
+      const a = this.ctx.alerts.raiseOnce(s.fingerprint, {
+        type: s.kind === 'DECIDEUR_CONCENTRE' ? 'REDUCTION_CONCENTRATION_DECIDEUR' : 'REDUCTION_CUMUL_CONTRIBUABLE',
+        severity: 'MEDIUM', source: 'pilotage:reductions', detail: s.detail, context: s.context, notifyRoles: ['R22', 'R24'],
+        ...(user ? { actor: { kind: 'user' as const, id: user.id, roles: user.roles } } : {}),
+      });
+      if (a) raised++;
+    }
+    return { signals, raised, params: REDUCTION_ALERT_PARAMS, automaticEffect: 'AUCUN' as const };
   }
 
   // ————————————————————————— échelle, drill-down, série —————————————————————————

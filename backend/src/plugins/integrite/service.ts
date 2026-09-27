@@ -55,7 +55,43 @@ export const DETECTION_PARAMS = {
   mysteryNonConformityMin: 2,
 } as const;
 
-const SENSITIVE_ACTIONS = ['ledger.entry.reversed', 'appeal.decided', 'beneficiary.change.proposed', 'rule.approval.refused'];
+/**
+ * Actes sensibles suivis par la détection de concentration (journal d'audit). Clé = action, ou `action:kind` quand
+ * l'action est générique et que `details.kind` précise l'opération (ex. opération du Trésor CONTRE_ECRITURE).
+ * Toute réduction de recette (remise, exonération, correction, recalcul, réduction accordée) y figure.
+ */
+export const SENSITIVE_ACTIONS = [
+  'ledger.entry.reversed', 'appeal.decided', 'beneficiary.change.proposed', 'rule.approval.refused',
+  // Réductions de recettes
+  'reduction.granted', 'recovery.remission.granted', 'exemption.granted', 'exemption.legal_visa', 'declaration.correction.accepted',
+  'rule.recalculation.applied', 'assessment.base_override',
+  // Registre des règles : suspension et levée (proposition comme approbation)
+  'rule.suspension.proposed', 'rule.suspended', 'rule.suspension.lift_proposed', 'rule.suspension.lifted',
+  // Points de paiement : réintégration après suspension
+  'canaux.point.reinstated',
+  // Trésor : contre-écriture ; coffre : changement de compte bénéficiaire
+  'treasury.operation.proposed:CONTRE_ECRITURE', 'treasury.operation.executed:CONTRE_ECRITURE',
+  'beneficiary.change.approved', 'beneficiary.change.effective',
+];
+
+/**
+ * Actes à fort impact : CHAQUE occurrence ouvre une alerte d'examen (sans effet automatique), en plus de la
+ * concentration — une seule occurrence peut suffire à ouvrir une fenêtre de perte de recettes.
+ */
+export const REVIEW_EACH_ACTIONS = [
+  'rule.suspended', 'rule.suspension.lifted', 'assessment.base_override', 'canaux.point.reinstated',
+  'treasury.operation.executed:CONTRE_ECRITURE', 'beneficiary.change.effective',
+];
+
+/** Clés d'un événement d'audit au sens des listes ci-dessus (action seule, et action:kind si présent). */
+export function sensitiveKeysOf(e: { action: string; details: Record<string, unknown> }): string[] {
+  const kind = typeof e.details?.kind === 'string' ? e.details.kind : undefined;
+  return kind ? [e.action, `${e.action}:${kind}`] : [e.action];
+}
+
+function sensitiveKeyOf(e: { action: string; details: Record<string, unknown> }, list: string[]): string | undefined {
+  return sensitiveKeysOf(e).reverse().find((k) => list.includes(k));
+}
 
 const STATUS_LABEL: Record<Report['status'], string> = {
   RECU: 'Reçu — en attente de qualification',
@@ -536,8 +572,9 @@ export class IntegriteService {
       }
     }
     // 6. Concentration d'actes sensibles sur une même personne (journal d'audit).
-    const sensitive = this.ctx.audit.list({ limit: 100_000 }).items.filter((e) => SENSITIVE_ACTIONS.includes(e.action) && e.actor.kind === 'user' && now - new Date(e.at).getTime() <= P.sensitiveWindowDays * DAY);
-    for (const [action, list] of groupBy(sensitive, (e) => e.action)) {
+    const recentAudit = this.ctx.audit.list({ limit: 1_000_000 }).items.filter((e) => now - new Date(e.at).getTime() <= P.sensitiveWindowDays * DAY);
+    const sensitive = recentAudit.filter((e) => e.actor.kind === 'user' && sensitiveKeyOf(e, SENSITIVE_ACTIONS) !== undefined);
+    for (const [action, list] of groupBy(sensitive, (e) => sensitiveKeyOf(e, SENSITIVE_ACTIONS)!)) {
       for (const [actor, mine] of groupBy(list, (e) => e.actor.id)) {
         const share = mine.length / list.length;
         if (mine.length >= P.sensitiveConcentrationMin && share >= P.sensitiveConcentrationShare && new Set(list.map((e) => e.actor.id)).size >= 2) {
@@ -550,6 +587,34 @@ export class IntegriteService {
           }, p));
         }
       }
+    }
+    // 6 bis. Actes à fort impact : chaque occurrence est proposée à l'examen (suspension/levée de règle, contre-écriture,
+    // changement de compte bénéficiaire, réintégration d'un point de paiement, forçage de base de liquidation).
+    for (const e of recentAudit) {
+      const key = sensitiveKeyOf(e, REVIEW_EACH_ACTIONS);
+      if (!key || e.outcome !== 'SUCCESS') continue;
+      push(this.raiseAlert({
+        ruleCode: 'ACTE_SENSIBLE_A_EXAMINER', ruleLabel: 'Acte sensible à examiner',
+        fingerprint: `ASE:${e.id}`, severity: 'MOYENNE', confidence: 'FAIBLE',
+        explanation: `Acte « ${key} » réalisé par ${e.actor.id} le ${e.at} sur ${e.resourceType} ${e.resourceId ?? '-'} : acte à fort impact sur les recettes, examen de routine (ne vaut pas soupçon).`,
+        variables: [{ name: 'Acte', value: key, source: `journal d’audit ${e.id}` }, { name: 'Ressource', value: `${e.resourceType} ${e.resourceId ?? '-'}`, source: 'journal d’audit' }],
+        subjects: [...(e.actor.kind === 'user' ? [{ kind: 'AGENT', ref: e.actor.id }] : []), { kind: 'AUDIT', ref: e.id }],
+      }, p));
+    }
+    // 6 ter. Décisions prises pendant la suspension d'une règle (pénalités ou droits non émis pendant la fenêtre).
+    for (const code of new Set(this.ctx.rules.rules.all().filter((r) => r.suspension || r.pastSuspensions?.length).map((r) => r.code))) {
+      const decisions = this.ctx.rules.decisionsDuringSuspension(code);
+      if (!decisions.length) continue;
+      push(this.raiseAlert({
+        ruleCode: 'DECISIONS_PENDANT_SUSPENSION', ruleLabel: 'Décisions prises pendant la suspension d’une règle',
+        fingerprint: `DPS:${code}:${decisions.length}`, severity: 'ELEVEE', confidence: 'MOYENNE',
+        explanation: `${decisions.length} décision(s) prise(s) pendant une suspension de la règle ${code} : pénalités ou droits possiblement non émis. Examen humain requis ; aucune sanction automatique.`,
+        variables: [
+          { name: 'Décisions', value: decisions.slice(0, 10).map((d) => `${d.action} ${d.resourceId ?? ''}`.trim()).join(', '), source: 'journal d’audit' },
+          { name: 'Décideurs', value: [...new Set(decisions.map((d) => d.actorId))].join(', '), source: 'journal d’audit' },
+        ],
+        subjects: [{ kind: 'REGLE', ref: code }, ...[...new Set(decisions.map((d) => d.actorId))].map((ref) => ({ kind: 'AGENT', ref }))],
+      }, p));
     }
     // 7. Tentatives d'accès refusées répétées.
     const denied = this.ctx.audit.list({ action: 'access.denied', limit: 100_000 }).items.filter((e) => e.actor.kind === 'user' && now - new Date(e.at).getTime() <= P.deniedAccessWindowH * HOUR);
