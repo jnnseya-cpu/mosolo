@@ -33,6 +33,19 @@ describe('File hors ligne chiffrée (§ 15.1, § 15.4, ARB-68)', () => {
     off();
   });
 
+  it('chiffrement lent (machine chargée) : flushOfflineQueues attend réellement la fin de l’écriture chiffrée', async () => {
+    // Cause de l'échec intermittent observé sous charge : l'attente se limitait à quelques tours de boucle d'événements.
+    const real = crypto.subtle.encrypt.bind(crypto.subtle);
+    vi.spyOn(crypto.subtle, 'encrypt').mockImplementation(async (...args: Parameters<SubtleCrypto['encrypt']>) => {
+      await new Promise((r) => setTimeout(r, 60));
+      return real(...args);
+    });
+    const k = queueKey('mosolo.fieldQueue.v2', 'agent-lent')!;
+    updateQueue(k, () => [{ id: 'z' }]);
+    await flushOfflineQueues();
+    expect(JSON.parse(localStorage.getItem(k)!)).toMatchObject({ v: 'mosolo-file-chiffree/1' });
+  });
+
   it('une file recopiée sous une autre clé ne se déchiffre pas ; la déconnexion efface la file et détruit la clé', async () => {
     const k = queueKey('mosolo.titres.queue', 'agent-2')!;
     updateQueue(k, () => [{ id: 'c1' }]);

@@ -122,6 +122,12 @@ const gen = new Map<string, number>();
 const pending = new Map<string, ((q: unknown[]) => unknown[])[]>();
 const hydrating = new Set<string>();
 const listeners = new Map<string, Set<() => void>>();
+/** Chiffrements et déchiffrements en cours : attendus par `flushOfflineQueues` (sinon course sous charge). */
+const inflight = new Set<Promise<void>>();
+function track(p: Promise<void>): void {
+  inflight.add(p);
+  void p.finally(() => inflight.delete(p));
+}
 
 function notify(key: string): void {
   for (const l of listeners.get(key) ?? []) { try { l(); } catch { /* écran démonté */ } }
@@ -150,7 +156,7 @@ function persist(key: string): void {
   const g = (gen.get(key) ?? 0) + 1;
   gen.set(key, g);
   const entries = cache.get(key) ?? [];
-  void (async () => {
+  track((async () => {
     const k = await keyFor(ownerOf(key));
     if (!k || gen.get(key) !== g) return;
     const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -159,14 +165,14 @@ function persist(key: string): void {
     const raw = JSON.stringify({ v: ENVELOPE_V, alg: 'AES-GCM-256', iv: b64(iv), ct: b64(ct), at: new Date().toISOString() } satisfies Envelope);
     safeSet(key, raw);
     lastSeen.set(key, raw);
-  })().catch(() => undefined);
+  })().catch(() => undefined));
 }
 
 /** Déchiffre une file écrite par ailleurs (rechargement, autre onglet), puis rejoue les modifications en attente. */
 function hydrate(key: string, raw: string, env: Envelope): void {
   if (hydrating.has(key)) return;
   hydrating.add(key);
-  void (async () => {
+  track((async () => {
     let entries: Entry<unknown>[] = [];
     try {
       const k = await keyFor(ownerOf(key));
@@ -186,7 +192,7 @@ function hydrate(key: string, raw: string, env: Envelope): void {
     setItems(key, items, entries);
     if (ops.length || entries.length !== fresh(entries).length) persist(key);
     notify(key);
-  })();
+  })());
 }
 
 /** Remplace les entrées en conservant l'horodatage des éléments inchangés (l'expiration court depuis leur saisie). */
@@ -299,16 +305,18 @@ export function purgeExpiredQueues(): number {
 
 /** Attente de la fin des chiffrements en cours (tests, déconnexion ordonnée). */
 export async function flushOfflineQueues(): Promise<void> {
-  for (let i = 0; i < 20; i++) {
+  // Attente EXPLICITE des opérations en cours (et de celles qu'elles déclenchent : un déchiffrement peut relancer un
+  // chiffrement) — auparavant quelques tours de boucle d'événements, insuffisants sous charge (échec intermittent).
+  for (let i = 0; i < 50; i++) {
     await new Promise((r) => setTimeout(r, 0));
     await Promise.all([...keys.values()]);
-    if (!hydrating.size) break;
+    if (!inflight.size && !hydrating.size) break;
+    await Promise.allSettled([...inflight]);
   }
-  await new Promise((r) => setTimeout(r, 5));
 }
 
 /** Réinitialise l'état en mémoire (tests : simule un rechargement de la page). */
 export function __resetOfflineQueuesForTests(opts: { dropKeys?: boolean } = {}): void {
-  cache.clear(); lastSeen.clear(); pending.clear(); hydrating.clear(); gen.clear();
+  cache.clear(); lastSeen.clear(); pending.clear(); hydrating.clear(); gen.clear(); inflight.clear();
   if (opts.dropKeys) keys.clear();
 }
