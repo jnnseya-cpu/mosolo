@@ -20,5 +20,8 @@ données de démonstration.
 - Aucun taux, tarif ni seuil inventé : les valeurs non confirmées sont marquées « par défaut — à confirmer par le maître
   d'ouvrage » ; les données de démonstration sont marquées non contractuelles.
 - Logos non modifiés ; interface et commentaires en français.
+- **Noms en français d'abord (27/09/2026)** : tous les modules, verticales, écrans, menus, statuts et autres noms affichés
+  dans la plateforme ont un nom français principal ; un nom de marque ou un terme anglais n'apparaît qu'en second, entre
+  parenthèses (ex. « Stationnement intelligent (ParkSmart) », « Centre de commandement (Command Centre) »).
 - Avant de livrer : `npm run typecheck && npm run lint && npm test && npm run build -w frontend`, et
   `python3 tools/gen_routes.py` si des routes changent.
