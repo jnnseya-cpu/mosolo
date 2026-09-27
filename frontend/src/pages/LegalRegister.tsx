@@ -21,6 +21,8 @@ interface Suspension { reason: string; authority: string; instrumentRef?: string
 type Rule = RuleSheet & {
   sample?: boolean; demo?: boolean; createdAt?: string; publishedAt?: string; activatedAt?: string;
   suspension?: Suspension; pastSuspensions?: Suspension[];
+  /** Suspension ou levée proposée, en attente de l'approbation d'une seconde personne. */
+  pendingSuspensionChange?: { kind: 'SUSPENSION' | 'LEVEE'; reason: string; authority?: string; proposedBy: string; proposedAt: string };
   abrogation?: { date: string; instrumentId: string; reason: string; by: string; at: string };
   retroactivity?: { instrumentId: string; article: string; justification: string };
   supersededBy?: string; history?: HistoryEntry[];
@@ -128,7 +130,20 @@ function Feedback({ msg }: { msg: { ok: boolean; text: string } | null }) {
 /** Suspension motivée, levée, abrogation datée (autorité de publication R16). */
 function RuleLifecycle({ rule, instruments, onChanged }: { rule: Rule; instruments: Instrument[]; onChanged: () => void }) {
   const { fmtDate, user } = useApp();
-  const canAct = !!user?.roles.includes('R16');
+  const canAct = !!user?.roles.some((r) => r === 'R16' || r === 'R14');
+  // Approbation par une seconde personne (R15 ou R16), jamais l'auteur de la proposition.
+  const pending = rule.pendingSuspensionChange;
+  const canApprove = !!pending && !!user && user.id !== pending.proposedBy && user.roles.some((r) => r === 'R15' || r === 'R16');
+  const [decision, setDecision] = useState('');
+  async function decide(approve: boolean) {
+    setBusy(true); setMsg(null);
+    try {
+      await api(`/v1/legal-rules/${encodeURIComponent(rule.id)}/suspension-change/decide`, { method: 'POST', body: { approve, reason: decision } });
+      setMsg({ ok: true, text: approve ? (pending?.kind === 'SUSPENSION' ? 'Suspension approuvée : effective.' : 'Levée approuvée : la règle s’applique de nouveau.') : 'Proposition refusée.' });
+      setDecision('');
+      onChanged();
+    } catch (x) { setMsg({ ok: false, text: errText(x) }); } finally { setBusy(false); }
+  }
   const [mode, setMode] = useState<'none' | 'suspend' | 'lift' | 'abrogate'>('none');
   const [reason, setReason] = useState('');
   const [authority, setAuthority] = useState('Ministre provincial des Finances');
@@ -149,7 +164,7 @@ function RuleLifecycle({ rule, instruments, onChanged }: { rule: Rule; instrumen
         const r = await api<{ obligationsToReview: { id: string; status: string; issuedOn: string }[] }>(`${base}/abrogate`, { method: 'POST', body: { date, instrumentId, reason } });
         setReview(r.obligationsToReview);
       }
-      setMsg({ ok: true, text: mode === 'suspend' ? 'Règle suspendue : aucune liquidation tant que dure la suspension.' : mode === 'lift' ? 'Suspension levée.' : 'Abrogation enregistrée : aucune liquidation à compter de la date.' });
+      setMsg({ ok: true, text: mode === 'suspend' ? 'Suspension proposée : sans effet tant qu’une seconde personne ne l’a pas approuvée.' : mode === 'lift' ? 'Levée proposée : sans effet tant qu’une seconde personne ne l’a pas approuvée.' : 'Abrogation enregistrée : aucune liquidation à compter de la date.' });
       setMode('none'); setReason('');
       onChanged();
     } catch (x) { setMsg({ ok: false, text: errText(x) }); } finally { setBusy(false); }
@@ -166,6 +181,21 @@ function RuleLifecycle({ rule, instruments, onChanged }: { rule: Rule; instrumen
       )}
       {rule.retroactivity && (
         <div className="callout callout-info"><Icon name="history" size={18} /><p className="small">Rétroactivité autorisée par <span className="mono">{rule.retroactivity.instrumentId}</span>, {rule.retroactivity.article} — {rule.retroactivity.justification}</p></div>
+      )}
+      {pending && (
+        <div className="callout callout-info"><Icon name="users" size={18} /><div className="stack-sm">
+          <p className="row-title">{pending.kind === 'SUSPENSION' ? 'Suspension' : 'Levée de suspension'} proposée le {fmtDate(pending.proposedAt, true)} — en attente d’une seconde personne</p>
+          <p className="small">{pending.authority ? `${pending.authority} — ` : ''}{pending.reason} <span className="muted">(proposée par {pending.proposedBy})</span></p>
+          {canApprove && (
+            <div className="stack-sm">
+              <label className="field"><span className="label">Motif de la décision</span><input value={decision} onChange={(e) => setDecision(e.target.value)} /></label>
+              <div className="btn-row">
+                <button type="button" className="btn btn-primary btn-sm" disabled={busy || decision.trim().length < 5} onClick={() => void decide(true)}>Approuver</button>
+                <button type="button" className="btn btn-ghost btn-sm" disabled={busy || decision.trim().length < 5} onClick={() => void decide(false)}>Refuser</button>
+              </div>
+            </div>
+          )}
+        </div></div>
       )}
       {!!rule.pastSuspensions?.length && <p className="small muted">{rule.pastSuspensions.length} suspension(s) antérieure(s) levée(s).</p>}
       {canAct ? (
