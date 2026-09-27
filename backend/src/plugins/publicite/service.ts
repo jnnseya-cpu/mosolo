@@ -150,6 +150,8 @@ export interface AdInspection {
   lat: number;
   lon: number;
   gpsAccuracyM: number | null;
+  /** GPS mesuré, point ajusté à la main (MANUEL) ou position de repli (ZONE). */
+  gpsSource?: 'GPS' | 'MANUEL' | 'ZONE';
   observedAt: string;
   qrScanned: string | null;
   ocrText: string | null;
@@ -571,7 +573,7 @@ export class PubliciteService {
   // ---------------------------------------------------------------- Inspections et dossiers de constat
 
   inspect(user: User, input: {
-    deviceId?: string; newDevice?: NewDeviceSpec; finding: AdInspection['finding']; photos: string[]; lat: number; lon: number; gpsAccuracyM?: number;
+    deviceId?: string; newDevice?: NewDeviceSpec; finding: AdInspection['finding']; photos: string[]; lat: number; lon: number; gpsAccuracyM?: number; gpsSource?: 'GPS' | 'MANUEL' | 'ZONE';
     qrScanned?: string; ocrText?: string; presumedOperator?: string; observations: string;
   }) {
     let device = input.deviceId ? this.getDevice(input.deviceId) : input.qrScanned ? this.devices.findOne((d) => d.qrToken === input.qrScanned) ?? null : null;
@@ -607,7 +609,7 @@ export class PubliciteService {
     }
     const insp = this.inspections.append({
       id: inspectionId, reference: this.ids.next(`CST-PUB-${now.getUTCFullYear()}`), inspectorId: user.id, deviceId: device.id, finding: input.finding,
-      photos: input.photos, lat: input.lat, lon: input.lon, gpsAccuracyM: input.gpsAccuracyM ?? null, observedAt: now.toISOString(),
+      photos: input.photos, lat: input.lat, lon: input.lon, gpsAccuracyM: input.gpsAccuracyM ?? null, gpsSource: input.gpsSource ?? 'GPS', observedAt: now.toISOString(),
       qrScanned: input.qrScanned ?? null, ocrText: input.ocrText ?? null, ocrMatches, authorizationValidAtInspection: st.status === 'AUTORISE',
       presumedOperator: input.presumedOperator ?? null, observations: input.observations, caseId,
     });

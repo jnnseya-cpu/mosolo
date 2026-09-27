@@ -200,7 +200,7 @@ export interface Finding {
   commune: string;
   outcome: FindingOutcome;
   observations: string;
-  gps: { lat: number; lon: number; accuracyM: number };
+  gps: { lat: number; lon: number; accuracyM: number; source?: 'GPS' | 'MANUEL' | 'ZONE' };
   photoSha256?: string;
   capturedAt: string;
   receivedAt: string;
@@ -238,7 +238,7 @@ export interface CounterVisit {
   status: 'A_AFFECTER' | 'A_FAIRE' | 'REALISEE';
   result?: 'CONFORME' | 'NON_CONFORME';
   notes?: string;
-  gps?: { lat: number; lon: number; accuracyM: number };
+  gps?: { lat: number; lon: number; accuracyM: number; source?: 'GPS' | 'MANUEL' | 'ZONE' };
   photoSha256?: string;
   performedAt?: string;
   distanceToOriginalM?: number;

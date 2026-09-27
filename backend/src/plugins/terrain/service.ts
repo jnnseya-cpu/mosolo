@@ -55,7 +55,7 @@ export interface MissionInput {
 }
 export interface FindingInput {
   clientRef: string; objectId?: string; outcome: FindingOutcome; observations: string;
-  gps: { lat: number; lon: number; accuracyM: number }; photoSha256?: string; capturedAt: string; deviceId?: string; justification?: string;
+  gps: { lat: number; lon: number; accuracyM: number; source?: 'GPS' | 'MANUEL' | 'ZONE' }; photoSha256?: string; capturedAt: string; deviceId?: string; justification?: string;
 }
 
 export class TerrainService {
@@ -805,7 +805,7 @@ export class TerrainService {
       flags.push('HORS_ZONE');
       flagMessage ??= `Opération effectuée à ${fromCenter} m du centre de la zone de mission (rayon ${m.radiusM} m) — justification et vérification requises`;
     }
-    if (input.gps.accuracyM > tol) flags.push('GPS_IMPRECIS');
+    if (input.gps.accuracyM > tol || (input.gps.source && input.gps.source !== 'GPS')) flags.push('GPS_IMPRECIS');
     if (!input.photoSha256 && (input.outcome === 'CONSTATE' || input.outcome === 'OBJET_NON_ENREGISTRE')) flags.push('SANS_PHOTO');
 
     const finding = this.findings.insert({
@@ -919,7 +919,7 @@ export class TerrainService {
     return updated;
   }
 
-  performCounterVisit(u: User, id: string, input: { result: 'CONFORME' | 'NON_CONFORME'; notes: string; gps: { lat: number; lon: number; accuracyM: number }; photoSha256?: string }) {
+  performCounterVisit(u: User, id: string, input: { result: 'CONFORME' | 'NON_CONFORME'; notes: string; gps: { lat: number; lon: number; accuracyM: number; source?: 'GPS' | 'MANUEL' | 'ZONE' }; photoSha256?: string }) {
     authorize(u, A.counterVisitPerform);
     const cv = this.counterVisits.get(id);
     if (!cv) throw notFound('COUNTER_VISIT_NOT_FOUND', `Contre-visite inconnue : ${id}`);

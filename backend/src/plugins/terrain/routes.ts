@@ -15,7 +15,8 @@ const moduleEnum = z.enum(TERRAIN_MODULES);
 const commune = z.string().trim().min(2).max(40);
 const reasonSchema = z.object({ reason: z.string().trim().min(5).max(2000) }).strict();
 const sha256 = z.string().regex(/^[a-fA-F0-9]{64}$/, 'empreinte SHA-256 hexadécimale attendue (64 caractères) — jamais le fichier');
-const gps = z.object({ lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180), accuracyM: z.number().min(0).max(10_000) }).strict();
+// `source` : GPS mesuré, point ajusté à la main (MANUEL) ou position de repli (ZONE) — signalé au vérificateur.
+const gps = z.object({ lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180), accuracyM: z.number().min(0).max(10_000), source: z.enum(['GPS', 'MANUEL', 'ZONE']).optional() }).strict();
 const photoRef = z.string().trim().min(1).max(300).refine((s) => !s.startsWith('data:'), 'référence de document attendue, jamais le binaire de la photo');
 
 const inviteSubcontractor = z.object({

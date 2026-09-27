@@ -67,7 +67,7 @@ export function registerPubliciteRoutes(app: FastifyInstance, ctx: AppContext, s
   app.post('/v1/publicite/inspections', async (req, reply) => {
     const body = parse(z.object({
       deviceId: z.string().optional(), newDevice: z.object(deviceSpec).strict().optional(), finding: z.enum(FINDINGS), photos: z.array(sha).min(1).max(6),
-      lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180), gpsAccuracyM: z.number().min(0).max(10_000).optional(),
+      lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180), gpsAccuracyM: z.number().min(0).max(10_000).optional(), gpsSource: z.enum(['GPS', 'MANUEL', 'ZONE']).optional(),
       qrScanned: z.string().max(64).optional(), ocrText: z.string().max(2000).optional(), presumedOperator: z.string().trim().max(160).optional(),
       observations: z.string().trim().min(3).max(2000),
     }).strict(), req.body);
