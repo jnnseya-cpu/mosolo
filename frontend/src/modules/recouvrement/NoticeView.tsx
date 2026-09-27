@@ -12,6 +12,7 @@ import { ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
 import type { Notice, NoticeProof } from './types';
+import { NotificationChronologie } from './visuels';
 import { DELIVERABLE_KINDS, FieldDeliverySummary, RemiseTerrainForm } from './RemiseTerrain';
 import './recouvrement.css';
 
@@ -107,6 +108,7 @@ export default function NoticeView() {
       {proof.data && (
         <section className="panel rc-proof">
           <div className="panel-head"><p className="panel-title"><Icon name="shieldCheck" size={16} /> Preuve de notification</p></div>
+          <NotificationChronologie issuedAt={n.issuedAt} deliveries={proof.data.deliveries} readAt={proof.data.readAcknowledgement?.at ?? readAt ?? null} fieldAt={proof.data.fieldDelivery?.at ?? null} channelLabel={CHANNEL_LABEL} />
           <ul className="list-rows compact-rows">
             {proof.data.deliveries.map((d) => (
               <li key={d.id} className="list-row"><span>{CHANNEL_LABEL[d.channel] ?? d.channel} · {d.recipientMasked}</span><span className="row-side small muted">{d.status} · {d.providerMode} · {fmtDate(d.at, true)}</span></li>

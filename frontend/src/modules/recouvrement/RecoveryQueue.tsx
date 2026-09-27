@@ -19,6 +19,7 @@ import {
   INSTALLMENT_LABEL, type Arrear, type Balance, type Plan, type Proposal, type RecoveryCase,
 } from './types';
 import { Msg, useAction } from './actions';
+import { RecouvrementVisuel } from './visuels';
 import './recouvrement.css';
 
 type Tab = 'arrears' | 'decisions' | 'plans';
@@ -337,6 +338,8 @@ export default function RecoveryQueue() {
               ))}
             </div>
           </section>
+
+          <RecouvrementVisuel items={d.arrears.items} balance={d.arrears.balance} indicators={d.indicators} plans={d.plans} />
 
           <div className="seg seg-wrap" role="group" aria-label="Vue">
             <button type="button" aria-pressed={tab === 'arrears'} onClick={() => setTab('arrears')}>Arriérés <span className="count">{d.arrears.items.length}</span></button>

@@ -19,6 +19,7 @@ import {
   APPEAL_STATE, errText, INSTALLMENT_LABEL, NOTICE_KIND_LABEL, PLAN_LABEL, PLAN_TONE, REMISSION_STATUS, SUSPENSIVE_LABEL,
   type Appeal, type Arrear, type MyRemission, type Plan,
 } from './types';
+import { MesArrieresVisuel } from './visuels';
 import './recouvrement.css';
 import { AttenteBaseLegale } from '../juridique/AttenteBaseLegale';
 
@@ -213,6 +214,7 @@ export default function MyArrears() {
       {q.error !== null && isTaxpayer && <ErrorState error={q.error} onRetry={q.reload} />}
       {d && (
         <>
+          <MesArrieresVisuel mine={d.mine} appeals={d.appeals.length} />
           <section className="section">
             <h2 className="h-sub">Arriérés</h2>
             {d.mine.arrears.length === 0 ? <EmptyState title="Aucun arriéré" icon="check">Aucune obligation échue impayée à ce jour ({fmtDate(d.mine.asOf)}).</EmptyState> : (

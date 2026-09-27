@@ -17,6 +17,7 @@ import { AppealDeadlinesPanel, type AppealIndicators } from '../../components/Ap
 import { api } from '../../lib/api';
 import { APPEAL_STATE, SUSPENSIVE_LABEL, hasRole, type Appeal } from './types';
 import { Msg, useAction } from './actions';
+import { RecoursVisuel } from './visuels';
 import './recouvrement.css';
 
 export type AgentAppeal = Appeal & {
@@ -167,6 +168,7 @@ export default function Recours() {
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
       {q.data && (
         <>
+          <RecoursVisuel appeals={q.data.appeals} ind={q.data.indicators} />
           <AppealDeadlinesPanel data={q.data.indicators} />
           <div className="seg seg-wrap" role="group" aria-label="Vue">
             <button type="button" aria-pressed={tab === 'ouverts'} onClick={() => setTab('ouverts')}>À instruire <span className="count">{groups.ouverts.length}</span></button>

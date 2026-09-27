@@ -17,6 +17,7 @@ import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
 import { hasRole, REMISSION_STATUS, type Arrear, type Remission, type RemissionComputation, type RuleLite } from './types';
 import { Msg, useAction } from './actions';
+import { RemisesVisuel } from './visuels';
 import './recouvrement.css';
 
 type Tab = 'instruire' | 'decider' | 'decidees';
@@ -197,6 +198,7 @@ export default function Remises() {
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
       {d && (
         <>
+          <RemisesVisuel remissions={all} />
           {hasRole(roles, 'R20') && <RequestForm arrears={d.arrears} rules={d.rules} onDone={q.reload} />}
           <div className="seg seg-wrap" role="group" aria-label="Vue">
             <button type="button" aria-pressed={tab === 'instruire'} onClick={() => setTab('instruire')}>À instruire <span className="count">{groups.instruire.length}</span></button>

@@ -78,3 +78,6 @@
 .lr-version > summary::-webkit-details-marker { display: none; }
 .lr-history { margin-top: 8px; display: grid; gap: 4px; }
 .lr-retro { border: 1px dashed var(--line); border-radius: var(--r); padding: 12px; }
+
+/* Bouton à long libellé : retour à la ligne plutôt que débordement à 360 px (trousse de visualisation, 27/09/2026). */
+.btn.rc-btn-wrap { white-space: normal; height: auto; min-height: 36px; max-width: 100%; text-align: center; }
