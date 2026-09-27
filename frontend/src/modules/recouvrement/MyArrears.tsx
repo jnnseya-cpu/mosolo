@@ -1,6 +1,7 @@
 /**
  * Espace contribuable : mes arriérés et échéances, avis reçus (accusé de lecture), échéanciers, mes recours
- * (délais légaux et décompte, pièces par empreinte, effet suspensif). Aucun profilage n'est affiché.
+ * (délais légaux et décompte, pièces par empreinte, effet suspensif), demandes de remise (taux et plafond de la règle ACTIVE,
+ * montant calculé par le serveur, instruction puis décision par des agents distincts). Aucun profilage n'est affiché.
  */
 import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
@@ -15,8 +16,8 @@ import { Icon } from '../../components/Icon';
 import { api, ApiError } from '../../lib/api';
 import { sha256Hex } from '../../lib/crypto';
 import {
-  APPEAL_STATE, errText, INSTALLMENT_LABEL, NOTICE_KIND_LABEL, PLAN_LABEL, PLAN_TONE, SUSPENSIVE_LABEL,
-  type Appeal, type Arrear, type Plan,
+  APPEAL_STATE, errText, INSTALLMENT_LABEL, NOTICE_KIND_LABEL, PLAN_LABEL, PLAN_TONE, REMISSION_STATUS, SUSPENSIVE_LABEL,
+  type Appeal, type Arrear, type MyRemission, type Plan,
 } from './types';
 import './recouvrement.css';
 
@@ -26,6 +27,7 @@ interface Mine {
   upcoming: { obligationId: string; label: string; amount: MoneyJSON; dueDate: string; status: string; daysToDue: number }[];
   notices: { id: string; number: string; kind: string; title: string; issuedAt: string; readAt: string | null; obligationId: string; demo: boolean }[];
   plans: Plan[];
+  remissions?: MyRemission[];
   planBasis: { available: boolean; title?: string; demo?: boolean; detail: string };
   procedure: { maxInstallments: number };
 }
@@ -51,13 +53,20 @@ function useAction(onDone: () => void) {
 
 function ArrearCard({ a, basis, max, onDone }: { a: Arrear; basis: Mine['planBasis']; max: number; onDone: () => void }) {
   const { fmtDate } = useApp();
-  const [mode, setMode] = useState<'none' | 'plan' | 'obs'>('none');
+  const [mode, setMode] = useState<'none' | 'plan' | 'obs' | 'remise'>('none');
+  const [amount, setAmount] = useState('');
+  const rb = a.remissionBasis;
   const [count, setCount] = useState(3);
   const [text, setText] = useState('');
   const act = useAction(() => { setMode('none'); setText(''); onDone(); });
   const hasPlan = a.plan && (a.plan.status === 'DEMANDE' || a.plan.status === 'ACCORDE');
   function submit(e: FormEvent) {
     e.preventDefault();
+    if (mode === 'remise') {
+      void act.run(() => api('/v1/recouvrement/remises', { method: 'POST', body: { obligationId: a.obligationId, basisRuleId: rb!.ruleId, requestedAmount: { amount: amount.trim(), currency: a.amount.currency }, motivation: text } }),
+        'Demande de remise enregistrée : un agent de recouvrement l’instruit, puis une autorité distincte décide. Le montant retenu est calculé selon la règle.');
+      return;
+    }
     if (mode === 'plan') void act.run(() => api('/v1/recouvrement/echeanciers', { method: 'POST', body: { obligationId: a.obligationId, installments: count, reason: text } }), 'Demande d’échéancier enregistrée ; un agent y répondra par une décision motivée.');
     else void act.run(() => api(`/v1/recouvrement/dossiers/${encodeURIComponent(a.caseId!)}/observations`, { method: 'POST', body: { text } }), 'Vos observations sont versées au dossier.');
   }
@@ -92,11 +101,21 @@ function ArrearCard({ a, basis, max, onDone }: { a: Arrear; basis: Mine['planBas
       <div className="btn-row">
         <Link className="btn btn-primary btn-sm" to="/espace"><Icon name="card" size={14} /> Payer par le circuit officiel</Link>
         {!hasPlan && basis.available && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMode('plan')}>Demander un échéancier</button>}
+        {rb?.available && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMode('remise')}>Demander une remise</button>}
         {a.caseId && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setMode('obs')}>Présenter mes observations</button>}
       </div>
       {!basis.available && <p className="small muted">Échéancier : {basis.detail}</p>}
+      {rb && !rb.available && <p className="small muted">Remise : {rb.detail}</p>}
       {mode !== 'none' && (
         <form className="form rc-inline-form" onSubmit={submit}>
+          {mode === 'remise' && rb?.available && (
+            <div className="field">
+              <p className="small">{rb.detail}</p>
+              <label className="label" htmlFor={`rm-${a.obligationId}`}>Montant après remise demandé ({a.amount.currency})</label>
+              <input id={`rm-${a.obligationId}`} inputMode="decimal" pattern="\d{1,15}(\.\d{1,2})?" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+              {rb.floor && <span className="hint">Selon la règle, le montant après remise ne peut descendre sous <MoneyText money={rb.floor} showIndicative={false} /> ; une demande plus basse est ramenée à ce plancher.</span>}
+            </div>
+          )}
           {mode === 'plan' && (
             <div className="field">
               <label className="label" htmlFor={`n-${a.obligationId}`}>Nombre d’échéances (2 à {max})</label>
@@ -105,8 +124,8 @@ function ArrearCard({ a, basis, max, onDone }: { a: Arrear; basis: Mine['planBas
             </div>
           )}
           <div className="field">
-            <label className="label" htmlFor={`t-${a.obligationId}`}>{mode === 'plan' ? 'Motif de la demande' : 'Vos observations'}</label>
-            <textarea id={`t-${a.obligationId}`} rows={3} value={text} onChange={(e) => setText(e.target.value)} required minLength={5} />
+            <label className="label" htmlFor={`t-${a.obligationId}`}>{mode === 'obs' ? 'Vos observations' : 'Motif de la demande'}</label>
+            <textarea id={`t-${a.obligationId}`} rows={3} value={text} onChange={(e) => setText(e.target.value)} required minLength={mode === 'remise' ? 10 : 5} />
           </div>
           <div className="btn-row">
             <button type="submit" className="btn btn-primary btn-sm" disabled={act.busy}>Envoyer</button>
@@ -223,6 +242,25 @@ export default function MyArrears() {
                 {p.legalBasis.demo && <p className="small muted">Fondement FICTIF de démonstration : {p.legalBasis.title}</p>}
               </article>
             ))}
+          </section>
+
+          <section className="section">
+            <h2 className="h-sub">Mes demandes de remise</h2>
+            {!d.mine.remissions?.length ? <p className="muted small">Aucune demande de remise.</p> : (
+              <ul className="list-rows">
+                {d.mine.remissions.map((r) => {
+                  const st = REMISSION_STATUS[r.status] ?? { label: r.status, tone: 'neutral' as const };
+                  return (
+                    <li key={r.id} className="list-row list-row-stack">
+                      <span className="row-title">Remise {r.id} <StatusBadge tone={st.tone} label={st.label} /></span>
+                      <span className="small muted">Obligation <span className="mono">{r.obligationId}</span> · demandée le {fmtDate(r.requestedAt, true)} · montant demandé <MoneyText money={r.requestedAmount} showIndicative={false} />{r.computedAmount && <> · calculé selon la règle{r.rate ? ` (${r.rate} % au plus)` : ''} : <MoneyText money={r.computedAmount} showIndicative={false} /></>}</span>
+                      {r.instruction && <span className="small">Instruction {r.instruction.favorable ? 'favorable' : 'défavorable'} le {fmtDate(r.instruction.at, true)}</span>}
+                      {r.decision && <span className="small">Décision du {fmtDate(r.decision.at, true)} — {r.decision.motivation}{r.decision.grantedAmount && <> · nouveau montant dû <MoneyText money={r.decision.grantedAmount} showIndicative={false} /></>}</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </section>
 
           <section className="section">

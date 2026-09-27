@@ -8,6 +8,7 @@ import NonValeurs from '../src/modules/recouvrement/NonValeurs';
 import Corrections from '../src/modules/fiscal/Corrections';
 import Derogations from '../src/modules/socle/Derogations';
 import Reductions from '../src/modules/pilotage/Reductions';
+import MyArrears from '../src/modules/recouvrement/MyArrears';
 
 const USD = (amount: string) => ({ amount, currency: 'USD' });
 type Call = { url: string; method: string; body: unknown };
@@ -87,6 +88,7 @@ describe('Écrans de décision — quatre yeux', () => {
       coverage: { color: 'green', label: '', reason: '' }, occupancy: { code: 'X', label: '' }, tree: { geo: [], objects: [], children: [] }, plate: null, relations: [], leases: [], example: true };
     mockBackend({ id: 'u-controleur', roles: ['R07'] }, (url) => {
       if (url.endsWith('/v1/fiscal/objects')) return { body: [obj] };
+      if (url.includes('/v1/fiscal/object-corrections?status=EN_ATTENTE')) return { body: [] };
       if (url.includes('/corrections')) return { body: { corrections: [{
         id: 'CORR-OBJ-000001', objectId: obj.id, proposed: { attributes: { surface_m2: '250' } }, before: { localityRank: 3, attributes: { surface_m2: '300' } },
         reason: 'Mesure contradictoire sur place', proposedBy: 'u-controleur', proposedAt: '2026-09-22T09:00:00.000Z', status: 'PROPOSEE',
@@ -94,7 +96,7 @@ describe('Écrans de décision — quatre yeux', () => {
       return undefined;
     });
     renderPage(<Corrections />);
-    fireEvent.click(await screen.findByRole('button', { name: /Corrections/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Corrections/ }));
     expect(await screen.findByText('CORR-OBJ-000001')).toBeTruthy();
     expect(screen.getByText('250')).toBeTruthy();
     expect(screen.getByText(/Quatre yeux : l’approbation revient à une autre personne/)).toBeTruthy();
@@ -136,7 +138,7 @@ describe('Écrans de décision — quatre yeux', () => {
       potentialUnassessed: { note: 'Aucun montant estimé.', units: 0, byVertical: [], rows: [] },
       signals: { raised: 0, open: 1, params: { demo: true, deciderShare: '0.5', minReductionsInGroup: 3, taxpayerThreshold: { USD: '1000' } } },
     };
-    mockBackend({ id: 'u-audit', roles: ['R24'] }, (url, method) => {
+    const rcalls = mockBackend({ id: 'u-audit', roles: ['R24'] }, (url, method) => {
       if (url.includes('/v1/pilotage/reductions/detection') && method === 'POST') return { body: { raised: 1, automaticEffect: 'AUCUN', params: report.signals.params, signals: [
         { kind: 'DECIDEUR_CONCENTRE', fingerprint: 'RED-DEC:Lemba:2026-09:u-decideur', detail: 'u-decideur a décidé 3 des 4 réductions de recettes de Lemba en 2026-09 : examen humain proposé, aucune mesure automatique.', context: {} },
       ] } };
@@ -148,9 +150,65 @@ describe('Écrans de décision — quatre yeux', () => {
     expect(screen.getByText('Rapproché')).toBeTruthy();
     expect(screen.getByText(/Seuils de démonstration \[EXEMPLE\]/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Type de réduction'), { target: { value: 'REMISE' } });
-    expect(screen.queryByText('Exonération appliquée à la liquidation', { selector: 'td *, td' })).toBeNull();
+    await waitFor(() => expect(rcalls.some((c) => c.url.includes('/v1/pilotage/reductions?type=REMISE'))).toBe(true));
+    fireEvent.change(screen.getByLabelText('Décideur'), { target: { value: 'u-decideur' } });
+    await waitFor(() => expect(rcalls.some((c) => c.url.includes('type=REMISE') && c.url.includes('decideur=u-decideur'))).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: /Lancer la détection/ }));
     expect(await screen.findByText(/examen humain proposé, aucune mesure automatique/)).toBeTruthy();
     expect(screen.getByText(/effet automatique : aucun/)).toBeTruthy();
+  });
+  it('corrections d’objets : file des approbations tous objets, pièces justificatives visibles de l’approbateur', async () => {
+    const sha = 'b'.repeat(64);
+    const calls = mockBackend({ id: 'u-chef', roles: ['R07'] }, (url, method) => {
+      if (url.endsWith('/v1/fiscal/objects')) return { body: [] };
+      if (url.includes('/v1/fiscal/object-corrections?status=EN_ATTENTE')) return { body: [{
+        id: 'CORR-OBJ-000007', objectId: 'OBJ-7', proposed: { localityRank: 2 }, before: { localityRank: 3, attributes: {} }, reason: 'Reclassement du quartier constaté',
+        evidence: [{ label: 'PV de constat n° 42', sha256: sha }], proposedBy: 'u-controleur', proposedAt: '2026-09-22T09:00:00.000Z', status: 'PROPOSEE',
+        object: { id: 'OBJ-7', category: 'PARCELLE', commune: 'Gombe', quartier: 'Golf', localityRank: 3, createdBy: 'u-agent' },
+      }] };
+      if (url.includes('/object-corrections/CORR-OBJ-000007/decision') && method === 'POST') return { body: { status: 'APPLIQUEE' } };
+      return undefined;
+    });
+    renderPage(<Corrections />);
+    expect(await screen.findByText('CORR-OBJ-000007')).toBeTruthy();
+    expect(screen.getByText(/OBJ-7 · Gombe · Golf/)).toBeTruthy();
+    expect(screen.getByText(/PV de constat n° 42/)).toBeTruthy();
+    expect(screen.getByText(/SHA-256 bbbbbbbbbbbb/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Approuver' }));
+    fireEvent.change(screen.getByLabelText(/Motif \(obligatoire/), { target: { value: 'Pièces concordantes, reclassement fondé' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Approuver et appliquer' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && (c.body as { approve?: boolean })?.approve === true)).toBe(true));
+  });
+
+  it('espace contribuable : demande de remise sur sa propre obligation, base de la règle affichée, statut suivi', async () => {
+    const arrear = {
+      obligationId: 'OBL-1', taxpayerId: 'TP-DEMO-0002', label: 'Impôt foncier (démonstration)', revenueCategory: 'IMPOT_PROVINCIAL', ruleCode: 'DEMO-IF-BATI',
+      entity: 'DGIPK', commune: 'Lemba', amount: USD('50.00'), dueDate: '2026-07-15', ageDays: 73, ageBand: '31-90', status: 'EN_RETARD',
+      prescription: { limitationYears: 5, startsOn: '2026-07-15', prescribedOn: '2031-07-15', daysRemaining: 1753, state: 'EN_COURS', note: '' },
+      legalBasis: [], caseId: null, plan: null, demo: true, steps: [], pendingMeasure: [],
+      remissionBasis: { available: true, detail: 'Règle DEMO-IF-BATI v2 : remise au plus 40 %.', ruleId: 'rule-demo-v2', rate: '40', floor: USD('30.00') },
+    };
+    const mine = {
+      asOf: '2026-09-26', arrears: [arrear], upcoming: [], notices: [], plans: [], procedure: { maxInstallments: 12 },
+      planBasis: { available: false, detail: 'Acte requis.' },
+      remissions: [{ id: 'REM-000009', obligationId: 'OBL-0', status: 'INSTRUITE', requestedAmount: USD('20.00'), requestedAt: '2026-09-01T09:00:00.000Z', motivation: 'x', computedAmount: USD('25.00'), rate: '40', instruction: { at: '2026-09-02T09:00:00.000Z', favorable: true } }],
+    };
+    const calls = mockBackend({ id: 'u-locataire', roles: ['R30'] }, (url, method) => {
+      if (url.includes('/v1/recouvrement/mes-arrieres')) return { body: mine };
+      if (url.endsWith('/v1/appeals')) return { body: [] };
+      if (url.endsWith('/v1/recouvrement/remises') && method === 'POST') return { status: 201, body: { id: 'REM-000010', status: 'DEMANDEE' } };
+      return undefined;
+    });
+    renderPage(<MyArrears />);
+    expect(await screen.findByText(/REM-000009/)).toBeTruthy();
+    expect(screen.getByText(/Instruction favorable/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Demander une remise' }));
+    expect(screen.getByText(/remise au plus 40 %/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/Montant après remise demandé/), { target: { value: '35.00' } });
+    fireEvent.change(screen.getByLabelText('Motif de la demande'), { target: { value: 'Perte d’emploi documentée par attestation' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer' }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.url.endsWith('/v1/recouvrement/remises'))?.body).toEqual({
+      obligationId: 'OBL-1', basisRuleId: 'rule-demo-v2', requestedAmount: USD('35.00'), motivation: 'Perte d’emploi documentée par attestation',
+    }));
   });
 });

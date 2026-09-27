@@ -7,6 +7,7 @@ import { canonicalJson } from '../../core/crypto.js';
 import { isoDateString, parse } from '../../core/http.js';
 import { PAYMENT_CHANNELS } from '../../modules/payments/service.js';
 import { DRILL_DIMENSIONS, type DrillDimension } from './ladder.js';
+import { REDUCTION_TYPES } from './reductions.js';
 import type { PilotageService } from './service.js';
 
 const querySchema = z.object({
@@ -24,7 +25,12 @@ const querySchema = z.object({
   lang: z.string().optional(),
 }).strict();
 
-const periodSchema = z.string().regex(/^\d{4}-[TQ][1-4]$/, 'trimestre AAAA-Tn attendu');
+const reductionsQuerySchema = querySchema.extend({
+  type: z.enum(REDUCTION_TYPES).optional(),
+  decideur: z.string().trim().regex(/^[A-Za-z0-9_.-]{1,80}$/, 'identifiant de décideur attendu').optional(),
+}).strict();
+
+const periodSchema =z.string().regex(/^\d{4}-[TQ][1-4]$/, 'trimestre AAAA-Tn attendu');
 const publishSchema = z.object({ motif: z.string().trim().min(10).max(1000) }).strict();
 const verifySchema = z.object({
   payload: z.string().min(1).max(10_000_000).optional(),
@@ -53,7 +59,11 @@ export function registerPilotageRoutes(app: FastifyInstance, _ctx: AppContext, s
   });
 
   // Réductions de recettes (fuites) et recettes potentielles non liquidées.
-  app.get('/v1/pilotage/reductions', async (req) => svc.reductions(requireUser(req), q(req.query)));
+  // Filtres propres au rapport : type de réduction et décideur (appliqués aux totaux comme aux ventilations).
+  app.get('/v1/pilotage/reductions', async (req) => {
+    const { type, decideur, ...rest } = parse(reductionsQuerySchema, req.query);
+    return svc.reductions(requireUser(req), q(rest), { ...(type ? { type } : {}), ...(decideur ? { decider: decideur } : {}) });
+  });
   app.post('/v1/pilotage/reductions/detection', async (req) => {
     const r = svc.detectReductionSignals(requireUser(req));
     return { raised: r.raised, signals: r.signals, params: r.params, automaticEffect: r.automaticEffect };

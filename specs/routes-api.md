@@ -1,12 +1,12 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **616 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **617 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
 | extension acces | 63 |
 | extension canaux | 41 |
-| extension fiscal | 43 |
+| extension fiscal | 44 |
 | extension ia | 28 |
 | extension integrite | 52 |
 | extension parking | 36 |
@@ -183,6 +183,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **616 routes** dans 35
 | POST | `/v1/fiscal/leases/:id/attestations` |
 | GET | `/v1/fiscal/map` |
 | GET | `/v1/fiscal/nearby` |
+| GET | `/v1/fiscal/object-corrections` |
 | POST | `/v1/fiscal/object-corrections/:id/decision` |
 | GET | `/v1/fiscal/objects` |
 | GET | `/v1/fiscal/objects/:id` |

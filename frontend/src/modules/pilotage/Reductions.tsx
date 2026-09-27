@@ -4,7 +4,7 @@
  * potentielles non liquidées (assiette seule, aucun montant estimé) ; détection de concentration (signaux proposés à
  * l'examen humain, aucune mesure automatique).
  */
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import type { MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
@@ -28,7 +28,7 @@ interface TypeAmount { type: string; label?: string; count: number; amount: Mone
 export interface CurrencyBlock {
   currency: string; chains: number; grossAssessed: MoneyJSON; reductions: { total: MoneyJSON; count: number; byType: TypeAmount[] };
   netExpected: MoneyJSON; collected: MoneyJSON; outstanding: MoneyJSON;
-  reconciliation: { grossMinusReductions: MoneyJSON; netExpected: MoneyJSON; gap: MoneyJSON; reconciled: boolean; tolerance: string };
+  reconciliation: { grossMinusReductions: MoneyJSON; netExpected: MoneyJSON; gap: MoneyJSON; reconciled: boolean; tolerance: string; otherReductions?: MoneyJSON };
 }
 interface DeciderRow { deciderId: string; traced: boolean; count: number; communes: string[]; totals: { currency: string; count: number; amount: MoneyJSON; byType: TypeAmount[] }[] }
 interface PotentialRow { vertical: string; commune: string; legalStatus: string; reason: string; ruleCode: string | null; units: number; surfaceM2: string | null; unitsWithSurface: number }
@@ -45,18 +45,10 @@ export interface ReductionReport {
 }
 export interface ReductionSignal { kind: 'DECIDEUR_CONCENTRE' | 'CUMUL_CONTRIBUABLE'; fingerprint: string; detail: string; context: Record<string, unknown> }
 interface Detection { raised: number; signals: ReductionSignal[]; params: AlertParams; automaticEffect: 'AUCUN' }
-interface ServerFilters { period?: string; commune?: string; entity?: string }
+interface ServerFilters { period?: string; commune?: string; entity?: string; type?: string; decideur?: string }
 
-/** Réductions d'un bloc, restreintes à un type si le filtre est posé (montants par devise). */
-function reductionsOf(blocks: { byType: TypeAmount[]; count: number; total: MoneyJSON }[], type: string): { count: number; amounts: MoneyJSON[] } {
-  if (!type) return { count: blocks.reduce((n, b) => n + b.count, 0), amounts: blocks.filter((b) => b.count).map((b) => b.total) };
-  const hits = blocks.flatMap((b) => b.byType.filter((t) => t.type === type));
-  return { count: hits.reduce((n, t) => n + t.count, 0), amounts: hits.map((t) => t.amount) };
-}
-
-function Filters({ value, onChange, type, onType, agent, onAgent, agents, lock }: {
-  value: ServerFilters; onChange: (f: ServerFilters) => void; type: string; onType: (t: string) => void; agent: string; onAgent: (a: string) => void; agents: string[]; lock?: Scope | null;
-}) {
+/** Filtres du rapport : tous appliqués par le serveur (totaux compris). */
+function Filters({ value, onChange, agents, lock }: { value: ServerFilters; onChange: (f: ServerFilters) => void; agents: string[]; lock?: Scope | null }) {
   const id = useId();
   const set = (k: keyof ServerFilters, v: string) => onChange({ ...value, [k]: v || undefined });
   const year = new Date().getUTCFullYear();
@@ -83,19 +75,19 @@ function Filters({ value, onChange, type, onType, agent, onAgent, agents, lock }
         </select>
       </label>
       <label className="pl-filter" htmlFor={`${id}-t`}><span>Type de réduction</span>
-        <select id={`${id}-t`} value={type} onChange={(e) => onType(e.target.value)}>
+        <select id={`${id}-t`} value={value.type ?? ''} onChange={(e) => set('type', e.target.value)}>
           <option value="">Tous</option>
           {Object.entries(REDUCTION_TYPE_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
         </select>
       </label>
       <label className="pl-filter" htmlFor={`${id}-a`}><span>Décideur</span>
-        <select id={`${id}-a`} value={agent} onChange={(e) => onAgent(e.target.value)}>
+        <select id={`${id}-a`} value={value.decideur ?? ''} onChange={(e) => set('decideur', e.target.value)}>
           <option value="">Tous</option>
-          {agents.map((a) => <option key={a} value={a}>{a === 'NON_TRACE' ? 'Non tracé' : a}</option>)}
+          {[...new Set([...(value.decideur ? [value.decideur] : []), ...agents])].map((a) => <option key={a} value={a}>{a === 'NON_TRACE' ? 'Non tracé' : a}</option>)}
         </select>
       </label>
-      {(value.period || value.commune || value.entity || type || agent) && (
-        <button type="button" className="btn btn-ghost btn-sm pl-reset" onClick={() => { onChange({}); onType(''); onAgent(''); }}><Icon name="x" size={16} /> Effacer</button>
+      {(value.period || value.commune || value.entity || value.type || value.decideur) && (
+        <button type="button" className="btn btn-ghost btn-sm pl-reset" onClick={() => onChange({})}><Icon name="x" size={16} /> Effacer</button>
       )}
     </form>
   );
@@ -121,8 +113,8 @@ export default function Reductions() {
   const roles = user?.roles ?? [];
   const canDetect = roles.some((r) => r === 'R22' || r === 'R24');
   const [filters, setFilters] = useState<ServerFilters>({});
-  const [type, setType] = useState('');
-  const [agent, setAgent] = useState('');
+  // Liste des décideurs connue sans filtre décideur (la réponse filtrée n'en contient qu'un).
+  const [agents, setAgents] = useState<string[]>([]);
   const q = useApi(() => api<ReductionReport>(`/v1/pilotage/reductions${qs({ ...filters })}`), [user?.id, JSON.stringify(filters)]);
   const [det, setDet] = useState<{ busy: boolean; result: Detection | null; err: string | null }>({ busy: false, result: null, err: null });
   async function detect() {
@@ -131,17 +123,17 @@ export default function Reductions() {
     catch (e) { const d = describeError(e); setDet({ busy: false, result: null, err: d.message + (d.code ? ` (${d.code})` : '') }); }
   }
   const d = q.data;
-  const deciders = (d?.byDecider ?? []).filter((r) => !agent || r.deciderId === agent)
-    .map((r) => ({ ...r, sel: reductionsOf(r.totals.map((t) => ({ byType: t.byType, count: t.count, total: t.amount })), type) }))
-    .filter((r) => r.sel.count > 0);
-  const communes = (d?.byCommune ?? []).map((c) => ({ ...c, sel: reductionsOf(c.totals.map((t) => t.reductions), type) })).filter((c) => !type || c.sel.count > 0);
-  const byType = (d?.totals ?? []).flatMap((t) => t.reductions.byType.map((x) => ({ ...x, currency: t.currency }))).filter((x) => !type || x.type === type);
+  useEffect(() => {
+    if (d && !filters.decideur) setAgents(d.byDecider.map((r) => r.deciderId));
+  }, [d, filters.decideur]);
+  const byType = (d?.totals ?? []).flatMap((t) => t.reductions.byType.map((x) => ({ ...x, currency: t.currency })));
+  const filtered = !!(filters.type || filters.decideur);
   return (
     <div className="page page-wide">
       <PageHead eyebrow="Pilotage · réductions de recettes" title="Réductions de recettes" lead="Toute réduction d’une obligation (exonération, remise, dégrèvement, correction, annulation, non-valeur) est tracée avec son décideur. Montants réels par devise ; les signaux de concentration sont proposés à l’examen humain, sans effet automatique.">
         {canDetect && <button type="button" className="btn btn-secondary" disabled={det.busy} onClick={() => void detect()}><Icon name="analysis" size={16} /> Lancer la détection</button>}
       </PageHead>
-      <Filters value={filters} onChange={setFilters} type={type} onType={setType} agent={agent} onAgent={setAgent} agents={(d?.byDecider ?? []).map((r) => r.deciderId)} lock={d?.scope ?? null} />
+      <Filters value={filters} onChange={setFilters} agents={agents} lock={d?.scope ?? null} />
       {det.err && <p className="notice notice-err" role="alert">{det.err}</p>}
       {det.result && (
         <Section title="Anomalies détectées" sub={`${det.result.signals.length} signal(aux) · ${det.result.raised} nouvelle(s) alerte(s) levée(s) · effet automatique : ${det.result.automaticEffect === 'AUCUN' ? 'aucun' : det.result.automaticEffect}`}>
@@ -152,14 +144,14 @@ export default function Reductions() {
         <div className="dash-grid">
           <div className="span-12">
             <ScopeLine scope={d.scope} generatedAt={d.generatedAt} />
-            <p className="small muted">{d.method} Formule : {d.formula}.{(type || agent) ? ' Les filtres « type » et « décideur » s’appliquent aux ventilations ci-dessous ; les totaux par devise restent ceux de la période.' : ''}</p>
+            <p className="small muted">{d.method} Formule : {d.formula}.{filtered ? ' Filtre type / décideur : chaînes portant au moins une réduction retenue ; leurs autres réductions n’entrent que dans le rapprochement.' : ''}</p>
           </div>
           <Section title="Totaux par devise" sub={d.reconciled ? 'Rapprochement brut − réductions = net vérifié' : 'Écart de rapprochement à examiner'}>
             {d.totals.length === 0 ? <EmptyState title="Aucune obligation liquidée sur la période" icon="chart" /> : (
               <DataTable caption="Totaux par devise" rows={d.totals} rowKey={(t) => t.currency} columns={[
                 { key: 'c', label: 'Devise', primary: true, render: (t) => <strong>{t.currency}</strong> },
                 { key: 'g', label: 'Brut liquidé', num: true, render: (t) => f.money(t.grossAssessed) },
-                { key: 'r', label: 'Réductions', num: true, render: (t) => <>{f.money(t.reductions.total)} <span className="small muted">({t.reductions.count})</span></> },
+                { key: 'r', label: 'Réductions', num: true, render: (t) => <>{f.money(t.reductions.total)} <span className="small muted">({t.reductions.count})</span>{t.reconciliation.otherReductions && <><br /><span className="small muted">autres réductions : {f.money(t.reconciliation.otherReductions)}</span></>}</> },
                 { key: 'n', label: 'Net attendu', num: true, render: (t) => f.money(t.netExpected) },
                 { key: 'e', label: 'Encaissé', num: true, render: (t) => f.money(t.collected) },
                 { key: 'o', label: 'Reste à recouvrer', num: true, render: (t) => f.money(t.outstanding) },
@@ -174,19 +166,19 @@ export default function Reductions() {
               { key: 'm', label: 'Montant', num: true, render: (x) => f.money(x.amount) },
             ]} />
           </Section>
-          <Section title="Par commune" sub={type ? `Réductions de type « ${REDUCTION_TYPE_LABELS[type] ?? type} »` : undefined}>
-            <DataTable caption="Réductions par commune" rows={communes} rowKey={(c) => c.commune} empty={<EmptyState title="Aucune commune" icon="pin" />} columns={[
+          <Section title="Par commune" sub={filters.type ? `Réductions de type « ${REDUCTION_TYPE_LABELS[filters.type] ?? filters.type} »` : undefined}>
+            <DataTable caption="Réductions par commune" rows={d.byCommune} rowKey={(c) => c.commune} empty={<EmptyState title="Aucune commune" icon="pin" />} columns={[
               { key: 'c', label: 'Commune', primary: true, render: (c) => c.commune === 'NON_ATTRIBUE' ? 'Lieu non établi' : c.commune },
               { key: 'g', label: 'Brut liquidé', num: true, render: (c) => f.amounts(c.totals.map((t) => t.grossAssessed)) },
-              { key: 'r', label: 'Réductions', num: true, render: (c) => <>{f.amounts(c.sel.amounts)} <span className="small muted">({c.sel.count})</span></> },
+              { key: 'r', label: 'Réductions', num: true, render: (c) => <>{f.amounts(c.totals.filter((t) => t.reductions.count).map((t) => t.reductions.total))} <span className="small muted">({c.totals.reduce((n, t) => n + t.reductions.count, 0)})</span></> },
               { key: 'n', label: 'Net attendu', num: true, render: (c) => f.amounts(c.totals.map((t) => t.netExpected)) },
             ]} />
           </Section>
           <Section title="Par décideur" sub={d.untracedDeciders ? `${d.untracedDeciders} réduction(s) sans décideur tracé — signalées, jamais attribuées par défaut` : 'Décideur tracé pour chaque réduction'}>
-            <DataTable caption="Réductions par décideur" rows={deciders} rowKey={(r) => r.deciderId} empty={<EmptyState title="Aucun décideur" icon="users" />} columns={[
+            <DataTable caption="Réductions par décideur" rows={d.byDecider} rowKey={(r) => r.deciderId} empty={<EmptyState title="Aucun décideur" icon="users" />} columns={[
               { key: 'a', label: 'Décideur', primary: true, render: (r) => r.traced ? <span className="mono">{r.deciderId}</span> : <StatusBadge tone="serious" label="Non tracé" /> },
-              { key: 'n', label: 'Nombre', num: true, render: (r) => r.sel.count },
-              { key: 'm', label: 'Montant', num: true, render: (r) => f.amounts(r.sel.amounts) },
+              { key: 'n', label: 'Nombre', num: true, render: (r) => r.count },
+              { key: 'm', label: 'Montant', num: true, render: (r) => f.amounts(r.totals.map((t) => t.amount)) },
               { key: 'c', label: 'Communes', render: (r) => <span className="small">{r.communes.join(', ')}</span> },
             ]} />
           </Section>

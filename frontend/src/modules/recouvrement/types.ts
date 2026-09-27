@@ -23,6 +23,16 @@ export interface Arrear {
   nextStep?: NextStep | null;
   steps?: { kind: string; label: string; doneOn: string; noticeId: string | null }[];
   pendingMeasure?: { id: string; measureType?: string; proposedAt: string }[];
+  /** Espace contribuable : base de remise déclarée par la règle ACTIVE (taux, plafond, plancher), ou motif d'indisponibilité. */
+  remissionBasis?: RemissionBasis;
+}
+
+export interface RemissionBasis { available: boolean; detail: string; ruleId?: string; ruleCode?: string; ruleVersion?: number; rate?: string; cap?: MoneyJSON; floor?: MoneyJSON; pendingId?: string }
+/** Demande de remise vue par le contribuable (sans identité des agents). */
+export interface MyRemission {
+  id: string; obligationId: string; status: 'DEMANDEE' | 'INSTRUITE' | 'ACCORDEE' | 'REFUSEE'; requestedAmount: MoneyJSON; requestedAt: string; motivation: string;
+  computedAmount?: MoneyJSON; rate?: string; instruction?: { at: string; favorable: boolean };
+  decision?: { at: string; motivation: string; grantedAmount?: MoneyJSON }; rectifyingObligationId?: string;
 }
 
 export type MoneyByCurrency = Record<string, string>;

@@ -540,6 +540,33 @@ describe('Pénalités et remises : règle ACTIVE et décision humaine uniquement
     expect(env.app.ctx.assessment.get(rect).supersededBy).toBeUndefined();
     expect(env.app.ctx.assessment.get(rect).supersededBy).toBeUndefined();
   });
+
+  it('espace contribuable : base de remise déclarée par la règle, demande suivie sans identité des agents', async () => {
+    const env = await setupRecovery();
+    const obl = tenantArrear(env);
+    const demoRule = env.app.ctx.rules.rules.find((r) => r.code === DEMO.demoRuleCode)[0]!;
+    const mine = async () => (await env.req('GET', '/v1/recouvrement/mes-arrieres', 'u-locataire')).json();
+    // Sans règle ACTIVE déclarant un taux : indisponible, aucun taux inventé.
+    const before = (await mine()).arrears.find((a: { obligationId: string }) => a.obligationId === obl);
+    expect(before.remissionBasis).toMatchObject({ available: false });
+    expect(before.remissionBasis.rate).toBeUndefined();
+    const today = env.clock.now().toISOString().slice(0, 10);
+    const exemptions = [{ basis: 'Art. 3 (fictif) — remise gracieuse', proof: 'Attestation sociale' }];
+    const basis = await publishCertifiedRule(env, { code: demoRule.code, exemptions, effectiveFrom: today, rateTable: { 'tarif_m2:1': '3.5', 'tarif_m2:2': '2.5', 'tarif_m2:3': '2', 'tarif_m2:4': '1.5', taux_remise_max: '40' } });
+    const open = (await mine()).arrears.find((a: { obligationId: string }) => a.obligationId === obl);
+    expect(open.remissionBasis).toMatchObject({ available: true, ruleId: basis.id, rate: '40', floor: { amount: '30.00', currency: 'USD' } });
+    const r = await env.req('POST', '/v1/recouvrement/remises', 'u-locataire', { obligationId: obl, basisRuleId: open.remissionBasis.ruleId, requestedAmount: { amount: '35.00', currency: 'USD' }, motivation: 'Perte d’emploi documentée par attestation' });
+    expect(r.statusCode).toBe(201);
+    const after = await mine();
+    expect(after.arrears.find((a: { obligationId: string }) => a.obligationId === obl).remissionBasis).toMatchObject({ available: false, pendingId: r.json().id });
+    expect(after.remissions).toEqual([expect.objectContaining({ id: r.json().id, status: 'DEMANDEE', computedAmount: { amount: '35.00', currency: 'USD' }, rate: '40' })]);
+    await env.req('POST', `/v1/recouvrement/remises/${r.json().id}/instruction`, 'u-contentieux', { favorable: true, analysis: 'Situation sociale vérifiée sur pièces.' });
+    const view = (await mine()).remissions[0];
+    expect(view).toMatchObject({ status: 'INSTRUITE', instruction: { favorable: true } });
+    expect(JSON.stringify(view)).not.toContain('u-contentieux');
+    // La liste complète des remises reste réservée aux agents.
+    expect((await env.req('GET', '/v1/recouvrement/remises', 'u-locataire')).statusCode).toBe(403);
+  });
 });
 
 describe('Indicateurs agrégés', () => {

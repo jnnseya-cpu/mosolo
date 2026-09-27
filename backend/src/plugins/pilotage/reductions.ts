@@ -84,6 +84,9 @@ export interface ReductionFilters {
   entity?: string;
   from?: string;
   to?: string;
+  /** Type de réduction et décideur : filtrent les réductions ET les chaînes (celles qui portent au moins une réduction retenue). */
+  type?: ReductionType;
+  decider?: string;
 }
 
 interface GrantedEvent {
@@ -164,6 +167,8 @@ function grantedEvents(audit: AuditRecord[], byId: Map<string, Obligation>): Gra
 export interface ReductionData {
   chains: ChainSummary[];
   lines: ReductionLine[];
+  /** Filtre type / décideur posé : toutes les réductions des chaînes retenues (rapprochement). */
+  reconcileLines?: ReductionLine[];
   /** Réductions déclarées (`reduction.granted`) qu'aucune trace d'obligation ne confirme : à examiner, hors totaux. */
   unmatched: { auditId: string; at: string; path: string; obligationId: string; deciderId: string | null; reason: string }[];
   /** Chaînes dont une rectification change de devise : exclues des totaux (jamais de conversion implicite). */
@@ -313,6 +318,14 @@ export function collectReductions(ctx: AppContext, f: ReductionFilters = {}): Re
     auditId: e.auditId, at: e.at, path: e.path, obligationId: e.obligationId, deciderId: e.deciderId ?? null,
     reason: byId.has(e.obligationId) ? 'Aucune variation de montant correspondante dans la chaîne d’obligations.' : 'Obligation inconnue.',
   }));
+  // Filtre type / décideur : chaînes portant au moins une réduction retenue ; leurs autres réductions restent
+  // comptées pour le rapprochement (brut − toutes réductions = net), jamais dans le total des réductions affiché.
+  if (f.type || f.decider) {
+    const keep = (l: ReductionLine) => (!f.type || l.type === f.type) && (!f.decider || l.deciderId === f.decider);
+    const roots = new Set(lines.filter(keep).map((l) => l.rootId));
+    const kept = chains.filter((c) => roots.has(c.rootId));
+    return { chains: kept, lines: lines.filter(keep), reconcileLines: lines.filter((l) => roots.has(l.rootId)), unmatched, currencyAnomalies };
+  }
   return { chains, lines, unmatched, currencyAnomalies };
 }
 
@@ -329,12 +342,12 @@ export interface CurrencyBlock {
   collected: MoneyJSON;
   /** Reste à recouvrer = net attendu − encaissé. */
   outstanding: MoneyJSON;
-  reconciliation: { grossMinusReductions: MoneyJSON; netExpected: MoneyJSON; gap: MoneyJSON; reconciled: boolean; tolerance: string };
+  reconciliation: { grossMinusReductions: MoneyJSON; netExpected: MoneyJSON; gap: MoneyJSON; reconciled: boolean; tolerance: string; otherReductions?: MoneyJSON };
 }
 
 const TOLERANCE = '0.01';
 
-function blocks(chains: ChainSummary[], lines: ReductionLine[]): CurrencyBlock[] {
+function blocks(chains: ChainSummary[], lines: ReductionLine[], reconcileLines?: ReductionLine[]): CurrencyBlock[] {
   const m = new Map<CurrencyCode, Bucket>();
   const bucket = (c: CurrencyCode) => {
     let b = m.get(c);
@@ -355,8 +368,20 @@ function blocks(chains: ChainSummary[], lines: ReductionLine[]): CurrencyBlock[]
     const t = b.byType.get(l.type) ?? { count: 0, amount: Money.zero(a.currency) };
     b.byType.set(l.type, { count: t.count + 1, amount: t.amount.add(a) });
   }
+  // Réductions des chaînes retenues écartées par le filtre type / décideur : rapprochement seulement.
+  const other = new Map<CurrencyCode, Money>();
+  if (reconcileLines) {
+    const shown = new Set(lines);
+    for (const l of reconcileLines) {
+      if (shown.has(l)) continue;
+      const a = Money.fromJSON(l.amount);
+      bucket(a.currency);
+      other.set(a.currency, (other.get(a.currency) ?? Money.zero(a.currency)).add(a));
+    }
+  }
   return [...m.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([currency, b]) => {
-    const expected = b.gross.subtract(b.reductions);
+    const others = reconcileLines ? other.get(currency) ?? Money.zero(currency) : undefined;
+    const expected = b.gross.subtract(b.reductions).subtract(others ?? Money.zero(currency));
     const gap = expected.subtract(b.net);
     const abs = gap.isNegative() ? gap.negate() : gap;
     return {
@@ -373,7 +398,7 @@ function blocks(chains: ChainSummary[], lines: ReductionLine[]): CurrencyBlock[]
       outstanding: b.net.subtract(b.collected).toJSON(),
       reconciliation: {
         grossMinusReductions: expected.toJSON(), netExpected: b.net.toJSON(), gap: gap.toJSON(),
-        reconciled: abs.compare(Money.of(TOLERANCE, currency)) <= 0, tolerance: TOLERANCE,
+        reconciled: abs.compare(Money.of(TOLERANCE, currency)) <= 0, tolerance: TOLERANCE, ...(others ? { otherReductions: others.toJSON() } : {}),
       },
     };
   });
@@ -399,11 +424,11 @@ function reductionTotals(lines: ReductionLine[]) {
 }
 
 export function buildReductionReport(data: ReductionData) {
-  const { chains, lines } = data;
-  const totals = blocks(chains, lines);
+  const { chains, lines, reconcileLines: rl } = data;
+  const totals = blocks(chains, lines, rl);
   const dims = (keyChain: (c: ChainSummary) => string, keyLine: (l: ReductionLine) => string) => {
     const keys = new Set([...chains.map(keyChain), ...lines.map(keyLine)]);
-    return [...keys].sort().map((k) => ({ key: k, totals: blocks(chains.filter((c) => keyChain(c) === k), lines.filter((l) => keyLine(l) === k)) }));
+    return [...keys].sort().map((k) => ({ key: k, totals: blocks(chains.filter((c) => keyChain(c) === k), lines.filter((l) => keyLine(l) === k), rl?.filter((l) => keyLine(l) === k)) }));
   };
   const byDecider = [...groupBy(lines, (l) => l.deciderId).entries()]
     .map(([deciderId, ls]) => ({ deciderId, traced: deciderId !== UNTRACED_DECIDER, count: ls.length, communes: [...new Set(ls.map((l) => l.commune))].sort(), totals: reductionTotals(ls) }))

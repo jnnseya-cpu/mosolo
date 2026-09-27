@@ -291,6 +291,28 @@ describe('Rang de localité : provisoire à la déclaration, confirmé par une p
     const c3 = (await env.req('POST', `/v1/fiscal/objects/${obj.id}/corrections`, 'chef-proposant', { localityRank: 2, reason: 'Retour au rang initial demandé' })).json();
     expect((await env.req('POST', `/v1/fiscal/object-corrections/${c3.id}/decision`, 'chef-proposant', { approve: true, reason: 'Auto-approbation interdite' })).json().code).toBe('SEPARATION_OF_DUTIES');
   });
+
+  it('file des corrections en attente (tous objets) et pièces justificatives conservées et visibles de l’approbateur', async () => {
+    const env = await setupAll();
+    const obj = (await declare(env, 2)).json();
+    await env.req('POST', `/v1/fiscal/objects/${obj.id}/validate`, 'u-controleur');
+    const sha = 'a'.repeat(64);
+    const bad = await env.req('POST', `/v1/fiscal/objects/${obj.id}/corrections`, 'u-controleur', { localityRank: 3, reason: 'Reclassement du quartier constaté', evidence: [{ label: 'PV', sha256: 'xyz' }] });
+    expect(bad.statusCode).toBe(400);
+    const c = (await env.req('POST', `/v1/fiscal/objects/${obj.id}/corrections`, 'u-controleur', {
+      localityRank: 3, reason: 'Reclassement du quartier constaté', evidence: [{ label: 'PV de constat n° 42', sha256: sha }, { label: 'Plan cadastral (référence)' }],
+    })).json();
+    expect(c.evidence).toEqual([{ label: 'PV de constat n° 42', sha256: sha }, { label: 'Plan cadastral (référence)' }]);
+    const q = await env.req('GET', '/v1/fiscal/object-corrections?status=EN_ATTENTE', 'u-fiscal-chef-service');
+    expect(q.statusCode).toBe(200);
+    const mine = q.json().find((x: { id: string }) => x.id === c.id);
+    expect(mine).toMatchObject({ status: 'PROPOSEE', evidence: [{ sha256: sha }, { label: 'Plan cadastral (référence)' }], object: { id: obj.id, commune: obj.commune } });
+    expect((await env.req('GET', '/v1/fiscal/object-corrections?status=EN_ATTENTE', 'u-contribuable')).statusCode).toBe(403);
+    expect((await env.req('GET', '/v1/fiscal/object-corrections?status=INCONNU', 'u-fiscal-chef-service')).statusCode).toBe(400);
+    await env.req('POST', `/v1/fiscal/object-corrections/${c.id}/decision`, 'u-fiscal-chef-service', { approve: false, reason: 'Pièces insuffisantes pour reclasser' });
+    expect((await env.req('GET', '/v1/fiscal/object-corrections?status=EN_ATTENTE', 'u-fiscal-chef-service')).json().some((x: { id: string }) => x.id === c.id)).toBe(false);
+    expect((await env.req('GET', '/v1/fiscal/object-corrections?status=REJETEE', 'u-fiscal-chef-service')).json().some((x: { id: string }) => x.id === c.id)).toBe(true);
+  });
 });
 
 // ───────────────────────── 6. Base de liquidation ─────────────────────────

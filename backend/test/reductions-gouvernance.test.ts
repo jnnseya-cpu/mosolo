@@ -224,6 +224,22 @@ describe('Pilotage — rapport des réductions de recettes', () => {
     const g = (await env.req('GET', '/v1/pilotage/reductions?commune=Gombe', 'u-auditeur')).json();
     expect(g.reconciled).toBe(true);
     expect(g.byCommune.map((x: { commune: string }) => x.commune)).toEqual(['Gombe']);
+
+    // Filtres type et décideur côté serveur : totaux filtrés eux aussi, rapprochement tenu sur les chaînes retenues.
+    const t = (await env.req('GET', '/v1/pilotage/reductions?type=REMISE', 'u-auditeur')).json();
+    const tu = t.totals.find((x: { currency: string }) => x.currency === 'USD');
+    expect(tu.reductions.byType.map((x: { type: string }) => x.type)).toEqual(['REMISE']);
+    expect(tu.reductions.total.amount).toBe(m(b.amount).subtract(half).toDecimalString());
+    expect(t.reconciled).toBe(true);
+    expect(t.filters).toMatchObject({ type: 'REMISE' });
+    const dd = (await env.req('GET', '/v1/pilotage/reductions?decideur=u-decideur', 'u-auditeur')).json();
+    expect(dd.byDecider.map((x: { deciderId: string }) => x.deciderId)).toEqual(['u-decideur']);
+    const du = dd.totals.find((x: { currency: string }) => x.currency === 'USD');
+    expect(du.reductions.count).toBe(2);
+    expect(dd.reconciled).toBe(true);
+    // Filtre combiné sans correspondance : aucun total ; valeur inconnue refusée.
+    expect((await env.req('GET', '/v1/pilotage/reductions?type=EXONERATION&decideur=u-decideur', 'u-auditeur')).json().totals).toEqual([]);
+    expect((await env.req('GET', '/v1/pilotage/reductions?type=INCONNU', 'u-auditeur')).statusCode).toBe(400);
   });
 
   it('concentration : un décideur > 50 % des réductions d’une commune sur un mois lève une alerte (une seule fois)', async () => {
