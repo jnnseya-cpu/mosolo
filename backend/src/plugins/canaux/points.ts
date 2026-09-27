@@ -9,7 +9,6 @@
  * - clôture de caisse journalière et versement bancaire au compte public du coffre, rapprochés : tout écart ou
  *   retard ouvre une exception et une PROPOSITION de suspension ; seul le Trésor (R17) décide, avec motif (ARB-12).
  */
-import { randomUUID } from 'node:crypto';
 import { Money, type CurrencyCode, type MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { AuditActor } from '../../core/audit.js';

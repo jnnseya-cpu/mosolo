@@ -4,7 +4,7 @@
  */
 import { Money, ROLES, type CurrencyCode, type RoleCode } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
-import type { Principal, User } from '../../core/auth.js';
+import type { Principal } from '../../core/auth.js';
 import { sha256Hex } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { authorize, assertDistinctPerson, evaluate } from '../../core/policy.js';
@@ -14,7 +14,7 @@ import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipie
 import { assertNotImplicated, DAY, DELAYS, haversineKm, HOUR, hoursBetween, Kit, normalizeCode } from './common.js';
 import {
   REPORT_CATEGORY_LABELS,
-  type AccessReviewCampaign, type AlertVariable, type CaseDecision, type CaseEvent, type CaseFinding, type EvidenceRef, type FraudAlert,
+  type AccessReviewCampaign, type CaseDecision, type CaseEvent, type CaseFinding, type EvidenceRef, type FraudAlert,
   type FraudCase, type Incident, type IncidentCategory, type IncidentStatus, type MysteryCheck, type MysteryFollowUp, type MysteryResult,
   type MysteryTarget, type NotificationTarget, type Observation, type PrivacyRequest, type PrivacyRequestType, type ProcessingRecord,
   type RectifiableField, type Report, type ReportCategory, type ReportChannel, type ReportOutcome, type Severity, type TargetKind,

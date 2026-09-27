@@ -183,7 +183,8 @@ export class CardRegistry {
     const card = this.byNumber(m[1]!);
     if (!card || String(card.version) !== m[2]) return invalid;
     const payload = canonicalJson({ n: card.number, v: card.version, c: card.commune, i: card.issuedAt });
-    let ok = false;
+    // Signature illisible ou mal formée : l'exception vaut refus (QR non authentique).
+    let ok: boolean;
     try {
       ok = verify(null, Buffer.from(payload), this.publicKey, Buffer.from(m[3]!, 'base64url'));
     } catch {
