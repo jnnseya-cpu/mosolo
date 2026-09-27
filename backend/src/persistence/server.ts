@@ -1,8 +1,10 @@
 /**
  * Point d'entrée avec persistance : `npm run start:persistent -w backend` (DATABASE_URL obligatoire pour persister ;
- * sans elle, comportement identique à src/server.ts, plus le module « socle »).
+ * sans elle, comportement identique à src/server.ts, plus le module « socle »). `--demo` : mode démonstration explicite.
  */
-import { buildApp } from '../app.js';
+import { enableDemoFromArgv } from '../core/demo-flag.js';
+enableDemoFromArgv();
+const { buildApp } = await import('../app.js');
 import { DEFAULT_PLUGINS } from '../plugins/index.js';
 import { soclePlugin } from '../plugins/socle/plugin.js';
 import { preparePersistence } from './boot.js';

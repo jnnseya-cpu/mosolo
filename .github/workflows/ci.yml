@@ -79,6 +79,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      # Données et identifiants de démonstration (le serveur semé) : mode démonstration explicite, jamais implicite.
+      MOSOLO_DEMO_MODE: 'true'
       DATABASE_URL: postgres://mosolo:mosolo-ci@localhost:5432/mosolo
       MOSOLO_AUDIT_HMAC_KEY: cle-audit-ci-non-secrete-0123456789
       MOSOLO_BACKUP_KEY: cle-sauvegarde-ci-non-secrete-0123456789

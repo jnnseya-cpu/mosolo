@@ -1,4 +1,5 @@
 import { isDemoMode } from '../../core/auth.js';
+import { notFound } from '../../core/errors.js';
 import { getActivePersistence } from '../../persistence/runtime.js';
 import { CURRENCIES, CURRENCY_CODES, EVENT_CATEGORIES, EVENTS, LANGUAGES, PRIMARY_CURRENCY, REFERENCE_LANGUAGE, completeness, LANGUAGE_CODES, ROLES } from '@mosolo/shared';
 import type { FastifyInstance } from 'fastify';
@@ -27,10 +28,12 @@ export function registerSystemRoutes(app: FastifyInstance, ctx: AppContext): voi
     receiptVerificationKey: { algorithm: 'Ed25519', publicKeyPem: ctx.receipts.publicKeyPem() },
   }));
 
-  app.get('/v1/demo/users', async () =>
-    ctx.users.all().map((u) => ({
+  // Annuaire de démonstration (sélecteur x-demo-user) : démonstration UNIQUEMENT — hors démonstration, 404.
+  app.get('/v1/demo/users', async (req) => {
+    if (!isDemoMode()) throw notFound('ROUTE_NOT_FOUND', `Route inconnue : GET ${req.url}`);
+    return ctx.users.all().map((u) => ({
       id: u.id, name: u.name, roles: u.roles, roleLabels: u.roles.map((r) => ROLES[r]), entity: u.entity,
       ...(u.taxpayerId ? { taxpayerId: u.taxpayerId } : {}), ...(u.territory ? { territory: u.territory } : {}),
-    })),
-  );
+    }));
+  });
 }

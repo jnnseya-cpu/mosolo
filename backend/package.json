@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch src/server.ts --demo",
     "start": "tsx src/persistence/server.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p .",
     "start:persistent": "tsx src/persistence/server.ts",
+    "start:demo": "tsx src/persistence/server.ts --demo",
     "db:backup": "tsx src/persistence/backup-cli.ts backup",
     "db:restore": "tsx src/persistence/backup-cli.ts restore",
     "db:verify": "tsx src/persistence/backup-cli.ts verify"

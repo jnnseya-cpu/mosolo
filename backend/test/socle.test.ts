@@ -279,7 +279,7 @@ describe('Persistance — sérialiseur, dépôts observables, magasins', () => {
 // =================================================================================================================
 describe('Authentification — fournisseur local compatible OIDC', () => {
   afterEach(() => {
-    delete process.env.MOSOLO_DEMO_MODE;
+    process.env.MOSOLO_DEMO_MODE = 'true';
   });
 
   it('primitives : Base32, HOTP (vecteurs RFC 4226), JWT EdDSA', () => {

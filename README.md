@@ -32,7 +32,7 @@ Le `frontend` ne dépend du `backend` que par l'API ; la logique commune vit dan
 ```bash
 npm install
 npm test                 # tests des trois paquets
-npm run dev:backend      # API sur http://localhost:8080
+npm run dev:backend      # API sur http://localhost:8080 (mode démonstration explicite : --demo)
 npm run dev:frontend     # PWA sur http://localhost:5173
 ```
 

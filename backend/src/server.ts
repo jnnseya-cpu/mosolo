@@ -1,5 +1,11 @@
-/** Point d'entrée : `npm run dev -w backend` (port PORT ou 8080, CORS actif). */
-import { buildApp } from './app.js';
+/**
+ * Point d'entrée : `npm run dev -w backend` (port PORT ou 8080). Le script de développement passe `--demo`, qui active
+ * explicitement le mode démonstration (x-demo-user, CORS ouvert, secrets publics) ; sans lui, le serveur démarre en
+ * mode sûr et exige les secrets réels (voir README).
+ */
+import { enableDemoFromArgv } from './core/demo-flag.js';
+enableDemoFromArgv();
+const { buildApp } = await import('./app.js');
 
 const port = Number.parseInt(process.env.PORT ?? '8080', 10);
 const host = process.env.HOST ?? '0.0.0.0';

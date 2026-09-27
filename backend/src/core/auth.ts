@@ -2,7 +2,8 @@
  * Authentification (ch. 31) :
  *  - jeton de session signé `Authorization: Bearer <jwt>` émis par le fournisseur d'identité local compatible OIDC
  *    (plugin « socle », backend/src/plugins/socle) ; vérifié par le vérificateur enregistré pour l'annuaire ;
- *  - en-tête de DÉMONSTRATION `x-demo-user`, accepté UNIQUEMENT si MOSOLO_DEMO_MODE ≠ « false » (défaut : démo active).
+ *  - en-tête de DÉMONSTRATION `x-demo-user`, accepté UNIQUEMENT si MOSOLO_DEMO_MODE vaut explicitement « true »
+ *    (défaut : démo DÉSACTIVÉE) et jamais lorsque NODE_ENV=production (démarrage refusé, voir `assertSafeDeployment`).
  * Cible de production : IdP OIDC souverain (Keycloak) + clés d'accès (passkeys) pour les rôles sensibles.
  */
 import { hasIncompatibility, ROLES, type LanguageCode, type RoleCode } from '@mosolo/shared';
@@ -126,9 +127,44 @@ export function registerBearerVerifier(directory: UserDirectory, verifier: Beare
   bearerVerifiers.set(directory, verifier);
 }
 
-/** Mode démonstration : actif sauf si MOSOLO_DEMO_MODE vaut explicitement « false ». */
+const TRUTHY = ['1', 'true', 'oui', 'yes'];
+const truthy = (v: string | undefined): boolean => TRUTHY.includes((v ?? '').trim().toLowerCase());
+const isProduction = (env: NodeJS.ProcessEnv): boolean => (env.NODE_ENV ?? '').trim().toLowerCase() === 'production';
+
+/**
+ * Mode démonstration : actif UNIQUEMENT si MOSOLO_DEMO_MODE vaut explicitement « true » (sûr par défaut), et jamais
+ * lorsque NODE_ENV=production. Les scripts locaux (`npm run dev`), les tests (vitest.config.ts) et la CI l'activent
+ * explicitement.
+ */
 export function isDemoMode(env: NodeJS.ProcessEnv = process.env): boolean {
-  return (env.MOSOLO_DEMO_MODE ?? 'true').trim().toLowerCase() !== 'false';
+  return truthy(env.MOSOLO_DEMO_MODE) && !isProduction(env);
+}
+
+/** Erreur de configuration : le serveur refuse de démarrer plutôt que de fonctionner avec un réglage dangereux. */
+export class ConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConfigurationError';
+  }
+}
+
+/**
+ * Contrôle de démarrage : en production (NODE_ENV=production), le mode démonstration et les identifiants de
+ * démonstration (mot de passe connu, secrets TOTP dérivés de l'identifiant) sont refusés explicitement.
+ */
+export function assertSafeDeployment(env: NodeJS.ProcessEnv = process.env): void {
+  if (!isProduction(env)) return;
+  if (truthy(env.MOSOLO_DEMO_MODE)) {
+    throw new ConfigurationError('MOSOLO_DEMO_MODE=true est interdit lorsque NODE_ENV=production : l’en-tête x-demo-user permettrait d’usurper n’importe quel compte.');
+  }
+  if (truthy(env.MOSOLO_DEMO_CREDENTIALS)) {
+    throw new ConfigurationError('MOSOLO_DEMO_CREDENTIALS=true est interdit lorsque NODE_ENV=production : mot de passe et secrets TOTP de démonstration publics.');
+  }
+}
+
+/** Le contexte d'authentification atteint-il le niveau demandé ? (Faux sans jeton de session.) */
+export function hasAcr(user: User, minimum: AcrValue): boolean {
+  return !!user.auth && (ACR_RANK[user.auth.acr] ?? 0) >= (ACR_RANK[minimum] ?? 99);
 }
 
 /**

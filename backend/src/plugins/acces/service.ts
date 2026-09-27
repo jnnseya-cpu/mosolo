@@ -11,7 +11,7 @@ import { randomInt } from 'node:crypto';
 import { hasIncompatibility, ROLES, type RoleCode, type VerificationLevel } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { AuditActor } from '../../core/audit.js';
-import type { User } from '../../core/auth.js';
+import { ACR, hasAcr, isDemoMode, type User } from '../../core/auth.js';
 import { isoDate } from '../../core/clock.js';
 import { randomSecret, sha256Hex } from '../../core/crypto.js';
 import { ApiError, conflict, forbidden, notFound, unauthorized, unprocessable } from '../../core/errors.js';
@@ -75,12 +75,19 @@ export class AccesService {
   /** Correspondance règle → fait générateur (établie par les revendications et les fiches). */
   readonly ruleFacts = new Map<string, TaxableFact>();
   private readonly ids = new IdGenerator();
-  /** Bac à sable : aucun fournisseur SMS branché et hors production — les codes sont journalisés dans la boîte d'envoi. */
-  readonly sandbox: boolean;
+  private readonly smsWired: boolean;
 
   constructor(private readonly ctx: AppContext) {
-    const smsWired = ctx.comms.channelStatus().some((c) => c.channel === 'sms' && c.wired);
-    this.sandbox = !smsWired && process.env.NODE_ENV !== 'production';
+    this.smsWired = ctx.comms.channelStatus().some((c) => c.channel === 'sms' && c.wired);
+  }
+
+  /**
+   * Bac à sable : MODE DÉMONSTRATION EXPLICITE et aucun fournisseur SMS branché — les codes sont journalisés dans la
+   * boîte d'envoi. Hors démonstration, jamais : la boîte d'envoi exposerait codes à usage unique, codes MFA et jetons
+   * d'invitation.
+   */
+  get sandbox(): boolean {
+    return !this.smsWired && isDemoMode();
   }
 
   // ═════════════════════════════════ Outils communs ═════════════════════════════════
@@ -115,6 +122,7 @@ export class AccesService {
   }
 
   sandboxMessages(to: string): SandboxMessage[] {
+    if (!isDemoMode()) throw notFound('ROUTE_NOT_FOUND', 'Indisponible hors mode démonstration.');
     if (!this.sandbox) throw notFound('SANDBOX_DISABLED', 'Boîte d’envoi du bac à sable indisponible : un fournisseur de messages est branché.');
     const t = normalizePhone(to);
     return this.outbox.find((m) => m.to === t).reverse();
@@ -208,6 +216,8 @@ export class AccesService {
   /** Actions sensibles : second facteur récent exigé (toujours pour le bris de glace). */
   requireMfa(user: User, always = false): void {
     if (!always && !this.isSensitive(user)) return;
+    // Session ouverte par mot de passe + TOTP (fournisseur d'identité « socle ») : le second facteur est déjà prouvé.
+    if (hasAcr(user, ACR.MFA)) return;
     if (!this.mfaActiveUntil(user)) {
       throw unauthorized('MFA_REQUIRED', 'Second facteur requis pour cette action sensible : validez votre code d’authentification.');
     }

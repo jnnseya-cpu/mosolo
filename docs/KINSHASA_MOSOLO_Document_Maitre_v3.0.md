@@ -6890,7 +6890,7 @@ Ensemble : **555 routes** (catalogue : `specs/routes-api.md`), **70 écrans** en
 
 ## I.1 Socle technique : persistance, identité et sécurité
 
-Le module « socle » donne au monolithe modulaire les fonctions transverses qu'exige la mise en service : une persistance PostgreSQL, une authentification réelle, une limitation de débit et une chaîne d'intégration continue. Rien de cela ne change le fonctionnement par défaut. Sans `DATABASE_URL`, les données restent en mémoire. L'en-tête de démonstration `x-demo-user` reste accepté tant que `MOSOLO_DEMO_MODE` ne vaut pas `false`. Les tests existants et les écrans de démonstration continuent donc de fonctionner.
+Le module « socle » donne au monolithe modulaire les fonctions transverses qu'exige la mise en service : une persistance PostgreSQL, une authentification réelle, une limitation de débit et une chaîne d'intégration continue. Rien de cela ne change le fonctionnement par défaut. Sans `DATABASE_URL`, les données restent en mémoire. L'en-tête de démonstration `x-demo-user` n'est accepté que si `MOSOLO_DEMO_MODE` vaut explicitement `true`, et jamais lorsque `NODE_ENV=production` (démarrage refusé). Le développement local (`npm run dev`), les tests et l'intégration continue l'activent explicitement ; hors démonstration, le serveur exige les secrets réels des prestataires.
 
 **Persistance.** Le serveur découvre automatiquement tous les dépôts de l'application, ceux du socle comme ceux des modules d'extension, et les nomme par leur chemin (`payments.orders`, `ledger.entries`…). Chaque écriture est journalisée dans PostgreSQL. Les documents modifiables vont dans `repository_snapshot` (JSONB, mise à jour par UPSERT). Les journaux en ajout seul vont dans `append_only_journal` : audit chaîné, grand livre, délivrances, observations, alertes et preuves. Dans cette table, un déclencheur refuse toute modification ou suppression. Au redémarrage, l'instantané est rechargé et la chaîne d'audit est vérifiée. Les générateurs d'identifiants repartent au-delà des numéros déjà attribués. Les migrations sont versionnées et chaque sauvegarde est un export JSON complet signé (HMAC-SHA256) avec un manifeste SHA-256 par dépôt. Toute restauration est refusée si la signature, le manifeste ou la chaîne d'audit ne se vérifient pas. Cette étape reste transitoire : le schéma relationnel `backend/db/schema.sql` (PostgreSQL + PostGIS) demeure la cible.
 
@@ -6907,7 +6907,7 @@ Le module « socle » donne au monolithe modulaire les fonctions transverses qu'
 | Contribuable | Téléphone + OTP SMS (5 min, 5 essais, empreinte seule) | `POST /v1/auth/login`, `POST /v1/auth/otp` | Fournisseur SMS réel |
 | Agent | Mot de passe + TOTP (MFA pour tous), verrouillage temporaire | idem | Passkeys / FIDO2 pour rôles sensibles, IdP Keycloak |
 | Sessions | JWT EdDSA 15 min, JWKS, révocation, appareil partagé | `/v1/auth/me`, `/refresh`, `/logout`, `/sessions` | Jetons en cookie httpOnly (BFF) |
-| Démonstration | `x-demo-user`, codes affichés, comptes fictifs | `MOSOLO_DEMO_MODE` (défaut actif) | Désactivation en production |
+| Démonstration | `x-demo-user`, codes affichés, comptes fictifs | `MOSOLO_DEMO_MODE=true` (défaut désactivé ; refusé en production) | Désactivé par défaut |
 | Débit | Fenêtre glissante, 3 paliers, 429 RFC 9457 + audit | `MOSOLO_RATE_LIMIT*` | Passerelle API, détection d'abus |
 | CI | Types, tests, construction, PostgreSQL réel | `.github/workflows/ci.yml` | SAST/DAST, SBOM, portes de mise en production |
 

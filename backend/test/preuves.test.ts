@@ -19,7 +19,7 @@ async function full() {
 afterEach(() => {
   delete process.env.WHATSAPP_APP_SECRET;
   delete process.env.SMS_GATEWAY_SECRET;
-  delete process.env.MOSOLO_DEMO_MODE;
+  process.env.MOSOLO_DEMO_MODE = 'true';
 });
 
 describe('Preuves — résolveur universel (tout code, tout canal, heure serveur)', () => {

@@ -14,12 +14,12 @@ import { randomUUID } from 'node:crypto';
 import type { RoleCode } from '@mosolo/shared';
 import type { FastifyRequest } from 'fastify';
 import type { AppContext } from '../../context.js';
-import { ACR, isDemoMode, type AcrValue, type AuthContext, type User } from '../../core/auth.js';
+import { ACR, ConfigurationError, isDemoMode, type AcrValue, type AuthContext, type User } from '../../core/auth.js';
 import { ApiError, badRequest, forbidden, notFound, unauthorized } from '../../core/errors.js';
 import { InMemoryRepository } from '../../core/repository.js';
 import { userRecipient } from '../../modules/identity/recipients.js';
 import {
-  JwtSigner, base32Encode, hashPassword, otpauthUri, randomDigits, sha256b64u, totp, verifyPassword, verifyTotp,
+  JwtSigner, base32Encode, hashPassword, otpauthUri, randomDigits, safeEqualStr, sha256b64u, totp, verifyPassword, verifyTotp,
   type JwtClaims, type PasswordHash,
 } from './tokens.js';
 import { createHash } from 'node:crypto';
@@ -31,6 +31,9 @@ export const OTP_TTL_S = 5 * 60;
 export const MAX_CODE_ATTEMPTS = 5;
 export const MAX_PASSWORD_FAILURES = 5;
 export const LOCK_MS = 15 * 60_000;
+/** Codes SMS par numéro (connu ou non, anti-énumération) sur la fenêtre glissante : borne l'envoi et la devinette. */
+export const MAX_PHONE_CHALLENGES = 5;
+export const PHONE_CHALLENGE_WINDOW_MS = 15 * 60_000;
 const SESSION_TTL_MS = { agent: 8 * 3_600_000, sensitive: 4 * 3_600_000, taxpayer: 12 * 3_600_000, shared: 30 * 60_000 };
 
 /** Rôles sensibles (DM 28 § 31 : Trésor, coffre, juristes publicateurs, administrateurs, direction). */
@@ -64,8 +67,10 @@ export interface Challenge {
   createdAt: string;
   expiresAt: string;
   attempts: number;
-  status: 'EN_ATTENTE' | 'UTILISE' | 'EXPIRE' | 'EPUISE';
+  status: 'EN_ATTENTE' | 'UTILISE' | 'EXPIRE' | 'EPUISE' | 'REMPLACE';
   ip: string;
+  /** Empreinte du numéro (connexion par téléphone) : limite par numéro, jamais le numéro en clair. */
+  subject?: string;
 }
 
 export interface Session {
@@ -114,6 +119,8 @@ export interface IdpOptions {
 
 /** Empreinte du mot de passe de démonstration, calculée une fois par processus (scrypt est volontairement coûteux). */
 let demoHash: PasswordHash | undefined;
+/** Empreinte leurre : un identifiant inconnu coûte le même calcul scrypt qu'un identifiant connu (pas d'énumération par le temps). */
+let decoyHash: PasswordHash | undefined;
 
 const isInternal = (u: User) => u.roles.some((r) => r !== 'R30');
 const isSensitive = (u: User) => u.roles.some((r) => SENSITIVE_ROLES.includes(r));
@@ -143,6 +150,10 @@ export class IdentityProviderService {
     this.issuer = opts.issuer ?? ISSUER_DEFAULT;
     this.signer = new JwtSigner(opts.jwtPrivateKeyPem);
     this.demoCredentialsEnabled = opts.demoCredentials ?? (isDemoMode() || process.env.MOSOLO_DEMO_CREDENTIALS === 'true');
+    // Mot de passe connu et secrets TOTP dérivés de l'identifiant : jamais en production, quelle que soit l'origine du réglage.
+    if (this.demoCredentialsEnabled && (process.env.NODE_ENV ?? '').trim().toLowerCase() === 'production') {
+      throw new ConfigurationError('Identifiants de démonstration interdits lorsque NODE_ENV=production (MOSOLO_DEMO_CREDENTIALS).');
+    }
   }
 
   private now(): Date {
@@ -194,7 +205,9 @@ export class IdentityProviderService {
       this.auditAuth('auth.login.failed', cred.id, 'DENIED', req, { reason: 'LOCKED' });
       throw new ApiError(429, 'LOGIN_TEMPORARILY_LOCKED', `Trop d'échecs : connexion suspendue temporairement (${Math.ceil(retryAfter / 60)} min). Aucune autre conséquence sur le compte.`, { retryAfter });
     }
-    if (!cred || !user || !cred.passwordHash || !verifyPassword(password, cred.passwordHash)) {
+    // Toujours un calcul scrypt, même pour un identifiant inconnu : temps de réponse indépendant de l'existence du compte.
+    const passwordOk = verifyPassword(password, cred?.passwordHash ?? (decoyHash ??= hashPassword(randomUUID())));
+    if (!cred || !user || !cred.passwordHash || !passwordOk) {
       if (cred) this.recordFailure(cred, req);
       else this.auditAuth('auth.login.failed', `login:${sha256b64u(login).slice(0, 12)}`, 'FAILURE', req, { reason: 'UNKNOWN_OR_BAD_PASSWORD' });
       throw unauthorized('INVALID_CREDENTIALS', 'Identifiant ou mot de passe incorrect.');
@@ -211,8 +224,17 @@ export class IdentityProviderService {
     if (!/^\+?\d{9,15}$/.test(phone)) throw badRequest('INVALID_PHONE', 'Numéro de téléphone invalide (format international attendu, ex. +243…).');
     const tp = this.ctx.taxpayers.taxpayers.findOne((t) => t.phone === phone && t.status !== 'FUSIONNE');
     const user = tp ? this.taxpayerUser(tp.id) : undefined;
+    // Limite par numéro (connu ou non : réponse identique) ; un nouveau code remplace le précédent (un seul défi ouvert).
+    const subject = sha256b64u(`tel:${phone}`);
+    const since = new Date(this.now().getTime() - PHONE_CHALLENGE_WINDOW_MS).toISOString();
+    const recent = this.challenges.find((c) => c.subject === subject && c.createdAt >= since);
+    if (recent.length >= MAX_PHONE_CHALLENGES) {
+      this.auditAuth('auth.otp.rate_limited', `tel:${subject.slice(0, 12)}`, 'DENIED', req, { window: PHONE_CHALLENGE_WINDOW_MS / 60_000 });
+      throw new ApiError(429, 'OTP_RATE_LIMITED', 'Trop de codes demandés pour ce numéro : réessayez dans quelques minutes.', { retryAfter: Math.ceil(PHONE_CHALLENGE_WINDOW_MS / 1000) });
+    }
+    for (const c of recent) if (c.status === 'EN_ATTENTE') this.challenges.update({ ...c, status: 'REMPLACE' });
     const code = randomDigits(6);
-    const ch = this.newChallenge('sms-otp', user?.id, req, code);
+    const ch = this.newChallenge('sms-otp', user?.id, req, code, subject);
     if (tp && user) {
       this.ctx.comms.publish('auth.otp_code', [{ id: tp.id, kind: 'taxpayer', name: tp.fullName, lang: tp.language, prefs: {} }], { code }, { entity: 'PLATEFORME' });
       this.auditAuth('auth.otp.sent', user.id, 'SUCCESS', req, { challengeId: ch.id, channel: 'sms' });
@@ -239,7 +261,7 @@ export class IdentityProviderService {
     const user = ch.userId ? this.ctx.users.get(ch.userId) : undefined;
     let ok = false;
     let totpStepUsed: number | null = null;
-    if (user && ch.method === 'sms-otp') ok = ch.codeHash === sha256b64u(`${ch.salt}:${code}`);
+    if (user && ch.method === 'sms-otp') ok = !!ch.codeHash && safeEqualStr(ch.codeHash, sha256b64u(`${ch.salt}:${code}`));
     if (user && ch.method === 'totp') {
       const cred = this.credentials.get(user.id);
       totpStepUsed = cred?.totpSecret ? verifyTotp(cred.totpSecret, code, now) : null;
@@ -398,14 +420,14 @@ export class IdentityProviderService {
 
   // ------------------------------------------------------------------------------------------ Interne
 
-  private newChallenge(method: ChallengeMethod, userId: string | undefined, req: FastifyRequest, code?: string): Challenge {
+  private newChallenge(method: ChallengeMethod, userId: string | undefined, req: FastifyRequest, code?: string, subject?: string): Challenge {
     const now = this.now();
     const salt = randomUUID();
     const ch: Challenge = {
       id: `CHL-${randomUUID()}`, ...(userId ? { userId } : {}), method,
       ...(code ? { codeHash: sha256b64u(`${salt}:${code}`) } : {}), salt,
       createdAt: now.toISOString(), expiresAt: new Date(now.getTime() + OTP_TTL_S * 1000).toISOString(),
-      attempts: 0, status: 'EN_ATTENTE', ip: req.ip,
+      attempts: 0, status: 'EN_ATTENTE', ip: req.ip, ...(subject ? { subject } : {}),
     };
     this.challenges.insert(ch);
     return ch;

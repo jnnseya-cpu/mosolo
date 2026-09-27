@@ -33,6 +33,7 @@ if (cmd === 'backup') {
   for (const r of v.reasons) console.error(`  - ${r}`);
   if (!v.ok) process.exit(2);
   if (cmd === 'restore') {
+    if (!auditKey) fail('Restauration : MOSOLO_AUDIT_HMAC_KEY obligatoire (la chaîne d’audit doit être vérifiée avant toute restauration).');
     if (!flags.includes('--confirm')) fail('Restauration : ajoutez --confirm (opération destructive, serveur arrêté).');
     const store = await openPgStore(process.env.DATABASE_URL ?? fail('DATABASE_URL obligatoire.'));
     await restoreStore(store, doc, key, auditKey);

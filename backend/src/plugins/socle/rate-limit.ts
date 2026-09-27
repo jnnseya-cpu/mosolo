@@ -1,7 +1,8 @@
 /**
  * Limitation de débit (§ 25.1 « limites par canal et par acteur », § 30.1) — fenêtre glissante par compteurs pondérés :
  *   estimation = compteur de la fenêtre précédente × (1 − fraction écoulée) + compteur de la fenêtre courante.
- * Clé : utilisateur authentifié (`u:<id>`) sinon adresse IP (`ip:<adresse>`). Trois paliers : global, public, authentification.
+ * Clé : utilisateur authentifié (`u:<id>`) sinon adresse IP (`ip:<adresse>` = `req.ip`, jamais un en-tête du client ;
+ * derrière un mandataire inverse, déclarer celui-ci par MOSOLO_TRUST_PROXY). Trois paliers : global, public, authentification.
  * Dépassement : 429 au format RFC 9457 + en-têtes Retry-After / RateLimit-* ; premier refus d'une fenêtre journalisé dans l'audit.
  * Aucune sanction : la limitation est temporaire et automatique, elle ne bloque aucun compte.
  */
@@ -101,10 +102,11 @@ export class SlidingWindowLimiter {
   }
 }
 
-function tierOf(url: string): 'auth' | 'public' | 'global' {
+export function tierOf(url: string): 'auth' | 'public' | 'global' {
   const path = url.split('?')[0] ?? url;
   if (path === '/v1/auth/login' || path === '/v1/auth/otp') return 'auth';
-  if (path.startsWith('/v1/public/') || path.startsWith('/v1/verify') || path.startsWith('/.well-known/')) return 'public';
+  // Pages légères sans JavaScript (/l : vérification de preuves, signalement anonyme) : palier public elles aussi.
+  if (path.startsWith('/v1/public/') || path.startsWith('/v1/verify') || path.startsWith('/.well-known/') || path === '/l' || path.startsWith('/l/')) return 'public';
   return 'global';
 }
 
