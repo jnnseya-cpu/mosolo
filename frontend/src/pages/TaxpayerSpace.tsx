@@ -15,6 +15,7 @@ import { AutosaveBar } from '../components/VersionHistory';
 import { EmptyState, ErrorState, Loading } from '../components/States';
 import { Icon } from '../components/Icon';
 import { QrCode } from '../components/QrCode';
+import { ReceiptPdfButton } from '../components/ReceiptPdfButton';
 import { categoryLabel, levelLabel } from '../lib/labels';
 import { api, ApiError, describeError, newIdempotencyKey, safeGet, serverNow } from '../lib/api';
 import { OBLIGATION_TONE, PAYMENT_TONE, RECEIPT_TONE, obligationKey } from '../lib/status';
@@ -399,6 +400,7 @@ export default function TaxpayerSpace() {
                         {r.amount && <MoneyText money={r.amount} />}
                         <StatusBadge tone={st.tone} label={tr(st.key)} />
                         <Link className="btn btn-ghost btn-sm" to={`/verifier/${encodeURIComponent(r.code)}`}>{tr('verify.button')}</Link>
+                        {r.number && <ReceiptPdfButton receipt={r.number} />}
                       </div>
                     </li>
                   );

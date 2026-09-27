@@ -15,6 +15,9 @@ const statementSchema = z.object({
     paymentReference: z.string().min(1),
     /** Empreinte du donneur d'ordre (fournie par la banque ou le prestataire) : destination d'une éventuelle restitution. */
     counterparty: z.string().trim().min(8).max(128).optional(),
+    /** Crédit groupé : fichier de détail du prestataire (référence et montant par paiement) et son empreinte. */
+    details: z.array(z.object({ paymentReference: z.string().min(1).max(100), amount: moneySchema }).strict()).min(1).max(5000).optional(),
+    detailFileSha256: z.string().regex(/^[0-9a-f]{64}$/, 'empreinte SHA-256 hexadécimale attendue').optional(),
   }).strict()).min(1).max(5000),
 }).strict();
 

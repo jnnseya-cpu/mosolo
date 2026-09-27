@@ -20,6 +20,17 @@ export interface OutboundMessage {
   entity: string;
   lang: LanguageCode;
   mandatory: boolean;
+  /** Pièces jointes (courriel uniquement) : ex. quittance PDF signée (§ 18A.4). */
+  attachments?: MessageAttachment[];
+}
+
+export interface MessageAttachment {
+  name: string;
+  contentType: string;
+  sha256: string;
+  size: number;
+  /** Contenu transmis au connecteur sortant (jamais journalisé). */
+  content?: Buffer;
 }
 
 export interface SendResult {

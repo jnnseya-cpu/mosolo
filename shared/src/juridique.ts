@@ -22,11 +22,12 @@ export const TAXABLE_EVENT_LABELS: Record<TaxableEventKind, string> = {
 
 /**
  * Codes de règles ACTE_REQUIS dotées d'un circuit d'activation propre, adossé à un acte (référence + empreinte) et à une
- * décision à deux personnes : la clé de répartition du § 37A (circuit REPARTITION_ACTIVATION). Ce ne sont pas des
+ * décision à deux personnes : la clé de répartition du § 37A (circuit REPARTITION_ACTIVATION) et les clés de partage légal
+ * province/ETD/pouvoir central (§ 27.1, fiche certifiée à quatre visas). Ce ne sont pas des
  * recettes : elles ne produisent jamais d'obligation (la liquidation refuse toujours ACTE_REQUIS). Harmonisation
  * signalée au maître d'ouvrage : § 6.3 « non activable » vs § 37A « activation sur acte ».
  */
-export const ACTE_REQUIS_CIRCUIT_PROPRE: readonly string[] = ['CLE-REPARTITION-37A'];
+export const ACTE_REQUIS_CIRCUIT_PROPRE: readonly string[] = ['CLE-REPARTITION-37A', 'CLE-PARTAGE-INTERET-COMMUN', 'CLE-PARTAGE-RECETTES-PARTAGEES'];
 
 /** Vrai si la règle relève de la catégorie ACTE_REQUIS sans circuit propre : jamais publiable ni activable. */
 export function acteRequisBloque(rule: Pick<RuleSheet, 'revenueCategory' | 'code'>): boolean {

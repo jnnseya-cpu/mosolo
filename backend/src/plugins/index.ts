@@ -29,6 +29,7 @@ import { sanctionsPlugin } from './sanctions/plugin.js';
 import { soclePlugin } from './socle/plugin.js';
 import { chainePlugin } from './chaine/plugin.js';
 import { juridiquePlugin } from './juridique/plugin.js';
+import { integriteDetecteursPlugin } from './integrite/detecteurs/plugin.js';
 
 /**
  * Ordre : `acces` en tête (garde des revendications, mandats), puis `fiscal` (il branche les exonérations sur la liquidation), `titres` avant `rakapay`,
@@ -65,5 +66,6 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   sanctionsPlugin,
   chainePlugin,
   juridiquePlugin,
+  integriteDetecteursPlugin,
   soclePlugin,
 ];

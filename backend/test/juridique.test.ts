@@ -50,7 +50,7 @@ describe('Garde par catégorie (§ 6.3, § 6.11)', () => {
     ] } as RuleSheet;
     expect(isRuleExecutable(forged, new Date('2026-09-26'))).toMatchObject({ ok: false, reason: expect.stringMatching(/ACTE_REQUIS/) });
     expect(isRuleExecutable({ ...forged, revenueCategory: 'IMPOT_PROVINCIAL' }, new Date('2026-09-26')).ok).toBe(true);
-    expect(ACTE_REQUIS_CIRCUIT_PROPRE).toEqual(['CLE-REPARTITION-37A']);
+    expect(ACTE_REQUIS_CIRCUIT_PROPRE).toEqual(['CLE-REPARTITION-37A', 'CLE-PARTAGE-INTERET-COMMUN', 'CLE-PARTAGE-RECETTES-PARTAGEES']);
     // Liquidation refusée par catégorie (journalisée), simulation admise.
     env.app.ctx.rules.rules.update({ ...env.app.ctx.rules.get(id), status: 'ACTIVE' });
     const liq = await calc(env, id, false);

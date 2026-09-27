@@ -508,6 +508,26 @@ export class ReceiptService {
   }
 
   /** Clé publique COURANTE (nouvelles quittances). */
+  /**
+   * Cachet d'un document de la plateforme (quittance PDF, rapport PDF) avec la clé des quittances, en séparation de
+   * domaine (préfixe « MOSOLO-DOC-v1 » : une signature de document ne vaut jamais signature de quittance ni l'inverse).
+   */
+  signDocument(bytes: Uint8Array): { sha256: string; signature: string; keyId: string; algorithm: 'Ed25519' } {
+    const hash = sha256Hex(Buffer.from(bytes));
+    return { sha256: hash, signature: sign(null, Buffer.from(`MOSOLO-DOC-v1\n${hash}`), this.privateKey).toString('base64url'), keyId: this.keyId, algorithm: 'Ed25519' };
+  }
+
+  /** Vérification d'un cachet de document avec la clé désignée du trousseau (clé inconnue ⇒ invalide). */
+  verifyDocument(bytes: Uint8Array, signature: string, keyId: string): boolean {
+    const key = this.verificationKeyRing.get(keyId);
+    if (!key) return false;
+    try {
+      return verify(null, Buffer.from(`MOSOLO-DOC-v1\n${sha256Hex(Buffer.from(bytes))}`), key, Buffer.from(signature, 'base64url'));
+    } catch {
+      return false;
+    }
+  }
+
   publicKeyPem(): string {
     return this.publicKey.export({ type: 'spki', format: 'pem' }).toString();
   }

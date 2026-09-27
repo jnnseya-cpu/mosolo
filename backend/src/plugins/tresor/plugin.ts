@@ -5,6 +5,9 @@
  */
 import { definePolicy, GRANTS } from '../../core/policy.js';
 import { definePlugin } from '../types.js';
+import { MatchingService } from './appariement.js';
+import { PointContractsService } from './points-contrats.js';
+import { registerTresorComplementRoutes } from './routes-complements.js';
 import { registerTresorRoutes } from './routes.js';
 import { TresorService } from './service.js';
 
@@ -33,7 +36,16 @@ definePolicy('tresor:verification.journal', { R17: always, R22: always, R24: alw
 
 export const tresorPlugin = definePlugin<TresorService>({
   name: 'tresor',
-  create: (ctx) => new TresorService(ctx),
+  create: (ctx) => {
+    const svc = new TresorService(ctx);
+    // Rapprochement proposé et crédits groupés (§ 20.1) ; clauses des points de paiement agréés (§ 37).
+    svc.matching = new MatchingService(ctx);
+    svc.pointContracts = new PointContractsService(ctx);
+    return svc;
+  },
   seed: (_ctx, svc) => svc.seedDemo(),
-  routes: (app, ctx, svc) => registerTresorRoutes(app, ctx, svc),
+  routes: (app, ctx, svc) => {
+    registerTresorRoutes(app, ctx, svc);
+    registerTresorComplementRoutes(app, ctx, svc);
+  },
 });

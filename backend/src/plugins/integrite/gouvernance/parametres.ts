@@ -35,6 +35,7 @@ import { IA_BIAIS_ECART_POINTS, IA_DECISIONS_MIN, IA_DERIVE_SEUIL_POINTS, IA_FEN
 import {
   ECHANTILLON_CONFORMITE_MIN_PCT, ECHANTILLON_TAILLE, EVALUATION_CONTINUE_INTERVALLE_JOURS, SEUIL_REUSSITE_EPREUVE_PCT, VALIDITE_CERTIFICAT_JOURS,
 } from '../../apprentissage/model.js';
+import { PARAMETRES_COMPLEMENTAIRES } from '../detecteurs/parametres.js';
 import {
   REPARTITION_DUREE_ANS, REPARTITION_NOMBRE_FLUX, REPARTITION_PART_AGENTS_PCT, REPARTITION_PART_GOUVERNEMENT_PCT, REPARTITION_PART_NSEYA_PCT,
   REPARTITION_PART_TUTELLE_PCT,
@@ -192,6 +193,8 @@ export const PARAMETRES_CODE: ParamDefinition[] = [
   C('ia.biais_ecart_points', 'IA : écart d’acceptation entre entités signalé comme biais', 'Suivi des modèles d’IA', IA_BIAIS_ECART_POINTS, 'points', code('plugins/ia/modeles.ts', 'IA_BIAIS_ECART_POINTS')),
   C('ia.fenetre_jours', 'IA : fenêtre de comparaison du suivi de dérive', 'Suivi des modèles d’IA', IA_FENETRE_JOURS, 'jours', code('plugins/ia/modeles.ts', 'IA_FENETRE_JOURS')),
   C('ia.decisions_min', 'IA : décisions minimales pour mesurer dérive ou biais', 'Suivi des modèles d’IA', IA_DECISIONS_MIN, 'décisions', code('plugins/ia/modeles.ts', 'IA_DECISIONS_MIN')),
+  // Rapprochement proposé, sous-traitance terrain, détecteurs complémentaires (§ 15A.5, § 20.1, § 25).
+  ...PARAMETRES_COMPLEMENTAIRES,
 ];
 
 export const ALL_PARAMETERS: ParamDefinition[] = [...REGISTRE_DEFAUTS, ...PARAMETRES_CODE];

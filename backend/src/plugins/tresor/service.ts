@@ -24,6 +24,8 @@ import type { PaymentOrder, UnappliedPayment } from '../../modules/payments/serv
 import type { Receipt, ReceiptDecision } from '../../modules/receipts/service.js';
 import type { LedgerEntry } from '../../modules/treasury/ledger.js';
 import type { ExceptionStatus, ExceptionType, ReconciliationException } from '../../modules/treasury/service.js';
+import type { MatchingService } from './appariement.js';
+import type { PointContractsService } from './points-contrats.js';
 
 /* ------------------------------------------------------------------ types */
 
@@ -49,7 +51,7 @@ export const REFUND_EXTRA_APPROVAL_THRESHOLDS: Partial<Record<CurrencyCode, Mone
  */
 export const MONEY_EXCEPTION_TYPES: ReadonlySet<ExceptionType> = new Set<ExceptionType>([
   'ORPHAN_CREDIT', 'CREDIT_WITHOUT_CONFIRMATION', 'UNKNOWN_ACCOUNT', 'DUPLICATE_CREDIT', 'AMOUNT_MISMATCH', 'MISSING_SETTLEMENT',
-  'PROVIDER_AMBIGUOUS', 'UNAPPLIED_PAYMENT', 'WRONG_ACCOUNT', 'ACCOUNT_VERSION_MISMATCH', 'RECEIPT_NOT_FINALIZABLE',
+  'PROVIDER_AMBIGUOUS', 'UNAPPLIED_PAYMENT', 'WRONG_ACCOUNT', 'ACCOUNT_VERSION_MISMATCH', 'RECEIPT_NOT_FINALIZABLE', 'CREDIT_GROUPE_ECART',
 ]);
 
 /** Écritures appartenant à un objet métier : corrigées par leur propre opération (contrepassation, remboursement, apurement). */
@@ -148,7 +150,12 @@ export type OperationKind =
   | 'ANNULATION_QUITTANCE' | 'REMPLACEMENT_QUITTANCE' | 'CONTREPASSATION' | 'REMBOURSEMENT'
   | 'CONTRE_ECRITURE' | 'APUREMENT_SUSPENS' | 'PARAMETRE_NOMENCLATURE'
   /** Instruction de virement d'un des DEUX flux de la clé de répartition du § 37A (jamais automatique). */
-  | 'DECAISSEMENT_REPARTITION';
+  | 'DECAISSEMENT_REPARTITION'
+  /**
+   * Récupération des sommes versées à un sous-traitant pour des objets fictifs ou des constats frauduleux (§ 15A.7) :
+   * ordre de reversement émis après une décision à deux personnes du contrôle qualité, puis validé ici à quatre yeux.
+   */
+  | 'RECUPERATION_SOUS_TRAITANT';
 
 export const RECEIPT_KINDS: OperationKind[] = ['ANNULATION_QUITTANCE', 'REMPLACEMENT_QUITTANCE'];
 
@@ -167,6 +174,18 @@ export interface OperationInput {
   nomenclature?: { revenueCategory: RevenueCategory; code: string; label: string; officialAct?: string };
   /** Décaissement de répartition (§ 37A.4) : répartition arrêtée et flux (deux flux seulement). */
   repartition?: { distributionId: string; flow: string };
+  /** Récupération auprès d'un sous-traitant (§ 15A.7) : décision de récupération du module terrain. */
+  recuperation?: { clawbackId: string };
+}
+
+/**
+ * Passerelle vers les décisions de récupération du contrôle qualité terrain (§ 15A.7), branchée par le module terrain.
+ * Le Trésor ne calcule rien : il demande la cible (refus si la récupération n'est pas décidée ou déjà ordonnée) puis,
+ * après validation, fait constater l'ordre de reversement (aucun fonds ne sort ; le sous-traitant reverse).
+ */
+export interface RecuperationGate {
+  target(input: OperationInput): { key: string; label: string; amount: MoneyJSON };
+  executed(op: FinancialOperation, user: User, at: string): Record<string, unknown>;
 }
 
 /**
@@ -318,6 +337,12 @@ export class TresorService {
   readonly operations = new InMemoryRepository<FinancialOperation>();
   /** Clé de répartition du § 37A (absente : aucun décaissement de répartition possible). */
   private repartitionGate: RepartitionGate | undefined;
+  /** Décisions de récupération auprès des sous-traitants (module terrain, § 15A.7). */
+  private recuperationGate: RecuperationGate | undefined;
+  /** Rapprochement proposé et crédits groupés (§ 20.1) — branché par le module (plugin.ts). */
+  matching!: MatchingService;
+  /** Clauses contractuelles des points de paiement agréés (§ 37) — branché par le module (plugin.ts). */
+  pointContracts!: PointContractsService;
   readonly nomenclature = new Map<string, NomenclatureEntry>();
   readonly imputations = new InMemoryRepository<Imputation>();
   readonly daily = new InMemoryAppendOnlyRepository<DailyClosure>();
@@ -674,6 +699,11 @@ export class TresorService {
 
   /* ------------------------------------------------ double validation */
 
+  /** Branche les décisions de récupération du contrôle qualité terrain (§ 15A.7). */
+  attachRecuperation(gate: RecuperationGate): void {
+    this.recuperationGate = gate;
+  }
+
   /** Branche la clé de répartition du § 37A (module pilotage/repartition). */
   attachRepartition(gate: RepartitionGate): void {
     this.repartitionGate = gate;
@@ -768,6 +798,10 @@ export class TresorService {
       case 'DECAISSEMENT_REPARTITION': {
         if (!this.repartitionGate) throw unprocessable('REPARTITION_INDISPONIBLE', 'Clé de répartition du § 37A non chargée : aucun décaissement de répartition.');
         return this.repartitionGate.target(input);
+      }
+      case 'RECUPERATION_SOUS_TRAITANT': {
+        if (!this.recuperationGate) throw unprocessable('RECUPERATION_INDISPONIBLE', 'Module terrain non chargé : aucune récupération auprès d’un sous-traitant.');
+        return this.recuperationGate.target(input);
       }
     }
   }
@@ -985,6 +1019,9 @@ export class TresorService {
       case 'DECAISSEMENT_REPARTITION':
         // Aucun fonds ne transite par MOSOLO : l'instruction est constatée, la banque de règlement exécute (§ 37A.4).
         return this.repartitionGate!.executed(op, user, decision.at);
+      case 'RECUPERATION_SOUS_TRAITANT':
+        // Ordre de reversement constaté : le sous-traitant reverse ; aucun fonds ne sort du compte public.
+        return this.recuperationGate!.executed(op, user, decision.at);
     }
   }
 
