@@ -36,7 +36,10 @@ export function registerInspectionRoutes(app: FastifyInstance, svc: InspectionSe
   app.get<P>('/v1/terrain/missions/:id/paquet-hors-ligne', async (req) => svc.offlinePackage(requireUser(req), req.params.id));
   app.post('/v1/terrain/paquets/verification', async (req) => {
     authorize(requireUser(req), 'terrain:inspection.read');
-    return svc.verifyPackage(req.body as { packageHash: string; signature: string });
+    // Paquet présenté tel qu'émis (champs du paquet conservés) : empreinte et signature obligatoires, corps objet
+    // (deuxième passe adverse, 27/09/2026 : un corps nul ou non objet provoquait une erreur interne 500).
+    const pkg = parse(z.object({ packageHash: z.string().regex(/^[0-9a-f]{64}$/), signature: z.string().regex(/^[0-9a-f]{64}$/) }).passthrough(), req.body);
+    return svc.verifyPackage(pkg);
   });
   app.get<{ Querystring: { status?: string; missionId?: string } }>('/v1/terrain/proces-verbaux', async (req) => svc.list(requireUser(req), req.query));
   app.get('/v1/terrain/proces-verbaux/mes-proces-verbaux', async (req) => svc.mine(requireUser(req)));

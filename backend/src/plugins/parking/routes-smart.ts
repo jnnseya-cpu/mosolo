@@ -6,7 +6,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../../core/auth.js';
-import { parse } from '../../core/http.js';
+import { parse, isRealCalendarDate } from '../../core/http.js';
 import { authorize } from '../../core/policy.js';
 import { DGTK } from './support.js';
 import type { ParkingService } from './service.js';
@@ -24,7 +24,7 @@ export function registerParkSmartRoutes(app: FastifyInstance, svc: ParkingServic
   // hors fourchette ou sans acte : recommandation seulement.
   app.get('/v1/parking/tarification-dynamique', async (req) => svc.tarification.view(requireUser(req)));
   app.post('/v1/parking/tarification-dynamique/run', async (req, reply) => reply.code(201).send(svc.tarification.run(requireUser(req), parse(z.object({
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), hour: z.number().int().min(0).max(23).optional(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isRealCalendarDate, 'date inexistante au calendrier').optional(), hour: z.number().int().min(0).max(23).optional(),
   }).strict(), req.body ?? {}))));
 
   // § 11A.2 — Modes tarifaires et grilles (règles du registre ; jamais de montant saisi)

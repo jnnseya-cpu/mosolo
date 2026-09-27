@@ -19,6 +19,8 @@ const TITLES: Record<number, string> = {
   404: 'Ressource introuvable',
   405: 'Méthode non autorisée',
   409: 'Conflit',
+  413: 'Corps trop volumineux',
+  415: 'Type de contenu non pris en charge',
   422: 'Traitement impossible',
   429: 'Trop de requêtes',
   500: 'Erreur interne',

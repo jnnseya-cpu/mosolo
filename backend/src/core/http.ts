@@ -27,7 +27,19 @@ export const moneySchema = z.object({
 }).strict();
 
 export const decimalString = z.string().regex(/^-?\d{1,18}(\.\d{1,18})?$/, 'nombre décimal en chaîne attendu');
-export const isoDateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date AAAA-MM-JJ attendue');
+/**
+ * Date civile AAAA-MM-JJ RÉELLE (deuxième passe adverse, 27/09/2026) : « 2026-02-30 » était acceptée puis décalée au
+ * 2 mars par le moteur de dates, « 2026-13-01 » devenait une date invalide. Le jour doit exister au calendrier.
+ */
+export function isRealCalendarDate(s: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (y < 1 || mo < 1 || mo > 12 || d < 1) return false;
+  const t = new Date(Date.UTC(y, mo - 1, d));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d;
+}
+export const isoDateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date AAAA-MM-JJ attendue').refine(isRealCalendarDate, 'date inexistante au calendrier');
 
 /** Langue : ?lang= puis Accept-Language ; français par défaut (langue de référence). */
 export function requestLang(req: FastifyRequest): LanguageCode {

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { AppContext } from '../../context.js';
 import { requireUser } from '../../core/auth.js';
 import { IdempotencyStore } from '../../core/idempotency.js';
-import { parse } from '../../core/http.js';
+import { parse, isRealCalendarDate } from '../../core/http.js';
 import { authorize } from '../../core/policy.js';
 import {
   PARTNER_KINDS, RESERVATION_PURPOSES, VIOLATION_NATURES, ZONE_KINDS, type ParkingService,
@@ -207,7 +207,7 @@ export function registerParkingRoutes(app: FastifyInstance, ctx: AppContext, svc
   app.get('/v1/parking/indicators', async (req) => svc.indicators(requireUser(req)));
 
   // Module 14 : exemptions (véhicules officiels, cas prévus par la règle), titres actifs, sessions par USSD ou SMS.
-  const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date AAAA-MM-JJ attendue');
+  const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date AAAA-MM-JJ attendue').refine(isRealCalendarDate, 'date inexistante au calendrier');
   app.get('/v1/parking/exemptions', async (req) => ({ items: svc.complements.listExemptions(requireUser(req)) }));
   app.post('/v1/parking/exemptions', async (req, reply) => {
     const body = parse(z.object({

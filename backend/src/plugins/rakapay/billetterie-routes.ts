@@ -5,7 +5,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../../core/auth.js';
-import { moneySchema, parse } from '../../core/http.js';
+import { moneySchema, parse, isRealCalendarDate } from '../../core/http.js';
 import { authorize } from '../../core/policy.js';
 import type { RakaPayService } from './service.js';
 
@@ -39,6 +39,6 @@ export function registerBilletterieRoutes(app: FastifyInstance, svc: RakaPayServ
   });
   // Période de grâce (modules 81 et 76) : proposition → approbation par une autre personne.
   app.get('/v1/rakapay/periode-grace', async (req) => { requireUser(req); return b.graceView(); });
-  app.post('/v1/rakapay/periode-grace', async (req, reply) => reply.code(201).send(b.proposeGrace(requireUser(req), parse(z.object({ module: z.enum(['76', '81']), until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), motif }).strict(), req.body))));
+  app.post('/v1/rakapay/periode-grace', async (req, reply) => reply.code(201).send(b.proposeGrace(requireUser(req), parse(z.object({ module: z.enum(['76', '81']), until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isRealCalendarDate, 'date inexistante au calendrier'), motif }).strict(), req.body))));
   app.post<{ Params: { id: string } }>('/v1/rakapay/periode-grace/:id/decision', async (req) => b.decideGrace(requireUser(req), req.params.id, parse(z.object({ approve: z.boolean(), motif }).strict(), req.body)));
 }

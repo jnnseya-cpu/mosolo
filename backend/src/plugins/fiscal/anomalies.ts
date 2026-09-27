@@ -8,6 +8,7 @@
  * registre local des protocoles ci-dessous s'applique (proposition, puis approbation par une seconde personne — le
  * délégué à la protection des données ou la direction).
  */
+import { isRealCalendarDate } from '../../core/http.js';
 import { z } from 'zod';
 import type { User } from '../../core/auth.js';
 import { sha256Hex } from '../../core/crypto.js';
@@ -62,7 +63,7 @@ export const SIGNAL_CATALOGUE: Record<Signal, { label: string; rule: string; out
 };
 
 const ref = z.string().trim().min(1).max(120);
-const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isRealCalendarDate, 'date inexistante au calendrier');
 /** Forme attendue d'un enregistrement par source (validation stricte ; aucune donnée superflue n'est conservée). */
 export const RECORD_SCHEMAS: Record<PartnerSource, z.ZodTypeAny> = {
   COMPTEURS: z.object({ objectRef: ref, meters: z.number().int().min(0).max(500), utility: z.enum(['ELECTRICITE', 'EAU']), period: z.string().max(20) }).strict(),

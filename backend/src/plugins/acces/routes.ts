@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { AppContext } from '../../context.js';
 import { isDemoMode, requireUser } from '../../core/auth.js';
 import { conflict, notFound } from '../../core/errors.js';
-import { currentAuditContext, isoDateString, parse } from '../../core/http.js';
+import { currentAuditContext, isoDateString, parse, isRealCalendarDate } from '../../core/http.js';
 import { authorize } from '../../core/policy.js';
 import {
   ACCESS_LEVELS, CHANNELS, CONSULTATION_PURPOSES, ENTITY_KIND_LABELS, ENTITY_KINDS, LEGAL_FORMS, LEVEL_INFO, LEVEL_RIGHTS, MANDATE_ACTIONS,
@@ -23,7 +23,7 @@ const code6 = z.string().regex(/^\d{6}$/, 'code à 6 chiffres attendu');
 const idDocument = z.object({
   type: z.string().trim().min(2).max(40), number: z.string().trim().min(3).max(40),
   // Date de naissance portée par la pièce : détection des comptes multiples d'une même personne (nom + date).
-  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date AAAA-MM-JJ').optional(),
+  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date AAAA-MM-JJ').refine(isRealCalendarDate, 'date inexistante au calendrier').optional(),
 }).strict();
 
 const entitySchema = z.object({

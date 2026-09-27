@@ -79,6 +79,15 @@ export function shouldSeed(opts: { seed?: boolean }, env: NodeJS.ProcessEnv = pr
   return opts.seed ?? isDemoMode(env);
 }
 
+/** Erreurs du cadriciel Fastify traduites (deuxième passe adverse, 27/09/2026 : messages anglais exposés à l'usager). */
+const FRAMEWORK_ERRORS: Record<string, { code: string; detail: string }> = {
+  FST_ERR_CTP_BODY_TOO_LARGE: { code: 'CORPS_TROP_VOLUMINEUX', detail: 'Corps de requête trop volumineux (limite : 1 Mo). Pour un fichier, utilisez le téléversement prévu.' },
+  FST_ERR_CTP_INVALID_MEDIA_TYPE: { code: 'TYPE_CONTENU_NON_PRIS_EN_CHARGE', detail: 'Type de contenu non pris en charge : envoyez du JSON (application/json).' },
+  FST_ERR_CTP_EMPTY_JSON_BODY: { code: 'CORPS_JSON_VIDE', detail: 'Corps JSON vide alors qu’un type application/json est annoncé.' },
+  FST_ERR_CTP_INVALID_CONTENT_LENGTH: { code: 'LONGUEUR_INVALIDE', detail: 'Longueur de contenu annoncée incohérente avec le corps reçu.' },
+  FST_ERR_CTP_INVALID_TYPE: { code: 'TYPE_CONTENU_INVALIDE', detail: 'En-tête Content-Type invalide.' },
+};
+
 export interface BuildOptions extends AppOptions {
   logger?: boolean;
   /** Amorçage hors démonstration (défaut : fichier MOSOLO_BOOTSTRAP_FILE s'il est défini). Ignoré si les données de démonstration sont semées. */
@@ -146,7 +155,9 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
     if (err instanceof ApiError) apiErr = err;
     else if (err && typeof err === 'object' && 'statusCode' in err && typeof (err as { statusCode: unknown }).statusCode === 'number' && (err as { statusCode: number }).statusCode < 500) {
       const e = err as { statusCode: number; message: string; code?: string };
-      apiErr = new ApiError(e.statusCode, e.code ?? 'BAD_REQUEST', e.message);
+      // Erreurs du cadriciel (corps trop volumineux, type de contenu…) : code stable et message en français.
+      const fr = e.code ? FRAMEWORK_ERRORS[e.code] : undefined;
+      apiErr = fr ? new ApiError(e.statusCode, fr.code, fr.detail) : new ApiError(e.statusCode, e.code ?? 'BAD_REQUEST', e.message);
     } else {
       req.log.error(err);
       apiErr = new ApiError(500, 'INTERNAL_ERROR', 'Erreur interne.');

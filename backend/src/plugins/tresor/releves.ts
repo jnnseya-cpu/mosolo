@@ -15,7 +15,7 @@ import type { AppContext } from '../../context.js';
 import { requireUser, type User } from '../../core/auth.js';
 import { sha256Hex } from '../../core/crypto.js';
 import { unprocessable } from '../../core/errors.js';
-import { isoDateString, moneySchema, parse } from '../../core/http.js';
+import { isoDateString, isRealCalendarDate, moneySchema, parse } from '../../core/http.js';
 import { authorize } from '../../core/policy.js';
 import type { StatementLine } from '../../modules/treasury/service.js';
 import { definePlugin } from '../types.js';
@@ -37,7 +37,7 @@ export function parseStatementFile(content: string): { lines: StatementLine[]; e
       return;
     }
     if (!(CURRENCY_CODES as readonly string[]).includes(currency)) { errors.push(`Ligne ${i + 1} : devise inconnue « ${currency} ».`); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(valueDate)) { errors.push(`Ligne ${i + 1} : date de valeur AAAA-MM-JJ attendue.`); return; }
+    if (!isRealCalendarDate(valueDate)) { errors.push(`Ligne ${i + 1} : date de valeur AAAA-MM-JJ attendue.`); return; }
     try {
       Money.parseStrict({ amount, currency: currency as CurrencyCode });
     } catch (e) {
