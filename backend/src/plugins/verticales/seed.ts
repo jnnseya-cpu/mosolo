@@ -104,6 +104,7 @@ function runCase(
 const fakeHash = (seed: string) => Array.from({ length: 64 }, (_, i) => '0123456789abcdef'[(seed.charCodeAt(i % seed.length) + i * 7) % 16]).join('');
 
 export function seedVerticales(ctx: AppContext, svc: VerticalesService): void {
+  seedSecteursReferences(svc);
   for (const u of DEMO_USERS) ctx.users.add(u);
   const user = (id: string) => ctx.users.get(id)!;
   const owner = user('u-contribuable');
@@ -241,4 +242,19 @@ export function seedVerticales(ctx: AppContext, svc: VerticalesService): void {
   svc.calcu.receiveTransaction(bank, { bank: 'Banque partenaire A (démo)', accountNumber: 'CD00 1111 2222 3333 4444 0001', amount: { amount: '12500000', currency: 'CDF' }, at: at(30), beneficiary: supplier, reference: 'OP-DEMO-0012' });
   svc.calcu.receiveTransaction(bank, { bank: 'Banque partenaire A (démo)', accountNumber: 'CD00 1111 2222 3333 4444 0001', amount: { amount: '4000000', currency: 'CDF' }, at: at(20), beneficiary: supplier, reference: 'OP-DEMO-0013' });
   svc.calcu.receiveTransaction(bank, { bank: 'Banque partenaire A (démo)', accountNumber: 'CD00 9999 8888 7777 6666 0009', amount: { amount: '2300000', currency: 'CDF' }, at: at(6), beneficiary: 'Bénéficiaire inconnu (démo)', reference: 'SANS-REF' });
+}
+
+/**
+ * Références des modules sectoriels (axes de péage, quais, points d'embarquement, points de contrôle forestiers) :
+ * libellés et positions [EXEMPLE], non contractuels, à remplacer par le relevé officiel.
+ */
+function seedSecteursReferences(svc: VerticalesService): void {
+  const r = svc.secteurs;
+  r.seedReference({ id: 'AXE-EX-01', module: '25', kind: 'AXE', label: 'Axe de péage [EXEMPLE] — sortie ouest', commune: 'Mont-Ngafula', lat: -4.47, lon: 15.26 });
+  r.seedReference({ id: 'AXE-EX-02', module: '25', kind: 'AXE', label: 'Axe de péage [EXEMPLE] — sortie est', commune: 'Nsele', lat: -4.37, lon: 15.52 });
+  r.seedReference({ id: 'QUAI-EX-01', module: '24', kind: 'QUAI', label: 'Quai privé [EXEMPLE] — fleuve, Ngaliema', commune: 'Ngaliema', lat: -4.3, lon: 15.25 });
+  r.seedReference({ id: 'QUAI-EX-02', module: '24', kind: 'QUAI', label: 'Quai privé [EXEMPLE] — Kinkole', commune: 'Nsele', lat: -4.34, lon: 15.49 });
+  r.seedReference({ id: 'EMB-EX-01', module: '13', kind: 'POINT_EMBARQUEMENT', label: 'Point d’embarquement [EXEMPLE] — Kinkole', commune: 'Nsele', lat: -4.341, lon: 15.492 });
+  r.seedReference({ id: 'PCF-EX-01', module: '23', kind: 'POINT_CONTROLE', label: 'Point de contrôle forestier [EXEMPLE] — entrée sud', commune: 'Mont-Ngafula', lat: -4.48, lon: 15.28 });
+  r.seedReference({ id: 'PCF-EX-02', module: '23', kind: 'POINT_CONTROLE', label: 'Point de contrôle forestier [EXEMPLE] — entrée est', commune: 'Maluku', lat: -4.07, lon: 15.56 });
 }

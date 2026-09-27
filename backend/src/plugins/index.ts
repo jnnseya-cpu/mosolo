@@ -9,6 +9,7 @@ import { rakapayPlugin } from './rakapay/plugin.js';
 import { parkingPlugin } from './parking/plugin.js';
 import { publicitePlugin } from './publicite/plugin.js';
 import { verticalesPlugin } from './verticales/plugin.js';
+import { referentielPlugin } from './referentiel/plugin.js';
 import { canauxPlugin } from './canaux/plugin.js';
 import { terrainPlugin } from './terrain/plugin.js';
 import { integritePlugin } from './integrite/plugin.js';
@@ -33,6 +34,7 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   parkingPlugin,
   publicitePlugin,
   verticalesPlugin,
+  referentielPlugin,
   canauxPlugin,
   terrainPlugin,
   integritePlugin,

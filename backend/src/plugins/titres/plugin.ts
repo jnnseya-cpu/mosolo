@@ -5,10 +5,16 @@
 import { definePlugin } from '../types.js';
 import { registerTitresRoutes } from './routes.js';
 import { TitresService } from './service.js';
+import { defineActeRequisTypes } from './catalogue.js';
 
 export const titresPlugin = definePlugin<TitresService>({
   name: 'titres',
-  create: (ctx) => new TitresService(ctx),
+  create: (ctx) => {
+    const svc = new TitresService(ctx);
+    // Catalogue § 19A.4 : types amorcés au statut ACTE_REQUIS (visibles, non activables).
+    defineActeRequisTypes(svc);
+    return svc;
+  },
   routes: (app, ctx, svc) => registerTitresRoutes(app, ctx, svc),
 });
 

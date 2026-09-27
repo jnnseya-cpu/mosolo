@@ -36,12 +36,14 @@ async function pay(env: TestEnv, obligationId: string, user = 'u-contribuable') 
 }
 
 describe('verticales — catalogue et espaces branchés sur le socle', () => {
-  it('catalogue public : seize verticales (§ 11.3), statut juridique honnête, cartes des modules externes conservées', async () => {
+  it('catalogue public : dix-sept verticales (§ 11.3 + Domaine public du § 11.1), statut juridique honnête, cartes des modules externes conservées', async () => {
     const env = await setupVx();
     const res = await env.req('GET', '/v1/verticales');
     expect(res.statusCode).toBe(200);
     const items = res.json().items as { slug: string; legal: string; managedBy: string | null; entity: string }[];
-    expect(items).toHaveLength(16); // § 11.3 v3.0 : Markets & Public Domain fusionnés
+    // § 11.3 v3.0 : Markets & Public Domain fusionnés (conservé) ; Cahier § 11.1 : Domaine public ajouté en 17e verticale.
+    expect(items).toHaveLength(17);
+    expect(items.find((v) => v.slug === 'domaine-public')).toMatchObject({ entity: 'DGTK', managedBy: null });
     expect(items.map((v) => v.slug)).toEqual(expect.arrayContaining(['rakapay', 'stationnement', 'publicite', 'avia', 'marches', 'evenements', 'construction', 'environnement', 'telecom', 'ports', 'mobilite']));
     expect(items.find((v) => v.slug === 'rakapay')!.managedBy).toBe('rakapay');
     expect(items.find((v) => v.slug === 'avia')!.legal).toBe('ACTE_REQUIS');

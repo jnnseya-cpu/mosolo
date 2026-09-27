@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **693 routes** dans 36 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -12,15 +12,16 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | extension parking | 36 |
 | extension pilotage | 17 |
 | extension preuves | 14 |
-| extension publicite | 34 |
-| extension rakapay | 23 |
+| extension publicite | 52 |
+| extension rakapay | 41 |
 | extension recouvrement | 37 |
+| extension referentiel | 10 |
 | extension sanctions | 8 |
 | extension socle | 14 |
 | extension terrain | 47 |
 | extension titres | 20 |
 | extension tresor | 27 |
-| extension verticales | 43 |
+| extension verticales | 59 |
 | module ai | 3 |
 | module alerts | 1 |
 | module appeals | 9 |
@@ -389,6 +390,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 
 | Méthode | Chemin |
 |---|---|
+| POST | `/v1/public/publicite/signalements` |
 | GET | `/v1/publicite/accreditations` |
 | POST | `/v1/publicite/accreditations` |
 | POST | `/v1/publicite/accreditations/:userId/revoke` |
@@ -399,17 +401,28 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | POST | `/v1/publicite/authorizations/:id/liquidation/approve` |
 | POST | `/v1/publicite/authorizations/:id/liquidation/propose` |
 | POST | `/v1/publicite/authorizations/:id/pieces` |
+| POST | `/v1/publicite/authorizations/:id/renewal` |
 | GET | `/v1/publicite/authorizations/mine` |
+| GET | `/v1/publicite/carte/couches` |
 | GET | `/v1/publicite/cases` |
 | POST | `/v1/publicite/cases/:id/contest` |
 | POST | `/v1/publicite/cases/:id/decide` |
 | POST | `/v1/publicite/cases/:id/verify` |
 | GET | `/v1/publicite/cases/mine` |
+| GET | `/v1/publicite/contrats` |
+| POST | `/v1/publicite/contrats` |
+| POST | `/v1/publicite/contrats/:id/resiliation` |
 | POST | `/v1/publicite/devices` |
 | GET | `/v1/publicite/devices/:id` |
 | GET | `/v1/publicite/devices/mine` |
+| GET | `/v1/publicite/echeances` |
+| POST | `/v1/publicite/espaces` |
+| POST | `/v1/publicite/espaces/:id/statut` |
 | POST | `/v1/publicite/evidence-photos` |
 | GET | `/v1/publicite/evidence-photos/:id` |
+| POST | `/v1/publicite/ia/analyses/:photoId` |
+| GET | `/v1/publicite/ia/propositions` |
+| POST | `/v1/publicite/ia/propositions/:id/verification` |
 | GET | `/v1/publicite/indicators` |
 | GET | `/v1/publicite/inspections` |
 | POST | `/v1/publicite/inspections` |
@@ -419,10 +432,16 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | GET | `/v1/publicite/map` |
 | GET | `/v1/publicite/nearby` |
 | GET | `/v1/publicite/obligations/mine` |
+| GET | `/v1/publicite/pilote` |
+| POST | `/v1/publicite/pilote/:rank` |
 | GET | `/v1/publicite/public/badges/:userId` |
 | GET | `/v1/publicite/public/devices/:token` |
 | POST | `/v1/publicite/reminders/run` |
+| GET | `/v1/publicite/signalements` |
+| POST | `/v1/publicite/signalements/:id/tri` |
 | GET | `/v1/publicite/vehicles/:plate` |
+| POST | `/v1/publicite/zones` |
+| POST | `/v1/publicite/zones/:id/cloture` |
 
 ## Extension rakapay
 
@@ -430,19 +449,37 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 |---|---|
 | GET | `/v1/public/wewa/:code` |
 | GET | `/v1/rakapay/catalogue` |
+| GET | `/v1/rakapay/circuits` |
 | GET | `/v1/rakapay/cooperatives` |
 | GET | `/v1/rakapay/cooperatives/:id` |
 | POST | `/v1/rakapay/cooperatives/:id/decisions` |
 | POST | `/v1/rakapay/cooperatives/:id/paiements-groupes` |
 | GET | `/v1/rakapay/indicateurs` |
 | GET | `/v1/rakapay/lignes` |
+| GET | `/v1/rakapay/offres` |
+| POST | `/v1/rakapay/offres/:id/decision` |
 | GET | `/v1/rakapay/operateurs` |
+| POST | `/v1/rakapay/operateurs/:id/agents` |
+| POST | `/v1/rakapay/operateurs/:id/agents/:userId/retrait` |
+| GET | `/v1/rakapay/operateurs/:id/agrement` |
+| POST | `/v1/rakapay/operateurs/:id/agrement/decision` |
+| POST | `/v1/rakapay/operateurs/:id/agrement/proposition` |
+| POST | `/v1/rakapay/operateurs/:id/offres` |
+| GET | `/v1/rakapay/operateurs/:id/tableau` |
+| POST | `/v1/rakapay/operateurs/candidatures` |
+| GET | `/v1/rakapay/operateurs/mon-rattachement` |
+| GET | `/v1/rakapay/redevance-plateforme/simulation` |
+| GET | `/v1/rakapay/revues-ventes` |
+| POST | `/v1/rakapay/revues-ventes/:id/decision` |
+| POST | `/v1/rakapay/revues-ventes/detection` |
 | GET | `/v1/rakapay/signalements` |
 | POST | `/v1/rakapay/signalements` |
 | POST | `/v1/rakapay/signalements/:id/traitement` |
 | GET | `/v1/rakapay/stations` |
 | GET | `/v1/rakapay/tickets` |
 | POST | `/v1/rakapay/tickets` |
+| POST | `/v1/rakapay/ventes-privees` |
+| POST | `/v1/rakapay/ventes-privees/:id/annulation` |
 | POST | `/v1/rakapay/wewa/conducteurs` |
 | POST | `/v1/rakapay/wewa/conducteurs/:id/affectation` |
 | POST | `/v1/rakapay/wewa/controles` |
@@ -493,6 +530,21 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | GET | `/v1/recouvrement/reprises` |
 | POST | `/v1/recouvrement/reprises` |
 | POST | `/v1/recouvrement/reprises/:id/validation` |
+
+## Extension referentiel
+
+| Méthode | Chemin |
+|---|---|
+| GET | `/v1/public/referentiel/recettes` |
+| GET | `/v1/referentiel/base-de-reference` |
+| GET | `/v1/referentiel/codes` |
+| POST | `/v1/referentiel/codes` |
+| POST | `/v1/referentiel/codes/:code/retrait` |
+| GET | `/v1/referentiel/espaces` |
+| GET | `/v1/referentiel/recettes` |
+| GET | `/v1/referentiel/recettes-administratives` |
+| GET | `/v1/referentiel/recettes/:code` |
+| POST | `/v1/referentiel/recettes/:code/inventaire` |
 
 ## Extension sanctions
 
@@ -670,6 +722,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | POST | `/v1/verticales/cases/:id/request-info` |
 | POST | `/v1/verticales/cases/:id/take` |
 | POST | `/v1/verticales/cases/:id/visits` |
+| GET | `/v1/verticales/domaine-public/emprises` |
 | POST | `/v1/verticales/evenements/events/:objectId/controls` |
 | POST | `/v1/verticales/evenements/events/:objectId/ticketing` |
 | GET | `/v1/verticales/indicators` |
@@ -681,7 +734,22 @@ Généré depuis le code source (`tools/gen_routes.py`) : **631 routes** dans 35
 | GET | `/v1/verticales/plates/:code/counter` |
 | POST | `/v1/verticales/plates/:code/replace` |
 | GET | `/v1/verticales/plates/:code/scan` |
+| GET | `/v1/verticales/secteurs` |
+| POST | `/v1/verticales/secteurs/:module/releves` |
+| GET | `/v1/verticales/secteurs/antennes/liquidation-annuelle` |
+| GET | `/v1/verticales/secteurs/declarations` |
+| POST | `/v1/verticales/secteurs/declarations` |
+| GET | `/v1/verticales/secteurs/declarations/:id` |
+| POST | `/v1/verticales/secteurs/declarations/:id/decision` |
+| POST | `/v1/verticales/secteurs/declarations/:id/observations` |
+| POST | `/v1/verticales/secteurs/declarations/:id/rapprochement` |
+| POST | `/v1/verticales/secteurs/donnees-tierces` |
+| GET | `/v1/verticales/secteurs/grands-redevables` |
+| POST | `/v1/verticales/secteurs/grands-redevables` |
+| POST | `/v1/verticales/secteurs/grands-redevables/:taxpayerId/levee` |
+| GET | `/v1/verticales/secteurs/modules/:module` |
 | GET | `/v1/verticales/telecom/reconciliation` |
+| GET | `/v1/verticales/vehicules/:plaque/controle` |
 
 ## Module ai
 

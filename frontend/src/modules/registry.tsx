@@ -67,8 +67,10 @@ export const MODULE_ROUTES: ModuleRoute[] = [
 
   // Titres, RakaPay, pass wewa
   { path: '/titres/controle', element: lazy(() => import('./titres/Controle')), nav: { label: 'Contrôle des titres', short: 'Contrôle', icon: 'qr', group: 'operations', roles: ['R10', 'R11', 'R35'] } },
+  { path: '/titres/catalogue', element: lazy(() => import('./titres/Catalogue')), nav: { label: 'Catalogue des titres', short: 'Titres', icon: 'ticket', group: 'public', roles: [] } },
   { path: '/rakapay/cooperative', element: lazy(() => import('./rakapay/Cooperative')), nav: { label: 'Espace coopérative wewa', short: 'Coopérative', icon: 'users', group: 'operations', roles: ['R30', 'R06', 'R07'] } },
   { path: '/rakapay/pilotage', element: lazy(() => import('./rakapay/Pilotage')), nav: { label: 'Pilotage RakaPay', short: 'RakaPay', icon: 'chart', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R22', 'R23', 'R24', 'R36'] } },
+  { path: '/rakapay/operateurs', element: lazy(() => import('./rakapay/Operateurs')), nav: { label: 'Opérateurs de billetterie (RakaPay)', short: 'Opérateurs', icon: 'ticket', group: 'operations', roles: ['R30', 'R35', 'R01', 'R02', 'R05', 'R06', 'R07', 'R22', 'R23', 'R24'] } },
 
   // Stationnement (ParkSmart)
   { path: '/stationnement', element: lazy(() => import('./parking/ParkingDriver')), nav: { label: 'Stationnement', icon: 'parking', group: 'public', roles: ['R30', 'R31'] } },
@@ -86,12 +88,18 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/publicite/regie', element: lazy(() => import('./publicite/AdRegie')), nav: { label: 'Autorisations publicité', short: 'Autorisations', icon: 'file', group: 'operations', roles: ['R06', 'R07'] } },
   { path: '/publicite/tableau-de-bord', element: lazy(() => import('./publicite/AdDashboard')), nav: { label: 'Tableau de bord publicité', short: 'Publicité', icon: 'chart', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R09', 'R22', 'R23'] } },
   { path: '/publicite/verifier', element: lazy(() => import('./publicite/AdVerify')) },
+  { path: '/publicite/carte', element: lazy(() => import('./publicite/AdCarte')), nav: { label: 'Carte et pilote publicité', short: 'Carte pub', icon: 'pin', group: 'operations', roles: ['R06', 'R07', 'R09', 'R11', 'R22'] } },
+  { path: '/publicite/contrats', element: lazy(() => import('./publicite/AdContrats')), nav: { label: 'Contrats et échéances publicitaires', short: 'Contrats', icon: 'file', group: 'public', roles: ['R30', 'R31'] } },
+  { path: '/publicite/signaler', element: lazy(() => import('./publicite/AdSignaler')), nav: { label: 'Signaler un panneau', short: 'Panneau', icon: 'megaphone', group: 'public', roles: [] } },
 
   // Verticales (console, plaques NFIU, CALCU)
   { path: '/verticales/console', element: lazy(() => import('./verticales/AgentConsole')), nav: { label: 'Console des verticales', short: 'Verticales', icon: 'table', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R12', 'R22', 'R24'] } },
   { path: '/verifier-plaque', element: lazy(() => import('./verticales/PlateVerify')) },
   { path: '/verifier-plaque/:code', element: lazy(() => import('./verticales/PlateVerify')) },
   { path: '/controle/calcu', element: lazy(() => import('./verticales/CalcuConsole')), nav: { label: 'CALCU — contrôle de la dépense', short: 'CALCU', icon: 'bank', group: 'pilotage', roles: ['R01', 'R05', 'R08', 'R15', 'R17', 'R22', 'R23'] } },
+  { path: '/verticales/secteurs', element: lazy(() => import('./verticales/Secteurs')), nav: { label: 'Modules sectoriels (acte requis)', short: 'Secteurs', icon: 'grid', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24', 'R30', 'R31', 'R35'] } },
+  // Référentiel des recettes (Cahier ch. 7) : transparence publique, inventaire et codes pour les agents habilités.
+  { path: '/referentiel/recettes', element: lazy(() => import('./referentiel/Recettes')), nav: { label: 'Référentiel des recettes', short: 'Recettes', icon: 'ledger', group: 'public', roles: [] } },
 
   // Terrain : supervision, sous-traitants, badges
   { path: '/terrain/supervision', element: lazy(() => import('./terrain/Supervision')), nav: { label: 'Supervision terrain', short: 'Supervision', icon: 'gauge', group: 'operations', roles: ['R06', 'R07', 'R09', 'R11', 'R22', 'R23', 'R24', 'R35'] } },

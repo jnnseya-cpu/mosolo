@@ -43,6 +43,17 @@ export const P = {
   calcuGateway: 'verticales:calcu.gateway',
   calcuRead: 'verticales:calcu.read',
   calcuFreeze: 'verticales:calcu.freeze',
+  // Modules sectoriels « acte requis » (secteurs.ts) et domaine public.
+  sectorRead: 'verticales:sector.read',
+  sectorDeclare: 'verticales:sector.declare',
+  sectorDeclRead: 'verticales:sector.declaration.read',
+  sectorObserve: 'verticales:sector.observe',
+  sectorThirdParty: 'verticales:sector.third-party',
+  sectorReconcile: 'verticales:sector.reconcile',
+  sectorDecide: 'verticales:sector.decide',
+  sectorLargeTaxpayer: 'verticales:sector.large-taxpayer',
+  vehicleControl: 'verticales:vehicle.control',
+  domainPlan: 'verticales:domain.plan',
 } as const;
 
 export function registerVerticalPolicies(): void {
@@ -83,4 +94,20 @@ export function registerVerticalPolicies(): void {
   definePolicy(P.calcuGateway, { R33: always });
   definePolicy(P.calcuRead, { R22: always, R23: always, R05: always, R15: always, R01: always, R08: minimal, R17: minimal });
   definePolicy(P.calcuFreeze, { R22: always });
+
+  // Modules sectoriels : le redevable déclare ; l'agent de terrain relève (comptage, passage, point de contrôle) ;
+  // le partenaire de données verse les données tierces sous protocole ; le contrôleur rapproche ; une autre personne décide.
+  definePolicy(P.sectorRead, {
+    R01: always, R02: always, R05: always, R06: sameEntity, R07: sameEntity, R09: always, R10: minimal, R11: sameEntity, R22: always, R23: always, R24: always,
+  });
+  definePolicy(P.sectorDeclare, { R30: ownTaxpayer, R31: mandant });
+  definePolicy(P.sectorDeclRead, { R30: ownTaxpayer, R31: mandant, R06: sameEntity, R07: sameEntity, R11: sameEntity, R22: always, R24: sameEntity });
+  definePolicy(P.sectorObserve, { R10: inTerritory('full'), R11: sameEntity, R35: inTerritory('full') });
+  definePolicy(P.sectorThirdParty, { R34: always });
+  definePolicy(P.sectorReconcile, { R11: sameEntity });
+  definePolicy(P.sectorDecide, { R06: sameEntity, R07: sameEntity });
+  definePolicy(P.sectorLargeTaxpayer, { R06: sameEntity, R07: sameEntity });
+  // Contrôle d'un véhicule par plaque : réponse minimale (titres, autorisations), jamais le nom du propriétaire.
+  definePolicy(P.vehicleControl, { R09: inTerritory('minimal'), R10: inTerritory('minimal'), R11: always, R35: inTerritory('minimal') });
+  definePolicy(P.domainPlan, { R06: sameEntity, R07: sameEntity, R09: always, R10: inTerritory('minimal'), R11: sameEntity, R22: always });
 }

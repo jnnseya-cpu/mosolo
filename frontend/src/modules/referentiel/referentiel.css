@@ -1,0 +1,6 @@
+/* Écrans du référentiel des recettes, des modules sectoriels, des opérateurs RakaPay et des compléments publicité. */
+.row-wrap { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.row-wrap > input, .row-wrap > select { flex: 1 1 10rem; min-width: 0; }
+.g3-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.75rem; }
+.g3-card { border: 1px solid var(--line-soft); border-radius: 0.75rem; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.g3-card h3 { margin: 0; font-size: 1rem; }
