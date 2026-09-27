@@ -55,6 +55,11 @@ const operationSchema = z.discriminatedUnion('kind', [
       officialAct: z.string().trim().min(3).max(200).optional(),
     }).strict(),
   }).strict(),
+  // Décaissement de la clé de répartition (§ 37A.4) : répartition arrêtée et flux ; un troisième flux est rejeté.
+  z.object({
+    kind: z.literal('DECAISSEMENT_REPARTITION'), reason: motif,
+    repartition: z.object({ distributionId: z.string().min(3).max(60), flow: z.string().min(3).max(40) }).strict(),
+  }).strict(),
 ]);
 
 const closeDaySchema = z.object({ date: isoDateString }).strict();

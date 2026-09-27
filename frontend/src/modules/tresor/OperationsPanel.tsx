@@ -9,7 +9,8 @@ import { api } from '../../lib/api';
 import { sha256Hex } from '../../lib/crypto';
 import { hasRole, Message, OP_LABEL, OP_STATUS, useAction, type Operation, type OperationKind } from './shared';
 
-const KIND_HELP: Record<Exclude<OperationKind, 'PARAMETRE_NOMENCLATURE'>, string> = {
+// Les décaissements de répartition (§ 37A) sont proposés depuis l'écran « Répartition des recettes » (mois clos, deux flux).
+const KIND_HELP: Record<Exclude<OperationKind, 'PARAMETRE_NOMENCLATURE' | 'DECAISSEMENT_REPARTITION'>, string> = {
   ANNULATION_QUITTANCE: 'Quittance provisoire ou signalée dont le paiement n’a pas abouti. Une quittance définitive ne s’annule pas.',
   REMPLACEMENT_QUITTANCE: 'Nouvelle quittance (nouveau numéro) reprenant les données faisant foi ; l’ancienne renvoie publiquement vers la nouvelle. Montant et paiement ne changent jamais.',
   CONTREPASSATION: 'Paiement inversé (prestataire, litige fondé) : contre-écriture liée à l’original, quittance « contrepassée », obligation de nouveau exigible.',

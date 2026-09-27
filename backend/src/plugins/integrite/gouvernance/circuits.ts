@@ -137,6 +137,11 @@ export const CIRCUITS: Circuit[] = [
     guard: { url: '/v1/agents/commission-validations/:id/decision', key: (p) => p.id!, refusal: approveFalse },
   },
   {
+    code: 'REPARTITION_ACTIVATION', label: 'Activation de la clé de répartition des recettes (§ 37A)',
+    proposals: ['repartition.key.activation_proposed'], approvals: ['repartition.key.activated'], refusals: ['repartition.key.activation_rejected'],
+    guard: { url: '/v1/pilotage/repartition/cles/:id/activation/decision', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
     code: 'REGISTRE_SEUILS', label: 'Registre des seuils anti-fraude (confirmation ou modification)',
     proposals: ['integrite.threshold.change_proposed'], approvals: ['integrite.threshold.change_approved'], refusals: ['integrite.threshold.change_rejected'],
   },
