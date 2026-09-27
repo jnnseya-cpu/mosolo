@@ -9,7 +9,7 @@
  * (≤ SHORT_SUSPENSION_DAYS) et toute décision prise pendant la suspension ouvrent une alerte d'examen humain.
  */
 import {
-  REQUIRED_APPROVALS, SAMPLE_RULES, type Approval, type LegalInstrumentStatus, type RoleCode, type RuleSheet, type RuleStatus,
+  acteRequisBloque, REQUIRED_APPROVALS, SAMPLE_RULES, type Approval, type LegalTestCase, type LegalTestRun, type LegalInstrumentStatus, type RoleCode, type RuleSheet, type RuleStatus,
 } from '@mosolo/shared';
 import type { AuditLog } from '../../core/audit.js';
 import type { User, UserDirectory } from '../../core/auth.js';
@@ -21,6 +21,8 @@ import { InMemoryRepository } from '../../core/repository.js';
 import type { CommunicationService } from '../communications/service.js';
 import { userRecipient } from '../identity/recipients.js';
 import { evaluateFormula, formulaIdentifiers, FormulaError, parseFormula } from './formula.js';
+import { LegalTestBench, type SampleSimulation } from './legal-tests.js';
+import { INSTRUMENTS_COMPLEMENTAIRES } from './textes.js';
 
 export interface LegalInstrument {
   id: string;
@@ -127,6 +129,13 @@ export interface RuleRecord extends RuleSheet {
   /** Version qui a remplacé celle-ci (à l'activation de la nouvelle version). */
   supersededBy?: string;
   history?: RuleHistoryEntry[];
+  /** Cas de tests juridiques de la version (§ 11.2, § 44) et exécutions conservées (ajout seul). */
+  legalTestCases?: LegalTestCase[];
+  legalTestRuns?: LegalTestRun[];
+  /** Simulations sur échantillon réel jointes à la version (contrôle fiscal, § 6.2). */
+  sampleSimulations?: SampleSimulation[];
+  /** Avertissements de citation (ex. texte abrogé cité avec une date d'effet postérieure : publication impossible). */
+  citationWarnings?: string[];
 }
 
 export type RuleInput = Omit<RuleSheet, 'id' | 'version' | 'status' | 'approvals' | 'supersedesVersionId'> & {
@@ -175,6 +184,8 @@ export interface FormulaEvaluation {
 export class RuleService {
   readonly rules = new InMemoryRepository<RuleRecord>();
   readonly instruments = new InMemoryRepository<LegalInstrument>();
+  /** Cas de tests juridiques et simulation sur échantillon (porte de publication). */
+  readonly tests: LegalTestBench;
 
   constructor(
     private readonly clock: Clock,
@@ -183,7 +194,9 @@ export class RuleService {
     private readonly users: UserDirectory,
     private readonly aliasExists: (alias: string) => boolean,
     private alerts?: RuleAlertSink,
-  ) {}
+  ) {
+    this.tests = new LegalTestBench(this, clock, audit);
+  }
 
   /** Branche le service d'alertes du socle (le registre est construit avant certains services). */
   attachAlerts(alerts: RuleAlertSink): void {
@@ -192,6 +205,30 @@ export class RuleService {
 
   seedSamples(): void {
     for (const r of SAMPLE_RULES) this.rules.insert({ ...structuredClone(r), createdAt: this.clock.now().toISOString(), sample: true });
+  }
+
+  /**
+   * Complète le registre avec les textes du tableau du § 6.1 qui manquent (statut A_VERIFIER) ; n'écrase jamais un
+   * instrument existant. L'OL 13/001 reçoit, si elle n'en a pas, la note de son abrogation.
+   */
+  seedLegalTexts(): void {
+    for (const i of INSTRUMENTS_COMPLEMENTAIRES) if (!this.instruments.get(i.id)) this.instruments.insert(structuredClone(i));
+    const ol13 = this.instruments.get('ol-13-001');
+    if (ol13 && !ol13.note) {
+      this.instruments.update({ ...ol13, note: 'ABROGÉE par l’OL 18/004 du 13 mars 2018 (abrogation confirmée par la loi n° 18/014 selon KIN RECETTES — à vérifier) : aucune règle ne peut la citer comme texte en vigueur.' });
+    }
+  }
+
+  /** Textes abrogés cités par une règle avec une date d'effet postérieure à l'abrogation (cités « comme en vigueur »). */
+  abrogatedCitations(rule: Pick<RuleSheet, 'legalInstrumentIds' | 'effectiveFrom'>): LegalInstrument[] {
+    return rule.legalInstrumentIds
+      .map((id) => this.instruments.get(id))
+      .filter((i): i is LegalInstrument => !!i && i.status === 'ABROGE' && (!i.abrogatedOn || rule.effectiveFrom >= i.abrogatedOn));
+  }
+
+  /** Activation impossible (§ 6.3 : ACTE_REQUIS ; texte abrogé cité comme en vigueur). */
+  private activationBlocked(r: RuleRecord): boolean {
+    return acteRequisBloque(r) || this.abrogatedCitations(r).length > 0;
   }
 
   instrument(id: string): LegalInstrument | undefined {
@@ -216,7 +253,7 @@ export class RuleService {
       if ((r.status === 'ACTIVE' || r.status === 'PUBLIEE') && r.abrogation && r.abrogation.date <= today) {
         this.rules.update({ ...r, status: 'ABROGEE', history: this.withHistory(r, 'rule.abrogated.effective', 'moteur-regles', 'ABROGEE', `Abrogation effective le ${r.abrogation.date} (${r.abrogation.instrumentId})`) });
         this.audit.append({ actor: system, action: 'rule.abrogated.effective', resourceType: 'rule', resourceId: r.id, details: { date: r.abrogation.date, instrumentId: r.abrogation.instrumentId } });
-      } else if (r.status === 'PUBLIEE' && r.effectiveFrom <= today) {
+      } else if (r.status === 'PUBLIEE' && r.effectiveFrom <= today && !this.activationBlocked(r)) {
         this.rules.update({ ...r, status: 'ACTIVE', activatedAt: now.toISOString(), history: this.withHistory(r, 'rule.activated', 'moteur-regles', 'ACTIVE', `Date d'effet ${r.effectiveFrom}`) });
         this.audit.append({ actor: system, action: 'rule.activated', resourceType: 'rule', resourceId: r.id, details: { effectiveFrom: r.effectiveFrom } });
         this.comms.publish('rule.activated', this.users.withRole('R16').map(userRecipient), { reference: r.code }, { entity: r.administeringEntity });
@@ -263,6 +300,8 @@ export class RuleService {
     }
     const previous = this.rules.find((r) => r.code === input.code).sort((a, b) => b.version - a.version)[0];
     const version = (previous?.version ?? 0) + 1;
+    const citationWarnings = this.abrogatedCitations(input).map((i) => `Texte abrogé cité : ${i.id} (${i.title}), abrogé le ${i.abrogatedOn ?? '?'}${i.abrogatedBy ? ` par ${i.abrogatedBy}` : ''} — publication impossible tant qu’il est cité comme en vigueur.`);
+    if (acteRequisBloque(input)) citationWarnings.push('Catégorie ACTE_REQUIS : fiche simulable, jamais publiable ni activable (§ 6.3).');
     const rule = this.rules.insert({
       ...structuredClone(input),
       id: `rule-${input.code.toLowerCase()}-v${version}`,
@@ -272,6 +311,7 @@ export class RuleService {
       ...(previous ? { supersedesVersionId: previous.id } : {}),
       createdBy: user.id,
       createdAt: this.clock.now().toISOString(),
+      ...(citationWarnings.length ? { citationWarnings } : {}),
       history: [{
         at: this.clock.now().toISOString(), action: 'rule.created', by: user.id, status: 'BROUILLON',
         ...(previous ? { detail: `Nouvelle version ${version} de ${input.code} (remplace ${previous.id})${input.changeReason ? ` — ${input.changeReason}` : ''}` } : {}),
@@ -289,6 +329,10 @@ export class RuleService {
 
   /** Contrôles bloquants de publication (§ 6.3, § 6.12). */
   private publicationBlockers(rule: RuleRecord): { code: string; detail: string; instrumentId?: string } | null {
+    // § 6.3 / § 6.11 : recette nécessitant un acte nouveau — simulable, jamais publiable ni activable.
+    if (acteRequisBloque(rule)) {
+      return { code: 'ACTE_REQUIS_NON_ACTIVABLE', detail: `${rule.code} v${rule.version} relève de la catégorie ACTE_REQUIS : un acte nouveau est requis ; créer une nouvelle version dans la catégorie fixée par cet acte.` };
+    }
     for (const id of rule.legalInstrumentIds) {
       const inst = this.instruments.get(id);
       if (!inst) return { code: 'UNKNOWN_LEGAL_INSTRUMENT', detail: `Instrument inconnu : ${id}`, instrumentId: id };
@@ -357,7 +401,8 @@ export class RuleService {
       throw forbidden('FORBIDDEN', `Le visa « ${role} » exige le rôle ${required}.`);
     }
     if (role === 'AUTORITE_PUBLICATION') {
-      const blocker = this.publicationBlockers(rule);
+      // Contrôle fiscal (§ 6.2, § 11.2, § 44) : cas de tests juridiques exécutés (résultat conservé) et échantillon joint.
+      const blocker: { code: string; detail: string; instrumentId?: string } | null = this.publicationBlockers(rule) ?? this.tests.gate(rule, user);
       if (blocker) {
         this.audit.append({ actor, action: 'rule.publication.blocked', resourceType: 'rule', resourceId: rule.id, outcome: 'DENIED', details: blocker });
         throw unprocessable(blocker.code, blocker.detail, blocker.instrumentId ? { instrumentId: blocker.instrumentId } : {});
@@ -366,7 +411,7 @@ export class RuleService {
     const now = this.clock.now().toISOString();
     const step = FLOW[role];
     const updated = this.rules.update({
-      ...rule,
+      ...(this.rules.get(rule.id) ?? rule), // relu : la porte de publication a pu conserver une exécution des cas
       approvals: [...rule.approvals, { role, userId: user.id, at: now }],
       status: step.to,
       ...(step.to === 'PUBLIEE' ? { publishedAt: now } : {}),

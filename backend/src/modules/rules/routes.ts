@@ -1,4 +1,4 @@
-import { REQUIRED_APPROVALS } from '@mosolo/shared';
+import { ficheTechnique, REQUIRED_APPROVALS, RULE_TECHNICAL_ATTRIBUTES, TAXABLE_EVENT_KINDS, TAXABLE_EVENT_LABELS } from '@mosolo/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../../context.js';
@@ -8,6 +8,7 @@ import { authorize } from '../../core/policy.js';
 import { recalculationsFor } from './recalculation.js';
 import type { RuleInput } from './service.js';
 import { kinshasaDay } from '../../core/clock.js';
+import { completude } from './textes.js';
 
 const REVENUE_CATEGORIES = [
   'IMPOT_PROVINCIAL', 'INTERET_COMMUN', 'PROVINCIAL_SPECIFIQUE', 'RECETTE_ETD', 'RECETTE_CENTRALE', 'PARTAGEE',
@@ -23,6 +24,8 @@ const ruleSchema = z.object({
   competentAuthority: z.string().min(1),
   administeringEntity: z.string().min(1),
   taxableEvent: z.string().min(1),
+  /** Fait générateur typé (§ 6.2) — facultatif, en plus du libellé. */
+  taxableEventKind: z.enum(TAXABLE_EVENT_KINDS).optional(),
   liableParty: z.string().min(1),
   withholdingAgent: z.string().optional(),
   baseDefinition: z.string().min(1),
@@ -56,6 +59,18 @@ const abrogateSchema = z.object({ date: isoDateString, instrumentId: z.string().
 const instrumentAbrogateSchema = z.object({ date: isoDateString, abrogatedBy: z.string().min(1), reason: motive }).strict();
 const recalcDecisionSchema = z.object({ decision: z.enum(['APPLIQUER', 'REJETER']), reason: motive }).strict();
 
+const inputsSchema = z.record(z.string().regex(/^[a-z_][a-z0-9_]{0,63}$/), decimalString);
+const testCaseSchema = z.object({
+  label: z.string().trim().min(3).max(300),
+  inputs: inputsSchema.default({}),
+  localityRank: z.number().int().min(1).max(4).default(1),
+  expected: z.union([z.object({ amount: decimalString }).strict(), z.object({ errorCode: z.string().regex(/^[A-Z_]{3,64}$/) }).strict()]),
+}).strict();
+const sampleSchema = z.object({
+  source: z.string().trim().min(10, 'décrire la provenance de l’échantillon (dossiers réels anonymisés, campagne…)').max(500),
+  rows: z.array(z.object({ ref: z.string().trim().min(1).max(80), inputs: inputsSchema, localityRank: z.number().int().min(1).max(4), previousAmount: decimalString.optional() }).strict()).max(5000).optional(),
+}).strict();
+
 const approveSchema = z.object({ role: z.enum(REQUIRED_APPROVALS as [string, ...string[]]) }).strict();
 
 export function registerRuleRoutes(app: FastifyInstance, ctx: AppContext): void {
@@ -70,7 +85,59 @@ export function registerRuleRoutes(app: FastifyInstance, ctx: AppContext): void 
   app.get<{ Params: { id: string } }>('/v1/legal-rules/:id', async (req) => {
     authorize(requireUser(req), 'rule.read');
     const rule = ctx.rules.get(req.params.id);
-    return { ...rule, requiredInputs: ctx.rules.requiredInputs(rule) };
+    return { ...rule, requiredInputs: ctx.rules.requiredInputs(rule), testGate: ctx.rules.tests.status(rule) };
+  });
+
+  // ── Registre : attributs techniques du Cahier (§ 6.2) — table de correspondance et fiche en snake_case ──
+  app.get('/v1/legal-rules/attributs-techniques', async (req) => {
+    authorize(requireUser(req), 'rule.read');
+    return { correspondance: RULE_TECHNICAL_ATTRIBUTES, faitsGenerateurs: TAXABLE_EVENT_KINDS.map((k) => ({ code: k, label: TAXABLE_EVENT_LABELS[k] })) };
+  });
+
+  app.get<{ Params: { id: string } }>('/v1/legal-rules/:id/fiche-technique', async (req) => {
+    authorize(requireUser(req), 'rule.read');
+    const rule = ctx.rules.get(req.params.id);
+    return { format: 'snake_case', correspondance: RULE_TECHNICAL_ATTRIBUTES, fiche: ficheTechnique(rule) };
+  });
+
+  // ── Cas de tests juridiques et simulation sur échantillon réel (§ 11.2, § 44, § 6.2) ──
+  app.get<{ Params: { id: string } }>('/v1/legal-rules/:id/test-cases', async (req) => {
+    authorize(requireUser(req), 'rule.read');
+    const rule = ctx.rules.get(req.params.id);
+    return {
+      ruleId: rule.id, version: rule.version, gate: ctx.rules.tests.status(rule), cases: rule.legalTestCases ?? [],
+      runs: rule.legalTestRuns ?? [], sampleSimulations: rule.sampleSimulations ?? [],
+    };
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/test-cases', async (req, reply) => {
+    const user = requireUser(req);
+    return reply.code(201).send(ctx.rules.tests.addCase(user, req.params.id, parse(testCaseSchema, req.body)));
+  });
+
+  app.post<{ Params: { id: string; caseId: string } }>('/v1/legal-rules/:id/test-cases/:caseId/validate', async (req) => {
+    const user = requireUser(req);
+    requireAcr(user, ACR.MFA); // validation juridique : acte sensible
+    return ctx.rules.tests.validateCase(user, req.params.id, req.params.caseId);
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/test-cases/run', async (req) => ctx.rules.tests.runAs(requireUser(req), req.params.id));
+
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/sample-simulations', async (req, reply) => {
+    const user = requireUser(req);
+    const body = parse(sampleSchema, req.body);
+    const rule = ctx.rules.get(req.params.id);
+    // Échantillon réel : traces figées des liquidations antérieures du même code (entrées, rang, montant).
+    const prior = ctx.assessment.obligations
+      .find((o) => o.ruleCode === rule.code && o.ruleId !== rule.id && !o.trace.simulate)
+      .map((o) => ({ ref: o.id, inputs: o.trace.inputs, localityRank: o.trace.localityRank, ...(o.amount.currency === rule.currency ? { previousAmount: o.amount.amount } : {}) }));
+    return reply.code(201).send(ctx.rules.tests.simulateSample(user, req.params.id, body, prior));
+  });
+
+  // Complétude du registre des textes (tableau du § 6.1).
+  app.get('/v1/legal-instruments/completude', async (req) => {
+    authorize(requireUser(req), 'rule.read');
+    return completude((id) => ctx.rules.instrument(id));
   });
 
   app.get('/v1/legal-instruments', async (req) => {

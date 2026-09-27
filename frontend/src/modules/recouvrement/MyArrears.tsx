@@ -20,6 +20,7 @@ import {
   type Appeal, type Arrear, type MyRemission, type Plan,
 } from './types';
 import './recouvrement.css';
+import { AttenteBaseLegale } from '../juridique/AttenteBaseLegale';
 
 interface Mine {
   asOf: string;
@@ -206,6 +207,8 @@ export default function MyArrears() {
     <div className="page rc-page">
       <PageHead eyebrow="Mon espace" title="Mes arriérés et échéances" lead="Ce que vous devez, pourquoi, jusqu’à quand, et vos droits : échéancier si un acte l’autorise, observations avant toute mesure, réclamation avec délais affichés." />
       {!isTaxpayer && <p className="callout callout-info"><Icon name="info" size={18} /> Écran réservé aux contribuables et à leurs mandataires : choisissez un profil contribuable de démonstration.</p>}
+      {/* Échéanciers par monnaie mobile : base légale J14 (§ 6.4) — affichage seulement, rien n'est désactivé. */}
+      {isTaxpayer && <AttenteBaseLegale fonction="ECHEANCIERS_MOBILE_MONEY" compact />}
       {q.loading && <Loading />}
       {q.error !== null && isTaxpayer && <ErrorState error={q.error} onRetry={q.reload} />}
       {d && (

@@ -3,7 +3,7 @@
  * Déterministe : mêmes règle, version, entrées ⇒ même montant. Chaque obligation fige la version de règle
  * appliquée et porte son explication complète (AC-ASS-01). Aucune obligation sans règle exécutable (AC-LEG-01).
  */
-import { isRuleExecutable, Money, type MoneyJSON, type ObligationStatus, type RevenueCategory, type TerritorialAttribution } from '@mosolo/shared';
+import { isRuleExecutable, Money, refusParCategorie, type MoneyJSON, type ObligationStatus, type RevenueCategory, type TerritorialAttribution } from '@mosolo/shared';
 import type { AuditLog } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { DAY_MS, kinshasaDate, type Clock } from '../../core/clock.js';
@@ -247,6 +247,16 @@ export class AssessmentService {
       throw unprocessable('OBJECT_TAXPAYER_MISMATCH', `L'objet ${object.id} n'est pas rattaché au contribuable ${taxpayer.id}.`);
     }
     const now = this.clock.now();
+    // Séparation des compétences (§ 6.3, § 6.11) : ACTE_REQUIS jamais liquidée, RECETTE_CENTRALE exclue, RECETTE_ETD
+    // non liquidée par la province. La simulation reste possible (non opposable).
+    const refusal = input.simulate ? null : refusParCategorie(rule.revenueCategory, user.entity);
+    if (refusal) {
+      this.audit.append({
+        actor, action: 'assessment.liquidation.refused', resourceType: 'rule', resourceId: rule.id, outcome: 'DENIED',
+        details: { reason: refusal.code, category: rule.revenueCategory, entity: user.entity, taxpayerId: taxpayer.id, objectId: object.id },
+      });
+      throw unprocessable(refusal.code, `Règle ${rule.code} v${rule.version} : ${refusal.detail}`, { category: rule.revenueCategory });
+    }
     const exec = isRuleExecutable(rule, now);
     if (!input.simulate && !exec.ok) {
       // AC-LEG-01 : aucune obligation, tentative journalisée.

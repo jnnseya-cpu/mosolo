@@ -14,6 +14,7 @@ import { MoneyText } from '../../components/MoneyText';
 import { StatusBadge } from '../../components/StatusBadge';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import './prestataires.css';
+import { AttenteBaseLegale } from '../juridique/AttenteBaseLegale';
 import type { UIKey } from '../../lib/i18n';
 
 interface Connector {
@@ -66,6 +67,8 @@ export default function Prestataires() {
         <button type="button" className="btn btn-ghost btn-sm" onClick={q.reload}><Icon name="refresh" size={16} /> Actualiser</button>
       </PageHead>
       <ExampleNotice text="Prestataires candidats, non désignés : l’activation en production exige l’agrément BCC, une convention et une procédure de passation. Sans clé API, chaque connecteur fonctionne en bac à sable local." />
+      {/* Habilitation des agrégateurs et prestataires (J9, J20) : l'activation en production attend la base légale. */}
+      <AttenteBaseLegale fonction="AGREGATEURS_ACTIVATION" />
       {q.loading && <Loading />}
       {!!q.error && <ErrorState error={q.error} onRetry={q.reload} />}
       {q.data && (
