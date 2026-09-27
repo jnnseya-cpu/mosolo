@@ -16,6 +16,7 @@ import { buildNearby } from './nearby.js';
 const proofSchema = z.object({ type: z.enum(PROOF_TYPES), reference: z.string().trim().min(3).max(200), sha256: z.string().regex(/^[0-9a-f]{64}$/).optional() }).strict();
 const reasonSchema = z.object({ reason: z.string().trim().min(3).max(1000) }).strict();
 const decimal = z.string().regex(/^\d{1,15}(\.\d{1,6})?$/, 'nombre décimal positif en chaîne attendu');
+const rankSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]);
 
 const relationSchema = z.object({
   taxpayerId: z.string().optional(),
@@ -107,8 +108,30 @@ export function registerFiscalRoutes(app: FastifyInstance, ctx: AppContext, svc:
 
   app.post<{ Params: { id: string } }>('/v1/fiscal/objects/:id/validate', async (req) => {
     const user = requireUser(req);
-    const r = svc.properties.validateObject(user, req.params.id);
+    // Le validateur confirme le rang déclaré (provisoire) ou le rectifie ; la table certifiée s'impose si elle existe.
+    const body = parse(z.object({ localityRank: rankSchema.optional(), reason: z.string().trim().min(3).max(1000).optional() }).strict(), req.body ?? {});
+    const r = svc.properties.validateObject(user, req.params.id, { ...(body.localityRank !== undefined ? { localityRank: body.localityRank } : {}), ...(body.reason ? { reason: body.reason } : {}) });
     return { object: svc.objectView(r.object, user, []), plate: svc.properties.qrOf(r.plate) };
+  });
+
+  // Correction du rang ou d'attributs de base (surface…) : proposition puis approbation par une seconde personne.
+  app.post<{ Params: { id: string } }>('/v1/fiscal/objects/:id/corrections', async (req, reply) => {
+    const body = parse(z.object({ localityRank: rankSchema.optional(), attributes: z.record(decimal).optional(), reason: z.string().trim().min(10).max(1000) }).strict(), req.body);
+    return reply.code(201).send(svc.properties.proposeCorrection(requireUser(req), req.params.id, {
+      reason: body.reason, ...(body.localityRank !== undefined ? { localityRank: body.localityRank } : {}), ...(body.attributes ? { attributes: body.attributes } : {}),
+    }));
+  });
+
+  app.get<{ Params: { id: string } }>('/v1/fiscal/objects/:id/corrections', async (req) => {
+    const user = requireUser(req);
+    const o = ctx.objects.get(req.params.id);
+    authorize(user, 'fiscal:object.read', { communes: [o.commune], ...(o.taxpayerId ? { taxpayerId: o.taxpayerId } : {}) });
+    return { corrections: svc.properties.corrections.find((c) => c.objectId === o.id), history: o.history ?? [] };
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/fiscal/object-corrections/:id/decision', async (req) => {
+    const body = parse(z.object({ approve: z.boolean(), reason: z.string().trim().min(10).max(1000) }).strict(), req.body);
+    return svc.properties.decideCorrection(requireUser(req), req.params.id, body);
   });
 
   app.post<{ Params: { id: string } }>('/v1/fiscal/objects/:id/plate/pose', async (req) => {

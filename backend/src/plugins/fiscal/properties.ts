@@ -6,11 +6,12 @@
  * La pose d'une plaque n'emporte aucune restriction de location avant l'acte NFIU (ARB-16, J27).
  */
 import type { User } from '../../core/auth.js';
-import { conflict, notFound, unprocessable } from '../../core/errors.js';
-import { assertDistinctPerson, authorize } from '../../core/policy.js';
+import { badRequest, conflict, notFound, unprocessable } from '../../core/errors.js';
+import { assertDistinctPerson, assertNotRelated, authorize } from '../../core/policy.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { taxpayerRecipient } from '../../modules/identity/recipients.js';
-import type { FiscalObject } from '../../modules/objects/service.js';
+import { rankConfirmed, type FiscalObject } from '../../modules/objects/service.js';
+import { certifiedRankOf, type LocalityRank } from '../../reference/locality-ranks.js';
 import { actorOf, CATEGORY_LABELS, formatShortCode, newShortCode, normalizeShortCode, parentIdOf, type FiscalDeps } from './common.js';
 import type { RelationService } from './relations.js';
 import { coverageOf, occupancyOf, situationOf } from './situation.js';
@@ -35,11 +36,30 @@ export interface PropertyPlate {
   replaces?: string;
 }
 
+/**
+ * Correction du rang de localité ou d'attributs de base d'un objet (surface…) : proposée puis approuvée par deux
+ * personnes distinctes (quatre yeux), historisée, suivie de la réévaluation des obligations ouvertes de l'objet.
+ */
+export interface ObjectCorrection {
+  id: string;
+  objectId: string;
+  taxpayerId?: string;
+  proposed: { localityRank?: LocalityRank; attributes?: Record<string, string> };
+  before: { localityRank: number; attributes: Record<string, unknown> };
+  reason: string;
+  proposedBy: string;
+  proposedAt: string;
+  status: 'PROPOSEE' | 'APPLIQUEE' | 'REJETEE';
+  decision?: { by: string; at: string; reason: string; approved: boolean };
+  reassessed?: { obligationId: string; changed: boolean; resultingObligationId: string }[];
+}
+
 export interface PlateCheck { id: string; at: string; shortCode: string; result: string; channel: 'PUBLIC' | 'AGENT'; actorId: string }
 
 export class PropertyService {
   readonly plates = new InMemoryRepository<PropertyPlate>();
   readonly checks = new InMemoryAppendOnlyRepository<PlateCheck>();
+  readonly corrections = new InMemoryRepository<ObjectCorrection>();
   private readonly ids = new IdGenerator();
 
   constructor(private readonly d: FiscalDeps, private readonly relations: RelationService) {}
@@ -57,11 +77,26 @@ export class PropertyService {
    * Validation par un agent habilité (contrôleur, chef de service, direction) : IGF stable généré une seule fois,
    * étiquette QR émise. Une nouvelle validation ne change jamais l'IGF.
    */
-  validateObject(user: User, objectId: string): { object: FiscalObject; plate: PropertyPlate } {
+  validateObject(user: User, objectId: string, input: { localityRank?: LocalityRank; reason?: string } = {}): { object: FiscalObject; plate: PropertyPlate } {
     const obj = this.d.ctx.objects.get(objectId);
     authorize(user, 'fiscal:object.validate', { communes: [obj.commune] });
     // Séparation des tâches : celui qui a recensé ou déclaré ne valide pas.
     assertDistinctPerson(user.id, [obj.createdBy], 'L’auteur du recensement ou de la déclaration ne peut pas valider l’objet.');
+    assertNotRelated(user, obj.taxpayerId, 'Conflit d’intérêts : le validateur est lié au contribuable redevable de l’objet.');
+    // Rang : le rang déclaré est PROVISOIRE ; la validation par une personne distincte le confirme (ou le corrige).
+    // La table certifiée, si elle couvre le quartier, s'impose ; un rang déjà confirmé ne se corrige qu'en quatre yeux.
+    const certified = certifiedRankOf(obj.commune, obj.quartier);
+    if (certified && input.localityRank !== undefined && input.localityRank !== certified.rank) {
+      throw unprocessable('LOCALITY_RANK_CERTIFIED_MISMATCH', `Le rang certifié de ${obj.quartier} (${obj.commune}) est ${certified.rank} (${certified.instrumentId}, ${certified.article}) : aucun autre rang n’est admis.`);
+    }
+    if (!certified && input.localityRank !== undefined && input.localityRank !== obj.localityRank && rankConfirmed(obj)) {
+      throw conflict('RANK_ALREADY_CONFIRMED', 'Rang déjà confirmé : sa modification passe par une correction en double validation.');
+    }
+    const confirmedRank = (certified?.rank ?? input.localityRank ?? obj.localityRank) as LocalityRank;
+    const rank = {
+      localityRank: confirmedRank, source: certified ? 'TABLE_CERTIFIEE' as const : 'VALIDATION' as const,
+      reason: input.reason?.trim() || (certified ? `Rang certifié (${certified.instrumentId}, ${certified.article}).` : 'Rang confirmé à la validation par une personne distincte du déclarant.'),
+    };
     const parent = this.parentOf(obj);
     let validated = obj;
     if (!obj.igf) {
@@ -71,12 +106,75 @@ export class PropertyService {
       }
       const siblings = parent ? this.childrenOf(parent).filter((c) => c.igf && c.category === obj.category).length : 0;
       const igf = this.d.geo.generateIgf(obj, parent, siblings);
-      validated = this.d.ctx.objects.markValidated(obj.id, user, igf);
+      validated = this.d.ctx.objects.markValidated(obj.id, user, igf, rank);
     } else {
-      validated = this.d.ctx.objects.markValidated(obj.id, user, obj.igf);
+      validated = this.d.ctx.objects.markValidated(obj.id, user, obj.igf, rank);
+    }
+    // Obligations liquidées sur le rang provisoire : réévaluées sur le rang confirmé (hausse comme baisse).
+    for (const o of this.d.ctx.assessment.openFor(obj.id, true)) {
+      this.d.ctx.assessment.reassess(o.id, user, { reason: `Rang de localité confirmé à ${confirmedRank} à la validation de l’objet ${obj.id}.`, sourceId: obj.id, path: 'REEVALUATION_RANG' });
     }
     const plate = this.currentPlate(obj.id) ?? this.issuePlate(user, validated);
     return { object: validated, plate };
+  }
+
+  /** Proposition motivée de correction du rang ou d'attributs de base (surface…) d'un objet. */
+  proposeCorrection(user: User, objectId: string, input: { localityRank?: LocalityRank; attributes?: Record<string, string>; reason: string }): ObjectCorrection {
+    const obj = this.d.ctx.objects.get(objectId);
+    authorize(user, 'fiscal:object.correct', { communes: [obj.commune] });
+    assertNotRelated(user, obj.taxpayerId, 'Conflit d’intérêts : l’agent est lié au contribuable redevable de l’objet.');
+    if (input.reason.trim().length < 10) throw badRequest('REASON_REQUIRED', 'Motif d’au moins 10 caractères requis.');
+    if (input.localityRank === undefined && !Object.keys(input.attributes ?? {}).length) throw badRequest('NOTHING_TO_CORRECT', 'Aucune correction proposée (rang ou attribut).');
+    for (const [k, v] of Object.entries(input.attributes ?? {})) {
+      if (!/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(k) || !/^\d{1,15}(\.\d{1,6})?$/.test(v)) throw badRequest('INVALID_ATTRIBUTE', `Attribut de base « ${k} » : nombre décimal positif attendu.`);
+    }
+    const certified = certifiedRankOf(obj.commune, obj.quartier);
+    if (certified && input.localityRank !== undefined && input.localityRank !== certified.rank) {
+      throw unprocessable('LOCALITY_RANK_CERTIFIED_MISMATCH', `Le rang certifié de ${obj.quartier} (${obj.commune}) est ${certified.rank} : aucune correction vers un autre rang.`);
+    }
+    if (this.corrections.findOne((c) => c.objectId === obj.id && c.status === 'PROPOSEE')) throw conflict('CORRECTION_PENDING', 'Une correction est déjà proposée pour cet objet.');
+    const c = this.corrections.insert({
+      id: this.ids.next('CORR-OBJ', 6), objectId: obj.id, ...(obj.taxpayerId ? { taxpayerId: obj.taxpayerId } : {}),
+      proposed: { ...(input.localityRank !== undefined ? { localityRank: input.localityRank } : {}), ...(input.attributes && Object.keys(input.attributes).length ? { attributes: input.attributes } : {}) },
+      before: { localityRank: obj.localityRank, attributes: Object.fromEntries(Object.keys(input.attributes ?? {}).map((k) => [k, obj.attributes[k] ?? null])) },
+      reason: input.reason.trim(), proposedBy: user.id, proposedAt: this.d.nowIso(), status: 'PROPOSEE',
+    });
+    this.d.ctx.audit.append({ actor: actorOf(user), action: 'object.correction.proposed', resourceType: 'fiscal_object', resourceId: obj.id, details: { correctionId: c.id, proposed: c.proposed, before: c.before } });
+    return c;
+  }
+
+  /** Approbation par une seconde personne (≠ auteur de la proposition, ≠ déclarant) : application, historique, réévaluation. */
+  decideCorrection(user: User, correctionId: string, input: { approve: boolean; reason: string }): ObjectCorrection {
+    const c = this.corrections.get(correctionId);
+    if (!c) throw notFound('CORRECTION_NOT_FOUND', `Correction inconnue : ${correctionId}`);
+    const obj = this.d.ctx.objects.get(c.objectId);
+    authorize(user, 'fiscal:object.correct.approve', { communes: [obj.commune] });
+    if (c.status !== 'PROPOSEE') throw conflict('CORRECTION_ALREADY_DECIDED', `Correction au statut ${c.status}.`);
+    assertDistinctPerson(user.id, [c.proposedBy, obj.createdBy], 'Quatre yeux : la correction est approuvée par une personne distincte de l’auteur de la proposition et du déclarant.');
+    assertNotRelated(user, obj.taxpayerId, 'Conflit d’intérêts : l’approbateur est lié au contribuable redevable de l’objet.');
+    if (input.reason.trim().length < 10) throw badRequest('REASON_REQUIRED', 'Motif d’au moins 10 caractères requis.');
+    const now = this.d.nowIso();
+    if (!input.approve) {
+      const r = this.corrections.update({ ...c, status: 'REJETEE', decision: { by: user.id, at: now, reason: input.reason.trim(), approved: false } });
+      this.d.ctx.audit.append({ actor: actorOf(user), action: 'object.correction.rejected', resourceType: 'fiscal_object', resourceId: obj.id, details: { correctionId: c.id } });
+      return r;
+    }
+    this.d.ctx.objects.applyCorrection(obj.id, {
+      ...(c.proposed.localityRank !== undefined ? { localityRank: c.proposed.localityRank } : {}),
+      ...(c.proposed.attributes ? { attributes: c.proposed.attributes } : {}),
+      by: [c.proposedBy, user.id], reason: c.reason, correctionId: c.id,
+    });
+    const reassessed: NonNullable<ObjectCorrection['reassessed']> = [];
+    for (const o of this.d.ctx.assessment.openFor(obj.id)) {
+      const res = this.d.ctx.assessment.reassess(o.id, user, {
+        reason: `Correction ${c.id} de l’objet ${obj.id} (quatre yeux : ${c.proposedBy}, ${user.id}) — ${c.reason}`, sourceId: c.id, path: 'CORRECTION_OBJET',
+        ...(c.proposed.attributes ? { inputs: c.proposed.attributes } : {}),
+      });
+      reassessed.push({ obligationId: o.id, changed: res.changed, resultingObligationId: res.obligation.id });
+    }
+    const r = this.corrections.update({ ...c, status: 'APPLIQUEE', decision: { by: user.id, at: now, reason: input.reason.trim(), approved: true }, reassessed });
+    this.d.ctx.audit.append({ actor: actorOf(user), action: 'object.correction.applied', resourceType: 'fiscal_object', resourceId: obj.id, details: { correctionId: c.id, proposedBy: c.proposedBy, approvedBy: user.id, before: c.before, after: c.proposed, reassessed } });
+    return r;
   }
 
   currentPlate(objectId: string): PropertyPlate | undefined {

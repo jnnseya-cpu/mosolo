@@ -34,7 +34,11 @@ function canRead(user: User, a: Pick<Appeal, 'taxpayerId'>): boolean {
 }
 const isAgentReader = (user: User) => !!(evaluate(user, 'appeal.instruct') || evaluate(user, 'appeal.decide') || evaluate(user, 'audit.read'));
 const instructSchema = z.object({ proposal: decisionEnum, analysis: z.string().trim().min(5).max(5000), proposedAmount: moneySchema.optional() }).strict();
-const decideSchema = z.object({ decision: decisionEnum, reason: z.string().trim().min(5).max(5000), rectifiedAmount: moneySchema.optional() }).strict();
+const decideSchema = z.object({
+  decision: decisionEnum, reason: z.string().trim().min(5).max(5000), rectifiedAmount: moneySchema.optional(),
+  // Re-liquidation justificative : entrées corrigées (même règle, même version) ; son résultat est un plancher.
+  reliquidationInputs: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/), z.string().regex(/^\d{1,15}(\.\d{1,6})?$/)).optional(),
+}).strict();
 
 export function registerAppealRoutes(app: FastifyInstance, ctx: AppContext): void {
   app.post('/v1/appeals', async (req, reply) => {

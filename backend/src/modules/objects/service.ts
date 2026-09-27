@@ -7,6 +7,7 @@ import { badRequest, forbidden, notFound, unprocessable } from '../../core/error
 import { authorize } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import { isCommune } from '../../reference/kinshasa.js';
+import { certifiedRankOf } from '../../reference/locality-ranks.js';
 import type { CommunicationService } from '../communications/service.js';
 import { taxpayerRecipient } from '../identity/recipients.js';
 import type { TaxpayerService } from '../identity/service.js';
@@ -42,6 +43,31 @@ export interface FiscalObject {
   igf?: { uuid: string; code: string; codeVersion: number; assignedAt: string; assignedBy: string };
   validatedBy?: string;
   validatedAt?: string;
+  /**
+   * Rang de localité : PROVISOIRE tant qu'il n'est que déclaré ; CONFIRME par la validation d'une personne distincte
+   * du déclarant ou par la table certifiée (reference/locality-ranks.ts). Absent sur les objets anciens : un objet
+   * VALIDE vaut rang confirmé.
+   */
+  rankStatus?: 'PROVISOIRE' | 'CONFIRME';
+  rankSource?: 'DECLARANT' | 'VALIDATION' | 'TABLE_CERTIFIEE' | 'CORRECTION';
+  rankConfirmedBy?: string;
+  /** Historique des corrections de rang et de base (jamais écrasé). */
+  history?: ObjectChange[];
+}
+
+export interface ObjectChange {
+  at: string;
+  kind: 'RANG_CONFIRME' | 'RANG_CORRIGE' | 'CORRECTION';
+  by: string[];
+  before: { localityRank: number; attributes?: Record<string, unknown> };
+  after: { localityRank: number; attributes?: Record<string, unknown> };
+  reason: string;
+  correctionId?: string;
+}
+
+/** Le rang de l'objet est-il confirmé (validation distincte ou table certifiée) ? */
+export function rankConfirmed(o: FiscalObject): boolean {
+  return o.rankStatus ? o.rankStatus === 'CONFIRME' : o.status === 'VALIDE';
 }
 
 export const LEASE_PERIODICITIES = ['MENSUELLE', 'TRIMESTRIELLE', 'SEMESTRIELLE', 'ANNUELLE'] as const;
@@ -94,19 +120,24 @@ export class ObjectService {
     if (taxpayerId) this.taxpayers.get(taxpayerId);
     if (input.parentObjectId) this.get(input.parentObjectId);
     const isAgent = !user.roles.includes('R30');
+    // Rang : imposé par la table certifiée si le quartier y figure ; sinon rang déclaré PROVISOIRE (jamais inventé).
+    const certified = certifiedRankOf(input.commune, input.quartier);
+    const localityRank = certified ? certified.rank : input.localityRank;
     const obj = this.objects.insert({
       id: fixedId ?? this.ids.next('OBJ'),
       ...(taxpayerId ? { taxpayerId } : {}),
       category: input.category,
       commune: input.commune,
       quartier: input.quartier,
-      localityRank: input.localityRank,
+      localityRank,
       lat: input.lat,
       lon: input.lon,
       attributes: input.attributes,
       observed: {},
       status: 'PROVISOIRE',
       probativeStatus: isAgent ? 'OBSERVE' : 'DECLARE',
+      rankStatus: certified ? 'CONFIRME' : 'PROVISOIRE',
+      rankSource: certified ? 'TABLE_CERTIFIEE' : 'DECLARANT',
       createdBy: user.id,
       createdAt: this.clock.now().toISOString(),
       ...(input.parentObjectId ? { parentObjectId: input.parentObjectId } : {}),
@@ -117,7 +148,10 @@ export class ObjectService {
       action: 'object.declared',
       resourceType: 'fiscal_object',
       resourceId: obj.id,
-      details: { category: obj.category, commune: obj.commune, probativeStatus: obj.probativeStatus },
+      details: {
+        category: obj.category, commune: obj.commune, probativeStatus: obj.probativeStatus, localityRank, rankStatus: obj.rankStatus,
+        ...(certified && certified.rank !== input.localityRank ? { declaredRank: input.localityRank, certifiedRank: certified.rank } : {}),
+      },
     });
     if (taxpayerId) {
       this.comms.publish('object.provisional.created', [taxpayerRecipient(this.taxpayers.get(taxpayerId))], { reference: obj.id }, { entity: 'DGIPK' });
@@ -135,11 +169,21 @@ export class ObjectService {
    * Validation d'un objet par un agent habilité (l'autorisation est vérifiée par l'appelant) :
    * statut VALIDE, statut probant VÉRIFIÉ, identifiant géofiscal figé s'il n'existe pas encore.
    */
-  markValidated(id: string, by: User, igf: { uuid: string; code: string; codeVersion: number }): FiscalObject {
+  markValidated(id: string, by: User, igf: { uuid: string; code: string; codeVersion: number }, rank?: { localityRank: 1 | 2 | 3 | 4; source: 'VALIDATION' | 'TABLE_CERTIFIEE'; reason: string }): FiscalObject {
     const o = this.get(id);
     const now = this.clock.now().toISOString();
+    const confirmedRank = rank?.localityRank ?? o.localityRank;
+    const rankChange: ObjectChange = {
+      at: now, kind: confirmedRank === o.localityRank ? 'RANG_CONFIRME' : 'RANG_CORRIGE', by: [by.id],
+      before: { localityRank: o.localityRank }, after: { localityRank: confirmedRank }, reason: rank?.reason ?? 'Rang confirmé à la validation.',
+    };
     const updated = this.objects.update({
       ...o,
+      localityRank: confirmedRank,
+      rankStatus: 'CONFIRME',
+      rankSource: rank?.source ?? (o.rankSource === 'TABLE_CERTIFIEE' || o.rankSource === 'CORRECTION' ? o.rankSource : 'VALIDATION'),
+      rankConfirmedBy: by.id,
+      history: [...(o.history ?? []), rankChange],
       status: 'VALIDE',
       probativeStatus: o.probativeStatus === 'CONTESTE' ? 'CONTESTE' : 'VERIFIE',
       igf: o.igf ?? { ...igf, assignedAt: now, assignedBy: by.id },
@@ -148,9 +192,31 @@ export class ObjectService {
     });
     this.audit.append({
       actor: { kind: 'user', id: by.id, roles: by.roles }, action: 'object.validated', resourceType: 'fiscal_object', resourceId: id,
-      details: { igf: updated.igf?.code, igfUuid: updated.igf?.uuid, firstAssignment: !o.igf },
+      details: { igf: updated.igf?.code, igfUuid: updated.igf?.uuid, firstAssignment: !o.igf, localityRank: confirmedRank, previousRank: o.localityRank },
     });
     return updated;
+  }
+
+  /**
+   * Correction de rang ou d'attributs de base décidée en double validation (l'appelant contrôle les quatre yeux) :
+   * l'état antérieur est conservé dans l'historique, jamais écrasé sans trace.
+   */
+  applyCorrection(id: string, change: { localityRank?: 1 | 2 | 3 | 4; attributes?: Record<string, unknown>; by: string[]; reason: string; correctionId: string }): FiscalObject {
+    const o = this.get(id);
+    const now = this.clock.now().toISOString();
+    const beforeAttrs = change.attributes ? Object.fromEntries(Object.keys(change.attributes).map((k) => [k, o.attributes[k] ?? null])) : undefined;
+    const entry: ObjectChange = {
+      at: now, kind: 'CORRECTION', by: change.by, reason: change.reason, correctionId: change.correctionId,
+      before: { localityRank: o.localityRank, ...(beforeAttrs ? { attributes: beforeAttrs } : {}) },
+      after: { localityRank: change.localityRank ?? o.localityRank, ...(change.attributes ? { attributes: change.attributes } : {}) },
+    };
+    return this.objects.update({
+      ...o,
+      localityRank: change.localityRank ?? o.localityRank,
+      attributes: change.attributes ? { ...o.attributes, ...change.attributes } : o.attributes,
+      ...(change.localityRank !== undefined ? { rankStatus: 'CONFIRME' as const, rankSource: 'CORRECTION' as const, rankConfirmedBy: change.by[change.by.length - 1]! } : {}),
+      history: [...(o.history ?? []), entry],
+    });
   }
 
   /** Rattache le redevable principal d'un objet provisoire (après validation d'une relation de propriété). */

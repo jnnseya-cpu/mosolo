@@ -12,8 +12,9 @@ import type { User, UserDirectory } from '../../core/auth.js';
 import { DAY_MS, isoDate, type Clock } from '../../core/clock.js';
 import { canonicalJson, sha256Hex } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
-import { assertDistinctPerson, authorize } from '../../core/policy.js';
+import { assertDistinctPerson, assertNotRelated, authorize } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
+import { recordReductionGranted } from '../assessment/reductions.js';
 import { PAYABLE_STATUSES, type AssessmentService } from '../assessment/service.js';
 import type { CommunicationService } from '../communications/service.js';
 import { taxpayerRecipient, userRecipient } from '../identity/recipients.js';
@@ -72,7 +73,11 @@ export interface Appeal {
   submittedAt: string;
   instructorId?: string;
   proposal?: { decision: AppealDecision; analysis: string; proposedAmount?: MoneyJSON; at: string };
-  decision?: { decision: AppealDecision; reason: string; decidedBy: string; at: string; rectifiedAmount?: MoneyJSON };
+  decision?: {
+    decision: AppealDecision; reason: string; decidedBy: string; at: string; rectifiedAmount?: MoneyJSON;
+    /** Re-liquidation justificative (mêmes règle et version, entrées corrigées) : montant plancher de la décision. */
+    reliquidation?: { inputs: Record<string, string>; localityRank: number; result: MoneyJSON };
+  };
   rectifyingObligationId?: string;
   previousObligationStatus: string;
   type?: AppealType;
@@ -271,6 +276,12 @@ export class AppealService {
     authorize(user, 'appeal.instruct');
     const appeal = this.get(id);
     if (appeal.status !== 'DEPOSEE') throw conflict('INVALID_APPEAL_STATE', `Réclamation au statut ${appeal.status}.`);
+    assertNotRelated(user, appeal.taxpayerId, 'Conflit d’intérêts : l’instructeur est lié au contribuable réclamant.');
+    if (input.proposedAmount) {
+      const ob = this.assessment.get(appeal.obligationId);
+      if (input.proposedAmount.currency !== ob.amount.currency) throw badRequest('CURRENCY_MISMATCH', `Montant proposé attendu en ${ob.amount.currency}.`);
+      if (Money.fromJSON(input.proposedAmount).isNegative()) throw unprocessable('INVALID_RECTIFIED_AMOUNT', 'Le montant proposé ne peut être négatif.');
+    }
     const updated = this.appeals.update({
       ...appeal,
       status: 'PROPOSITION',
@@ -285,7 +296,12 @@ export class AppealService {
     return updated;
   }
 
-  decide(user: User, id: string, input: { decision: AppealDecision; reason: string; rectifiedAmount?: MoneyJSON }): Appeal {
+  /**
+   * Décision (R21). Une décision favorable est une RÉDUCTION de créance : montant explicite (jamais « absent = 0 »),
+   * motif circonstancié, jamais inférieur au montant demandé par le contribuable ni à la proposition de l'instructeur,
+   * ni au résultat de la re-liquidation justificative si elle est fournie ; décideur sans lien avec le contribuable.
+   */
+  decide(user: User, id: string, input: { decision: AppealDecision; reason: string; rectifiedAmount?: MoneyJSON; reliquidationInputs?: Record<string, string> }): Appeal {
     authorize(user, 'appeal.decide');
     const appeal = this.get(id);
     if (appeal.status === 'DEPOSEE') throw conflict('APPEAL_NOT_INSTRUCTED', 'La réclamation doit être instruite avant décision.');
@@ -294,10 +310,12 @@ export class AppealService {
     const obligation = this.assessment.get(appeal.obligationId);
     // Le décideur est aussi distinct de l'auteur de la liquidation contestée (module 37, contrôle C1).
     if (obligation.createdBy === user.id) throw forbidden('SEPARATION_OF_DUTIES', "L'autorité de décision doit être distincte de l'auteur de la liquidation contestée.");
+    assertNotRelated(user, appeal.taxpayerId, 'Conflit d’intérêts : l’autorité de décision est liée au contribuable réclamant.');
     const actor = { kind: 'user' as const, id: user.id, roles: user.roles };
     const now = this.clock.now().toISOString();
     let rectifyingObligationId: string | undefined;
     let rectifiedAmount: MoneyJSON | undefined;
+    let decisionReliquidation: NonNullable<Appeal['decision']>['reliquidation'];
 
     if (input.decision === 'REJETEE') {
       // L'obligation reprend l'état que justifient les paiements (jamais « EMISE » d'office sur une obligation payée).
@@ -308,25 +326,54 @@ export class AppealService {
       this.assessment.setStatus(obligation.id, restored === 'CONTESTEE' ? 'EMISE' : restored);
     } else {
       const original = Money.fromJSON(obligation.amount);
-      let amount: Money;
-      if (input.decision === 'ACCEPTEE') {
-        amount = input.rectifiedAmount ? Money.fromJSON(input.rectifiedAmount) : Money.zero(original.currency);
-      } else {
-        if (!input.rectifiedAmount) throw badRequest('RECTIFIED_AMOUNT_REQUIRED', 'Montant rectifié obligatoire pour une acceptation partielle.');
-        amount = Money.fromJSON(input.rectifiedAmount);
+      // Montant décidé toujours explicite : une acceptation totale se décide « 0 » en connaissance de cause.
+      if (!input.rectifiedAmount) {
+        throw badRequest('RECTIFIED_AMOUNT_REQUIRED', input.decision === 'ACCEPTEE'
+          ? 'Montant rectifié obligatoire, y compris pour une acceptation totale (saisir 0 explicitement).'
+          : 'Montant rectifié obligatoire pour une acceptation partielle.');
       }
+      if (input.reason.trim().length < 10) throw badRequest('REASON_REQUIRED', 'Motif circonstancié obligatoire (au moins 10 caractères) pour toute réduction.');
+      const amount = Money.fromJSON(input.rectifiedAmount);
       if (amount.currency !== original.currency) throw badRequest('CURRENCY_MISMATCH', `Montant rectifié attendu en ${original.currency}.`);
       if (amount.isNegative() || amount.compare(original) >= 0) {
         throw unprocessable('INVALID_RECTIFIED_AMOUNT', 'Le montant rectifié doit être positif et inférieur au montant initial.');
       }
-      const rectified = this.assessment.rectify(obligation.id, amount.toJSON(), { appealId: appeal.id, reason: input.reason, decidedBy: user });
+      // Acceptation totale : exactement ce que demande le contribuable (0 si toute l'obligation est contestée).
+      const claimed = appeal.requestedAmount ? Money.fromJSON(appeal.requestedAmount) : Money.zero(original.currency);
+      if (input.decision === 'ACCEPTEE' && !amount.equals(claimed)) {
+        throw unprocessable('INVALID_RECTIFIED_AMOUNT', `Acceptation totale : montant rectifié égal au montant réclamé (${claimed.toDecimalString()} ${claimed.currency}) ; un autre montant relève d’une acceptation partielle.`);
+      }
+      if (input.decision === 'PARTIELLEMENT_ACCEPTEE' && amount.isZero()) {
+        throw unprocessable('INVALID_RECTIFIED_AMOUNT', 'Acceptation partielle : le montant rectifié doit être strictement positif (0 = acceptation totale).');
+      }
+      // Jamais plus que ce que le contribuable demande, ni plus que ce que l'instruction propose.
+      const floors: { label: string; m: Money }[] = [];
+      if (appeal.requestedAmount && appeal.requestedAmount.currency === original.currency) floors.push({ label: 'montant demandé par le contribuable', m: Money.fromJSON(appeal.requestedAmount) });
+      if (appeal.proposal?.proposedAmount && appeal.proposal.proposedAmount.currency === original.currency) floors.push({ label: 'proposition de l’instructeur', m: Money.fromJSON(appeal.proposal.proposedAmount) });
+      let reliquidation: NonNullable<Appeal['decision']>['reliquidation'];
+      if (input.reliquidationInputs) {
+        reliquidation = this.assessment.reliquidate(obligation.id, input.reliquidationInputs);
+        floors.push({ label: `re-liquidation (règle ${obligation.ruleCode} v${obligation.ruleVersion})`, m: Money.fromJSON(reliquidation.result) });
+      }
+      for (const f of floors) {
+        if (amount.compare(f.m) < 0) {
+          throw unprocessable('RECTIFIED_AMOUNT_BELOW_JUSTIFIED', `Montant décidé ${amount.toDecimalString()} inférieur au ${f.label} (${f.m.toDecimalString()} ${f.m.currency}) : réduction non justifiée.`, { floor: f.m.toJSON(), basis: f.label });
+        }
+      }
+      const rectified = this.assessment.rectify(obligation.id, amount.toJSON(), { appealId: appeal.id, reason: input.reason, decidedBy: user, decisionType: 'RECLAMATION', zeroStatus: 'ANNULEE' });
       rectifyingObligationId = rectified.id;
       rectifiedAmount = amount.toJSON();
+      decisionReliquidation = reliquidation;
+      recordReductionGranted(this.audit, actor, {
+        path: 'RECLAMATION', obligationId: obligation.id, fromAmount: obligation.amount, toAmount: amount.toJSON(), deciderId: user.id,
+        taxpayerId: appeal.taxpayerId, resultingObligationId: rectified.id, sourceId: appeal.id,
+        approvers: [...(appeal.instructorId ? [appeal.instructorId] : []), user.id],
+      });
     }
     const updated = this.appeals.update({
       ...appeal,
       status: input.decision,
-      decision: { decision: input.decision, reason: input.reason, decidedBy: user.id, at: now, ...(rectifiedAmount ? { rectifiedAmount } : {}) },
+      decision: { decision: input.decision, reason: input.reason, decidedBy: user.id, at: now, ...(rectifiedAmount ? { rectifiedAmount } : {}), ...(decisionReliquidation ? { reliquidation: decisionReliquidation } : {}) },
       ...(rectifyingObligationId ? { rectifyingObligationId } : {}),
       nextRemedy: { ...APPEAL_PROCEDURE.nextRemedy, status: 'A_VERIFIER' },
       history: this.event(appeal, 'appeal.decided', user.id, `${input.decision} — ${input.reason}`),

@@ -17,6 +17,10 @@ definePolicy('fiscal:object.read', {
 });
 // Valider un objet (IGF) : contrôleur, chef de service, direction — jamais l'agent qui a recensé.
 definePolicy('fiscal:object.validate', { R06: always, R07: always, R11: always });
+// Correction du rang / de la base d'un objet validé : proposition (contrôleur, chef de service, direction),
+// approbation par une seconde personne de la hiérarchie (quatre yeux), réévaluation des obligations ouvertes.
+definePolicy('fiscal:object.correct', { R06: always, R07: always, R11: always });
+definePolicy('fiscal:object.correct.approve', { R06: always, R07: always });
 definePolicy('fiscal:plate.pose', { R10: inTerritory('full'), R11: always, R07: always });
 definePolicy('fiscal:plate.scan', { R06: always, R07: always, R11: always, R09: inTerritory('full'), R10: inTerritory('full') });
 // « Autour de moi » : agents des modules liés aux biens et activités, sur place, dans leur secteur, sans montant.

@@ -9,11 +9,12 @@ import { isRuleExecutable, Money, type CurrencyCode, type ProbativeStatus } from
 import type { User } from '../../core/auth.js';
 import { canonicalJson, sha256Hex } from '../../core/crypto.js';
 import { badRequest, conflict, notFound, unprocessable } from '../../core/errors.js';
-import { assertDistinctPerson, authorize } from '../../core/policy.js';
+import { assertDistinctPerson, assertNotRelated, authorize } from '../../core/policy.js';
+import { recordReductionGranted } from '../../modules/assessment/reductions.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import type { AssessmentTrace } from '../../modules/assessment/service.js';
 import { PAYABLE_STATUSES } from '../../modules/assessment/service.js';
-import { taxpayerRecipient } from '../../modules/identity/recipients.js';
+import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
 import type { FiscalObject, Lease } from '../../modules/objects/service.js';
 import type { RuleRecord } from '../../modules/rules/service.js';
 import { actorOf, parentIdOf, type FiscalDeps } from './common.js';
@@ -89,10 +90,18 @@ export interface Declaration {
   filedByRole: 'CONTRIBUABLE' | 'MANDATAIRE' | 'GUICHET';
   liquidation: { mode: LiquidationMode; obligationId?: string; trace?: AssessmentTrace; message: string };
   correctionReason?: string;
-  instruction?: { decision: 'ACCEPTEE' | 'REJETEE'; reason: string; decidedBy: string; at: string; rectifiedObligationId?: string };
+  instruction?: { decision: 'ACCEPTEE' | 'REJETEE'; reason: string; decidedBy: string; at: string; rectifiedObligationId?: string; approvers?: string[] };
+  /** Première validation d'une correction à la baisse soumise aux quatre yeux (en attente de la seconde). */
+  firstReview?: { by: string; at: string; reason: string; fromAmount: { amount: string; currency: string }; toAmount: { amount: string; currency: string }; why: string[] };
 }
 
 const DECIMAL = /^\d{1,15}(\.\d{1,6})?$/;
+
+/**
+ * Seuil (valeur de conception À VÉRIFIER) au-delà duquel une correction À LA BAISSE d'une déclaration liquidée exige
+ * une seconde validation (quatre yeux). Devise sans seuil paramétré ⇒ quatre yeux systématiques.
+ */
+export const DOWNWARD_CORRECTION_FOUR_EYES_THRESHOLD: Partial<Record<CurrencyCode, string>> = { USD: '100', CDF: '250000' };
 const PERIOD_MONTHS: Record<Lease['periodicity'], number> = { MENSUELLE: 1, TRIMESTRIELLE: 3, SEMESTRIELLE: 6, ANNUELLE: 12 };
 
 export class DeclarationService {
@@ -286,13 +295,18 @@ export class DeclarationService {
     return this.get(next.id);
   }
 
-  /** Instruction d'une correction sur déclaration liquidée : un contrôleur distinct du déclarant décide, motif obligatoire. */
+  /**
+   * Instruction d'une correction sur déclaration liquidée : un contrôleur distinct du déclarant ET du liquidateur de
+   * l'obligation initiale, sans lien avec le contribuable, décide ; motif obligatoire. Une correction À LA BAISSE
+   * au-delà du seuil, ou abaissant un élément vérifié, exige une seconde validation par un autre contrôleur.
+   */
   instruct(user: User, id: string, input: { decision: 'ACCEPTEE' | 'REJETEE'; reason: string }): Declaration {
     const decl = this.get(id);
     const obj = this.d.ctx.objects.get(decl.objectId);
     authorize(user, 'fiscal:declaration.instruct', { communes: [obj.commune] });
     if (decl.status !== 'A_INSTRUIRE') throw conflict('INVALID_DECLARATION_STATE', `Déclaration au statut ${decl.status}.`);
     assertDistinctPerson(user.id, [decl.filedBy], 'Le déclarant ne peut pas instruire sa propre correction.');
+    assertNotRelated(user, decl.taxpayerId, 'Conflit d’intérêts : le contrôleur est lié au contribuable déclarant.');
     const now = this.d.nowIso();
     const orig = decl.supersedes ? this.get(decl.supersedes) : undefined;
     if (input.decision === 'REJETEE') {
@@ -307,14 +321,43 @@ export class DeclarationService {
     const obligationId = decl.liquidation.obligationId;
     if (!obligationId) throw unprocessable('NO_OBLIGATION', 'Aucune obligation à rectifier.');
     const ob = this.d.ctx.assessment.get(obligationId);
+    // Le liquidateur de l'obligation initiale (et le déposant de la version corrigée) n'instruisent pas la correction.
+    assertDistinctPerson(user.id, [ob.createdBy, ...(orig ? [orig.filedBy] : [])], 'L’auteur de la liquidation initiale ne peut pas instruire la correction qui la réduit.');
     if (!PAYABLE_STATUSES.includes(ob.status)) throw unprocessable('OBLIGATION_NOT_RECTIFIABLE', `Obligation au statut ${ob.status} : rectification par ce circuit impossible (remboursement : circuit dédié).`);
     const rule = this.d.ctx.rules.get(ob.ruleId);
     // Recalcul déterministe avec la version de règle figée sur l'obligation.
     const sim = this.d.ctx.assessment.liquidateDeclaration(user, { ruleId: rule.id, taxpayerId: decl.taxpayerId, objectId: obj.id, inputs: decl.inputs, simulate: true }, decl.id);
+    const from = Money.fromJSON(ob.amount);
+    const to = Money.fromJSON(sim.trace.result);
+    const downward = to.compare(from) < 0;
+    const why: string[] = [];
+    if (downward) {
+      const threshold = DOWNWARD_CORRECTION_FOUR_EYES_THRESHOLD[from.currency];
+      if (!threshold) why.push(`aucun seuil paramétré en ${from.currency}`);
+      else if (from.subtract(to).compare(Money.of(threshold, from.currency)) > 0) why.push(`baisse de ${from.subtract(to).toDecimalString()} ${from.currency} > seuil ${threshold}`);
+      if (decl.verificationRequired) why.push('élément vérifié abaissé');
+    }
+    let approvers = [user.id];
+    if (why.length) {
+      if (!decl.firstReview) {
+        const r = this.declarations.update({ ...decl, firstReview: { by: user.id, at: now, reason: input.reason, fromAmount: ob.amount, toAmount: sim.trace.result, why } });
+        this.d.ctx.audit.append({ actor: actorOf(user), action: 'declaration.correction.first_review', resourceType: 'declaration', resourceId: id, details: { reason: input.reason, from: ob.amount, to: sim.trace.result, why } });
+        this.d.ctx.comms.publish('approval.requested', [...this.d.ctx.users.withRole('R07'), ...this.d.ctx.users.withRole('R11')].filter((u) => u.id !== user.id).map(userRecipient), { objet: `Seconde validation — correction ${id}` }, { entity: rule.administeringEntity });
+        return r;
+      }
+      assertDistinctPerson(user.id, [decl.firstReview.by], 'Quatre yeux : la seconde validation d’une correction à la baisse est faite par un autre contrôleur.');
+      approvers = [decl.firstReview.by, user.id];
+    }
     const rectified = this.d.ctx.assessment.rectify(ob.id, sim.trace.result, { appealId: decl.id, reason: `Correction de déclaration acceptée : ${input.reason}`, decidedBy: user, decisionType: 'CORRECTION_DECLARATION' });
     if (orig) this.declarations.update({ ...orig, status: 'REMPLACEE', supersededBy: decl.id });
-    const r = this.declarations.update({ ...decl, status: 'LIQUIDEE', instruction: { decision: 'ACCEPTEE', reason: input.reason, decidedBy: user.id, at: now, rectifiedObligationId: rectified.id }, liquidation: { mode: 'OPPOSABLE', obligationId: rectified.id, trace: sim.trace, message: `Obligation rectificative ${rectified.id} (contre-écriture de ${ob.id}).` } });
-    this.d.ctx.audit.append({ actor: actorOf(user), action: 'declaration.correction.accepted', resourceType: 'declaration', resourceId: id, details: { reason: input.reason, original: ob.id, rectified: rectified.id } });
+    const r = this.declarations.update({ ...decl, status: 'LIQUIDEE', instruction: { decision: 'ACCEPTEE', reason: input.reason, decidedBy: user.id, at: now, rectifiedObligationId: rectified.id, approvers }, liquidation: { mode: 'OPPOSABLE', obligationId: rectified.id, trace: sim.trace, message: `Obligation rectificative ${rectified.id} (contre-écriture de ${ob.id}).` } });
+    this.d.ctx.audit.append({ actor: actorOf(user), action: 'declaration.correction.accepted', resourceType: 'declaration', resourceId: id, details: { reason: input.reason, original: ob.id, rectified: rectified.id, approvers } });
+    if (downward) {
+      recordReductionGranted(this.d.ctx.audit, actorOf(user), {
+        path: 'CORRECTION_DECLARATION', obligationId: ob.id, fromAmount: ob.amount, toAmount: sim.trace.result, deciderId: user.id, taxpayerId: decl.taxpayerId,
+        resultingObligationId: rectified.id, sourceId: decl.id, approvers,
+      });
+    }
     return r;
   }
 

@@ -294,7 +294,10 @@ describe('Fiscal — exonérations et remises', () => {
   it('même personne à deux étapes refusée ; rétroactivité seulement sur décision expresse', async () => {
     const env = await setupFiscal();
     const id = (await env.req('POST', '/v1/fiscal/exemptions', 'u-controleur', { ...base, taxpayerId: DEMO.taxpayerId, validFrom: '2026-01-01', legalBasis: { instrumentId: 'demo-instrument-001', article: 'Art. 2' } })).json().id;
-    await env.req('POST', `/v1/fiscal/exemptions/${id}/instruction`, 'u-controleur', { decision: 'FAVORABLE', reason: 'Conforme' });
+    // L'initiateur (contrôleur) n'instruit pas sa propre demande : instruction par le guichet.
+    const selfInstruct = await env.req('POST', `/v1/fiscal/exemptions/${id}/instruction`, 'u-controleur', { decision: 'FAVORABLE', reason: 'Conforme' });
+    expect(selfInstruct.json().code).toBe('SEPARATION_OF_DUTIES');
+    await env.req('POST', `/v1/fiscal/exemptions/${id}/instruction`, 'u-guichet', { decision: 'FAVORABLE', reason: 'Conforme' });
     await env.req('POST', `/v1/fiscal/exemptions/${id}/legal-visa`, 'u-juriste-verificateur', { decision: 'FAVORABLE', reason: 'Conforme' });
     const noRetro = await env.req('POST', `/v1/fiscal/exemptions/${id}/decision`, 'u-fiscal-chef-service', { decision: 'APPROUVEE', reason: 'Conforme' });
     expect(noRetro.json().code).toBe('RETROACTIVITY_REQUIRES_DECISION');
@@ -317,7 +320,7 @@ describe('Fiscal — exonérations et remises', () => {
       kind: 'REMISE', obligationId: obA.id, amount: { amount: '50.00', currency: 'USD' }, grounds: 'Sinistre (exemple fictif).',
       proofs: [{ type: 'PV', reference: 'PV-2' }], validFrom: '2026-09-26', legalBasis: { instrumentId: 'demo-instrument-001', article: 'Art. 5 (fictif)' },
     })).json().id;
-    await env.req('POST', `/v1/fiscal/exemptions/${id}/instruction`, 'u-guichet', { decision: 'FAVORABLE', reason: 'Conforme' });
+    await env.req('POST', `/v1/fiscal/exemptions/${id}/instruction`, 'u-controleur', { decision: 'FAVORABLE', reason: 'Conforme' });
     await env.req('POST', `/v1/fiscal/exemptions/${id}/legal-visa`, 'u-juriste-verificateur', { decision: 'FAVORABLE', reason: 'Conforme' });
     env.app.ctx.assessment.setStatus(obA.id, 'SOLDEE');
     const d = await env.req('POST', `/v1/fiscal/exemptions/${id}/decision`, 'u-fiscal-directeur', { decision: 'APPROUVEE', reason: 'Sinistre constaté' });
@@ -340,7 +343,7 @@ describe('Fiscal — exonérations et remises', () => {
     });
     expect(r.statusCode).toBe(201);
     const id = r.json().id;
-    await env.req('POST', `/v1/fiscal/exemptions/${id}/instruction`, 'u-guichet', { decision: 'FAVORABLE', reason: 'Conforme' });
+    await env.req('POST', `/v1/fiscal/exemptions/${id}/instruction`, 'u-controleur', { decision: 'FAVORABLE', reason: 'Conforme' });
     await env.req('POST', `/v1/fiscal/exemptions/${id}/legal-visa`, 'u-juriste-verificateur', { decision: 'FAVORABLE', reason: 'Conforme' });
     const d = await env.req('POST', `/v1/fiscal/exemptions/${id}/decision`, 'u-fiscal-directeur', { decision: 'APPROUVEE', reason: 'Sinistre constaté' });
     const rect = env.app.ctx.assessment.get(d.json().rectifiedObligationId);

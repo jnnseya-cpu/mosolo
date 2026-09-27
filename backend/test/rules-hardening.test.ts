@@ -75,7 +75,7 @@ describe('Dates des règles — journée de Kinshasa', () => {
     env.clock.set('2026-09-30T23:30:00Z');
     expect(env.app.ctx.rules.get(id).status).toBe('ACTIVE');
     const res = await env.req('POST', '/v1/assessments/calculate', 'u-controleur', {
-      ruleId: id, taxpayerId: DEMO.taxpayerId, objectId: DEMO.parcelId, inputs: { superficie_m2: '100' }, simulate: false,
+      ruleId: id, taxpayerId: DEMO.taxpayerId, objectId: DEMO.parcelId, inputs: { superficie_m2: '600' }, simulate: false,
     });
     expect(res.statusCode).toBe(201);
   });
