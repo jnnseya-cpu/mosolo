@@ -124,9 +124,11 @@ export class DeclarationService {
       const exec = versions.find((r) => isRuleExecutable(r, now).ok);
       if (exec) return exec;
     }
-    // Simulation non opposable : une position du promoteur (A_VERIFIER, Cahier) ne remplace pas la version antérieure.
+    // Simulation non opposable : décision du maître d'ouvrage (27/09/2026, IRL 22 % à tous les rangs, retenue 20 % / 15 %,
+    // § 16.2) — la version la plus récente (position du promoteur, v2, A_VERIFIER) sert à la simulation ; les versions 1
+    // restent au registre, toutes « à vérifier », sans aucun effet opposable.
     const firstVersions = byCode.find((v) => v.length);
-    const fallback = firstVersions?.find((r) => !r.promoterPosition) ?? firstVersions?.[0];
+    const fallback = firstVersions?.[0];
     if (!fallback) throw unprocessable('NO_RULE_FOR_DECLARATION', `Aucune fiche de règle au registre pour la déclaration ${kind} : acte requis.`);
     return fallback;
   }

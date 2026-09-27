@@ -33,6 +33,8 @@ export const CONDITION_LABELS: Record<ConditionKind, string> = { QUITUS_VALIDE: 
 export const PROCEDURE_SERVICES: Record<string, DependentService> = {
   'construction:DEMANDE_AUTORISATION_CHANTIER': 'PERMIS_DE_BATIR',
   'mobilite:DEMANDE_AUTORISATION_TRANSPORT': 'AUTORISATION_TRANSPORT',
+  // Module 11 : la mutation d'un véhicule est bloquée sans quitus lorsque la règle l'exige (mode BLOQUANT).
+  'mobilite:DECLARATION_MUTATION': 'MUTATION_VEHICULE',
   'actifs:MANIFESTATION_INTERET': 'MARCHE_PUBLIC',
 };
 

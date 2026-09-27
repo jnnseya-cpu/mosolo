@@ -30,6 +30,7 @@ import { soclePlugin } from './socle/plugin.js';
 import { chainePlugin } from './chaine/plugin.js';
 import { juridiquePlugin } from './juridique/plugin.js';
 import { integriteDetecteursPlugin } from './integrite/detecteurs/plugin.js';
+import { citoyenPlugin } from './citoyen/plugin.js';
 
 /**
  * Ordre : `acces` en tête (garde des revendications, mandats), puis `fiscal` (il branche les exonérations sur la liquidation), `titres` avant `rakapay`,
@@ -67,5 +68,7 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   chainePlugin,
   juridiquePlugin,
   integriteDetecteursPlugin,
+  // Parcours du citoyen (modules 1 à 12) : après fiscal, titres, verticales, canaux et terrain qu'il relit.
+  citoyenPlugin,
   soclePlugin,
 ];

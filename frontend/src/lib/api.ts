@@ -124,8 +124,42 @@ export function deviceFingerprint(): string | null {
   return safeGet(DEVICE_KEY) ? v : null;
 }
 
+/**
+ * Identifiant d'installation de l'application citoyenne (module 4) : aléatoire, attribué par le serveur, jamais
+ * l'identifiant matériel ni le numéro de téléphone. Joint à chaque requête pour compter les transactions mobiles et
+ * appliquer le refus des fonctions sensibles sur un appareil modifié.
+ */
+export const INSTALLATION_KEY = 'mosolo.installation';
+export function installationId(): string | null {
+  const v = safeGet(INSTALLATION_KEY);
+  return v && /^APP-[0-9a-f-]{36}$/.test(v) ? v : null;
+}
+
+/** Protection anti-robots (module 5) : défi de calcul résolu dans le navigateur, puis la requête est rejouée une fois. */
+async function solveChallengeHeader(): Promise<string> {
+  const { solveChallenge } = await import('./defi');
+  let res: Response;
+  try { res = await fetch(`${API_URL}/v1/public/defi`, { headers: { Accept: 'application/json' } }); } catch { throw new NetworkError(); }
+  if (!res.ok) throw new ApiError(res.status, 'Défi anti-robots indisponible');
+  const d = (await res.json()) as { id: string; sel: string; difficulte: number };
+  return `${d.id}:${await solveChallenge(d.sel, d.difficulte)}`;
+}
+
 export async function api<T>(path: string, opts: RequestOpts = {}): Promise<T> {
+  try {
+    return await apiOnce<T>(path, opts);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 428 && (e.code ?? '').startsWith('DEFI_') && !opts.headers?.['x-mosolo-defi']) {
+      return apiOnce<T>(path, { ...opts, headers: { ...opts.headers, 'x-mosolo-defi': await solveChallengeHeader() } });
+    }
+    throw e;
+  }
+}
+
+async function apiOnce<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json', ...authHeaders(), ...opts.headers };
+  const inst = installationId();
+  if (inst) headers['x-mosolo-installation'] ??= inst;
   headers['X-Request-Id'] ??= newRequestId();
   // Sessions réelles seulement : le sélecteur d'utilisateurs de démonstration change de compte sur le même navigateur.
   const fp = headers.Authorization ? deviceFingerprint() : null;

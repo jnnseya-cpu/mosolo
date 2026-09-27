@@ -79,6 +79,12 @@ export class RelationService {
   readonly relations = new InMemoryRepository<Relationship>();
   readonly disputes = new InMemoryRepository<OwnershipDispute>();
   private readonly ids = new IdGenerator();
+  /**
+   * Gardes et suites du détachement, branchées par d'autres modules (module 7 : blocage de mutation sans quitus
+   * lorsque la règle l'exige ; revue des obligations à la date d'effet). Une garde lève une erreur pour refuser.
+   */
+  readonly avantDetachement: ((rel: Relationship, input: { to: string; reason: (typeof CLOSE_REASONS)[number] }) => void)[] = [];
+  readonly apresDetachement: ((rel: Relationship, by: User) => void)[] = [];
 
   constructor(private readonly d: FiscalDeps) {}
 
@@ -254,9 +260,11 @@ export class RelationService {
     authorize(user, 'fiscal:relation.close', { communes: [obj.commune] });
     if (rel.status !== 'VALIDEE') throw conflict('INVALID_RELATION_STATE', 'Seule une relation validée peut être close.');
     if (input.to < rel.from) throw badRequest('INVALID_PERIOD', 'La date de fin précède la date de début.');
+    for (const guard of this.avantDetachement) guard(rel, input);
     const now = this.d.nowIso();
     const r = this.relations.update({ ...rel, status: 'CLOSE', to: input.to, closeReason: input.reason, history: [...rel.history, { at: now, by: user.id, action: 'CLOSE', reason: `${input.reason}${input.comment ? ` — ${input.comment}` : ''}` }] });
     this.d.ctx.audit.append({ actor: actorOf(user), action: 'relationship.closed', resourceType: 'relationship', resourceId: id, details: { to: input.to, reason: input.reason } });
+    for (const after of this.apresDetachement) after(r, user);
     return r;
   }
 
