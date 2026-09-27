@@ -15,7 +15,7 @@ import { ACR, hasAcr, isDemoMode, type User } from '../../core/auth.js';
 import { isoDate } from '../../core/clock.js';
 import { randomSecret, sha256Hex } from '../../core/crypto.js';
 import { ApiError, conflict, forbidden, notFound, unauthorized, unprocessable } from '../../core/errors.js';
-import { assertDistinctPerson, evaluate, type AnyAction } from '../../core/policy.js';
+import { assertDistinctPerson, evaluate, registerRelatedTaxpayersResolver, type AnyAction } from '../../core/policy.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { obligationSummary } from '../../modules/assessment/views.js';
 import type { Recipient } from '../../modules/communications/service.js';
@@ -79,6 +79,8 @@ export class AccesService {
 
   constructor(private readonly ctx: AppContext) {
     this.smsWired = ctx.comms.channelStatus().some((c) => c.channel === 'sms' && c.wired);
+    // Source des liens agent ↔ contribuables pour le contrôle de conflit d'intérêts (vérifier, décider, accorder).
+    registerRelatedTaxpayersResolver((u) => this.relatedTaxpayers(u));
   }
 
   /**
@@ -1446,7 +1448,7 @@ export class AccesService {
 
   // ─────────────── Consultation motivée (bris de glace) ───────────────
 
-  private relatedTaxpayers(user: User): Set<string> {
+  relatedTaxpayers(user: User): Set<string> {
     const out = new Set<string>(this.declaredRelations.get(user.id) ?? []);
     for (const t of this.accounts.get(user.id)?.linkedTaxpayerIds ?? []) out.add(t);
     if (user.taxpayerId) out.add(user.taxpayerId);

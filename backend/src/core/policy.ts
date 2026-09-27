@@ -224,6 +224,20 @@ export function assertDistinctPerson(userId: string, previous: string[], detail:
   if (previous.includes(userId)) throw forbidden('SEPARATION_OF_DUTIES', detail);
 }
 
+/**
+ * Conflit d'intérêts : un agent ne vérifie, ne décide ni n'accorde rien qui profite à un contribuable auquel il est lié
+ * (son propre compte, contribuables déclarés ou rattachés). La source des liens est fournie par le module d'accès.
+ */
+type RelatedResolver = (user: User) => Set<string>;
+let relatedResolver: RelatedResolver = (u) => new Set(u.taxpayerId ? [u.taxpayerId] : []);
+export function registerRelatedTaxpayersResolver(fn: RelatedResolver): void {
+  relatedResolver = fn;
+}
+export function assertNotRelated(user: User, taxpayerId: string | null | undefined, detail: string): void {
+  if (!taxpayerId) return;
+  if (relatedResolver(user).has(taxpayerId)) throw forbidden('CONFLICT_OF_INTEREST', detail);
+}
+
 /** Rôles qui ne doivent jamais voir de montant nominatif (agrégats seulement). */
 export function isAggregateOnly(user: User): boolean {
   return !hasAnyGrant(user, 'obligation.read');
