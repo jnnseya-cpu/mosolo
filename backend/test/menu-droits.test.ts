@@ -234,8 +234,9 @@ describe('Menu aligné sur les droits de lecture', () => {
     let checked = 0;
     const roles = Object.keys(ROLES).filter((r) => r !== 'R01');
     for (const role of roles) {
-      // Un compte de démonstration portant ce seul rôle (sinon le premier qui le porte).
-      const u = users.find((x) => x.roles.length === 1 && x.roles[0] === role) ?? users.find((x) => x.roles.includes(role));
+      // Un compte de démonstration portant ce seul rôle (sinon le premier qui le porte). Conversion justifiée : le code
+      // de rôle vient du catalogue partagé (chaîne) ; la liste des rôles d'un utilisateur est typée par ce catalogue.
+      const u = users.find((x) => x.roles.length === 1 && x.roles[0] === role) ?? users.find((x) => (x.roles as string[]).includes(role));
       if (!u) continue;
       for (const path of visible(menu, u.roles)) {
         if (SANS_LECTURE.has(path)) continue;

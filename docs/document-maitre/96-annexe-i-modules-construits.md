@@ -957,3 +957,23 @@ d'entrée en mémoire, aucun élément fictif en production (données de démons
 démonstration), en-têtes de sécurité (CSP, HSTS, COOP, Permissions-Policy), limitation de débit étendue, image Docker non
 privilégiée. Tests : `mode-production`, `durcissement-http`, `refus-par-defaut`, `invariants-financiers`,
 `sauvegarde-restauration`, `ia-injection` (backend) ; `api-url` (frontend).
+
+## I.24 Deuxième passe adverse de préparation à la production (27/09/2026)
+
+Seconde passe « testeur de réalité » sur les phases peu couvertes par l'audit I.23 : concurrence, faux succès,
+téléversements, injection de pannes, notifications, droits des personnes, abus de session, accessibilité, menu et
+droits. Rapport, preuves et fiches de défauts : `docs/production-readiness.md`, § 18. Ajouts, sans rien retirer :
+
+| Ajout | Route / écran | Règle |
+|---|---|---|
+| Limitation et effacement (anonymisation) des données personnelles | `POST /v1/integrite/privacy/requests` (types `LIMITATION`, `EFFACEMENT`) ; `POST /v1/integrite/privacy/requests/:id/validation` | Deux personnes distinctes (délégué, puis un autre délégué) ; seules les données non exigées par la loi fiscale sont anonymisées ; identité fiscale, obligations, paiements, quittances, grand livre, preuves et journal d'audit conservés (durée fixée par acte — à confirmer) ; écran « Vos données » |
+| Contrôle des fichiers déposés (module 38) | `POST /v1/documents`, `…/versions` | Liste fermée de types vérifiés par signature ; exécutables, HTML, SVG refusés ; nom assaini ; doublon signalé |
+| Stockage en échec | toutes les écritures ; `GET /health` | Écritures refusées (503 `STOCKAGE_INDISPONIBLE`) tant que la base est en échec ; nouvelles tentatives bornées ; alerte `PERSISTANCE_EN_ECHEC` |
+| Tâches planifiées | liquidation, répartition, ParkSmart, AVIA, réserve… | Échec journalisé (`system.job.failed`) et alerté une fois par jour ; jamais silencieux |
+| Codes à usage unique | `auth.otp_code` | Jamais conservés en clair (boîte d'envoi, empreinte, avis apposé) |
+| Menu aligné sur les droits de lecture | `shared/src/menu.ts` | Présentation seulement : entrées masquées, pages et routes conservées, aucun droit modifié |
+| Accessibilité au clavier | fenêtres modales, fiche de décision, contrôle de plaque | Piège de focus, annonce globale, Entrée qui lance le contrôle ; script `tools/accessibilite/parcours-clavier.cjs` |
+
+Tests : `concurrence-adverse`, `fuzz-ecritures`, `entrees-metier-hostiles`, `televersements-adverses`,
+`injection-pannes`, `notifications-adverses`, `droits-des-personnes`, `sessions-abus`, `menu-droits`,
+`limitation-debit-site` (backend) ; `accessibilite-clavier`, `labels-nav` (frontend).

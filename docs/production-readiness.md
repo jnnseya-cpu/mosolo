@@ -15,7 +15,7 @@ non contractuelles, mode `--demo`).
 | Élément | Valeur |
 |---|---|
 | **Verdict** | **NO-GO pour la production réelle** · **GO pour la démonstration publique** (déjà en ligne, inchangée) |
-| Score de préparation | **58 / 100** (logiciel : solide ; exploitation réelle : non prouvée — voir § 3) |
+| Score de préparation | **60 / 100** après la deuxième passe adverse (§ 18) — **58 / 100** au premier audit (logiciel : solide ; exploitation réelle : non prouvée — voir § 3) |
 | Version candidate (release candidate) | commit portant ce document, sur la branche de travail `worktree-agent-afb23bcf5c56a5990`, fusion de `1aac7c3` (le SHA exact est communiqué dans le compte rendu de livraison) |
 | Environnement de test | conteneur Linux 4 cœurs **partagé** (charge moyenne ≈ 20 due à d'autres travaux), Node 22.22.2, npm 10.9.7, Chromium Playwright 1194, pg-mem ; **pas** de PostgreSQL réel démarrable ni de démon Docker |
 | Période de test | 27/09/2026, ≈ 15 h 00 – 18 h 30 (heure du conteneur) |
@@ -197,6 +197,8 @@ les données de la page sont refusées au rôle (la page affiche proprement « a
 - R03 / R04 : `/gouverneur` visible, tableau du Gouverneur refusé ;
 - R05 : `/tresor` et `/rakapay/pilotage` visibles, données refusées.
 Arbitrage demandé : aligner le menu sur les droits, ou élargir les droits en lecture. Aucune donnée n'est exposée.
+**Suite (deuxième passe, § 18)** : ces entrées sont désormais masquées du menu pour ces rôles (présentation seulement,
+`shared/src/menu.ts`), pages et routes conservées, droits inchangés ; l'élargissement éventuel des lectures reste à arbitrer.
 
 Refus attendus relevés par le parcours (non des défauts) : 400 `VALIDATION_ERROR` sur formulaires vides, 404
 `DRAFT_NOT_FOUND` (aucun brouillon), 409 `ROOT_ALREADY_PUBLISHED`, 403 `DEVICE_NOT_ALLOWED` (terminal non enrôlé),
@@ -335,6 +337,7 @@ délai relevé. **Délai de 30 s du backend** : mesuré, aucun test ne dépasse 
    montée en charge horizontale sans refonte (verrous, file partagée). Risque de perte des écritures des 25 dernières ms
    en cas d'arrêt brutal (non testé).
 4. Menus non alignés sur les droits (§ 7) — pas de fuite, mais confusion pour l'utilisateur.
+   Deuxième passe (§ 18) : aligné pour les rôles audités ; 78 écarts ouverts pour les autres rôles (entités).
 5. Dépendances de développement vulnérables (montées majeures vite 8, vitest 5 à planifier).
 6. Aucun audit d'accessibilité complet (RGAA / WCAG 2.1 AA).
 7. Jetons de session dans le stockage du navigateur (dépend de l'absence de XSS ; CSP stricte en place).
@@ -376,6 +379,208 @@ Démonstration (inchangée) : `render.yaml` / `Dockerfile` — `tsx backend/src/
 **NO-GO pour une mise en production réelle** tant que les bloqueurs B1 à B10 ne sont pas levés et prouvés ;
 **GO pour la démonstration publique** et pour la poursuite vers un environnement de préproduction sur l'infrastructure
 cible.
+
+## 18. Deuxième passe adverse (27/09/2026)
+
+Seconde passe « testeur de réalité » (brief GO / NO-GO renvoyé par le maître d'ouvrage) sur les phases que le premier
+audit couvrait peu ou pas : concurrence, faux succès, téléversements, injection de pannes, notifications, droits des
+personnes, abus de session, accessibilité, menu et droits. Base : branche commune `claude/beautiful-hawking-3tw7gb`,
+tête **74eb0a4**. Méthode : INSPECTER → REPRODUIRE → CORRIGER (plus petite modification sûre) → TEST DE NON-RÉGRESSION
+→ RETESTER. Chaque défaut ci-dessous a été **reproduit avant correction** (test en échec sur l'ancien code, ou
+constat dans le navigateur) sauf mention contraire. Rien n'a été retiré (règle n° 1) ; données de démonstration
+inchangées. **NON TESTÉ n'est jamais compté comme RÉUSSI** ; aucun système n'est « inviolable ».
+
+### 18.1 Synthèse
+
+| Phase | Résultat | Défauts (gravité) | Preuve principale |
+|---|---|---|---|
+| 1. Concurrence et courses | PASS après correctif | D2-01 (P3) | `backend/test/concurrence-adverse.test.ts` — 12 scénarios en parallèle |
+| 2. Faux succès, entrées hostiles | PASS après correctifs | D2-06 (P3), D2-07 (P2), D2-08 (P4) | `fuzz-ecritures.test.ts` (849 routes d'écriture, 785 validées, 7 661 requêtes, 0 × 5xx), `entrees-metier-hostiles.test.ts` |
+| 3. Téléversement et stockage | PASS après correctif | D2-09 (P2) | `televersements-adverses.test.ts` |
+| 4. Injection de pannes | PASS après correctifs (niveau logiciel) | D2-02 (P1), D2-03 (P2), D2-04 (P3), D2-05 (P3) | `injection-pannes.test.ts` |
+| 5. Notifications | PASS après correctifs | D2-10 (P2), D2-11 (P3) | `notifications-adverses.test.ts` |
+| 6. Droits des personnes | PASS après ajout | D2-13 (P3, manque fonctionnel) | `droits-des-personnes.test.ts` |
+| 7. Sessions et authentification | PASS après correctif | D2-12 (P1) ; résidus R2-1, R2-2 (P3) | `sessions-abus.test.ts` |
+| 8. Accessibilité | PASS WITH NON-BLOCKING ISSUES | D2-15 (P2), D2-16 (P3), D2-17 à D2-20 (P3–P4) | `tools/accessibilite/parcours-clavier.cjs` (Chromium), `frontend/test/accessibilite-clavier.test.tsx` |
+| 9. Menu et droits | PASS pour les rôles audités ; 78 écarts ouverts ailleurs | D2-14 (P3) | `menu-droits.test.ts` (1 238 lectures) |
+
+**Aucun P0 trouvé.** Deux P1 trouvés et corrigés (D2-02 perte possible d'écritures acquittées pendant une panne de base ;
+D2-12 compte révoqué encore actif jusqu'à 8 h). Le verdict reste **NO-GO pour la production** (bloqueurs externes B1–B10
+inchangés), **GO pour la démonstration**.
+
+### 18.2 Preuves par phase
+
+**Phase 1 — concurrence** (`npx vitest run test/concurrence-adverse.test.ts` → 12 réussis). Requêtes simultanées
+`Promise.all` + `app.inject` :
+- même clé d'idempotence × 10 → dix 201, **une** référence, neuf réponses rejouées (`idempotent-replayed: true`) ;
+- clés différentes × 10 → un 201, neuf 409 `ACTIVE_PAYMENT_REFERENCE_EXISTS` ; prestataire connecté (appel sortant
+  asynchrone) × 6 → une seule intention (409 `PAYMENT_INITIATION_IN_PROGRESS` pour les autres) ;
+- même rappel SUCCESS × 8 → une écriture `PAYMENT_CONFIRMED`, une quittance, sept rejeux ; deux transactions SUCCESS
+  distinctes → `CONFIRME` + `DOUBLON` (compte d'attente) ; SUCCESS et FAILED de la même transaction en parallèle → un
+  seul traitement ; SUCCESS arrivé après remboursement → `DOUBLON`, ordre toujours `REMBOURSE`, une seule quittance ;
+- deux et trois validations concurrentes d'un même relevé (module 29) → une seule application (201), les autres 4xx ;
+- deux remboursements proposés puis approuvés en parallèle → un seul exécuté, **une** écriture `REFUND` ;
+- répartition automatique × 2 en parallèle → aucune écriture en double ; reprise de points de la réserve (module 67)
+  × 2 → une 201 + `REPRISE_EN_COURS`, décisions concurrentes → une 200 + une 409 ;
+- délégation : titulaire et délégataire décident la même fiche en parallèle → une seule décision au journal.
+Invariants vérifiés à chaque scénario : grand livre équilibré, chaîne de hachage valide, une écriture de confirmation
+et une quittance au plus par ordre. Limite : processus unique (architecture à une instance, § 14) ; une montée en
+charge horizontale n'est **pas** couverte (NON TESTÉ).
+
+**Phase 2 — faux succès** (`npx vitest run test/fuzz-ecritures.test.ts test/entrees-metier-hostiles.test.ts`) :
+rapport `routes d'écriture — corps hostiles` : 849 routes, 785 réellement validées (premier utilisateur de démonstration
+non refusé par l'autorisation), 7 661 requêtes : JSON mal formé 785 × 400 ; `null` 683 × 400 ; tableau, chaîne,
+nombre, `__proto__` 702 × 400 chacun ; affectation de masse (`status`, `amount`, `role`, `entity`, `createdBy`,
+`approvedBy`, `id`) 702 × 400, 24 routes 2xx — toutes des déclenchements sans corps (détections, échéanciers, balayage
+IA, défi MFA, effacement de sa mémoire IA) qui ignorent le corps, aucun champ interdit appliqué ni renvoyé ; corps de
+1,1 Mo → 40 × 413 `CORPS_TROP_VOLUMINEUX` ; **0 réponse 5xx**, toutes les erreurs RFC 9457 sans pile ni chemin. Montants
+négatifs, nuls, flottants (`150`), exponentiels, 23 chiffres, 3 décimales, devise inconnue, vides → refus sans écriture
+ni quittance ; minuit de Kinshasa (23 h 30 UTC) : la clôture du 01/10 est refusée, celle du 30/09 admise. Recherche
+statique des gestionnaires : aucun `catch` renvoyant 2xx, aucun `ok: true` accompagné d'erreurs ; les lots (terrain,
+imports) renvoient la liste des refus ligne à ligne (succès partiel explicite).
+
+**Phase 3 — téléversements** (`televersements-adverses.test.ts`, 6 réussis) : fichier vide, exécutable MZ renommé en
+PDF, ELF renommé en JPEG, double extension (`.pdf.exe`, `.exe.pdf`), type déclaré faux, extension incohérente, SVG avec
+script, SVG et HTML déguisés en texte, `text/html`, `application/octet-stream`, script `#!`, base64 invalide, texte
+binaire, nom `../..` → 400/415 avec code précis, **aucune version stockée** ; 16 Mo → 413 ; noms `../../etc/passwd.txt`,
+`..\..\Windows\…`, inversion bidirectionnelle U+202E, caractères de contrôle, 500 caractères → assainis ; JPEG corrompu
+de signature correcte → accepté (jamais décodé par le serveur, servi avec `nosniff`) ; doublon → signalé dans le même
+périmètre, jamais révélé pour un autre contribuable ; IDOR (fiche, contenu, export, nouvelle version d'un document
+interne ou d'autrui) → 403 ; export d'un autre demandeur → `EXPORT_NOT_YOURS`, expiré → 409 `EXPORT_EXPIRED`, jeton
+inventé → 404. Photos de preuve (stationnement, publicité, contrôle technique) : JPEG seul, signature vérifiée (inchangé).
+
+**Phase 4 — injection de pannes** (`injection-pannes.test.ts`, 7 réussis) :
+- magasin persistant qui échoue : 201 accepté avant détection, puis nouvelles tentatives à délai exponentiel plafonné
+  (< 20 tentatives en 150 ms avec plafond de test 40 ms ; défaut 250 ms → 30 s), alerte `PERSISTANCE_EN_ECHEC` (une),
+  `/health` → `{"status":"degraded","storage":"EN_ECHEC"}`, écriture suivante → **503 `STOCKAGE_INDISPONIBLE`** (RFC 9457,
+  `Retry-After: 60`, sans détail interne), lectures servies ; base rétablie → file vidée, **aucune perte**, retour à
+  `ok` ; aucun rejet de promesse non géré ;
+- prestataire de paiement : réseau coupé → 502 `PROVIDER_UNAVAILABLE` « erreur réseau », **3 appels** (1 + 2
+  nouvelles tentatives) ; délai dépassé → 502 « délai de 20 ms dépassé » ; aucun ordre, deux traces
+  `payment.provider_intent.failed`, secret jamais renvoyé ;
+- fournisseur de communication qui lève une exception → envoi `echoue`, canal de secours utilisé, ordre de paiement
+  créé normalement ;
+- fournisseur d'IA en panne ou sortie mal formée → **503 `IA_INDISPONIBLE`** (au lieu de 500), aucune recommandation,
+  trois traces `ia.provider.failed`, deux alertes ;
+- tâche planifiée qui lève une exception → `system.job.failed` au journal (sans pile), alerte
+  `TACHE_PLANIFIEE_EN_ECHEC` une fois par tâche et par jour, jamais propagée ; 16 planificateurs passent par la garde ;
+- gardes du processus : rejet non géré → journal + alerte, le processus continue ; exception non capturée → arrêt
+  propre (vidage des écritures) puis code 1.
+Correction d'une hypothèse initiale : l'écriture différée en échec ne produisait **pas** de rejet non géré (la
+promesse était déjà rattachée à un gestionnaire) — vérifié par un test ciblé ; le défaut réel était l'absence de
+nouvelle tentative, d'alerte et de refus des écritures (D2-02).
+
+**Phase 5 — notifications** (`notifications-adverses.test.ts`, 7 réussis ; 4 en échec sur l'ancien code) : le
+fournisseur reçoit le code à usage unique, mais ni la boîte d'envoi, ni les lignes de délivrance, ni le journal
+d'audit ne le contiennent ; l'empreinte n'est plus retrouvable par essais ; tous canaux en échec → aucun avis apposé
+(auparavant **2 avis imprimés portant le code**) ; variable absente → « — » et `missingVariables` (auparavant
+`Votre code MOSOLO : {{code}}` envoyé) ; variable malveillante (`\r\nBcc:`, `{{code}}`, lien, `<script>`, 1 000
+caractères) → une ligne, sans accolade, bornée, sans lien par SMS ; accusé « échoué » rejoué deux fois en parallèle →
+un seul envoi de secours, jamais deux fois le même canal ; bon destinataire (contribuable de l'ordre) ; refus global →
+facultatif supprimé sur tous les canaux externes (boîte de l'application conservée par conception), obligatoire envoyé,
+WhatsApp jamais sans consentement.
+
+**Phase 6 — droits des personnes** (`droits-des-personnes.test.ts`, 4 réussis) : accès et portabilité (JSON lisible par
+machine, désormais avec paiements, quittances et préférences ; export refusé à un tiers) ; rectification (empreintes
+avant/après, jamais la valeur) ; **limitation** (retrait du consentement) et **effacement par anonymisation** ajoutés,
+décidés par deux personnes (délégué puis un autre délégué ; l'auteur de la première décision et le demandeur ne
+valident pas) ; après effacement : adresse électronique, préférences, consentements et mémoire de l'assistant effacés ;
+identité fiscale, obligations, paiements, quittances, tête du grand livre, préfixe du journal d'audit **inchangés**,
+chaîne vérifiée ; refus motivé possible. La base légale de conservation (durées) reste à fixer par acte (point
+juridique ; avis sur la loi de protection des données non obtenu — B6).
+
+**Phase 7 — sessions** (`sessions-abus.test.ts`, 7 réussis ; 1 en échec sur l'ancien code) : 5 essais par défi puis
+`CHALLENGE_EXHAUSTED`, le bon code ensuite refusé ; rejeu d'un code utilisé → `CHALLENGE_INVALID` ; 6ᵉ demande de code
+pour un numéro → 429 ; générateur `crypto.randomInt` (répartition des chiffres sur 18 000 tirages dans ± 250) ;
+numéro connu / inconnu, mot de passe sur compte connu / inconnu, récupération de compte → mêmes statut et champs ;
+jeton après déconnexion → 401 `SESSION_REVOKED` (lecture et renouvellement) ; jeton altéré, « alg none », chaîne
+quelconque → 401 ; expiré → `TOKEN_EXPIRED` ; nouvelle session à chaque connexion (pas de fixation) ; aucun cookie émis,
+un cookie seul ne vaut pas authentification (CSRF sans objet) ; **compte révoqué** : jeton en cours refusé
+(`ACCOUNT_REVOKED`), renouvellement et nouvelle connexion refusés.
+
+**Phase 8 — accessibilité** (serveur local `PORT=18743 MOSOLO_STATIC_DIR=frontend/dist tsx backend/src/server.ts
+--demo`, Chromium 1194, `node tools/accessibilite/parcours-clavier.cjs`) — sortie finale :
+- paiement du contribuable au clavier : lien d'évitement → « Payer — [obligation] » → panneau (focus dedans, piège
+  vérifié sur 12 tabulations) → « Monnaie mobile » → « Obtenir ma référence de paiement » → référence `PR-85F4-PDCZM`
+  affichée → Échap → focus rendu au bouton d'origine : **RÉUSSI** ;
+- fiche de décision du Gouverneur : « Approuver » → focus sur le motif → saisie → « Confirmer — Approuver » → annonce
+  « … : enregistré et journalisé. » → focus sur le contenu principal : **RÉUSSI** ;
+- contrôle de plaque : champ « Plaque ou contenu du QR » → saisie → Entrée → résultat annoncé (`role="status"`) :
+  **RÉUSSI** ;
+- sur ces pages et les pages publiques : 1 `main`, `lang="fr"`, 1 `h1`, 0 contrôle sans nom, 0 image sans `alt`, focus
+  visible sur tous les éléments traversés, 0 texte sous le contraste requis (après correctif), zoom 200 % (640 × 400) :
+  0 px de défilement horizontal, 0 contrôle hors écran ; « réduire les animations » : 0 élément animé.
+Limites : pas d'axe-core (non installé, ajout non justifié) — contrôles programmés simples ; aucun test avec un lecteur
+d'écran réel (NVDA, VoiceOver, TalkBack) ; audit RGAA / WCAG 2.1 AA complet **NON FAIT**.
+
+**Phase 9 — menu et droits** (`menu-droits.test.ts`, 3 réussis) : le menu est reconstitué depuis le code
+(`Shell.tsx`, `registry.tsx`) pour chaque rôle de démonstration ; chaque entrée visible doit lire au moins une de ses
+données. Rôles audités (R01 à R05, R10, R17, R22, R30) : **0 écart** après masquage (présentation seulement,
+`shared/src/menu.ts`, pages et routes conservées, aucun droit modifié) des entrées signalées + `/chaine` pour R17. Autres
+rôles : **78 écarts** relevés et bornés par le test (souvent liés à l'**entité** : ex. directeur général de la DGIPK et
+écrans de la DGTK ou de la RFCK ; d'autres tiennent à une lecture principale imparfaitement relevée) — **arbitrage
+demandé** (menu par entité ou élargissement des lectures). Le test de navigation existant a été harmonisé (R03/R04 sans
+`/gouverneur`).
+
+### 18.3 Fiches de défauts
+
+| ID | Gravité | Bloquant | Reproduction | Cause | Correctif | Fichiers | Test de non-régression | Retest |
+|---|---|---|---|---|---|---|---|---|
+| D2-01 | P3 | Non | Rappel FAILED (autre transaction) après SUCCESS | Le chemin « échec » publiait `payment.failed` quel que soit l'état de l'ordre | Échec après issue définitive : sans effet, sans avis, trace `payment.failure_ignored` | `modules/payments/service.ts` | `concurrence-adverse` (FAILED après SUCCESS) | 12/12 |
+| D2-02 | **P1** | Oui (corrigé) | Magasin qui échoue ; POST ordre → 201 ; aucune nouvelle tentative sans nouvelle écriture ; `/health` « ok » | Écriture différée sans reprise planifiée, sans alerte, sans refus des écritures | Reprise exponentielle plafonnée ; alerte ; 503 `STOCKAGE_INDISPONIBLE` sur toute écriture en panne ; `/health` « degraded » | `persistence/runtime.ts`, `plugins/socle/plugin.ts`, `modules/system/routes.ts`, `context.ts`, `core/errors.ts` | `injection-pannes` (stockage) | 7/7 |
+| D2-03 | P2 | Non | Tâche planifiée qui lève une exception | `catch { /* journalisé */ }` sans journalisation réelle (répartition, liquidation…) | Garde commune `runScheduledJob` : audit + alerte quotidienne | `core/jobs.ts` + 16 planificateurs | `injection-pannes` (tâches) | 7/7 |
+| D2-04 | P3 | Non | Fournisseur d'IA qui lève une exception ou renvoie une sortie mal formée | Aucun contrôle autour de `provider.run` | 503 `IA_INDISPONIBLE`, contrôle de forme, audit, alerte | `plugins/ia/service.ts` | `injection-pannes` (IA) | 7/7 |
+| D2-05 | P3 | Non | Revue des points d'entrée | Aucun gestionnaire `unhandledRejection` / `uncaughtException` | Gardes du processus (journal + alerte ; arrêt propre) | `core/process-guards.ts`, `server.ts`, `persistence/server.ts` | `injection-pannes` (gardes) | 7/7 |
+| D2-06 | P3 | Non | `POST /v1/terrain/paquets/verification` corps `null` → 500 | Corps non validé (`req.body as …`) | Schéma zod (empreinte, signature) | `plugins/terrain/routes-inspection.ts` | `fuzz-ecritures` | 0 × 5xx |
+| D2-07 | P2 | Non | Clôture du jour `2026-02-30` → **201** ; relevé en date de valeur `2026-02-30` → 202 | Schéma AAAA-MM-JJ par expression régulière seulement ; le moteur de dates décale au 2 mars | Date réelle exigée (`isRealCalendarDate`) : schéma partagé, 7 schémas locaux, import de relevé | `core/http.ts` et 8 fichiers | `entrees-metier-hostiles` | 6/6 |
+| D2-08 | P4 | Non | Corps > 1 Mo → message anglais `Request body is too large` | Erreurs du cadriciel non traduites | Codes et messages français (413, 415…) | `app.ts`, `core/errors.ts` | `fuzz-ecritures` | réussi |
+| D2-09 | P2 | Non | Dépôt `text/html`, SVG avec script, exécutable renommé en PDF, `../` dans le nom, base64 invalide → acceptés | Aucun contrôle de type, de signature ni de nom | Liste fermée vérifiée par signature, refus des contenus actifs, nom assaini, base64 strict, doublon signalé | `plugins/documents/controle-fichiers.ts`, `service.ts`, `Documents.tsx` | `televersements-adverses` | 6/6 |
+| D2-10 | P2 | Non | OTP : boîte d'envoi persistée en clair ; tous canaux en échec → 2 avis apposés portant le code | Le contenu complet était remis aux abonnés ; avis apposé pour tout avis obligatoire | Secret masqué dans tout contenu conservé, empreinte masquée, pas d'avis apposé ni de relance pour un secret | `modules/communications/service.ts`, `plugins/communication/service.ts` | `notifications-adverses` | 7/7 (4 en échec avant) |
+| D2-11 | P3 | Non | Variable absente → `{{code}}` envoyé ; variable avec `\r\n` et `{{…}}` transmise | Remplissage sans contrôle | Variables assainies (une ligne, 300 car., sans accolades) ; manques « — » relevés | idem | idem | idem |
+| D2-12 | **P1** | Oui (corrigé) | Compte révoqué (module accès) ; son jeton → `/v1/auth/me` 200 ; renouvellement possible jusqu'à la fin de session (8 h) | La vérification du jeton ne consultait pas l'état du compte de travail | Refus `ACCOUNT_REVOKED` (jeton, renouvellement, connexion) | `plugins/socle/service.ts` | `sessions-abus` | 7/7 (1 en échec avant) |
+| D2-13 | P3 | Non | Parcours des droits : aucun chemin de limitation ni d'effacement | Manque fonctionnel | Limitation et anonymisation à deux personnes, sans toucher aux preuves | `plugins/integrite/*`, `EspaceDonnees.tsx` | `droits-des-personnes` | 4/4 |
+| D2-14 | P3 | Non | Menu : entrées visibles, lecture principale 403 (§ 7) | Menu par rôle, droits par rôle et entité | Masquage de présentation pour les rôles audités ; test menu ↔ API | `shared/src/menu.ts`, `Shell.tsx` | `menu-droits`, `labels-nav` | 3/3 ; 78 écarts ouverts (autres rôles) |
+| D2-15 | P2 | Non | Serveur de démonstration local : après quelques pages, un script reçoit un JSON 429, écran blanc | Les fichiers de l'application comptaient dans le palier global de l'API (même adresse) | Lectures de fichiers hors `/v1`, `/l`, `/.well-known` exemptées | `plugins/socle/rate-limit.ts` | `limitation-debit-site` | 1/1 (échec avant) |
+| D2-16 | P3 | Non | Panneau « Payer » : Tab après le dernier bouton → page masquée | « Piège de focus simple » annoncé mais absent | `useFocusTrap` (panneau, photo agrandie, feuille « Plus ») | `hooks/useFocusTrap.ts`, `Drawer.tsx`, `Shell.tsx`, `EvidencePhotos.tsx` | `accessibilite-clavier` | 5/5 ; parcours Chromium réussi |
+| D2-17 | P4 | Non | Décision confirmée : carte retirée, message et focus perdus | Message porté par la carte supprimée | Annonce globale `aria-live`, focus sur le contenu ; focus sur le motif à l'ouverture | `lib/annonce.ts`, `postes/common.tsx` | idem | idem |
+| D2-18 | P4 | Non | Contrôle de plaque : Entrée sans effet, résultat non annoncé | Champs hors formulaire, pas de zone d'annonce | Formulaire (Entrée), `role="status"` | `ScanVehicule.tsx` | idem | idem |
+| D2-19 | P4 | Non | Six boutons « Payer » identiques au lecteur d'écran | Nom accessible sans contexte | Nom « Payer — [obligation] » (texte visible en tête) | `TaxpayerSpace.tsx` | idem | idem |
+| D2-20 | P3 | Non | Tuiles des communes : blanc sur gris 3,21:1, orange 3,33:1, vert 4,31:1 | Couleurs trop claires | Teintes assombries (≥ 5,4:1) | `postes/postes.css` | parcours Chromium (0 contraste bas) | réussi |
+
+### 18.4 Résidus et points NON TESTÉS
+
+| ID | Gravité | Constat | État |
+|---|---|---|---|
+| R2-1 | P3 | Inscription publique : un numéro déjà inscrit renvoie 409 `PHONE_ALREADY_REGISTERED` (énumération possible, bornée par le palier public 60/min/adresse) | Non corrigé (contrat d'API) ; recommandation : inscription par code à usage unique d'abord |
+| R2-2 | P3 | Pas de jeton de renouvellement distinct : le jeton d'accès (15 min) se renouvelle lui-même jusqu'à la fin de la session (4 à 12 h) ; un jeton volé reste utilisable jusqu'à révocation de la session | Conception à revoir (jeton de renouvellement à rotation et détection de réemploi) |
+| R2-3 | P3 | PDF contenant du JavaScript : non détecté (servi en téléchargement seulement) ; image corrompue de signature correcte acceptée | Accepté provisoirement ; analyse antivirus / assainissement à raccorder à l'hébergement |
+| R2-4 | P3 | 78 écarts menu ↔ lecture hors rôles audités (§ 18.2, phase 9) | Arbitrage demandé |
+| R2-5 | — | Concurrence entre plusieurs instances, panne réelle de PostgreSQL, fournisseurs réels, lecteurs d'écran réels | **NON TESTÉ** |
+
+### 18.5 Effet sur les portes et le score
+
+Portes (§ 3) inchangées dans leur résultat ; précisions : porte 2 (fonctionnalités critiques) — trois parcours critiques
+réussis au clavier seul ; porte 5 (intégrité financière) — concurrence éprouvée sur les chemins d'argent (processus
+unique) ; porte 7 (fiabilité) — injection de pannes au niveau logiciel **réussie**, bascule et reprise d'infrastructure
+toujours **NON TESTÉES** → reste BLOCKED (EXTERNAL) ; porte 9 (vie privée) — limitation et anonymisation à deux personnes
+ajoutées, avis juridique toujours manquant. **Score : 60 / 100** (58 au premier audit ; + 2 pour deux P1 et six P2
+corrigés et prouvés par tests : résilience du stockage, sessions révoquées, dates, téléversements, secrets des
+notifications, limitation de débit). **Verdict inchangé : NO-GO production, GO démonstration.**
+
+### 18.6 Commandes de la porte finale de cette passe
+
+`npm run typecheck && npm run lint && npm test && npm run build -w frontend` ; `python3 tools/gen_routes.py`
+(1 514 routes : une route ajoutée, `POST /v1/integrite/privacy/requests/:id/validation`). Résultats : § 18.7.
+
+### 18.7 Résultats de la porte finale (27/09/2026)
+
+| Commande | Résultat |
+|---|---|
+| `npm run typecheck` | 3 paquets, 0 erreur |
+| `npm run lint` | 0 erreur, 0 avertissement |
+| `npm test` | **1 369 / 1 369 réussis** : shared 32 (2 fichiers), backend **1 054** (117 fichiers, dont 10 nouveaux), frontend **283** (52 fichiers, dont 1 nouveau) ; aucun rejet de promesse non géré dans la sortie |
+| `npm run build -w frontend` | construction réussie (service worker, 310 entrées pré-cachées) |
+| `python3 tools/gen_routes.py` | 1 514 routes (+ 1) |
 
 ---
 
