@@ -295,6 +295,7 @@ function AviaPanel({ objects }: { objects: VObject[] }) {
     <section className="panel" aria-labelledby="vx-avia">
       <div className="panel-head"><h2 className="panel-title" id="vx-avia"><Icon name="plane" size={18} /> Déclarations mensuelles de mouvements</h2></div>
       <p className="small muted">Chaque déclaration est rapprochée des données de l’exploitant (embarquements, sorties). Un écart ouvre une procédure contradictoire ; aucune facturation n’est automatique et aucune n’est possible avant l’arrêté (acte requis).</p>
+      <p className="small muted">Pôle de rapprochement des recettes (RRH) : vos billets transmis (interface de la compagnie — API, GDS, DCS), les embarquements RVA, les sorties DGM et les reversements sont rapprochés chaque mois. Chaque passager reçoit un identifiant fiscal aérien (IFA) inscrit dans le QR fiscal signé de sa carte d’embarquement.</p>
       {q.loading && <Loading />}
       {!!q.error && <ErrorState error={q.error} onRetry={q.reload} />}
       {q.data && (
@@ -308,6 +309,9 @@ function AviaPanel({ objects }: { objects: VObject[] }) {
               {d.reconciliation && (
                 <p className="small">Exploitant : {d.reconciliation.observed.passengersBoarded.toLocaleString('fr-FR')} embarqués · écart {d.reconciliation.gaps.passengers >= 0 ? '+' : ''}{d.reconciliation.gaps.passengers} passagers ({d.reconciliation.passengerGapRate} %) · fret {d.reconciliation.gaps.freightKg >= 0 ? '+' : ''}{d.reconciliation.gaps.freightKg} kg</p>
               )}
+              {d.origin === 'CONSTAT_RRH' && <p className="small">Constat du pôle de rapprochement des recettes (RRH) : ce mois n’a pas été déclaré. Répondez par vos observations.</p>}
+              {d.reconciliation?.rrh && <p className="small">Pôle de rapprochement : {d.reconciliation.rrh.sold} billets transmis · {d.reconciliation.rrh.boarded} embarqués ({d.reconciliation.rrh.boardedWithoutIfa} sans IFA) · {d.reconciliation.rrh.exited} sortis · écart de reversement {d.reconciliation.rrh.remittanceGap} USD</p>}
+              {d.gapDecisions?.map((g, i) => <p key={i} className="small muted">{g.outcome === 'COMPENSATION' ? 'Compensation décidée' : 'Écart classé'} — {g.reason}</p>)}
               {d.contradictory && ['ECART_CONSTATE', 'OBSERVATIONS_RECUES'].includes(d.status) && (
                 <div className="input-row">
                   <input value={obs[d.id] ?? ''} onChange={(e) => setObs({ ...obs, [d.id]: e.target.value })} placeholder={`Vos observations avant le ${fmtDate(d.contradictory.deadline)}`} aria-label="Observations" />

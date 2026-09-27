@@ -50,3 +50,6 @@
 .vxv-plate::after { content: ''; position: absolute; inset: auto 0 0 0; height: 5px; background: linear-gradient(90deg, var(--flag-blue) 0 33%, var(--flag-yellow) 33% 66%, var(--flag-red) 66%); }
 .vxv-plate .mono { font-size: clamp(18px, 5vw, 26px); letter-spacing: 0.06em; font-weight: 600; overflow-wrap: anywhere; text-align: center; }
 .vxv-plate small { color: rgba(255, 255, 255, 0.75); }
+
+/* AVIA — chiffres du dossier source sur deux colonnes (une seule colonne sur téléphone). */
+.vx-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }

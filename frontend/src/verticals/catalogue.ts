@@ -63,10 +63,18 @@ export interface VerticalSpaceData {
   cases: CaseView[]; certificates: CertificateView[]; stalls?: StallView[]; ticketing?: TicketingView[];
 }
 
+export interface AviaRrhFigures {
+  reconciliationId: string; flights: number; sold: number; boarded: number; boardedWithoutIfa: number; exited: number; taxOnBoarded: string; remitted: string; remittanceGap: string;
+  freightDeclaredKg: number; freightManifestKg: number; hasGap: boolean; gapLabels: string[];
+}
+
 export interface AviaDeclaration {
   id: string; taxpayerId: string; period: string; status: string; statusLabel: string; declared: { flights: number; passengersDeparting: number; freightKg: number };
+  /** Constat du pôle de rapprochement (RRH) sur un mois non déclaré (§ 11C). */
+  origin?: 'COMPAGNIE' | 'CONSTAT_RRH';
+  gapDecisions?: { at: string; by: string; outcome: 'COMPENSATION' | 'CLASSEMENT'; reason: string; proposalRef?: string }[];
   declaredAt: string; aircraftObjectIds: string[];
-  reconciliation?: { at: string; by: string; observed: { flights: number; passengersBoarded: number; passengersExited: number | null; freightKg: number }; gaps: { flights: number; passengers: number; passengersExited: number | null; freightKg: number }; passengerGapRate: string };
+  reconciliation?: { at: string; by: string; observed: { flights: number; passengersBoarded: number; passengersExited: number | null; freightKg: number }; gaps: { flights: number; passengers: number; passengersExited: number | null; freightKg: number }; passengerGapRate: string; rrh?: AviaRrhFigures };
   contradictory?: { openedAt: string; deadline: string; observations: { at: string; by: string; text: string; documents: string[] }[] };
   validation?: { by: string; at: string; reason: string };
   billing: { at: string; by: string; outcome: string; reason: string; obligationId?: string }[];

@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **669 routes** dans 36 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **696 routes** dans 36 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -21,7 +21,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **669 routes** dans 36
 | extension terrain | 47 |
 | extension titres | 20 |
 | extension tresor | 27 |
-| extension verticales | 43 |
+| extension verticales | 70 |
 | module ai | 3 |
 | module alerts | 1 |
 | module appeals | 9 |
@@ -683,6 +683,8 @@ Généré depuis le code source (`tools/gen_routes.py`) : **669 routes** dans 36
 
 | Méthode | Chemin |
 |---|---|
+| GET | `/v1/public/verticales/avia/ifa/cle-publique` |
+| POST | `/v1/public/verticales/avia/ifa/verify` |
 | GET | `/v1/public/verticales/certificates/:code` |
 | GET | `/v1/public/verticales/plates/:code` |
 | GET | `/v1/verticales` |
@@ -690,15 +692,40 @@ Généré depuis le code source (`tools/gen_routes.py`) : **669 routes** dans 36
 | POST | `/v1/verticales/:slug/cases` |
 | POST | `/v1/verticales/:slug/objects/:objectId/liquidate` |
 | GET | `/v1/verticales/:slug/space` |
+| GET | `/v1/verticales/avia/cadre` |
+| POST | `/v1/verticales/avia/cadre/actes` |
+| POST | `/v1/verticales/avia/cadre/actes/:id/validate` |
+| POST | `/v1/verticales/avia/cadre/coordination/:partner` |
+| POST | `/v1/verticales/avia/cadre/mesures` |
+| POST | `/v1/verticales/avia/cadre/mesures/:id/decide` |
+| GET | `/v1/verticales/avia/cadre/remuneration-alternative` |
 | GET | `/v1/verticales/avia/declarations` |
 | POST | `/v1/verticales/avia/declarations` |
 | GET | `/v1/verticales/avia/declarations/:id` |
 | POST | `/v1/verticales/avia/declarations/:id/billing` |
+| POST | `/v1/verticales/avia/declarations/:id/gap-decision` |
 | POST | `/v1/verticales/avia/declarations/:id/observations` |
 | POST | `/v1/verticales/avia/declarations/:id/reconcile` |
 | POST | `/v1/verticales/avia/declarations/:id/validate` |
+| GET | `/v1/verticales/avia/ifa/:code` |
+| POST | `/v1/verticales/avia/ifa/controls` |
 | POST | `/v1/verticales/avia/operator-data` |
 | GET | `/v1/verticales/avia/overview` |
+| GET | `/v1/verticales/avia/rrh/agencies` |
+| POST | `/v1/verticales/avia/rrh/agencies` |
+| POST | `/v1/verticales/avia/rrh/agencies/:id/decision` |
+| POST | `/v1/verticales/avia/rrh/agencies/:id/tickets` |
+| GET | `/v1/verticales/avia/rrh/connectors` |
+| POST | `/v1/verticales/avia/rrh/connectors/:code/pull` |
+| POST | `/v1/verticales/avia/rrh/freight` |
+| GET | `/v1/verticales/avia/rrh/overview` |
+| POST | `/v1/verticales/avia/rrh/passenger-events` |
+| GET | `/v1/verticales/avia/rrh/reconciliations` |
+| POST | `/v1/verticales/avia/rrh/reconciliations` |
+| GET | `/v1/verticales/avia/rrh/reconciliations/:id` |
+| POST | `/v1/verticales/avia/rrh/reconciliations/:id/lines/:airline/submit` |
+| POST | `/v1/verticales/avia/rrh/remittances` |
+| POST | `/v1/verticales/avia/rrh/tickets` |
 | POST | `/v1/verticales/calcu/accounts` |
 | POST | `/v1/verticales/calcu/accounts/:id/validate` |
 | POST | `/v1/verticales/calcu/documents` |

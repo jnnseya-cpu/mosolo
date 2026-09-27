@@ -29,6 +29,8 @@ import {
   type CertificateKind, type ProcedureDef, type VerticalDef,
 } from './catalogue.js';
 import { AviaService } from './avia.js';
+import { AviaRrhService } from './avia-rrh.js';
+import { AviaCadreService } from './avia-cadre.js';
 import { CalcuService } from './calcu.js';
 import { P } from './policies.js';
 import { distanceM, presenceOk } from '../parking/field.js';
@@ -200,10 +202,16 @@ export class VerticalesService {
   readonly titleService: User = { kind: 'user', id: 'svc-verticales-titres', name: 'Service des titres à tarif fixe (verticales)', roles: ['R11'], entity: 'DGTK' };
 
   readonly avia: AviaService;
+  /** Pôle de rapprochement des recettes (RRH) et IFA — § 11C, par-dessus `avia`. */
+  readonly aviaRrh: AviaRrhService;
+  /** Arrêté, coordination, mesures décidées par l'autorité, clé alternative 65/35 (simulation) — § 11C. */
+  readonly aviaCadre: AviaCadreService;
   readonly calcu: CalcuService;
 
   constructor(readonly ctx: AppContext) {
     this.avia = new AviaService(ctx);
+    this.aviaRrh = new AviaRrhService(ctx, this.avia);
+    this.aviaCadre = new AviaCadreService(ctx, this.aviaRrh);
     this.calcu = new CalcuService(ctx);
   }
 

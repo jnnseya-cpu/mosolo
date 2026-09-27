@@ -17,6 +17,7 @@ import { api, describeError } from '../../lib/api';
 import { GpsQualityLine } from '../../components/GpsQuality';
 import { usePreciseLocation, withPresence } from '../../lib/geo';
 import { CASE_TONE, fetchCatalogue, OBLIGATION_LABEL, TITLE_LABEL, TITLE_TONE, verifyPath, type AviaDeclaration, type CaseView, type VObligation } from '../../verticals/catalogue';
+import { AviaCadreSection, AviaIfaControlSection, AviaRrhSection } from './AviaRrh';
 import './verticales.css';
 
 type Tab = 'demarches' | 'plaques' | 'avia' | 'telecom' | 'indicateurs';
@@ -289,12 +290,37 @@ function PlatesTab() {
 
 // ------------------------------------------------------------------------------------------------ AVIA
 
+type AviaSub = 'declarations' | 'rrh' | 'ifa' | 'cadre';
+const AVIA_SUBS: { id: AviaSub; label: string; icon: string }[] = [
+  { id: 'declarations', label: 'Déclarations mensuelles', icon: 'file' },
+  { id: 'rrh', label: 'Pôle de rapprochement des recettes (RRH)', icon: 'table' },
+  { id: 'ifa', label: 'Contrôle IFA (QR)', icon: 'qr' },
+  { id: 'cadre', label: 'Arrêté, mesures et clés', icon: 'scale' },
+];
+
+/** AVIA : déclarations mensuelles (circuit d'origine) + pôle de rapprochement, contrôle IFA et cadre (§ 11C). */
 function AviaTab() {
+  const [sub, setSub] = useState<AviaSub>('declarations');
+  return (
+    <div className="stack">
+      <div className="seg seg-wrap" role="tablist" aria-label="Rubriques AVIA">
+        {AVIA_SUBS.map((t) => <button key={t.id} type="button" role="tab" aria-selected={sub === t.id} aria-pressed={sub === t.id} onClick={() => setSub(t.id)}><Icon name={t.icon} size={16} /> {t.label}</button>)}
+      </div>
+      {sub === 'declarations' && <AviaDeclarationsTab />}
+      {sub === 'rrh' && <AviaRrhSection />}
+      {sub === 'ifa' && <AviaIfaControlSection />}
+      {sub === 'cadre' && <AviaCadreSection />}
+    </div>
+  );
+}
+
+function AviaDeclarationsTab() {
   const { fmtDate } = useApp();
   const list = useApi(() => api<AviaDeclaration[]>('/v1/verticales/avia/declarations'), []);
   const ov = useApi(() => api<{ notice: string; periods: { period: string; declarations: number; passengersDeclared: number; passengersBoarded: number; withGap: number; validated: number }[] }>('/v1/verticales/avia/overview'), []);
   const a = useAction();
   const [reason, setReason] = useState<Record<string, string>>({});
+  const [gapReason, setGapReason] = useState<Record<string, string>>({});
   const act = (id: string, path: string, body: unknown, msg: string) => a.run(async () => { await api(`/v1/verticales/avia/declarations/${id}/${path}`, { method: 'POST', body }); list.reload(); ov.reload(); }, msg);
   return (
     <div className="stack">
@@ -313,8 +339,11 @@ function AviaTab() {
                   <StatusBadge tone={d.status === 'ECART_CONSTATE' ? 'warning' : ['VALIDEE', 'RAPPROCHEE'].includes(d.status) ? 'good' : 'info'} label={d.statusLabel} />
                 </div>
                 {d.reconciliation && <p className="small">Exploitant : {d.reconciliation.observed.passengersBoarded.toLocaleString('fr-FR')} embarqués · écart {d.reconciliation.gaps.passengers} ({d.reconciliation.passengerGapRate} %){d.contradictory ? ` · contradictoire jusqu’au ${fmtDate(d.contradictory.deadline)}` : ''}</p>}
+                {d.origin === 'CONSTAT_RRH' && <p className="small"><Icon name="table" size={13} /> Constat du pôle de rapprochement sur un mois non déclaré par la compagnie.</p>}
+                {d.reconciliation?.rrh && <p className="small">Pôle de rapprochement : {d.reconciliation.rrh.sold} vendus · {d.reconciliation.rrh.boarded} embarqués ({d.reconciliation.rrh.boardedWithoutIfa} sans IFA) · {d.reconciliation.rrh.exited} sortis · écart de reversement {d.reconciliation.rrh.remittanceGap} USD · fret manifesté {d.reconciliation.rrh.freightManifestKg} kg</p>}
                 {d.contradictory?.observations.map((o, i) => <p key={i} className="small"><Icon name="message" size={13} /> Observation de la compagnie : {o.text}</p>)}
                 {d.billing.map((b, i) => <p key={i} className="small muted">Facturation {b.outcome === 'REFUSEE' ? 'refusée' : 'émise'} — {b.reason}</p>)}
+                {d.gapDecisions?.map((g, i) => <p key={`g${i}`} className="small muted">{g.outcome === 'COMPENSATION' ? 'Compensation décidée' : 'Écart classé'} — {g.reason}</p>)}
                 <div className="row-actions">
                   {d.status === 'DECLAREE' && <button type="button" className="btn btn-secondary btn-sm" disabled={a.busy} onClick={() => void act(d.id, 'reconcile', undefined, 'Rapprochement effectué.')}>Rapprocher</button>}
                   {['RAPPROCHEE', 'ECART_CONSTATE', 'OBSERVATIONS_RECUES'].includes(d.status) && (
@@ -322,6 +351,11 @@ function AviaTab() {
                       <button type="button" className="btn btn-primary btn-sm" disabled={a.busy || (reason[d.id] ?? '').trim().length < 5} onClick={() => void act(d.id, 'validate', { reason: reason[d.id] }, 'Déclaration validée.')}>Valider</button></div>
                   )}
                   {d.status === 'VALIDEE' && <button type="button" className="btn btn-secondary btn-sm" disabled={a.busy} onClick={() => void act(d.id, 'billing', undefined, 'Avis émis.')}>Demander la facturation</button>}
+                  {d.status === 'VALIDEE' && (
+                    <div className="input-row"><input value={gapReason[d.id] ?? ''} onChange={(e) => setGapReason({ ...gapReason, [d.id]: e.target.value })} placeholder="Motif (compensation ou classement)" aria-label="Motif de la décision sur l’écart" />
+                      <button type="button" className="btn btn-secondary btn-sm" disabled={a.busy || (gapReason[d.id] ?? '').trim().length < 5} onClick={() => void act(d.id, 'gap-decision', { outcome: 'COMPENSATION', reason: gapReason[d.id] }, 'Compensation décidée.')}>Décider une compensation</button>
+                      <button type="button" className="btn btn-secondary btn-sm" disabled={a.busy || (gapReason[d.id] ?? '').trim().length < 5} onClick={() => void act(d.id, 'gap-decision', { outcome: 'CLASSEMENT', reason: gapReason[d.id] }, 'Écart classé.')}>Classer l’écart</button></div>
+                  )}
                 </div>
               </li>
             ))}

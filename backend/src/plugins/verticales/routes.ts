@@ -187,6 +187,110 @@ export function registerVerticalRoutes(app: FastifyInstance, ctx: AppContext, sv
     return svc.avia.validate(requireUser(req), req.params.id, body.reason);
   });
   app.post<{ Params: { id: string } }>('/v1/verticales/avia/declarations/:id/billing', async (req, reply) => reply.code(201).send(svc.avia.requestBilling(requireUser(req), req.params.id)));
+  app.post<{ Params: { id: string } }>('/v1/verticales/avia/declarations/:id/gap-decision', async (req) => {
+    const body = parse(z.object({ outcome: z.enum(['COMPENSATION', 'CLASSEMENT']), reason, proposalRef: z.string().max(64).optional() }).strict(), req.body);
+    return svc.avia.decideCompensation(requireUser(req), req.params.id, body);
+  });
+
+  // ---------------------------------------------------------------- AVIA — pôle de rapprochement des recettes (RRH) et IFA (§ 11C)
+  const usdAmount = z.object({ amount: z.string().regex(/^\d{1,15}(\.\d{1,2})?$/, 'montant décimal (2 décimales max.)'), currency: z.literal('USD') }).strict();
+  const flightNumber = z.string().trim().regex(/^[A-Z0-9]{2,3}\d{1,4}[A-Z]?$/, 'numéro de vol attendu (ex. XB101)');
+  const ticketSchema = z.object({
+    ticketNumber: z.string().trim().regex(/^\d{10,14}$/, 'numéro de billet (10 à 14 chiffres)'), flightNumber, flightDate: isoDateString,
+    destination: z.string().trim().regex(/^[A-Z]{3}$/, 'code aéroport IATA (3 lettres)'), passengerRef: z.string().trim().min(3).max(64), urbanTax: usdAmount,
+  }).strict();
+  const tickets = z.array(ticketSchema).min(1).max(5000);
+  app.get('/v1/verticales/avia/rrh/overview', async (req) => svc.aviaRrh.overview(requireUser(req)));
+  app.get('/v1/verticales/avia/rrh/connectors', async (req) => { requireUser(req); return svc.aviaRrh.connectorsView(); });
+  app.post<{ Params: { code: string } }>('/v1/verticales/avia/rrh/connectors/:code/pull', async (req, reply) => {
+    const body = parse(z.object({ airlineTaxpayerId: z.string(), period: periodSchema }).strict(), req.body);
+    return reply.code(201).send(svc.aviaRrh.pullConnector(requireUser(req), req.params.code, body));
+  });
+  app.post('/v1/verticales/avia/rrh/tickets', async (req, reply) => {
+    const body = parse(z.object({ source: z.enum(['BSP', 'GDS', 'TTBS', 'API_COMPAGNIE']), airlineTaxpayerId: z.string(), period: periodSchema, tickets, fileSha256: sha256.optional() }).strict(), req.body);
+    return reply.code(201).send(svc.aviaRrh.receiveTickets(requireUser(req), body));
+  });
+  app.get('/v1/verticales/avia/rrh/agencies', async (req) => svc.aviaRrh.listAgencies(requireUser(req)));
+  app.post('/v1/verticales/avia/rrh/agencies', async (req, reply) => {
+    const body = parse(z.object({ name: z.string().trim().min(2).max(160), kind: z.enum(['AGENCE_VOYAGES', 'OPERATEUR_PARTIEL', 'AGENT_FRET']), iataCode: z.string().trim().regex(/^\d{7,8}$/).optional(), taxpayerId: z.string() }).strict(), req.body);
+    return reply.code(201).send(svc.aviaRrh.requestAgency(requireUser(req), body));
+  });
+  app.post<{ Params: { id: string } }>('/v1/verticales/avia/rrh/agencies/:id/decision', async (req) => {
+    const body = parse(z.object({ decision: z.enum(['CERTIFIEE', 'REFUSEE', 'SUSPENDUE']), reason }).strict(), req.body);
+    return svc.aviaRrh.decideAgency(requireUser(req), req.params.id, body);
+  });
+  app.post<{ Params: { id: string } }>('/v1/verticales/avia/rrh/agencies/:id/tickets', async (req, reply) => {
+    const body = parse(z.object({ airlineTaxpayerId: z.string(), period: periodSchema, tickets }).strict(), req.body);
+    return reply.code(201).send(svc.aviaRrh.agencyDeclareTickets(requireUser(req), req.params.id, body));
+  });
+  app.post('/v1/verticales/avia/rrh/passenger-events', async (req, reply) => {
+    const body = parse(z.object({
+      source: z.enum(['RVA_EMBARQUEMENT', 'DGM_SORTIE']), airlineTaxpayerId: z.string(), flightNumber, flightDate: isoDateString,
+      scans: z.array(z.object({ qr: z.string().max(2000).optional(), ifa: z.string().max(40).optional() }).strict()).max(1000).default([]), withoutIfa: count.max(1000).default(0),
+    }).strict(), req.body);
+    return reply.code(201).send(svc.aviaRrh.recordPassengerEvents(requireUser(req), body));
+  });
+  app.post('/v1/verticales/avia/rrh/freight', async (req, reply) => {
+    const body = parse(z.object({
+      source: z.enum(['COMPAGNIE', 'AGENT_FRET', 'RVA_MANIFESTE']), airlineTaxpayerId: z.string(), flightNumber, flightDate: isoDateString,
+      awbNumber: z.string().trim().regex(/^\d{3}-?\d{8}$/, 'numéro de LTA (ex. 123-12345678)'), weightKg: count, embarkationTax: usdAmount.optional(), agencyId: z.string().optional(),
+    }).strict(), req.body);
+    return reply.code(201).send(svc.aviaRrh.recordFreight(requireUser(req), body));
+  });
+  app.post('/v1/verticales/avia/rrh/remittances', async (req, reply) => {
+    const body = parse(z.object({ source: z.enum(['BSP', 'BANQUE_COLLECTRICE']), airlineTaxpayerId: z.string(), period: periodSchema, amount: usdAmount, reference: z.string().trim().min(2).max(64), bank: z.string().trim().max(120).optional(), nature: z.enum(['COURANT', 'RATTRAPAGE']).default('COURANT') }).strict(), req.body);
+    return reply.code(201).send(svc.aviaRrh.recordRemittance(requireUser(req), body));
+  });
+  app.get<{ Querystring: { period?: string } }>('/v1/verticales/avia/rrh/reconciliations', async (req) => svc.aviaRrh.listReconciliations(requireUser(req), req.query.period));
+  app.post('/v1/verticales/avia/rrh/reconciliations', async (req, reply) => {
+    const body = parse(z.object({ period: periodSchema }).strict(), req.body);
+    return reply.code(201).send(svc.aviaRrh.runMonthly(requireUser(req), body.period));
+  });
+  app.get<{ Params: { id: string } }>('/v1/verticales/avia/rrh/reconciliations/:id', async (req) => svc.aviaRrh.readReconciliation(requireUser(req), req.params.id));
+  app.post<{ Params: { id: string; airline: string } }>('/v1/verticales/avia/rrh/reconciliations/:id/lines/:airline/submit', async (req) => svc.aviaRrh.submitLine(requireUser(req), req.params.id, req.params.airline));
+  app.get<{ Params: { code: string } }>('/v1/verticales/avia/ifa/:code', async (req) => svc.aviaRrh.boardingPass(requireUser(req), req.params.code));
+  app.post('/v1/verticales/avia/ifa/controls', async (req, reply) => {
+    const body = parse(z.object({ qr: z.string().max(2000).optional(), ifa: z.string().max(40).optional(), flightNumber: flightNumber.optional(), place: z.string().trim().min(2).max(120) }).strict(), req.body);
+    return reply.code(201).send(svc.aviaRrh.controlIfa(requireUser(req), body));
+  });
+  app.get('/v1/public/verticales/avia/ifa/cle-publique', async () => svc.aviaRrh.publicKey());
+  app.post('/v1/public/verticales/avia/ifa/verify', async (req) => {
+    const body = parse(z.object({ qr: z.string().min(4).max(2000) }).strict(), req.body);
+    return svc.aviaRrh.publicVerify(body.qr);
+  });
+
+  // ---------------------------------------------------------------- AVIA — arrêté, coordination, mesures, clé alternative (§ 11C)
+  const measureCode = z.enum(['BILLET_SANS_IFA_NON_VALIDABLE', 'PENALITE_ELECTRONIQUE', 'SUSPENSION_ACCES_DEPART', 'RETRAIT_AGREMENT']);
+  app.get('/v1/verticales/avia/cadre', async (req) => svc.aviaCadre.view(requireUser(req)));
+  app.post('/v1/verticales/avia/cadre/actes', async (req, reply) => {
+    const body = parse(z.object({
+      reference: z.string().trim().min(3).max(120), title: z.string().trim().min(3).max(300), signedOn: isoDateString, documentSha256: sha256,
+      measuresEnabled: z.array(measureCode).max(4).default([]),
+      parameters: z.object({ penaltyPerTicketUsd: z.string().regex(/^\d{1,15}(\.\d{1,2})?$/).nullable().default(null), integrationDelayDays: z.number().int().min(0).max(3650).nullable().default(null) }).strict().default({}),
+    }).strict(), req.body);
+    return reply.code(201).send(svc.aviaCadre.recordAct(requireUser(req), body));
+  });
+  app.post<{ Params: { id: string } }>('/v1/verticales/avia/cadre/actes/:id/validate', async (req) => {
+    const body = parse(z.object({ approve: z.boolean(), reason }).strict(), req.body);
+    return svc.aviaCadre.validateAct(requireUser(req), req.params.id, body);
+  });
+  app.post<{ Params: { partner: string } }>('/v1/verticales/avia/cadre/coordination/:partner', async (req) => {
+    const body = parse(z.object({ reference: z.string().trim().min(3).max(160), note: z.string().trim().max(500).optional() }).strict(), req.body);
+    const partner = parse(z.enum(['RVA', 'DGM', 'AAC', 'COMPAGNIES']), req.params.partner);
+    return svc.aviaCadre.confirmCoordination(requireUser(req), partner, body);
+  });
+  app.post('/v1/verticales/avia/cadre/mesures', async (req, reply) => {
+    const body = parse(z.object({ measure: measureCode, airlineTaxpayerId: z.string(), period: periodSchema }).strict(), req.body);
+    return reply.code(201).send(svc.aviaCadre.proposeMeasure(requireUser(req), body));
+  });
+  app.post<{ Params: { id: string } }>('/v1/verticales/avia/cadre/mesures/:id/decide', async (req) => {
+    const body = parse(z.object({ decision: z.enum(['RETENUE', 'ECARTEE']), authority: z.string().trim().min(3).max(160), reason }).strict(), req.body);
+    return svc.aviaCadre.decideMeasure(requireUser(req), req.params.id, body);
+  });
+  app.get<{ Querystring: { period?: string; amount?: string } }>('/v1/verticales/avia/cadre/remuneration-alternative', async (req) => {
+    const q = parse(z.object({ period: periodSchema.optional(), amount: z.string().regex(/^\d{1,15}(\.\d{1,2})?$/).optional() }), req.query);
+    return svc.aviaCadre.simulateAlternativeKey(requireUser(req), q);
+  });
 
   // ---------------------------------------------------------------- CALCU
   app.get('/v1/verticales/calcu/overview', async (req) => svc.calcu.overview(requireUser(req)));
