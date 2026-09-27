@@ -18,6 +18,8 @@ import { api, describeError } from '../../lib/api';
 import { monthLabel, qs, Section, useFmt } from './shared';
 import { ActForm, AutomationPanel, ControlsPanel, ConventionForm, ReserveModulesPanel, TableauPanel, type AutomationView, type ReportComplements } from './RepartitionComplements';
 import './pilotage.css';
+import { DonutViz, fmtCompact, fmtNombre, KpiTile, LineAreaViz, ProgressMeter, VizFrame } from '../../components/viz';
+import { BarresParDevise, nombre, Tuiles, Visuels } from './visuels';
 
 // ————————————————————————— contrat —————————————————————————
 
@@ -100,6 +102,54 @@ export function repartitionGuard(key: KeyView['key'], user: { id: string; roles:
 
 // ————————————————————————— vues —————————————————————————
 
+/** Visuels de la répartition : clé, parts par devise, assiette mois par mois, réserve des agents, tutelles. */
+export function VisuelsRepartition({ report, keyView }: { report: RepartitionReport; keyView: KeyView }) {
+  const k = keyView.key;
+  const devises = report.totals.map((t) => t.currency);
+  const acte = k.status === 'ACTIVE' ? undefined : 'Clé au statut « acte requis » : parts par défaut — à confirmer par le maître d’ouvrage ; simulation seulement.';
+  return (
+    <>
+      <Tuiles label="Répartition des recettes — synthèse" max={4}>
+        <KpiTile hero label="Clé de répartition" value={`${k.slices.map((s) => s.pct).join(' / ')} %`} state={{ label: KEY_STATUS[k.status].label, tone: KEY_STATUS[k.status].tone }} sub={`${k.source} · ${k.durationYears} ans`} />
+        {report.totals.map((t) => (
+          <KpiTile key={t.currency} label={`Assiette rapprochée — ${t.currency}`} value={nombre(t.base.amount)} unit={t.currency} format={fmtCompact}
+            state={t.check.equalsBase && t.check.flowsEqualBase ? { label: '100 % réparti', tone: 'good' } : { label: 'Écart — alerte', tone: 'critical' }} sub={`${t.payments} paiement(s) rapproché(s)`} />
+        ))}
+        {report.totals.length === 0 && <KpiTile label="Assiette rapprochée" value={null} reason="Aucune recette rapprochée sur la période." />}
+        <KpiTile label="Répartitions arrêtées" value={report.distributions.length} format={(v) => fmtNombre(v, 0)} state={{ label: report.mode === 'SIMULATION' ? 'Simulation' : 'Calcul', tone: report.mode === 'SIMULATION' ? 'warning' : 'good' }} />
+      </Tuiles>
+      <Visuels label="Répartition en graphiques">
+        <DonutViz title="Clé de répartition (§ 37A)" subtitle="Part de chaque bénéficiaire, en %" centerLabel="% des recettes rapprochées" format={(v) => `${fmtNombre(v)} %`} note={acte}
+          slices={k.slices.map((s) => ({ key: s.code, label: s.label, value: nombre(s.pct) ?? 0 }))} />
+        {report.totals.map((t) => (
+          <DonutViz key={t.currency} title={`Parts calculées — ${t.currency}`} subtitle="Sur l’assiette rapprochée (somme = 100 % de l’assiette)" centerLabel={t.currency} format={(v) => `${fmtCompact(v)} ${t.currency}`}
+            slices={t.slices.map((s) => ({ key: s.slice, label: s.label, value: nombre(s.amount.amount) ?? 0 }))} note={acte} />
+        ))}
+        {devises.map((c) => {
+          const pts = report.byPeriod.filter((p) => p.currency === c && p.period.length === 7).sort((a, b) => a.period.localeCompare(b.period));
+          return pts.length > 0 ? (
+            <LineAreaViz key={`l-${c}`} className="viz-span-2" title={`Assiette rapprochée, mois par mois — ${c}`} granularity="month" area format={(v) => `${fmtCompact(v)} ${c}`} tickFormat={fmtCompact}
+              series={[{ key: 'b', label: 'Assiette rapprochée' }]} points={pts.map((p) => ({ date: p.period, values: { b: nombre(p.base.amount) } }))} />
+          ) : null;
+        })}
+        {report.agents.totals.length > 0 && (
+          <VizFrame frame={{ title: 'Réserve des agents — consommation', subtitle: 'Commissions validées / réserve des 10 % (par devise)' }} empty={false}
+            table={{ columns: ['Devise', 'Consommation'], rows: report.agents.totals.map((r) => [r.currency, r.consumptionPct === null ? '—' : `${r.consumptionPct} %`]) }}>
+            <div className="pl-meters">
+              {report.agents.totals.map((r) => (
+                <ProgressMeter key={r.currency} compact label={`Réserve ${r.currency}`} unit="%" value={nombre(r.consumptionPct)} target={100} targetLabel="plafond de la réserve" better="BAISSE"
+                  tone={AGENTS_STATUS[r.status].tone} toneLabel={AGENTS_STATUS[r.status].label} reason="aucune réserve sur la période" />
+              ))}
+            </div>
+          </VizFrame>
+        )}
+        <BarresParDevise className="viz-span-2" title="Part des ministères de tutelle (indicatif)" series={[{ key: 'm', label: 'Part du ministère' }, { key: 'a', label: 'Réserve agents du module' }]} emptyText="Aucun module rattaché"
+          rows={report.byTutelle.map((t) => ({ key: `${t.tutelle}-${t.currency}`, label: t.tutelle, values: { m: t.slices.find((x) => x.slice === 'TUTELLE')?.amount, a: t.slices.find((x) => x.slice === 'AGENTS_SOUS_TRAITANTS')?.amount } }))} />
+      </Visuels>
+    </>
+  );
+}
+
 function SliceAmounts({ agg }: { agg: Aggregate }) {
   const f = useFmt();
   return <>{agg.slices.map((s) => <span key={s.slice} className="small" style={{ display: 'block' }}>{s.label} ({s.pct} %) : <strong>{f.money(s.amount)}</strong></span>)}</>;
@@ -131,6 +181,7 @@ export function RepartitionView({ report, keyView, onDone }: { report: Repartiti
         </div>
         <p className="small muted">{report.baseDefinition}</p>
       </div>
+      <VisuelsRepartition report={report} keyView={keyView} />
 
       <Section title="Clé de répartition" sub={`${k.source} · durée ${k.durationYears} ans · deux flux de décaissement seulement`}>
         <DataTable caption="Parts de la clé" rows={k.slices} rowKey={(s) => s.code} columns={[

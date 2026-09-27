@@ -15,6 +15,45 @@ import { api } from '../../lib/api';
 import { Section } from './shared';
 import { Area, Callout, CertBadge, certifyGuard, Choice, Field, hasRole, moneysText, Notice, useRunner } from './planif';
 import './pilotage.css';
+import { DonutViz, fmtCompact, fmtNombre, KpiTile, StatusDistribution } from '../../components/viz';
+import { CERT_STATUS } from './planif';
+import { BarresParDevise, etatsDe, nombre, Tuiles, Visuels } from './visuels';
+
+const entier = (v: number) => fmtNombre(v, 0);
+
+/** Visuels de la ventilation par origine (§ 8.7) : paiements par origine, montants par devise. */
+export function VisuelsOrigines({ origins }: { origins: Origins }) {
+  return (
+    <>
+      <DonutViz title="Paiements par origine (§ 8.7)" centerLabel="paiements" emptyText="Aucun paiement ventilé" slices={origins.rows.map((r) => ({ key: r.origin, label: r.label, value: r.count }))} />
+      <BarresParDevise title="Montants par origine" series={[{ key: 'a', label: 'Montant' }]} rows={origins.rows.map((r) => ({ key: r.origin, label: r.label, values: { a: r.amounts } }))} />
+    </>
+  );
+}
+
+/** Visuels de la base de référence et de la RANV : jamais d'estimation ; non mesuré motivé. */
+function VisuelsBase({ ranv, sets }: { ranv: Ranv | null; sets: BaseSet[] | null }) {
+  return (
+    <>
+      <Tuiles label="Base de référence et RANV — synthèse" max={4}>
+        {ranv && ranv.certified && ranv.ranv.length > 0 ? ranv.ranv.map((m, i) => (
+          <KpiTile key={m.currency} hero={i === 0} label={`RANV — ${m.currency}`} value={nombre(m.amount)} unit={m.currency} format={fmtCompact} state={{ label: ranv.partial ? 'Mesure partielle' : 'Base certifiée', tone: ranv.partial ? 'warning' : 'good' }} sub={`Base ${ranv.base?.period ?? '—'}`} />
+        )) : <KpiTile hero label="RANV" value={null} reason={ranv?.note ?? 'Aucune base de référence certifiée (§ 38.1).'} />}
+        <KpiTile label="Jeux importés" value={sets?.length ?? null} format={entier} state={{ label: 'Deux personnes', tone: 'info' }} reason="Liste indisponible." />
+        <KpiTile label="Jeux certifiés" value={sets ? sets.filter((s) => s.status === 'CERTIFIEE').length : null} format={entier} state={{ label: 'Certifié', tone: 'good' }} reason="Liste indisponible." />
+        <KpiTile label="En attente de certification" value={sets ? sets.filter((s) => s.status === 'IMPORTEE').length : null} format={entier} state={{ label: 'Seconde personne', tone: 'warning' }} reason="Liste indisponible." />
+      </Tuiles>
+      <Visuels label="Base de référence en graphiques">
+        <StatusDistribution title="Jeux importés par statut" unitLabel="jeux" emptyText="Aucun jeu importé" items={etatsDe(sets ?? [], (s) => s.status, CERT_STATUS)} />
+        {ranv?.certified && (
+          <BarresParDevise className="viz-span-2" title="Composantes de la RANV" subtitle="Montants mesurés (signe indiqué dans le libellé)" series={[{ key: 'a', label: 'Montant' }]}
+            rows={ranv.components.filter((c) => c.measured).map((c) => ({ key: c.code, label: `${c.sign > 0 ? '+' : '−'} ${c.label}`, values: { a: c.amounts } }))} />
+        )}
+        {ranv?.origins && <VisuelsOrigines origins={ranv.origins} />}
+      </Visuels>
+    </>
+  );
+}
 
 export interface OriginRow { origin: string; label: string; definition: string; count: number; amounts: MoneyJSON[] }
 export interface Origins { basis: string; rule: string; reference: { date: string | null; source: string; note: string }; rows: OriginRow[]; total: { count: number; amounts: MoneyJSON[] } }
@@ -54,6 +93,7 @@ export default function BaseReference() {
   return (
     <div className="page page-wide">
       <PageHead eyebrow="Pilotage · § 38.1–38.2" title="Base de référence et RANV" lead="Aucun engagement chiffré ne précède la mesure. La recette additionnelle nette vérifiée n’est calculée que sur une base de référence certifiée par deux personnes." />
+      <div className="dash-grid" style={{ marginBottom: 16 }}><VisuelsBase ranv={ranv.data ?? null} sets={sets.data?.items ?? null} /></div>
       {ranv.loading && !ranv.data ? <Loading /> : ranv.error ? <ErrorState error={ranv.error} onRetry={reload} /> : ranv.data && (
         <div className="dash-grid">
           <Section title="Recette additionnelle nette vérifiée (RANV)" sub={`Du ${ranv.data.period.from} au ${ranv.data.period.to}`}>

@@ -17,6 +17,37 @@ import { SEQ_NAVY } from '../../lib/palette';
 import { Section } from './shared';
 import { Area, Callout, CertBadge, certifyGuard, Field, hasRole, moneysText, moneyText, Notice, pctText, useRunner } from './planif';
 import './pilotage.css';
+import { fmtNombre, GaugeMeter, HeatGrid, KpiTile, StatusDistribution } from '../../components/viz';
+import { CERT_STATUS } from './planif';
+import { BarresParDevise, etatsDe, nombre, Tuiles, Visuels } from './visuels';
+
+/** Visuels des assignations : réalisation de l'exercice, carte de chaleur, assigné / rapproché, registre par statut. */
+export function VisuelsAssignations({ g, sets }: { g: GapMap | null; sets: TargetSet[] | null }) {
+  const taux = g?.certified ? nombre(g.totals?.ratePct) : null;
+  const motif = g?.note ?? 'Aucune assignation certifiée pour l’exercice.';
+  return (
+    <>
+      <Tuiles label="Assignations — synthèse" max={4}>
+        <KpiTile hero label={`Réalisation de l’exercice ${g?.year ?? ''}`} value={taux} unit="%" format={(v) => fmtNombre(v, 1)} reason={motif}
+          state={taux === null ? undefined : { label: 'Rapproché / assigné', tone: taux >= 100 ? 'good' : 'warning' }} sub={g?.certified ? `${moneyText(g.totals?.realisedCdf)} / ${moneyText(g.totals?.targetCdf)}` : undefined} />
+        <KpiTile label="Jeux d’assignations" value={sets?.length ?? null} format={(v) => fmtNombre(v, 0)} state={{ label: 'Acte de référence', tone: 'info' }} reason="Liste indisponible." />
+        <KpiTile label="Certifiés" value={sets ? sets.filter((s) => s.status === 'CERTIFIEE').length : null} format={(v) => fmtNombre(v, 0)} state={{ label: 'Deux personnes', tone: 'good' }} reason="Liste indisponible." />
+        <KpiTile label="Communes assignées" value={g?.certified ? g.byCommune.filter((c) => c.commune !== '*').length : null} format={(v) => fmtNombre(v, 0)} reason={motif} state={{ label: 'Sur 24 communes', tone: 'neutral' }} />
+      </Tuiles>
+      <Visuels label="Assignations en graphiques">
+        <GaugeMeter title="Réalisation de l’assignation" subtitle="Rapproché / assigné (contre-valeur indicative)" value={taux} unit="%" target={g?.certified ? 100 : null} targetLabel="assignation certifiée" reason={motif} max={Math.max(100, taux ?? 0)} />
+        <HeatGrid className="viz-span-2" title="Réalisation par commune" subtitle="Rapproché / assigné ; gris hachuré = sans assignation certifiée" measureLabel="Réalisation" unit="%" domain={[0, 100]} format={(v) => fmtNombre(v, 0)}
+          unmeasuredReason={g?.certified ? 'aucune assignation certifiée pour cette commune' : motif}
+          cells={(g?.certified ? g.byCommune : []).filter((c) => c.commune !== '*').map((c) => ({ commune: c.commune, value: nombre(c.ratePctCdf) }))} />
+        {g?.certified && (
+          <BarresParDevise className="viz-span-2" title="Assigné et rapproché par commune" series={[{ key: 't', label: 'Assigné' }, { key: 'r', label: 'Rapproché' }]}
+            rows={g.byCommune.map((c) => ({ key: c.commune, label: c.commune === '*' ? 'Toute la province' : c.commune, values: { t: c.target, r: c.realised } }))} />
+        )}
+        <StatusDistribution title="Registre des assignations par statut" unitLabel="jeux" emptyText="Aucune assignation importée" items={etatsDe(sets ?? [], (s) => s.status, CERT_STATUS)} />
+      </Visuels>
+    </>
+  );
+}
 
 interface TargetSet { id: string; fiscalYear: string; label: string; status: string; importedBy: string; act: { reference: string; title: string }; entries: unknown[]; decision?: { by: string; approve: boolean } }
 export interface GapMap {
@@ -112,6 +143,7 @@ export default function Assignations() {
     <div className="page page-wide">
       <PageHead eyebrow="Pilotage · § 26.1" title="Assignations et carte des écarts" lead="Écart à l’assignation par commune et par catégorie, mesuré sur les recettes rapprochées ; assignations certifiées par deux personnes." />
       <div className="dash-grid">
+        <VisuelsAssignations g={gaps.data ?? null} sets={sets.data?.items ?? null} />
         <Section title="Écart assignation / rapproché" tools={<label className="pl-filter"><span>Exercice</span><select value={annee} onChange={(e) => setAnnee(e.target.value)}>{[year, String(Number(year) - 1)].map((y) => <option key={y} value={y}>{y}</option>)}</select></label>}>
           {gaps.loading && !gaps.data ? <Loading /> : gaps.error ? <ErrorState error={gaps.error} onRetry={reload} /> : gaps.data && <GapView g={gaps.data} />}
         </Section>

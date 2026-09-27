@@ -13,6 +13,40 @@ import { api } from '../../lib/api';
 import { Section } from './shared';
 import { Choice, Field, hasRole, Notice, useRunner } from './planif';
 import './pilotage.css';
+import { fmtNombre, KpiTile, ProgressMeter, StackedBarViz, StatusDistribution, VizFrame } from '../../components/viz';
+import { nombre, Tuiles, Visuels } from './visuels';
+
+/** Visuels des accords de service : respect des délais par accord, état des demandes, satisfaction (§ 39). */
+export function VisuelsAccords({ b, sat }: { b: Board; sat: Sat | null }) {
+  const entier = (v: number) => fmtNombre(v, 0);
+  const etat = (x: Req) => (x.closedAt ? (x.onTime ? 'OK' : 'KO') : x.overdue ? 'RETARD' : 'OUVERTE');
+  return (
+    <>
+      <Tuiles label="Accords de service — synthèse" max={4}>
+        <KpiTile hero label="Accords en vigueur" value={b.agreements.filter((a) => a.active).length} format={entier} state={{ label: 'Convention signée', tone: 'info' }} />
+        <KpiTile label="Demandes inter-entités" value={b.agreements.reduce((s, a) => s + a.requests, 0)} format={entier} state={{ label: `${b.agreements.reduce((s, a) => s + a.open, 0)} ouverte(s)`, tone: 'neutral' }} />
+        <KpiTile label="Closes dans le délai" value={b.agreements.reduce((s, a) => s + a.onTime, 0)} format={entier} state={{ label: 'Délai de l’accord', tone: 'good' }} />
+        <KpiTile label="Hors délai" value={b.agreements.reduce((s, a) => s + a.late, 0) + b.requests.filter((x) => !x.closedAt && x.overdue).length} format={entier} state={{ label: 'Suivi à l’audit', tone: 'critical' }} />
+      </Tuiles>
+      <Visuels label="Accords de service en graphiques">
+        <StackedBarViz className="viz-span-2" title="Respect des délais par accord" subtitle="Demandes closes dans le délai, hors délai, encore ouvertes" mode="absolute" orientation="horizontal" format={entier}
+          emptyText="Aucun accord enregistré" series={[{ key: 'ok', label: 'Dans le délai' }, { key: 'ko', label: 'Hors délai' }, { key: 'o', label: 'Ouvertes' }]}
+          rows={b.agreements.map((a) => ({ key: a.id, label: `${a.fromEntity} → ${a.toEntity} (${a.kindLabel})`, values: { ok: a.onTime, ko: a.late, o: a.open } }))} />
+        <StatusDistribution title="Demandes récentes par état" unitLabel="demandes" emptyText="Aucune demande"
+          items={(['OK', 'KO', 'RETARD', 'OUVERTE'] as const).map((k) => ({ key: k, label: { OK: 'Close dans le délai', KO: 'Close hors délai', RETARD: 'Ouverte hors délai', OUVERTE: 'Ouverte' }[k], tone: ({ OK: 'good', KO: 'critical', RETARD: 'serious', OUVERTE: 'warning' } as const)[k], count: b.requests.filter((x) => etat(x) === k).length }))} />
+        {sat && (
+          <VizFrame frame={{ title: 'Satisfaction des contribuables (§ 39)', subtitle: `${sat.total} réponse(s) ; moyenne masquée sous ${sat.threshold} réponses` }} empty={false}
+            table={{ columns: ['Moment', 'Moyenne / 5', 'Réponses'], rows: [['Après paiement', sat.afterPayment.masked ? 'masqué' : sat.afterPayment.mean ?? '—', sat.afterPayment.count ?? '—'], ['Après visite', sat.afterVisit.masked ? 'masqué' : sat.afterVisit.mean ?? '—', sat.afterVisit.count ?? '—']] }}>
+            <div className="pl-meters">
+              <ProgressMeter compact label="Après paiement" unit="/ 5" max={5} value={sat.afterPayment.masked ? null : nombre(sat.afterPayment.mean)} reason={`moins de ${sat.threshold} réponses : moyenne masquée`} />
+              <ProgressMeter compact label="Après visite" unit="/ 5" max={5} value={sat.afterVisit.masked ? null : nombre(sat.afterVisit.mean)} reason={`moins de ${sat.threshold} réponses : moyenne masquée`} />
+            </div>
+          </VizFrame>
+        )}
+      </Visuels>
+    </>
+  );
+}
 
 interface Agreement { id: string; fromEntity: string; toEntity: string; kind: string; kindLabel: string; delayHours: number; act: { reference: string }; active: boolean; requests: number; open: number; onTime: number; late: number }
 interface Req { id: string; agreementId: string; reference: string; openedAt: string; dueAt: string; closedAt?: string; onTime?: boolean; overdue: boolean }
@@ -33,6 +67,7 @@ export default function AccordsService() {
       <Notice msg={r.msg} />
       {q.loading && !q.data ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : q.data && (
         <div className="dash-grid">
+          <VisuelsAccords b={q.data} sat={sat.data ?? null} />
           <Section title="Accords en vigueur">
             <DataTable caption="Accords" rows={q.data.agreements} rowKey={(a) => a.id} empty={<EmptyState title="Aucun accord de service enregistré" icon="scale">Les délais ne sont jamais présumés : ils découlent d’un accord signé.</EmptyState>} columns={[
               { key: 'e', label: 'Entités', primary: true, render: (a) => <><strong>{a.fromEntity} → {a.toEntity}</strong><span className="small muted" style={{ display: 'block' }}>{a.kindLabel} · {a.delayHours} h · {a.act.reference}</span></> },

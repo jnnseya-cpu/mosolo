@@ -16,6 +16,8 @@ import { currentQuarter, Section } from './shared';
 import { Area, Callout, Choice, Field, hasRole, moneyText, Notice, useRunner } from './planif';
 import './pilotage.css';
 import { EnveloppesBudget, type Envelope } from './EnveloppesBudget';
+import { BarChartViz, DonutViz, fmtNombre, KpiTile, ProgressMeter, StatusDistribution, VizFrame } from '../../components/viz';
+import { BarresParDevise, etatsDe, lignesCompte, nombre, Tuiles, Visuels } from './visuels';
 import type { Indicator } from '../decision/commun';
 
 interface Project { id: string; code: string; title: string; domain: string; communes: string[]; beneficiaries: string; expectedResult: string; maturity: string; cost: MoneyJSON; recurringCost: MoneyJSON; procurement: string; risks: string; approvalAuthority: string; legalFundSource: string; status: string; progressPct?: string; funding?: { decisionReference: string }; example?: boolean }
@@ -26,6 +28,39 @@ export const PROJECT_STATUS: Record<string, { label: string; tone: Tone }> = {
   PROPOSE: { label: 'Proposé', tone: 'info' }, RETENU: { label: 'Retenu', tone: 'warning' }, ECARTE: { label: 'Écarté', tone: 'neutral' },
   FINANCE: { label: 'Financé (acte)', tone: 'good' }, EN_COURS: { label: 'En cours', tone: 'good' }, ACHEVE: { label: 'Achevé', tone: 'good' },
 };
+
+/** Visuels des projets : statuts, domaines, maturité, coûts par devise, avancement des projets financés. */
+export function VisuelsProjets({ d }: { d: ListResponse }) {
+  const entier = (v: number) => fmtNombre(v, 0);
+  const suivis = d.items.filter((x) => ['FINANCE', 'EN_COURS', 'ACHEVE'].includes(x.status));
+  const exemple = d.items.some((x) => x.example);
+  return (
+    <>
+      <Tuiles label="Projets publics — synthèse" max={4}>
+        <KpiTile hero label="Projets" value={d.items.length} format={entier} example={exemple} state={{ label: `${d.items.filter((x) => x.status === 'PROPOSE').length} proposé(s)`, tone: 'info' }} />
+        <KpiTile label="Financés sur acte" value={suivis.length} format={entier} state={{ label: 'Acte budgétaire', tone: 'good' }} />
+        <KpiTile label="Scénarios à décider" value={d.scenarios.filter((s) => s.status === 'PROPOSE').length} format={entier} state={{ label: 'Décision humaine', tone: 'warning' }} />
+        <KpiTile label="Enveloppes certifiées" value={(d.envelopes ?? []).filter((e) => e.status === 'CERTIFIEE').length} format={entier} unit={`/ ${(d.envelopes ?? []).length}`} state={{ label: 'Budget voté', tone: 'neutral' }} />
+      </Tuiles>
+      <Visuels label="Projets en graphiques">
+        <StatusDistribution title="Projets par statut" unitLabel="projets" emptyText="Aucun projet" example={exemple} items={etatsDe(d.items, (x) => x.status, PROJECT_STATUS)} />
+        <DonutViz title="Projets par domaine" centerLabel="projets" emptyText="Aucun projet" example={exemple} slices={lignesCompte(d.items, (x) => x.domain).map((r) => ({ key: r.key, label: d.domains[r.key] ?? r.key, value: r.values.n }))} />
+        <BarChartViz title="Projets par maturité" orientation="horizontal" format={entier} emptyText="Aucun projet" example={exemple} series={[{ key: 'n', label: 'Projets' }]}
+          rows={Object.keys(d.maturity).map((m) => ({ key: m, label: m.replace(/_/g, ' ').toLowerCase(), values: { n: d.items.filter((x) => x.maturity === m).length } }))} />
+        <BarresParDevise className="viz-span-2" title="Coût et coût récurrent par projet" series={[{ key: 'c', label: 'Coût' }, { key: 'r', label: 'Récurrent annuel' }]}
+          rows={d.items.map((x) => ({ key: x.id, label: `${x.code} — ${x.title}${x.example ? ' [EXEMPLE]' : ''}`, values: { c: x.cost, r: x.recurringCost } }))} />
+        {suivis.length > 0 && (
+          <VizFrame frame={{ title: 'Avancement des projets financés', subtitle: 'Déclaré par le service porteur' }} empty={false}
+            table={{ columns: ['Projet', 'Avancement'], rows: suivis.map((x) => [x.title, x.progressPct ? `${x.progressPct} %` : 'non déclaré']) }}>
+            <div className="pl-meters">{suivis.map((x) => <ProgressMeter key={x.id} compact label={x.title} unit="%" value={nombre(x.progressPct ?? null)} target={100} targetLabel="achèvement" reason="avancement non déclaré" />)}</div>
+          </VizFrame>
+        )}
+        <StatusDistribution title="Scénarios d’emploi des fonds" unitLabel="scénarios" emptyText="Aucun scénario proposé"
+          items={etatsDe(d.scenarios, (s) => s.status, { PROPOSE: { label: 'Proposé — à décider', tone: 'warning' }, RETENU: { label: 'Retenu', tone: 'good' }, ECARTE: { label: 'Écarté', tone: 'neutral' } })} />
+      </Visuels>
+    </>
+  );
+}
 
 export default function Projets() {
   const { user } = useApp();
@@ -43,6 +78,7 @@ export default function Projets() {
       <Notice msg={r.msg} />
       {q.loading && !q.data ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : q.data && (
         <div className="dash-grid">
+          <VisuelsProjets d={q.data} />
           <EnveloppesBudget envelopes={q.data.envelopes ?? []} indicators={q.data.indicators ?? []} roles={user?.roles} userId={user?.id} onDone={q.reload} />
           <Section title="Projets" sub="Fiches complètes du § 27.2 : bénéficiaires, impact géographique, résultat, maturité, coût récurrent, passation, risques, autorité">
             <DataTable caption="Projets" rows={q.data.items} rowKey={(x) => x.id} empty={<EmptyState title="Aucun projet" icon="building" />} columns={[

@@ -14,6 +14,7 @@ import { Icon } from '../../components/Icon';
 import { api, ApiError, describeError } from '../../lib/api';
 import { compact } from '../../lib/money';
 import './pilotage.css';
+import { DonutViz, fmtCompact, HeatGrid } from '../../components/viz';
 
 interface Cell { currency: CurrencyCode; amount: string | null; contributors: string | null; suppressed: boolean; reason?: string }
 interface Row { key: string; label: string; cells: Cell[] }
@@ -79,6 +80,17 @@ export default function Transparence() {
             <p>{p.content.basis}</p>
             <p className="small">Publié le {fmtDate(p.publishedAt, true)} par {p.authority} · version {p.version}</p>
           </section>
+          <div className="viz-grid" style={{ ['--viz-min' as string]: '300px' }} role="region" aria-label="Le trimestre en graphiques">
+            {currencies.map((c) => (
+              <HeatGrid key={`h-${c}`} className="viz-span-2" title={`Carte des communes — ${c}`} subtitle="Recettes rapprochées du trimestre ; gris hachuré = masqué ou sans recette" measureLabel={`Rapproché (${c})`} unit={c} format={fmtCompact}
+                unmeasuredReason={`cellule masquée (moins de ${p.content.threshold} contribuables ou contribuable prépondérant) ou aucune recette`}
+                cells={p.content.byCommune.map((r) => { const cell = r.cells.find((x) => x.currency === c); return { commune: r.label, value: cell && !cell.suppressed && cell.amount !== null ? Number(cell.amount) : null, detail: cell?.suppressed ? `Masqué : ${REASONS[cell.reason ?? ''] ?? 'protection'}` : undefined }; })} />
+            ))}
+            {currencies.map((c) => (
+              <DonutViz key={`d-${c}`} title={`Par catégorie de recette — ${c}`} centerLabel={c} format={(v) => `${fmtCompact(v)} ${c}`} note="Les cellules masquées ne sont pas dessinées."
+                slices={p.content.byCategory.map((r) => { const cell = r.cells.find((x) => x.currency === c); return { key: r.key, label: r.label, value: cell && !cell.suppressed && cell.amount !== null ? Number(cell.amount) : 0 }; })} />
+            ))}
+          </div>
           <div className="dash-grid">
             {currencies.map((c, i) => {
               const rows = p.content.byCommune.map((r) => ({ r, cell: r.cells.find((x) => x.currency === c) })).filter((x) => x.cell);

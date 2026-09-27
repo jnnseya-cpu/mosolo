@@ -9,6 +9,9 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { Section } from './shared';
 import { Field, hasRole, moneyText, useRunner } from './planif';
 import { Indicateurs, type Indicator } from '../decision/commun';
+import { StatusDistribution } from '../../components/viz';
+import { CERT_STATUS } from './planif';
+import { BarresParDevise, EtatIndicateurs, etatsDe, Visuels } from './visuels';
 
 export interface Envelope { id: string; period: string; amount: MoneyJSON; actReference: string; label: string; status: string; importedBy: string }
 
@@ -21,6 +24,12 @@ export function EnveloppesBudget({ envelopes, indicators, roles, userId, onDone 
   const [label, setLabel] = useState('');
   return (
     <>
+      <Visuels label="Budget voté en graphiques (module 48)">
+        <StatusDistribution title="Enveloppes par statut" unitLabel="enveloppes" emptyText="Aucune enveloppe importée" items={etatsDe(envelopes, (e) => e.status, CERT_STATUS)} />
+        <BarresParDevise title="Enveloppes d’investissement" subtitle="Montant de chaque enveloppe du budget voté" series={[{ key: 'm', label: 'Montant' }]} emptyText="Aucune enveloppe : capacité sur recettes rapprochées seules"
+          rows={envelopes.map((e) => ({ key: e.id, label: `${e.label} (${e.period})`, values: { m: e.amount } }))} />
+        <EtatIndicateurs items={indicators} title="Indicateurs du module 48 par état" />
+      </Visuels>
       <Section title="Indicateurs (module 48)"><Indicateurs items={indicators} /></Section>
       <Section title="Capacité disponible selon le budget voté" sub="Enveloppes d’investissement inscrites au budget voté ; la capacité proposée par l’IA est le minimum entre l’enveloppe restante et les recettes rapprochées.">
         <DataTable caption="Enveloppes" rows={envelopes} rowKey={(e) => e.id} empty={<p className="muted">Aucune enveloppe : la capacité repose sur les seules recettes rapprochées.</p>} columns={[

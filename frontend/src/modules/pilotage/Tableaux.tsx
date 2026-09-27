@@ -10,12 +10,83 @@ import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
 import { SIX_ETATS } from '@mosolo/shared';
 import {
-  DrillChart, ExportButton, FiltersBar, KpiTiles, LadderChart, qs, ScopeLine, Section, SeriesChart, useFmt,
+  CATEGORY_LABELS, CHANNEL_LABELS, DrillChart, ExportButton, FiltersBar, KpiTiles, LadderChart, qs, ScopeLine, Section, SeriesChart, useFmt,
   type Amounts, type Contested, type DrillResult, type Filters, type Kpi, type LadderLevel, type Scope, type SeriesPoint,
 } from './shared';
 import { OriginsTable, type Origins } from './BaseReference';
 import { INSTR_STATUS } from './Instructions';
 import './pilotage.css';
+import {
+  BarChartViz, DonutViz, fmtCompact, fmtNombre, HeatGrid, KpiTile, LadderFunnel, LineAreaViz, sixEtatsFromLadder, StatusDistribution,
+} from '../../components/viz';
+import { ETATS_KPI, etatsDe, KpiTileDe, nombre, Tuiles, Visuels } from './visuels';
+import type { MoneyJSON } from '@mosolo/shared';
+
+const entier = (v: number) => fmtNombre(v, 0);
+const cdf = (a: Amounts | undefined) => nombre(a?.consolidatedCdf?.amount);
+const texteMontants = (a: MoneyJSON[]) => a.map((m) => `${fmtCompact(Number(m.amount))} ${m.currency}`).join(' · ');
+
+/** Visuels du tableau par profil : chiffres du jour vs veille, six états, communes, canaux, série mensuelle, états des indicateurs. */
+function VisuelsProfil({ d }: { d: ProfileData }) {
+  const t = d.tiles;
+  const jour = (label: string, x: Record<'today' | 'yesterday', Amounts>, tone: 'info' | 'good', hero?: boolean) => (
+    <KpiTile hero={hero} label={`${label} aujourd’hui`} value={cdf(x.today)} unit="CDF" format={fmtCompact} state={{ label, tone }}
+      delta={{ current: cdf(x.today), previous: cdf(x.yesterday), versus: 'vs veille' }} sub={`${x.today.count ?? 0} paiement(s) · ${texteMontants(x.today.amounts) || '—'}`} reason="Aucun montant ce jour." />
+  );
+  const mesures = d.kpis.filter((k) => k.status !== 'NON_MESURE');
+  return (
+    <>
+      {t && (
+        <Tuiles label={`Journée du ${t.today}`} max={3}>
+          {jour('Confirmé', t.confirmed, 'info', true)}
+          {jour('Réglé', t.settled, 'good')}
+          {jour('Rapproché', t.reconciled, 'good')}
+        </Tuiles>
+      )}
+      {!t && mesures.length > 0 && <Tuiles label="Indicateurs clés" max={4}>{mesures.slice(0, 4).map((k) => <KpiTileDe key={k.code} k={k} href="/pilotage/indicateurs" />)}</Tuiles>}
+      <Visuels label={`${d.label} en graphiques`}>
+        <LadderFunnel className="viz-span-2" title="Les six états de la recette" subtitle="Emboîtés, jamais additionnés — contre-valeur indicative CDF" steps={sixEtatsFromLadder(d.ladder, texteMontants)} />
+        {d.kpis.length > 0 && <StatusDistribution title="Indicateurs par état" unitLabel="indicateurs" items={etatsDe(d.kpis, (k) => k.status, ETATS_KPI)} />}
+        {d.byCommune && (
+          <HeatGrid className="viz-span-2" title="Rapproché par commune" subtitle="Contre-valeur indicative CDF — fait générateur" measureLabel="Rapproché (contre-valeur CDF)" unit="CDF" format={fmtCompact}
+            unmeasuredReason="aucun paiement rapproché rattaché à cette commune" cells={d.byCommune.rows.filter((r) => r.key !== 'NON_ATTRIBUE').map((r) => ({ commune: r.key, value: cdf(r.values.reconciled) }))} />
+        )}
+        {d.byChannel && (
+          <DonutViz title="Confirmé par canal de paiement" centerLabel="CDF (contre-valeur)" format={fmtCompact}
+            slices={d.byChannel.rows.map((r) => ({ key: r.key, label: CHANNEL_LABELS[r.key] ?? r.key, value: cdf(r.values.confirmed) ?? 0 }))} />
+        )}
+        {d.byCategory && (
+          <DonutViz title="Liquidé par catégorie de recette" centerLabel="CDF (contre-valeur)" format={fmtCompact}
+            slices={d.byCategory.rows.map((r) => ({ key: r.key, label: CATEGORY_LABELS[r.key] ?? r.key, value: cdf(r.values.assessed) ?? 0 }))} />
+        )}
+        {d.series && d.series.length > 0 && (
+          <LineAreaViz className="viz-span-2" title="Confirmé et rapproché, mois par mois" subtitle="Contre-valeur indicative CDF" granularity="month" format={fmtCompact}
+            series={[{ key: 'c', label: 'Confirmé' }, { key: 'r', label: 'Rapproché' }]} points={d.series.map((m) => ({ date: m.month, values: { c: cdf(m.confirmed), r: cdf(m.reconciled) } }))} />
+        )}
+        {d.recovery && (
+          <BarChartViz title="Retards par ancienneté" subtitle="Nombre d’obligations en retard" orientation="vertical" format={entier} emptyText="Aucun retard"
+            series={[{ key: 'n', label: 'Obligations' }]} rows={d.recovery.buckets.map((b) => ({ key: b.code, label: b.label, values: { n: b.count } }))} />
+        )}
+        {d.suspense && (
+          <BarChartViz title="Suspens par âge" subtitle="Confirmé non rapproché (nombre)" orientation="vertical" format={entier} emptyText="Aucun suspens"
+            series={[{ key: 'n', label: 'Paiements' }]} rows={d.suspense.map((b) => ({ key: b.code, label: b.label, values: { n: b.count } }))} />
+        )}
+        {d.providers && (
+          <BarChartViz className="viz-span-2" title="Prestataires — chaîne des paiements" subtitle="Confirmés, réglés, rapprochés (nombre)" orientation="horizontal" format={entier} emptyText="Aucun paiement confirmé"
+            series={[{ key: 'c', label: 'Confirmés' }, { key: 's', label: 'Réglés' }, { key: 'r', label: 'Rapprochés' }]} rows={d.providers.map((p) => ({ key: p.provider, label: p.provider, values: { c: p.confirmed, s: p.settled, r: p.reconciled } }))} />
+        )}
+        {d.objects && (
+          <DonutViz title={`Assiette recensée${d.commune ? ` — ${d.commune}` : ''}`} centerLabel="objets" emptyText="Aucun objet recensé"
+            slices={d.objects.byCategory.map((c) => ({ key: c.category, label: c.category.replace(/_/g, ' ').toLowerCase(), value: c.count }))} />
+        )}
+        {d.instructions && (
+          <BarChartViz title="Instructions par statut" orientation="vertical" format={entier} emptyText="Aucune instruction"
+            series={[{ key: 'n', label: 'Instructions' }]} rows={d.instructions.byStatus.map((b) => ({ key: b.status, label: INSTR_STATUS[b.status]?.label ?? b.status, values: { n: b.count } }))} />
+        )}
+      </Visuels>
+    </>
+  );
+}
 
 interface ProfileRef { code: string; label: string; description: string }
 interface InstructionsSummary { total: number; byStatus: { status: string; count: number }[]; overdue: { id: string; number: string; subject: string; entity: string; deadline: string }[]; closedOnTime: number; closedLate: number }
@@ -145,6 +216,7 @@ export default function Tableaux() {
           <ScopeLine scope={d.scope} generatedAt={d.generatedAt} />
           <p className="small muted">{d.description}</p>
           <div className="dash-grid">
+            <VisuelsProfil d={d} />
             {d.kpis.length > 0 && <div className="span-12"><KpiTiles kpis={d.kpis.filter((k) => k.status !== 'NON_MESURE').slice(0, 8)} /></div>}
             {d.tiles && <Section title="Encaissement du jour" sub={`Journée du ${d.tiles.today} — comparaison avec la veille`}><DayFigures t={d.tiles} /></Section>}
             <SixEtats levels={d.ladder} />

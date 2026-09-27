@@ -9,6 +9,10 @@ import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
 import { ExportButton, useFmt } from './shared';
 import './pilotage.css';
+import { DonutViz, fmtNombre, KpiGrid, KpiTile, StatusDistribution, TimelineStrip } from '../../components/viz';
+import { ETATS_OBLIGATION, etatsDe } from './visuels';
+
+const entier = (v: number) => fmtNombre(v, 0);
 
 interface DossierItem { obligationId: string; objectId: string; label: string; commune: string; status: string; amount: MoneyJSON; createdAt: string; payments: { orderId: string; paymentReference: string; status: string }[] }
 interface TrailEvent { at: string; source: string; kind: string; label: string; resourceType: string; resourceId: string | null; actor?: { kind: string; id: string; roles?: string[] }; outcome?: string; details: Record<string, unknown>; hash?: string; seq?: number }
@@ -20,6 +24,36 @@ interface Trail {
 }
 
 const SOURCES: Record<string, string> = { AUDIT: 'Journal d’audit', GRAND_LIVRE: 'Grand livre', QUITTANCE: 'Quittances', RECLAMATION: 'Réclamations', DELIVRANCE: 'Délivrances' };
+
+/** Visuels des dossiers récents : état des obligations, communes, paiements rattachés. */
+export function VisuelsDossiers({ items }: { items: DossierItem[] }) {
+  const communes = items.reduce<Record<string, number>>((m, d) => { const k = d.commune === 'NON_ATTRIBUE' ? 'Lieu non établi' : d.commune; m[k] = (m[k] ?? 0) + 1; return m; }, {});
+  return (
+    <div className="stack-sm" style={{ marginBottom: 16 }}>
+      <KpiGrid max={3} label="Dossiers récents — synthèse">
+        <KpiTile hero label="Dossiers récents" value={items.length} format={entier} state={{ label: 'Consultation journalisée', tone: 'info' }} />
+        <KpiTile label="Avec paiement rattaché" value={items.filter((d) => d.payments.length > 0).length} format={entier} state={{ label: 'Chaîne paiement', tone: 'good' }} />
+        <KpiTile label="Paiements rattachés" value={items.reduce((s, d) => s + d.payments.length, 0)} format={entier} state={{ label: 'Références', tone: 'neutral' }} />
+      </KpiGrid>
+      <div className="viz-grid" style={{ ['--viz-min' as string]: '300px' }}>
+        <StatusDistribution title="Dossiers par état de l’obligation" unitLabel="dossiers" emptyText="Aucun dossier" items={etatsDe(items, (d) => d.status, ETATS_OBLIGATION).filter((i) => i.count > 0)} />
+        <DonutViz title="Dossiers par commune" centerLabel="dossiers" emptyText="Aucun dossier" slices={Object.entries(communes).map(([k, v]) => ({ key: k, label: k, value: v }))} />
+      </div>
+    </div>
+  );
+}
+
+/** Visuels d'une piste : contrôles « sans trou » et chronologie par source. */
+export function VisuelsPiste({ t }: { t: Trail }) {
+  return (
+    <div className="viz-grid" style={{ ['--viz-min' as string]: '300px' }}>
+      <StatusDistribution title="Contrôles d’absence de trou" unitLabel="contrôles"
+        items={[{ key: 'ok', label: 'Contrôle réussi', tone: 'good', count: t.controls.filter((c) => c.passed).length }, { key: 'ko', label: 'Trou détecté', tone: 'critical', count: t.controls.filter((c) => !c.passed).length }]} />
+      <TimelineStrip className="viz-span-2" title="Chronologie par source" subtitle="Chaque point est un événement de la piste (jour de Kinshasa)" categories={Object.values(SOURCES)} emptyText="Aucun événement"
+        events={t.events.map((e, i) => ({ id: `${e.source}-${e.resourceId}-${e.seq ?? i}-${e.kind}`, at: e.at, category: SOURCES[e.source] ?? e.source, label: e.label }))} />
+    </div>
+  );
+}
 
 /** Explorateur de piste d'audit par dossier (auditeurs, enquêteurs) : chronologie fusionnée et contrôles « sans trou ». */
 export default function PisteAudit() {
@@ -41,6 +75,7 @@ export default function PisteAudit() {
   return (
     <div className="page page-wide">
       {head}
+      {list.data && <VisuelsDossiers items={list.data.items} />}
       <div className="pl-layout">
         <aside className="stack-sm" aria-label="Dossiers">
           <form className="pl-search" onSubmit={submit} role="search">
@@ -85,6 +120,7 @@ export default function PisteAudit() {
                     Obligations : {t.graph.obligationIds.join(', ') || '—'} · Paiements : {t.graph.paymentReferences.join(', ') || '—'} · Quittances : {t.graph.receiptNumbers.join(', ') || '—'} · Écritures : {t.graph.ledgerEntryIds.length}
                   </p>
                 </section>
+                <VisuelsPiste t={t} />
                 <section className="panel">
                   <header className="panel-head">
                     <div><h2 className="panel-title">Chronologie</h2><p className="panel-sub">{t.note}</p></div>

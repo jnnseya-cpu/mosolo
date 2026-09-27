@@ -13,6 +13,8 @@ import { api } from '../../lib/api';
 import { COMMUNES, Section } from './shared';
 import { Callout, Field, hasRole, Notice, useRunner } from './planif';
 import './pilotage.css';
+import { BarChartViz, fmtNombre, KpiTile, StatusDistribution, TimelineStrip } from '../../components/viz';
+import { etatsDe, nombre, Tuiles, Visuels } from './visuels';
 
 interface Indicateur40 { code: string; label: string; unit: string; targetLabel: string | null; pilot: string | null; controls: string | null; pilotStatus: string; gapPoints: string | null }
 interface Criterion { code: string; label: string; threshold: string; pilot: { value: string | null; unit: string; met: boolean | null; note?: string }; controls: { value: string | null; unit: string; note?: string }; gapPoints: string | null; status: string; note: string; texte46?: string; indicateurs40?: Indicateur40[] }
@@ -36,6 +38,31 @@ const STATUS: Record<string, { label: string; tone: 'good' | 'critical' | 'neutr
 };
 const val = (v: string | null, unit: string) => (v === null ? '—' : `${v}${unit === '%' ? ' %' : unit === 's' ? ' s' : ''}`);
 
+/** Visuels du pilote : jour sur 180, critères par statut, pilotes vs témoins, jalons dans le temps. */
+export function VisuelsPilote({ b }: { b: PilotBoard }) {
+  const pct = b.criteria.filter((c) => c.pilot.unit === '%' && (c.pilot.value !== null || c.controls.value !== null));
+  const signees = b.milestones.filter((m) => m.signed).length;
+  return (
+    <>
+      <Tuiles label="Pilote de 180 jours — synthèse" max={4}>
+        <KpiTile hero label="Jour du pilote" value={b.day} format={(v) => fmtNombre(v, 0)} unit="/ 180" target={b.day !== null ? { value: 180, label: 'Durée du pilote : 180 jours (§ 45)', max: 180 } : undefined}
+          reason="Date de démarrage non fixée." state={{ label: b.config.startDate ? `Démarré le ${b.config.startDate}` : 'Non démarré', tone: b.config.startDate ? 'info' : 'neutral' }} />
+        <KpiTile label="Critères atteints" value={b.criteria.filter((c) => c.status === 'ATTEINT').length} format={(v) => fmtNombre(v, 0)} unit={`/ ${b.criteria.length}`} state={{ label: 'Seuils du Cahier (§ 45.3)', tone: 'good' }} />
+        <KpiTile label="Revues signées" value={signees} format={(v) => fmtNombre(v, 0)} unit={`/ ${b.milestones.length}`} state={{ label: 'Instantanés figés', tone: signees > 0 ? 'good' : 'neutral' }} />
+        <KpiTile label="Communes pilotes / témoins" value={`${b.config.communes.length} / ${b.config.controls.length}`} state={{ label: b.baseline ? 'Base de référence certifiée' : 'Base de référence absente', tone: b.baseline ? 'good' : 'warning' }} />
+      </Tuiles>
+      <Visuels label="Pilote en graphiques">
+        <StatusDistribution title="Critères de succès par statut" unitLabel="critères" items={etatsDe(b.criteria, (c) => c.status, STATUS)} />
+        <BarChartViz className="viz-span-2" title="Communes pilotes et communes témoins" subtitle="Critères exprimés en % — valeurs réelles de chaque groupe ; seuil dans le tableau" orientation="horizontal" format={(v) => `${fmtNombre(v)} %`}
+          emptyText="Aucun critère en % encore mesuré" series={[{ key: 'p', label: 'Communes pilotes' }, { key: 't', label: 'Communes témoins' }]}
+          rows={pct.map((c) => ({ key: c.code, label: c.label, values: { p: nombre(c.pilot.value), t: nombre(c.controls.value) } }))} />
+        <TimelineStrip className="viz-span-2" title="Jalons du pilote (J30 … J180)" categories={['Revue signée', 'Atteint — à signer', 'À venir']} emptyText="Date de démarrage non fixée : jalons non datés"
+          events={b.milestones.filter((m) => m.dueDate).map((m) => ({ id: m.milestone, at: m.dueDate!, category: m.signed ? 'Revue signée' : m.reached ? 'Atteint — à signer' : 'À venir', label: `${m.milestone} (${m.days} jours)` }))} />
+      </Visuels>
+    </>
+  );
+}
+
 /** Communes pilotes (raison du choix, objets prioritaires) et séquence en cinq étapes (Document maître FR 2, ch. 46). */
 export function Chapitre46View({ c }: { c: Chapitre46 }) {
   return (
@@ -58,6 +85,7 @@ export function PilotView({ b, onDone }: { b: PilotBoard; onDone: () => void }) 
   const canSign = hasRole(user?.roles, 'R01', 'R05', 'R22', 'R23');
   return (
     <div className="dash-grid">
+      <VisuelsPilote b={b} />
       <Section title="Communes pilotes et communes témoins" sub={b.config.startDate ? `Démarrage le ${b.config.startDate} — jour ${b.day}` : 'Date de démarrage non fixée'}>
         <p className="small"><strong>Pilotes :</strong> {b.config.communes.join(', ')} · <strong>Témoins :</strong> {b.config.controls.length ? b.config.controls.join(', ') : 'aucune désignée'}</p>
         {!b.baseline && <Callout tone="warn">Base de référence auditée absente : la progression comparée n’est pas mesurée (§ 45.5).</Callout>}
