@@ -94,3 +94,6 @@
 .fs-space-link > span { display: grid; gap: 2px; min-width: 0; }
 .fs-space-link .icon { color: var(--navy); flex: none; margin-top: 2px; }
 .fs-object-head > .min0 { flex: 1 1 240px; }
+/* Corrections d’objets : file des approbations au-dessus du détail par objet ; pièces justificatives. */
+.fs-corr-queue { margin-bottom: 16px; display: grid; gap: 12px; }
+.fs-page fieldset.field { border: 1px solid var(--line-soft); border-radius: var(--r); padding: 12px; margin: 0; min-width: 0; }

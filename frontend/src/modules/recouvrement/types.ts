@@ -23,6 +23,16 @@ export interface Arrear {
   nextStep?: NextStep | null;
   steps?: { kind: string; label: string; doneOn: string; noticeId: string | null }[];
   pendingMeasure?: { id: string; measureType?: string; proposedAt: string }[];
+  /** Espace contribuable : base de remise déclarée par la règle ACTIVE (taux, plafond, plancher), ou motif d'indisponibilité. */
+  remissionBasis?: RemissionBasis;
+}
+
+export interface RemissionBasis { available: boolean; detail: string; ruleId?: string; ruleCode?: string; ruleVersion?: number; rate?: string; cap?: MoneyJSON; floor?: MoneyJSON; pendingId?: string }
+/** Demande de remise vue par le contribuable (sans identité des agents). */
+export interface MyRemission {
+  id: string; obligationId: string; status: 'DEMANDEE' | 'INSTRUITE' | 'ACCORDEE' | 'REFUSEE'; requestedAmount: MoneyJSON; requestedAt: string; motivation: string;
+  computedAmount?: MoneyJSON; rate?: string; instruction?: { at: string; favorable: boolean };
+  decision?: { at: string; motivation: string; grantedAmount?: MoneyJSON }; rectifyingObligationId?: string;
 }
 
 export type MoneyByCurrency = Record<string, string>;
@@ -137,3 +147,34 @@ export const hasRole = (roles: string[] | undefined, ...codes: string[]) => !!ro
 export function moneyEntries(m: MoneyByCurrency | undefined): MoneyJSON[] {
   return Object.entries(m ?? {}).map(([currency, amount]) => ({ amount, currency }) as MoneyJSON);
 }
+
+/** Calcul de remise renvoyé par le serveur (taux et plafond déclarés par la règle, cumul sur la chaîne) : jamais saisi. */
+export interface RemissionComputation {
+  rate: string; cap?: MoneyJSON; declaredBy: string[]; originalAmount: MoneyJSON; maxReduction: MoneyJSON; alreadyRemitted: MoneyJSON;
+  available: MoneyJSON; currentAmount: MoneyJSON; computedAmount: MoneyJSON; chain: string[];
+}
+export interface Remission {
+  id: string; obligationId: string; taxpayerId: string; basisRuleId: string; requestedAmount: MoneyJSON; motivation: string;
+  requestedBy: string; requestedAt: string; status: 'DEMANDEE' | 'INSTRUITE' | 'ACCORDEE' | 'REFUSEE';
+  instruction?: { by: string; at: string; favorable: boolean; analysis: string };
+  computation?: RemissionComputation;
+  decision?: { by: string; at: string; motivation: string; grantedAmount?: MoneyJSON; fromAmount?: MoneyJSON };
+  rectifyingObligationId?: string;
+}
+export const REMISSION_STATUS: Record<Remission['status'], { label: string; tone: Tone }> = {
+  DEMANDEE: { label: 'Demandée — instruction attendue', tone: 'info' }, INSTRUITE: { label: 'Instruite — décision attendue', tone: 'warning' },
+  ACCORDEE: { label: 'Accordée', tone: 'good' }, REFUSEE: { label: 'Refusée', tone: 'neutral' },
+};
+
+/** Admission en non-valeur : l'obligation passe au statut ADMISE_EN_NON_VALEUR (jamais SOLDEE). */
+export interface WriteOff {
+  id: string; obligationId: string; taxpayerId: string; amount: MoneyJSON; motivation: string; evidence: string[];
+  proposedBy: string; proposedAt: string; status: 'PROPOSEE' | 'ADMISE' | 'REJETEE';
+  decision?: { by: string; at: string; motivation: string };
+}
+export const WRITE_OFF_STATUS: Record<WriteOff['status'], { label: string; tone: Tone }> = {
+  PROPOSEE: { label: 'Proposée — décision attendue', tone: 'warning' }, ADMISE: { label: 'Admise en non-valeur', tone: 'serious' }, REJETEE: { label: 'Rejetée', tone: 'neutral' },
+};
+
+/** Fiche de règle (sous-ensemble utile) : une remise ne se fonde que sur une règle ACTIVE du même code déclarant une base. */
+export interface RuleLite { id: string; code: string; version: number; label: string; status: string; exemptions: { basis: string; proof: string }[] }

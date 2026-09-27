@@ -20,7 +20,7 @@ import {
 } from './ladder.js';
 import { CurrencyTotals } from './money.js';
 import {
-  buildReductionReport, collectReductions, potentialUnassessed, REDUCTION_ALERT_PARAMS, reductionSignals, type ReductionFilters,
+  buildReductionReport, collectReductions, potentialUnassessed, REDUCTION_ALERT_PARAMS, reductionSignals, type ReductionFilters, type ReductionType,
 } from './reductions.js';
 import { buildTransparency, reidentificationCheck, type ReidentificationCheck, type TransparencyContent } from './transparency.js';
 import { buildGraph, buildTrail, resolveDossier } from './trail.js';
@@ -164,18 +164,19 @@ export class PilotageService {
    * « recettes potentielles non liquidées » (assiette sans règle ACTIVE, sans montant). La lecture rejoue aussi la
    * détection de concentration (signaux idempotents, examen humain).
    */
-  reductions(user: User, q: Query) {
+  reductions(user: User, q: Query, rq: { type?: ReductionType; decider?: string } = {}) {
     this.gate(user, 'reductions.read');
     const { filters, scope } = this.filtersFor(user, q);
     const rf: ReductionFilters = {
       ...(filters.commune ? { commune: filters.commune } : {}), ...(filters.communes ? { communes: filters.communes } : {}),
       ...(filters.entity ? { entity: filters.entity } : {}), ...(filters.from ? { from: filters.from } : {}), ...(filters.to ? { to: filters.to } : {}),
+      ...(rq.type ? { type: rq.type } : {}), ...(rq.decider ? { decider: rq.decider } : {}),
     };
-    this.viewed(user, 'reductions', filters);
+    this.viewed(user, 'reductions', { ...filters, ...(rq.type ? { type: rq.type } : {}), ...(rq.decider ? { decideur: rq.decider } : {}) });
     const data = collectReductions(this.ctx, rf);
     const detection = this.detectReductionSignals();
     return {
-      generatedAt: this.now(), scope, filters,
+      generatedAt: this.now(), scope, filters: { ...filters, ...(rq.type ? { type: rq.type } : {}), ...(rq.decider ? { decideur: rq.decider } : {}) },
       method: 'Obligations liquidées sur la période (date de l’obligation d’origine) et toutes leurs réductions ; montants par devise, jamais additionnés entre devises.',
       formula: 'brut liquidé − réductions = net attendu ; net attendu − encaissé = reste à recouvrer',
       ...buildReductionReport(data),

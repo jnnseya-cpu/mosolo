@@ -20,7 +20,7 @@ import { badRequest, conflict, notFound, unprocessable } from '../../core/errors
 import { assertDistinctPerson, assertNotRelated, authorize, definePolicy, GRANTS } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import { APPEAL_PROCEDURE } from '../../modules/appeals/procedure.js';
-import { recordReductionGranted, remissionHeadroom } from '../../modules/assessment/reductions.js';
+import { declaredReductionTerms, recordReductionGranted, remissionHeadroom } from '../../modules/assessment/reductions.js';
 import type { Obligation } from '../../modules/assessment/service.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
 import { AGE_BANDS, LARGE_DEBTOR_THRESHOLD_EXAMPLE, RECOVERY_PROCEDURE, SEGMENTS, type SegmentCode } from './parameters.js';
@@ -982,15 +982,17 @@ export class RecoveryService {
         steps: c ? c.steps.map((s) => ({ kind: s.kind, label: STEP_LABELS[s.kind], doneOn: s.doneOn, noticeId: s.noticeId ?? null })) : [],
         pendingMeasure: c ? this.proposals.find((p) => p.caseId === c.id && p.status === 'PROPOSEE' && p.kind === 'MESURE_EXECUTION').map((p) => ({ id: p.id, measureType: p.measureType, proposedAt: p.proposedAt })) : [],
         caseId: c?.id ?? null,
+        remissionBasis: this.remissionBasisFor(o),
       };
     });
-    const upcoming = obligations.filter((o) => PAYABLE.includes(o.status) && o.dueDate >= today).map((o) => ({ obligationId: o.id, label: o.label, amount: o.amount, dueDate: o.dueDate, status: o.status, daysToDue: daysBetween(today, o.dueDate) }));
+    const upcoming = obligations.filter((o) => PAYABLE.includes(o.status) && o.dueDate >= today).map((o) => ({ obligationId: o.id, label: o.label, amount: o.amount, dueDate: o.dueDate, status: o.status, daysToDue: daysBetween(today, o.dueDate), remissionBasis: this.remissionBasisFor(o) }));
     return {
       asOf: today,
       arrears,
       upcoming,
       notices: this.listNotices({ taxpayerIds }).map((n) => ({ id: n.id, number: n.number, kind: n.kind, title: n.content.title, issuedAt: n.issuedAt, readAt: n.readAt ?? null, obligationId: n.obligationId, demo: n.demo })),
       plans: this.plans.find((p) => taxpayerIds.includes(p.taxpayerId)).map((p) => this.planView(p)),
+      remissions: this.remissions.find((r) => taxpayerIds.includes(r.taxpayerId)).map((r) => this.remissionPublicView(r)),
       planBasis: this.planBasis(),
       procedure: { ...RECOVERY_PROCEDURE },
     };
@@ -1223,6 +1225,42 @@ export class RecoveryService {
     // La base de remise est la règle même de l'obligation (une version en vigueur de son code), jamais une autre recette.
     if (rule.code !== o.ruleCode) throw unprocessable('REMISSION_BASIS_RULE_MISMATCH', `La règle ${rule.code} ne fonde pas l’obligation (${o.ruleCode}) : remise impossible sur cette base.`);
     return rule;
+  }
+
+  /**
+   * Base de remise ouverte au contribuable pour une obligation : version ACTIVE de la règle de l'obligation déclarant
+   * un taux de remise ; taux, plafond et plancher (montant minimal après remise) tels que déclarés. Rien d'inventé :
+   * sans taux déclaré, la remise est indisponible (acte requis).
+   */
+  remissionBasisFor(o: Obligation): { available: boolean; detail: string; ruleId?: string; ruleCode?: string; ruleVersion?: number; rate?: string; cap?: MoneyJSON; floor?: MoneyJSON; pendingId?: string } {
+    const pending = this.remissions.findOne((x) => x.obligationId === o.id && (x.status === 'DEMANDEE' || x.status === 'INSTRUITE'));
+    if (pending) return { available: false, detail: `Demande de remise ${pending.id} en cours.`, pendingId: pending.id };
+    const now = this.ctx.clock.now();
+    const rank = this.ctx.objects.objects.get(o.objectId)?.localityRank;
+    const candidates = this.ctx.rules.list().filter((r) => r.code === o.ruleCode && r.exemptions.length > 0 && isRuleExecutable(r, now).ok).sort((a, b) => b.version - a.version);
+    // Version la plus récente déclarant un taux de remise ; à défaut, la plus récente (motif « acte requis »).
+    const rule = candidates.find((r) => !!declaredReductionTerms(r, 'REMISE', rank).maxRate) ?? candidates[0];
+    if (!rule) return { available: false, detail: 'Aucune règle ACTIVE ne déclare de base de remise pour cette recette.' };
+    const h = remissionHeadroom((id) => this.ctx.assessment.obligations.get(id), o.id, rule, rank);
+    if (!h.terms.maxRate) return { available: false, detail: `La règle ${rule.code} v${rule.version} ne déclare aucun taux de remise : acte requis.` };
+    if (h.available.isZero()) return { available: false, detail: `Plafond de remise déclaré (${h.terms.maxRate} %) déjà atteint.`, ruleId: rule.id, rate: h.terms.maxRate };
+    const floor = Money.fromJSON(o.amount).subtract(h.available);
+    return {
+      available: true, detail: `Règle ${rule.code} v${rule.version} : remise au plus ${h.terms.maxRate} %${h.terms.cap ? `, plafond ${h.terms.cap.toDecimalString()} ${h.terms.cap.currency}` : ''}.`,
+      ruleId: rule.id, ruleCode: rule.code, ruleVersion: rule.version, rate: h.terms.maxRate, ...(h.terms.cap ? { cap: h.terms.cap.toJSON() } : {}),
+      floor: (floor.isNegative() ? Money.zero(floor.currency) : floor).toJSON(),
+    };
+  }
+
+  /** Vue d'une demande de remise pour le contribuable : statut, montants et motifs, sans identité des agents. */
+  remissionPublicView(r: RemissionRequest) {
+    return {
+      id: r.id, obligationId: r.obligationId, status: r.status, requestedAmount: r.requestedAmount, requestedAt: r.requestedAt, motivation: r.motivation,
+      ...(r.computation ? { computedAmount: r.computation.computedAmount, rate: r.computation.rate } : {}),
+      ...(r.instruction ? { instruction: { at: r.instruction.at, favorable: r.instruction.favorable } } : {}),
+      ...(r.decision ? { decision: { at: r.decision.at, motivation: r.decision.motivation, ...(r.decision.grantedAmount ? { grantedAmount: r.decision.grantedAmount } : {}) } } : {}),
+      ...(r.rectifyingObligationId ? { rectifyingObligationId: r.rectifyingObligationId } : {}),
+    };
   }
 
   /**

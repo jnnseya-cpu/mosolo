@@ -16,6 +16,11 @@ import { buildNearby } from './nearby.js';
 const proofSchema = z.object({ type: z.enum(PROOF_TYPES), reference: z.string().trim().min(3).max(200), sha256: z.string().regex(/^[0-9a-f]{64}$/).optional() }).strict();
 const reasonSchema = z.object({ reason: z.string().trim().min(3).max(1000) }).strict();
 const decimal = z.string().regex(/^\d{1,15}(\.\d{1,6})?$/, 'nombre décimal positif en chaîne attendu');
+// Pièce justificative d'une correction : même forme que les justificatifs du Trésor (libellé, empreinte SHA-256 facultative).
+const correctionEvidenceSchema = z.object({
+  label: z.string().trim().min(3).max(200),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/, 'empreinte SHA-256 hexadécimale attendue').optional(),
+}).strict();
 const rankSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]);
 
 const relationSchema = z.object({
@@ -116,9 +121,13 @@ export function registerFiscalRoutes(app: FastifyInstance, ctx: AppContext, svc:
 
   // Correction du rang ou d'attributs de base (surface…) : proposition puis approbation par une seconde personne.
   app.post<{ Params: { id: string } }>('/v1/fiscal/objects/:id/corrections', async (req, reply) => {
-    const body = parse(z.object({ localityRank: rankSchema.optional(), attributes: z.record(decimal).optional(), reason: z.string().trim().min(10).max(1000) }).strict(), req.body);
+    const body = parse(z.object({
+      localityRank: rankSchema.optional(), attributes: z.record(decimal).optional(), reason: z.string().trim().min(10).max(1000),
+      evidence: z.array(correctionEvidenceSchema).max(10).optional(),
+    }).strict(), req.body);
     return reply.code(201).send(svc.properties.proposeCorrection(requireUser(req), req.params.id, {
       reason: body.reason, ...(body.localityRank !== undefined ? { localityRank: body.localityRank } : {}), ...(body.attributes ? { attributes: body.attributes } : {}),
+      ...(body.evidence?.length ? { evidence: body.evidence } : {}),
     }));
   });
 
@@ -127,6 +136,21 @@ export function registerFiscalRoutes(app: FastifyInstance, ctx: AppContext, svc:
     const o = ctx.objects.get(req.params.id);
     authorize(user, 'fiscal:object.read', { communes: [o.commune], ...(o.taxpayerId ? { taxpayerId: o.taxpayerId } : {}) });
     return { corrections: svc.properties.corrections.find((c) => c.objectId === o.id), history: o.history ?? [] };
+  });
+
+  // File des corrections toutes objets confondus (approbateurs, proposants) : limitée aux communes du périmètre de l'agent.
+  app.get<{ Querystring: { status?: string } }>('/v1/fiscal/object-corrections', async (req) => {
+    const user = requireUser(req);
+    const { status } = parse(z.object({ status: z.enum(['EN_ATTENTE', 'PROPOSEE', 'APPLIQUEE', 'REJETEE']).optional() }).strict(), req.query ?? {});
+    if (!hasAnyGrant(user, 'fiscal:object.correct') && !hasAnyGrant(user, 'fiscal:object.correct.approve')) authorize(user, 'fiscal:object.correct.approve');
+    const wanted = status === 'EN_ATTENTE' ? 'PROPOSEE' : status;
+    return svc.properties.corrections.find((c) => !wanted || c.status === wanted).flatMap((c) => {
+      const o = ctx.objects.objects.get(c.objectId);
+      if (!o) return [];
+      const scope = { communes: [o.commune] };
+      if (!evaluate(user, 'fiscal:object.correct', scope) && !evaluate(user, 'fiscal:object.correct.approve', scope)) return [];
+      return [{ ...c, object: { id: o.id, category: o.category, commune: o.commune, quartier: o.quartier, localityRank: o.localityRank, createdBy: o.createdBy } }];
+    });
   });
 
   app.post<{ Params: { id: string } }>('/v1/fiscal/object-corrections/:id/decision', async (req) => {

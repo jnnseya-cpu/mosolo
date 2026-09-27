@@ -33,6 +33,7 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/fiscal/exonerations', element: lazy(() => import('./fiscal/Exonerations')), nav: { label: 'Exonérations', short: 'Exonérations', icon: 'scale', group: 'operations', roles: ['R30', 'R31', 'R06', 'R07', 'R11', 'R12', 'R13', 'R14', 'R22', 'R24'] } },
   { path: '/fiscal/quitus', element: lazy(() => import('./fiscal/Quitus')), nav: { label: 'Quitus fiscal', short: 'Quitus', icon: 'shieldCheck', group: 'public', roles: ['R30', 'R31', 'R06', 'R07', 'R12', 'R37'] } },
   { path: '/fiscal/baux', element: lazy(() => import('./fiscal/AttestationsBail')) },
+  { path: '/fiscal/corrections', element: lazy(() => import('./fiscal/Corrections')), nav: { label: 'Corrections d’objets', short: 'Corrections', icon: 'replace', group: 'operations', roles: ['R06', 'R07', 'R11'] } },
   { path: '/autour-de-moi', element: lazy(() => import('./fiscal/AutourDeMoi')), nav: { label: 'Autour de moi', short: 'Autour', icon: 'gps', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R22', 'R24', 'R35'] } },
   { path: '/fiscal/carte', element: lazy(() => import('./fiscal/Carte')), nav: { label: 'Carte fiscale', short: 'Carte', icon: 'pin', group: 'operations', roles: ['R06', 'R07', 'R09', 'R10', 'R11', 'R22'] } },
   { path: '/fiscal/verifier', element: lazy(() => import('./fiscal/Verifier')) },
@@ -43,6 +44,12 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/mes-arrieres', element: lazy(() => import('./recouvrement/MyArrears')), nav: { label: 'Mes arriérés et échéances', short: 'Arriérés', icon: 'clock', group: 'public', roles: ['R30', 'R31'] } },
   { path: '/recouvrement', element: lazy(() => import('./recouvrement/RecoveryQueue')), nav: { label: 'Recouvrement', icon: 'scale', group: 'operations', roles: ['R06', 'R07', 'R11', 'R20', 'R21', 'R22', 'R23'] } },
   { path: '/recouvrement/avis/:id', element: lazy(() => import('./recouvrement/NoticeView')) },
+  // Remises (demande et instruction R20, décision R21) et admission en non-valeur (proposition R20, décision R21) ; lecture : recouvrement:read.
+  { path: '/recouvrement/remises', element: lazy(() => import('./recouvrement/Remises')), nav: { label: 'Remises gracieuses', short: 'Remises', icon: 'scale', group: 'operations', roles: ['R06', 'R07', 'R11', 'R20', 'R21', 'R22', 'R23'] } },
+  { path: '/recouvrement/non-valeurs', element: lazy(() => import('./recouvrement/NonValeurs')), nav: { label: 'Admissions en non-valeur', short: 'Non-valeurs', icon: 'ban', group: 'operations', roles: ['R06', 'R07', 'R11', 'R20', 'R21', 'R22', 'R23'] } },
+
+  // Liquidation : dérogations à la base connue (lecture liquidation R06/R07/R11 et audit R22/R23 ; approbation R06/R07)
+  { path: '/liquidation/derogations', element: lazy(() => import('./socle/Derogations')), nav: { label: 'Dérogations à la base', short: 'Dérogations', icon: 'scale', group: 'operations', roles: ['R06', 'R07', 'R11', 'R22', 'R23'] } },
 
   // Canaux : USSD/SVI, points de paiement, enrôlement assisté, carte MOSOLO
   { path: '/preuve', element: lazy(() => import('./preuves/ProofVerify')), nav: { label: 'Vérifier une preuve', short: 'Vérifier', icon: 'shieldCheck', group: 'public', roles: [] } },
@@ -102,6 +109,7 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   // Pilotage : tableaux par profil, indicateurs, piste d'audit, transparence
   { path: '/pilotage/tableaux', element: lazy(() => import('./pilotage/Tableaux')), nav: { label: 'Tableaux par profil', short: 'Tableaux', icon: 'grid', group: 'pilotage', roles: DASH } },
   { path: '/pilotage/indicateurs', element: lazy(() => import('./pilotage/Indicateurs')), nav: { label: 'Indicateurs', short: 'KPI', icon: 'gauge', group: 'pilotage', roles: DASH } },
+  { path: '/pilotage/reductions', element: lazy(() => import('./pilotage/Reductions')), nav: { label: 'Réductions de recettes', short: 'Réductions', icon: 'analysis', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R22', 'R23', 'R24'] } },
   { path: '/pilotage/piste-audit', element: lazy(() => import('./pilotage/PisteAudit')), nav: { label: 'Piste d’audit par dossier', short: 'Piste', icon: 'history', group: 'operations', roles: ['R22', 'R23', 'R24'] } },
   { path: '/transparence', element: lazy(() => import('./pilotage/Transparence')), nav: { label: 'Transparence publique', short: 'Transparence', icon: 'globe', group: 'public', roles: [] } },
 

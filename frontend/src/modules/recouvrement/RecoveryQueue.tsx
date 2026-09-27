@@ -15,9 +15,10 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
 import {
-  errText, hasRole, moneyEntries, NOTICE_KIND_LABEL, PLAN_LABEL, PLAN_TONE, PROPOSAL_KIND_LABEL, RISK_TONE, STEP_STATUS_LABEL, STEP_TONE,
+  hasRole, moneyEntries, NOTICE_KIND_LABEL, PLAN_LABEL, PLAN_TONE, PROPOSAL_KIND_LABEL, RISK_TONE, STEP_STATUS_LABEL, STEP_TONE,
   INSTALLMENT_LABEL, type Arrear, type Balance, type Plan, type Proposal, type RecoveryCase,
 } from './types';
+import { Msg, useAction } from './actions';
 import './recouvrement.css';
 
 type Tab = 'arrears' | 'decisions' | 'plans';
@@ -41,21 +42,6 @@ async function load() {
     api<Instrument[]>('/v1/legal-instruments').catch(() => [] as Instrument[]),
   ]);
   return { arrears, indicators, proposals, plans, instruments };
-}
-
-function Msg({ msg }: { msg: { ok: boolean; text: string } | null }) {
-  if (!msg) return null;
-  return <p role={msg.ok ? 'status' : 'alert'} className={msg.ok ? 'notice notice-ok' : 'notice notice-err'}>{msg.text}</p>;
-}
-
-function useAction(onDone: () => void) {
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  async function run(fn: () => Promise<unknown>, ok: string) {
-    setBusy(true); setMsg(null);
-    try { await fn(); setMsg({ ok: true, text: ok }); onDone(); } catch (e) { setMsg({ ok: false, text: errText(e) }); } finally { setBusy(false); }
-  }
-  return { busy, msg, run };
 }
 
 function CaseTimeline({ c }: { c: RecoveryCase }) {
@@ -323,6 +309,8 @@ export default function RecoveryQueue() {
             <Icon name="refresh" size={16} /> Exécuter la planification
           </button>
         )}
+        <Link className="btn btn-ghost" to="/recouvrement/remises"><Icon name="scale" size={16} /> Remises</Link>
+        <Link className="btn btn-ghost" to="/recouvrement/non-valeurs"><Icon name="ban" size={16} /> Non-valeurs</Link>
       </PageHead>
       <Msg msg={sched.msg} />
       {q.loading && <Loading />}

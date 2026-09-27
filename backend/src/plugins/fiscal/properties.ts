@@ -47,6 +47,8 @@ export interface ObjectCorrection {
   proposed: { localityRank?: LocalityRank; attributes?: Record<string, string> };
   before: { localityRank: number; attributes: Record<string, unknown> };
   reason: string;
+  /** Pièces justificatives (libellé, empreinte SHA-256 du fichier si fournie) : même forme que les justificatifs du Trésor. */
+  evidence?: { label: string; sha256?: string }[];
   proposedBy: string;
   proposedAt: string;
   status: 'PROPOSEE' | 'APPLIQUEE' | 'REJETEE';
@@ -119,7 +121,7 @@ export class PropertyService {
   }
 
   /** Proposition motivée de correction du rang ou d'attributs de base (surface…) d'un objet. */
-  proposeCorrection(user: User, objectId: string, input: { localityRank?: LocalityRank; attributes?: Record<string, string>; reason: string }): ObjectCorrection {
+  proposeCorrection(user: User, objectId: string, input: { localityRank?: LocalityRank; attributes?: Record<string, string>; reason: string; evidence?: { label: string; sha256?: string }[] }): ObjectCorrection {
     const obj = this.d.ctx.objects.get(objectId);
     authorize(user, 'fiscal:object.correct', { communes: [obj.commune] });
     assertNotRelated(user, obj.taxpayerId, 'Conflit d’intérêts : l’agent est lié au contribuable redevable de l’objet.');
@@ -137,9 +139,10 @@ export class PropertyService {
       id: this.ids.next('CORR-OBJ', 6), objectId: obj.id, ...(obj.taxpayerId ? { taxpayerId: obj.taxpayerId } : {}),
       proposed: { ...(input.localityRank !== undefined ? { localityRank: input.localityRank } : {}), ...(input.attributes && Object.keys(input.attributes).length ? { attributes: input.attributes } : {}) },
       before: { localityRank: obj.localityRank, attributes: Object.fromEntries(Object.keys(input.attributes ?? {}).map((k) => [k, obj.attributes[k] ?? null])) },
-      reason: input.reason.trim(), proposedBy: user.id, proposedAt: this.d.nowIso(), status: 'PROPOSEE',
+      reason: input.reason.trim(), ...(input.evidence?.length ? { evidence: input.evidence.map((e) => ({ label: e.label.trim(), ...(e.sha256 ? { sha256: e.sha256 } : {}) })) } : {}),
+      proposedBy: user.id, proposedAt: this.d.nowIso(), status: 'PROPOSEE',
     });
-    this.d.ctx.audit.append({ actor: actorOf(user), action: 'object.correction.proposed', resourceType: 'fiscal_object', resourceId: obj.id, details: { correctionId: c.id, proposed: c.proposed, before: c.before } });
+    this.d.ctx.audit.append({ actor: actorOf(user), action: 'object.correction.proposed', resourceType: 'fiscal_object', resourceId: obj.id, details: { correctionId: c.id, proposed: c.proposed, before: c.before, evidence: c.evidence ?? [] } });
     return c;
   }
 

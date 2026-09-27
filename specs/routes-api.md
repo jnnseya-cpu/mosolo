@@ -6,7 +6,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **617 routes** dans 35
 |---|---|
 | extension acces | 63 |
 | extension canaux | 41 |
-| extension fiscal | 43 |
+| extension fiscal | 44 |
 | extension ia | 28 |
 | extension integrite | 52 |
 | extension parking | 36 |
@@ -183,6 +183,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **617 routes** dans 35
 | POST | `/v1/fiscal/leases/:id/attestations` |
 | GET | `/v1/fiscal/map` |
 | GET | `/v1/fiscal/nearby` |
+| GET | `/v1/fiscal/object-corrections` |
 | POST | `/v1/fiscal/object-corrections/:id/decision` |
 | GET | `/v1/fiscal/objects` |
 | GET | `/v1/fiscal/objects/:id` |
