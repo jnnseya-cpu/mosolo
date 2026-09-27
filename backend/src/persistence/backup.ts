@@ -99,6 +99,8 @@ export async function backupStore(store: SnapshotStore, key: string, now = new D
 
 /** Restauration : refusée si la vérification échoue. Remplace tout le contenu du magasin dans une transaction. */
 export async function restoreStore(store: SnapshotStore, doc: BackupDocument, key: string, auditHmacKey?: string, now = new Date()): Promise<BackupVerification> {
+  // Une restauration sans contrôle de la chaîne d'audit accepterait en silence un journal altéré : clé exigée.
+  if (!auditHmacKey) throw new Error('Restauration refusée : MOSOLO_AUDIT_HMAC_KEY obligatoire pour vérifier la chaîne d’audit avant restauration.');
   const v = verifyBackup(doc, key, auditHmacKey);
   if (!v.ok) throw new Error(`Restauration refusée : ${v.reasons.join(' ')}`);
   await store.migrate();

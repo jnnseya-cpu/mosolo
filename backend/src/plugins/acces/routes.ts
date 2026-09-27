@@ -3,8 +3,8 @@ import { LANGUAGE_CODES, ROLES, type RoleCode } from '@mosolo/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../../context.js';
-import { requireUser } from '../../core/auth.js';
-import { conflict } from '../../core/errors.js';
+import { isDemoMode, requireUser } from '../../core/auth.js';
+import { conflict, notFound } from '../../core/errors.js';
 import { isoDateString, parse } from '../../core/http.js';
 import { authorize } from '../../core/policy.js';
 import {
@@ -135,7 +135,9 @@ export function registerAccesRoutes(app: FastifyInstance, ctx: AppContext, svc: 
     return svc.mfaVerify(requireUser(req), body.challengeId, body.code);
   });
 
+  // Boîte d'envoi du bac à sable (codes, jetons d'invitation) : démonstration UNIQUEMENT — 404 sinon (service).
   app.get<{ Querystring: { to?: string } }>('/v1/acces/sandbox/outbox', async (req) => {
+    if (!isDemoMode()) throw notFound('ROUTE_NOT_FOUND', `Route inconnue : GET ${req.url.split('?')[0]}`);
     const to = parse(z.object({ to: z.string().min(3) }).strict(), req.query).to;
     return { sandbox: true, notice: 'Bac à sable : messages journalisés, jamais envoyés. Désactivé dès qu’un fournisseur SMS est branché.', items: svc.sandboxMessages(to) };
   });

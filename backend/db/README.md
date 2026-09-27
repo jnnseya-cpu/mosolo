@@ -31,10 +31,11 @@ JSONB dépôt par dépôt, derrière les mêmes interfaces `Repository<T>`.
 | Variable | Rôle |
 |---|---|
 | `DATABASE_URL` | Active la persistance (`postgres://utilisateur:motdepasse@hôte:5432/base`). |
-| `MOSOLO_AUDIT_HMAC_KEY` | **Obligatoire en persistance** : clé stable du journal d'audit ; sinon la chaîne restaurée ne se vérifie pas (avertissement au démarrage). |
+| `MOSOLO_AUDIT_HMAC_KEY` | **Obligatoire en persistance** : clé stable du journal d'audit ; sans elle, démarrage refusé hors démonstration (avertissement en démonstration). Obligatoire aussi pour `db:restore` (la chaîne est vérifiée avant toute restauration). |
+| `MOSOLO_AUDIT_ACCEPT_UNVERIFIED` | `true` : démarrer malgré une chaîne d'audit restaurée non vérifiée (événement `audit.chain.restored_unverified` ajouté à la chaîne). Sinon, démarrage refusé hors démonstration. |
 | `MOSOLO_BACKUP_KEY` | Clé HMAC de signature des sauvegardes (16 caractères minimum), distincte de la clé d'audit. |
 | `MOSOLO_JWT_PRIVATE_KEY` | Clé Ed25519 PKCS#8 (PEM) des jetons de session ; générée au démarrage si absente (les sessions ne survivent alors pas au redémarrage). |
-| `MOSOLO_DEMO_MODE` | `false` : en-tête `x-demo-user`, codes affichés et comptes de démonstration désactivés. |
+| `MOSOLO_DEMO_MODE` | `true` : en-tête `x-demo-user`, codes affichés et comptes de démonstration activés (défaut : **désactivés** ; interdit avec `NODE_ENV=production`). |
 
 ## Sauvegarde, vérification, restauration
 
@@ -51,8 +52,10 @@ SHA-256), l'empreinte SHA-256 du contenu et une signature HMAC-SHA256. La restau
 l'empreinte, le manifeste ou (clé d'audit fournie) la chaîne d'audit ne se vérifient pas. Elle remplace tout le
 contenu dans une transaction (le déclencheur d'ajout seul est levé pour cette seule transaction).
 
-L'export applicatif `POST /v1/socle/exports` (R26, R27 ; motif obligatoire ; journalisé) produit le même format
-depuis l'état en cours.
+L'export applicatif `POST /v1/socle/exports` (R26, R27 ; MFA ; motif obligatoire ; journalisé) produit le même format
+depuis l'état en cours, **sans les secrets d'authentification** (empreintes de mot de passe et de PIN, secrets TOTP,
+clés des terminaux, empreintes de codes et de jetons ; liste dans le champ `redacted`). La sauvegarde intégrale passe
+par `db:backup`, serveur arrêté, sous un rôle d'exploitation distinct.
 
 ## Limites connues
 

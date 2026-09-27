@@ -18,9 +18,17 @@ import * as lite from './lite.js';
 import type { PreuvesService } from './service.js';
 import type { WhatsAppAssistant } from './whatsapp.js';
 
+/**
+ * Clé du limiteur anti-énumération : `req.ip` seulement. Jamais X-Forwarded-For lu directement (un client en changerait
+ * à chaque requête pour contourner la limite) ; derrière un mandataire inverse, Fastify le résout via MOSOLO_TRUST_PROXY.
+ */
 function clientKey(req: FastifyRequest): string {
-  const fwd = header(req, 'x-forwarded-for');
-  return `ip:${(fwd ? fwd.split(',')[0]!.trim() : req.ip) || 'inconnu'}`;
+  return `ip:${req.ip || 'inconnu'}`;
+}
+
+function sameText(a: string, b: string): boolean {
+  const x = Buffer.from(a); const y = Buffer.from(b);
+  return x.length === y.length && x.length > 0 && timingSafeEqual(x, y);
 }
 
 function sameHex(a: string, b: string): boolean {
@@ -29,7 +37,7 @@ function sameHex(a: string, b: string): boolean {
 }
 
 /** Passerelle opérateur : HMAC-SHA256(secret, corps brut) ; démonstration seulement si aucun secret n'est configuré. */
-function gatewayGuard(req: FastifyRequest, secret: string | undefined, headerName: string, prefix = ''): { simulated: boolean } {
+export function gatewayGuard(req: FastifyRequest, secret: string | undefined, headerName: string, prefix = ''): { simulated: boolean } {
   if (!secret) {
     if (!isDemoMode()) throw forbidden('GATEWAY_NOT_CONFIGURED', 'Passerelle non configurée : secret de signature absent (production).');
     return { simulated: true };
@@ -40,7 +48,10 @@ function gatewayGuard(req: FastifyRequest, secret: string | undefined, headerNam
   return { simulated: false };
 }
 
-const html = (reply: FastifyReply, body: string, status = 200) => reply.code(status).type('text/html; charset=utf-8').header('cache-control', 'no-store').send(body);
+/** Pages légères : aucun script, aucune ressource externe — la politique de sécurité du contenu l'impose au navigateur. */
+const LITE_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
+const html = (reply: FastifyReply, body: string, status = 200) =>
+  reply.code(status).type('text/html; charset=utf-8').header('cache-control', 'no-store').header('content-security-policy', LITE_CSP).send(body);
 const msisdn = z.string().trim().regex(/^\+?[0-9]{8,15}$/, 'numéro attendu');
 
 export function registerPreuvesRoutes(app: FastifyInstance, ctx: AppContext, svc: PreuvesService, wa: WhatsAppAssistant): void {
@@ -72,7 +83,7 @@ export function registerPreuvesRoutes(app: FastifyInstance, ctx: AppContext, svc
   app.get<{ Querystring: Record<string, string> }>('/v1/whatsapp/webhook', async (req, reply) => {
     const q = req.query;
     const token = process.env.WHATSAPP_VERIFY_TOKEN;
-    if (q['hub.mode'] === 'subscribe' && token && q['hub.verify_token'] === token) return reply.type('text/plain').send(q['hub.challenge'] ?? '');
+    if (q['hub.mode'] === 'subscribe' && token && typeof q['hub.verify_token'] === 'string' && sameText(q['hub.verify_token'], token)) return reply.type('text/plain').send(q['hub.challenge'] ?? '');
     throw forbidden('BAD_VERIFY_TOKEN', 'Jeton de vérification du webhook invalide.');
   });
   app.post('/v1/whatsapp/webhook', async (req) => {
@@ -102,8 +113,11 @@ export function registerPreuvesRoutes(app: FastifyInstance, ctx: AppContext, svc
     }
   });
   app.get<{ Querystring: { c?: string } }>('/l/imprimer', async (req, reply) => {
+    // Adresse du QR imprimé : MOSOLO_PUBLIC_URL. L'en-tête Host (choisi par le client) n'est utilisé qu'en démonstration :
+    // sinon un domaine tiers pointant sur ce serveur produirait un document officiel renvoyant vers lui (hameçonnage).
+    const base = process.env.MOSOLO_PUBLIC_URL?.trim().replace(/\/+$/, '') || (isDemoMode() ? `${req.protocol}://${req.headers.host ?? 'localhost'}` : null);
+    if (!base) return html(reply, lite.page('Impression indisponible', '<p>Version imprimable indisponible : adresse publique officielle non configurée (MOSOLO_PUBLIC_URL).</p><p><a href="/l">Accueil</a></p>'), 503);
     const r = svc.resolve((req.query.c ?? '').trim(), clientKey(req), 'IMPRIME');
-    const base = process.env.MOSOLO_PUBLIC_URL ?? `${req.protocol}://${req.headers.host ?? 'localhost'}`;
     return html(reply, await lite.printable(r, base));
   });
   app.get<{ Querystring: { commune?: string } }>('/l/points', async (req, reply) => {

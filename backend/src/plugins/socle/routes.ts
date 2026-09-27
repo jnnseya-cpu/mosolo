@@ -7,6 +7,7 @@ import { parse } from '../../core/http.js';
 import { authorize, definePolicy, GRANTS } from '../../core/policy.js';
 import { createBackup } from '../../persistence/backup.js';
 import { collectRows } from '../../persistence/registry.js';
+import type { SnapshotRow } from '../../persistence/store.js';
 import type { SocleService } from './plugin.js';
 import { ACCESS_TOKEN_TTL_S, AUDIENCE, SENSITIVE_ROLES } from './service.js';
 
@@ -24,6 +25,38 @@ const otpSchema = z.object({
   sharedDevice: z.boolean().optional(),
 }).strict();
 const revokeSchema = z.object({ reason: z.string().trim().min(5, 'motif obligatoire (5 caractères minimum)').max(300) }).strict();
+
+/**
+ * Minimisation de l'export HTTP : les secrets d'authentification n'en sortent jamais (empreintes de mot de passe et de
+ * PIN, secrets TOTP, clés des terminaux, empreintes de codes et de jetons, boîte d'envoi du bac à sable). Un export
+ * permettrait sinon de se connecter à la place de n'importe quel agent. La sauvegarde complète de la base passe par
+ * l'outil d'exploitation (backup-cli), serveur arrêté, sous un rôle distinct.
+ */
+const SECRET_FIELDS = ['passwordHash', 'totpSecret', 'codeHash', 'tokenHash'];
+const SECRET_FIELDS_BY_REPO: Record<string, string[]> = {
+  'field.devices': ['key'],
+  'ext.canaux.cards.pins': ['salt', 'hash'],
+  'ext.socle.idp.challenges': ['salt'],
+  'ext.acces.outbox': ['text'],
+};
+export function redactExportRows(rows: SnapshotRow[]): { rows: SnapshotRow[]; redacted: string[] } {
+  const redacted = new Set<string>();
+  const out = rows.map((r) => {
+    if (!r.doc || typeof r.doc !== 'object' || Array.isArray(r.doc)) return r;
+    const fields = [...SECRET_FIELDS, ...(SECRET_FIELDS_BY_REPO[r.repo] ?? [])];
+    const doc = r.doc as Record<string, unknown>;
+    if (!fields.some((f) => f in doc)) return r;
+    const copy: Record<string, unknown> = { ...doc };
+    for (const f of fields) {
+      if (f in copy) {
+        delete copy[f];
+        redacted.add(`${r.repo}.${f}`);
+      }
+    }
+    return { ...r, doc: copy };
+  });
+  return { rows: out, redacted: [...redacted].sort() };
+}
 
 export function registerSocleRoutes(app: FastifyInstance, ctx: AppContext, svc: SocleService): void {
   const idp = svc.idp;
@@ -149,7 +182,8 @@ export function registerSocleRoutes(app: FastifyInstance, ctx: AppContext, svc: 
       actor: { kind: 'user', id: u.id, roles: u.roles }, action: 'socle.export.created', resourceType: 'backup', outcome: 'SUCCESS',
       details: { reason: body.reason.trim() },
     });
-    const doc = createBackup(collectRows(ctx), key, { source: svc.persistence ? 'application+postgresql' : 'application', now: ctx.clock.now() });
-    return { ...doc, demoKey: !envKey };
+    const { rows, redacted } = redactExportRows(collectRows(ctx));
+    const doc = createBackup(rows, key, { source: svc.persistence ? 'application+postgresql' : 'application', now: ctx.clock.now() });
+    return { ...doc, demoKey: !envKey, redacted };
   });
 }

@@ -1,12 +1,15 @@
 /**
  * Registre des connecteurs, construit à partir des variables d'environnement (secrets côté serveur uniquement).
- * Sans clé API : mode SANDBOX_LOCAL (aucun appel réseau, intention simulée `sbx_…`) et secret de webhook de
- * démonstration, afin que la démo et les tests puissent signer des webhooks. En mode TEST/LIVE, le secret de
- * webhook est obligatoire (jamais le secret de démonstration).
+ * Sans clé API : mode SANDBOX_LOCAL (aucun appel réseau, intention simulée `sbx_…`) et, EN MODE DÉMONSTRATION
+ * SEULEMENT, secret de webhook de démonstration, afin que la démo et les tests puissent signer des webhooks.
+ * Hors démonstration, un connecteur sans secret de webhook réel n'est PAS enregistré (aucun webhook accepté) et un
+ * secret égal à la valeur publique de démonstration est refusé au démarrage. En mode TEST/LIVE, le secret de
+ * webhook est obligatoire.
  * Doctrine : `settlementAccountAlias` DOIT être un alias du coffre — sinon le démarrage échoue.
  */
 import { BitriPayConnector, BITRIPAY_DEFAULT_BASE_URL, BITRIPAY_DEMO_WEBHOOK_SECRET, BITRIPAY_OPERATORS } from './bitripay.js';
 import { KodaConnector, KODA_DEFAULT_BASE_URL, KODA_DEMO_WEBHOOK_SECRET, type ConnectorRuntime } from './koda.js';
+import { isDemoMode } from '../../../core/auth.js';
 import { ConnectorConfigError, CONNECTOR_IDS, type ConnectorId, type PaymentConnector } from './types.js';
 
 /** Alias par défaut : compte de recettes DGIPK de démonstration (voir seed.ts). */
@@ -24,10 +27,14 @@ function bool(v: string | undefined, fallback: boolean): boolean {
   return ['1', 'true', 'oui', 'yes'].includes(v.toLowerCase());
 }
 
-function webhookSecret(provider: string, apiKey: string | undefined, secret: string | undefined, demo: string): string {
-  if (secret) return secret;
+/** Secret de webhook ; `undefined` : connecteur non configuré hors démonstration (il n'est pas enregistré). */
+function webhookSecret(provider: string, apiKey: string | undefined, secret: string | undefined, demo: string, demoMode: boolean): string | undefined {
+  if (secret) {
+    if (!demoMode && secret === demo) throw new ConnectorConfigError(`${provider} : le secret de webhook de démonstration est public, il est refusé hors mode démonstration.`);
+    return secret;
+  }
   if (apiKey) throw new ConnectorConfigError(`${provider} : secret de webhook obligatoire hors bac à sable local.`);
-  return demo;
+  return demoMode ? demo : undefined;
 }
 
 export class ConnectorRegistry {
@@ -63,14 +70,15 @@ export class ConnectorRegistry {
   }
 }
 
-export function buildConnectorRegistry(env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env, runtime: ConnectorRuntime = {}): ConnectorRegistry {
+export function buildConnectorRegistry(env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env, runtime: ConnectorRuntime = {}, demoMode = isDemoMode()): ConnectorRegistry {
   if (env.KODA_API_KEY && !env.KODA_SUCCESS_URL) {
     throw new ConnectorConfigError('KODA_SUCCESS_URL est obligatoire en mode réel (URL de retour du portail officiel, à fournir par la Ville).');
   }
-  const koda = new KodaConnector(
+  const kodaSecret = webhookSecret('KODA', env.KODA_API_KEY, env.KODA_WEBHOOK_SECRET, KODA_DEMO_WEBHOOK_SECRET, demoMode);
+  const koda = kodaSecret === undefined ? null : new KodaConnector(
     {
       ...(env.KODA_API_KEY ? { apiKey: env.KODA_API_KEY } : {}),
-      webhookSecret: webhookSecret('KODA', env.KODA_API_KEY, env.KODA_WEBHOOK_SECRET, KODA_DEMO_WEBHOOK_SECRET),
+      webhookSecret: kodaSecret,
       baseUrl: env.KODA_BASE_URL || KODA_DEFAULT_BASE_URL,
       settlementAccountAlias: env.KODA_SETTLEMENT_ACCOUNT_ALIAS || DEFAULT_SETTLEMENT_ACCOUNT_ALIAS,
       operators: list(env.KODA_OPERATORS, ['orange_cd', 'mpesa_cd']),
@@ -80,10 +88,11 @@ export function buildConnectorRegistry(env: NodeJS.ProcessEnv | Record<string, s
   );
   const cdf = env.BITRIPAY_CDF_EXPONENT === undefined || env.BITRIPAY_CDF_EXPONENT === '' ? 2 : Number(env.BITRIPAY_CDF_EXPONENT);
   if (cdf !== 0 && cdf !== 2) throw new ConnectorConfigError('BITRIPAY_CDF_EXPONENT doit valoir 0 ou 2.');
-  const bitripay = new BitriPayConnector(
+  const bitripaySecret = webhookSecret('BitriPay', env.BITRIPAY_API_KEY, env.BITRIPAY_WEBHOOK_SECRET, BITRIPAY_DEMO_WEBHOOK_SECRET, demoMode);
+  const bitripay = bitripaySecret === undefined ? null : new BitriPayConnector(
     {
       ...(env.BITRIPAY_API_KEY ? { apiKey: env.BITRIPAY_API_KEY } : {}),
-      webhookSecret: webhookSecret('BitriPay', env.BITRIPAY_API_KEY, env.BITRIPAY_WEBHOOK_SECRET, BITRIPAY_DEMO_WEBHOOK_SECRET),
+      webhookSecret: bitripaySecret,
       ...(env.BITRIPAY_ED25519_PUBLIC_KEY ? { ed25519PublicKey: env.BITRIPAY_ED25519_PUBLIC_KEY } : {}),
       hmacRequired: bool(env.BITRIPAY_HMAC_REQUIRED, true),
       ed25519Required: bool(env.BITRIPAY_ED25519_REQUIRED, false),
@@ -95,5 +104,5 @@ export function buildConnectorRegistry(env: NodeJS.ProcessEnv | Record<string, s
     },
     runtime,
   );
-  return new ConnectorRegistry([bitripay, koda]);
+  return new ConnectorRegistry([bitripay, koda].filter((c): c is BitriPayConnector | KodaConnector => c !== null));
 }

@@ -90,7 +90,7 @@ export function seedRakaPay(ctx: AppContext, svc: RakaPayService): void {
   register(RK_DEMO.driverTaxpayer, '+243899100001', 'Kabeya Tshibangu (fictif)');
   register(RK_DEMO.driver2Taxpayer, '+243899100002', 'Mukendi Ilunga (fictif)');
   register(RK_DEMO.coopTaxpayer, '+243899100100', 'Coopérative des wewa de Kalamu (fictive)');
-  if (!ctx.field.devices.get(RK_DEMO.device)) ctx.field.enroll(RK_DEMO.device, RK_DEMO.controllerUser, RK_DEMO.deviceKey);
+  if (!ctx.field.devices.get(RK_DEMO.device)) ctx.field.enroll(RK_DEMO.device, RK_DEMO.controllerUser, ctx.secrets.deviceKeys[RK_DEMO.device] ?? RK_DEMO.deviceKey);
   // Période de grâce (J28) : les constats y sont marqués pédagogiques [paramètre de démonstration].
   svc.titres.gracePeriods.set(MODULE_WEWA, '2026-10-31');
 

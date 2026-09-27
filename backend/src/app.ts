@@ -4,7 +4,7 @@
 import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { createContext, type AppContext, type AppOptions } from './context.js';
-import { resolveDemoUser } from './core/auth.js';
+import { assertSafeDeployment, ConfigurationError, isDemoMode, resolveDemoUser } from './core/auth.js';
 import { ApiError } from './core/errors.js';
 import { registerAiRoutes } from './modules/ai/routes.js';
 import { registerAlertRoutes } from './modules/alerts/routes.js';
@@ -33,8 +33,40 @@ declare module 'fastify' {
   }
 }
 
+/**
+ * Origines CORS autorisées : liste explicite MOSOLO_CORS_ORIGINS (« https://a.example,https://b.example »).
+ * Sans liste : toute origine en mode démonstration (développement local), AUCUNE hors démonstration (même origine).
+ */
+export function corsOrigins(env: NodeJS.ProcessEnv = process.env): string[] | boolean {
+  const list = (env.MOSOLO_CORS_ORIGINS ?? '').split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean);
+  if (list.includes('*')) {
+    if (!isDemoMode(env)) throw new ConfigurationError('MOSOLO_CORS_ORIGINS=* est refusé hors mode démonstration : listez les origines autorisées.');
+    return true;
+  }
+  if (list.length > 0) return list;
+  return isDemoMode(env);
+}
+
+/**
+ * Mandataires inverses de confiance (MOSOLO_TRUST_PROXY) : « true », nombre de sauts, ou liste d'adresses/CIDR.
+ * Défaut : aucun — `req.ip` est l'adresse du pair TCP et X-Forwarded-For est ignoré (limitation de débit non contournable).
+ */
+export function trustProxyFromEnv(env: NodeJS.ProcessEnv = process.env): boolean | string[] | ((address: string, hop: number) => boolean) {
+  const v = (env.MOSOLO_TRUST_PROXY ?? '').trim();
+  if (v === '' || v.toLowerCase() === 'false') return false;
+  if (v.toLowerCase() === 'true') return true;
+  if (/^\d+$/.test(v)) {
+    const hops = Number.parseInt(v, 10);
+    return (_address: string, hop: number) => hop < hops;
+  }
+  return v.split(',').map((x) => x.trim()).filter(Boolean);
+}
+
 export function buildApp(opts: AppOptions & { logger?: boolean } = {}): FastifyInstance {
-  const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 1_048_576 });
+  // Sûr par défaut : démonstration refusée en production, secrets de démonstration refusés hors démonstration.
+  assertSafeDeployment(process.env);
+  const origin = corsOrigins(process.env);
+  const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 1_048_576, trustProxy: trustProxyFromEnv(process.env) });
   const ctx = createContext(opts);
   const plugins = opts.plugins ?? DEFAULT_PLUGINS;
   for (const p of plugins) ctx.ext[p.name] = p.create(ctx);
@@ -48,13 +80,17 @@ export function buildApp(opts: AppOptions & { logger?: boolean } = {}): FastifyI
   app.decorate('ctx', ctx);
 
   void app.register(cors, {
-    origin: true,
+    origin,
     exposedHeaders: ['idempotent-replayed', 'x-mosolo-subject', 'content-language', 'retry-after', 'x-mosolo-sha256', 'x-mosolo-signature', 'x-mosolo-server-time'],
   });
 
   // Heure de référence = heure du SERVEUR (§ H.11.6) : chaque réponse la porte ; le client s'y cale pour ses comptes à rebours.
   app.addHook('onSend', async (_req, reply) => {
     reply.header('x-mosolo-server-time', ctx.clock.now().toISOString());
+    // En-têtes de sécurité de base (API JSON et pages légères) : pas de reniflage de type, pas d'intégration en cadre.
+    reply.header('x-content-type-options', 'nosniff');
+    reply.header('x-frame-options', 'DENY');
+    reply.header('referrer-policy', 'no-referrer');
   });
 
   // Corps brut conservé : nécessaire à la vérification des signatures (prestataires, terminaux).

@@ -2,7 +2,7 @@
 import type { KeyObject } from 'node:crypto';
 import type { Channel } from '@mosolo/shared';
 import { AuditLog } from './core/audit.js';
-import { UserDirectory } from './core/auth.js';
+import { ConfigurationError, isDemoMode, UserDirectory } from './core/auth.js';
 import { isoDate, systemClock, type Clock } from './core/clock.js';
 import { randomSecret } from './core/crypto.js';
 import { IdempotencyStore } from './core/idempotency.js';
@@ -43,21 +43,85 @@ export interface Secrets {
   receiptSigningKey?: KeyObject;
 }
 
-/** Secrets de DÉMONSTRATION (surchargeables par variables d'environnement). */
-export function defaultSecrets(env: NodeJS.ProcessEnv = process.env): Secrets {
+/** Prestataires habilités : variable d'environnement du secret HMAC et valeur PUBLIQUE de démonstration. */
+const PROVIDER_SECRET_VARS: Record<string, { env: string; demo: string }> = {
+  'mm-operator-a': { env: 'MOSOLO_PROVIDER_SECRET_MM_OPERATOR_A', demo: 'demo-secret-mm-operator-a' },
+  'bank-a': { env: 'MOSOLO_PROVIDER_SECRET_BANK_A', demo: 'demo-secret-bank-a' },
+  'card-gateway': { env: 'MOSOLO_PROVIDER_SECRET_CARD_GATEWAY', demo: 'demo-secret-card-gateway' },
+};
+/** Terminaux semés par les données de démonstration et leurs clés PUBLIQUES de démonstration. */
+const DEMO_DEVICE_KEYS: Record<string, string> = {
+  'dev-terrain-001': 'demo-device-key-001',
+  'dev-terrain-002': 'demo-device-key-002',
+  'dev-terrain-perdu': 'demo-device-key-perdu',
+  'dev-canaux-enrol-01': 'demo-device-key-canaux-01',
+  'dev-canaux-guichet-01': 'demo-device-key-canaux-02',
+  'dev-rakapay-01': 'demo-device-key-rakapay-01',
+};
+const MIN_SECRET_LENGTH = 16;
+/** Une valeur de démonstration est publique (dépôt, documentation) : elle ne vaut jamais secret hors démonstration. */
+const isDemoValue = (v: string): boolean => /^demo-/i.test(v.trim()) || Object.values(PROVIDER_SECRET_VARS).some((p) => p.demo === v) || Object.values(DEMO_DEVICE_KEYS).includes(v);
+
+/**
+ * Secrets HMAC des prestataires. Démonstration : valeurs publiques par défaut. Hors démonstration : chaque secret DOIT
+ * venir de l'environnement, sans valeur de démonstration — sinon le démarrage est refusé (un rappel signé avec un
+ * secret public vaudrait quittance).
+ */
+export function providerSecretsFromEnv(env: NodeJS.ProcessEnv = process.env, demo = isDemoMode(env)): Record<string, string> {
+  const out: Record<string, string> = {};
+  const problems: string[] = [];
+  for (const [provider, { env: name, demo: demoValue }] of Object.entries(PROVIDER_SECRET_VARS)) {
+    const v = env[name]?.trim();
+    if (demo) out[provider] = v || demoValue;
+    else if (!v) problems.push(`${name} absente`);
+    else if (isDemoValue(v) || v.length < MIN_SECRET_LENGTH) problems.push(`${name} invalide (valeur de démonstration ou moins de ${MIN_SECRET_LENGTH} caractères)`);
+    else out[provider] = v;
+  }
+  if (problems.length) throw new ConfigurationError(`Secrets des prestataires de paiement : ${problems.join(' ; ')}. Hors mode démonstration, chaque secret doit être fourni par l’environnement.`);
+  return out;
+}
+
+/**
+ * Clés HMAC des terminaux : MOSOLO_DEVICE_KEYS=« id=clé,id=clé ». Démonstration : clés publiques par défaut.
+ * Hors démonstration : jamais de clé publique ; un terminal semé sans clé fournie reçoit une clé aléatoire
+ * (inutilisable tant qu'il n'est pas ré-enrôlé), de sorte qu'aucune clé de démonstration n'est jamais acceptée.
+ */
+export function deviceKeysFromEnv(env: NodeJS.ProcessEnv = process.env, demo = isDemoMode(env)): Record<string, string> {
+  const given: Record<string, string> = {};
+  for (const item of (env.MOSOLO_DEVICE_KEYS ?? '').split(/[,;\n]/).map((s) => s.trim()).filter(Boolean)) {
+    const i = item.indexOf('=');
+    if (i <= 0 || i === item.length - 1) throw new ConfigurationError('MOSOLO_DEVICE_KEYS : format attendu « identifiant=clé » séparés par des virgules.');
+    const id = item.slice(0, i).trim();
+    const key = item.slice(i + 1).trim();
+    if (!demo && (isDemoValue(key) || key.length < MIN_SECRET_LENGTH)) {
+      throw new ConfigurationError(`MOSOLO_DEVICE_KEYS : clé du terminal ${id} invalide (valeur de démonstration ou moins de ${MIN_SECRET_LENGTH} caractères).`);
+    }
+    given[id] = key;
+  }
+  if (demo) return { ...DEMO_DEVICE_KEYS, ...given };
+  const out: Record<string, string> = { ...given };
+  for (const id of Object.keys(DEMO_DEVICE_KEYS)) out[id] ??= randomSecret();
+  return out;
+}
+
+/** Hors démonstration, aucun secret injecté ne peut être une valeur publique de démonstration. */
+function assertNoDemoSecrets(secrets: Secrets): void {
+  if (isDemoMode()) return;
+  const bad = [
+    ...Object.entries(secrets.providerSecrets).filter(([, v]) => isDemoValue(v)).map(([k]) => `prestataire ${k}`),
+    ...Object.entries(secrets.deviceKeys).filter(([, v]) => isDemoValue(v)).map(([k]) => `terminal ${k}`),
+  ];
+  if (bad.length) throw new ConfigurationError(`Secrets de démonstration refusés hors mode démonstration : ${bad.join(', ')}.`);
+}
+
+/** Secrets (surchargeables par variables d'environnement ; valeurs publiques de DÉMONSTRATION en mode démo seulement). */
+export function defaultSecrets(env: NodeJS.ProcessEnv = process.env, injected: Partial<Secrets> = {}): Secrets {
   return {
     auditHmacKey: env.MOSOLO_AUDIT_HMAC_KEY ?? randomSecret(),
-    providerSecrets: {
-      'mm-operator-a': env.MOSOLO_PROVIDER_SECRET_MM_OPERATOR_A ?? 'demo-secret-mm-operator-a',
-      'bank-a': env.MOSOLO_PROVIDER_SECRET_BANK_A ?? 'demo-secret-bank-a',
-      'card-gateway': env.MOSOLO_PROVIDER_SECRET_CARD_GATEWAY ?? 'demo-secret-card-gateway',
-    },
+    // Secrets injectés (tests, intégration) : l'environnement n'est pas exigé pour ce qui est déjà fourni.
+    providerSecrets: injected.providerSecrets ?? providerSecretsFromEnv(env),
     commsProviderKeys: CommunicationService.providerKeysFromEnv(env),
-    deviceKeys: {
-      'dev-terrain-001': 'demo-device-key-001',
-      'dev-terrain-002': 'demo-device-key-002',
-      'dev-terrain-perdu': 'demo-device-key-perdu',
-    },
+    deviceKeys: injected.deviceKeys ?? deviceKeysFromEnv(env),
   };
 }
 
@@ -77,7 +141,8 @@ export interface AppOptions {
 
 export function createContext(opts: AppOptions = {}) {
   const clock = opts.clock ?? systemClock;
-  const secrets: Secrets = { ...defaultSecrets(), ...opts.secrets };
+  const secrets: Secrets = { ...defaultSecrets(process.env, opts.secrets), ...opts.secrets };
+  assertNoDemoSecrets(secrets);
   const users = new UserDirectory();
   const audit = new AuditLog(clock, secrets.auditHmacKey);
   const idempotency = new IdempotencyStore();

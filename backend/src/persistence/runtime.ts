@@ -10,6 +10,7 @@
  *   4. s'abonne aux écritures et écrit par lots (écriture différée courte, `flush()` à l'arrêt).
  */
 import type { AuditLog, AuditRecord, AuditVerification } from '../core/audit.js';
+import { ConfigurationError, isDemoMode } from '../core/auth.js';
 import type { Entity } from '../core/repository.js';
 import { decodeDoc, encodeDoc, stableText } from './codec.js';
 import { AUDIT_REPO, collectRows, discover, isAppendOnly, readableIds, type Discovery } from './registry.js';
@@ -45,6 +46,12 @@ export interface RuntimeOptions {
   /** Délai d'écriture différée (ms) ; 0 = écriture à la prochaine micro-tâche. */
   flushDelayMs?: number;
   log?: (level: 'info' | 'warn' | 'error', msg: string) => void;
+  /**
+   * Chaîne d'audit restaurée NON vérifiée (altération, troncature, autre clé) : hors démonstration, le démarrage est
+   * refusé sauf acceptation explicite et tracée (défaut : MOSOLO_AUDIT_ACCEPT_UNVERIFIED=true). Dans tous les cas,
+   * l'événement `audit.chain.restored_unverified` est ajouté à la chaîne : jamais de restauration silencieuse.
+   */
+  acceptUnverifiedAudit?: boolean;
 }
 
 export class PersistenceRuntime {
@@ -115,7 +122,19 @@ export class PersistenceRuntime {
       auditRestored = records.length;
       auditCheck = ctx.audit.verify();
       if (!auditCheck.ok) {
+        const accepted = this.opts.acceptUnverifiedAudit ?? ['1', 'true', 'oui', 'yes'].includes((process.env.MOSOLO_AUDIT_ACCEPT_UNVERIFIED ?? '').trim().toLowerCase());
+        if (!isDemoMode() && !accepted) {
+          throw new ConfigurationError(
+            `Chaîne d'audit restaurée NON VÉRIFIÉE (${auditCheck.reason ?? 'inconnu'}, enregistrement ${auditCheck.brokenAt ?? '?'}) : démarrage refusé. ` +
+              'Vérifiez MOSOLO_AUDIT_HMAC_KEY et l’intégrité de la base ; pour démarrer malgré tout après enquête, MOSOLO_AUDIT_ACCEPT_UNVERIFIED=true (tracé dans le journal).',
+          );
+        }
         warnings.push(`Chaîne d'audit restaurée NON VÉRIFIÉE (${auditCheck.reason ?? 'inconnu'}) — clé MOSOLO_AUDIT_HMAC_KEY différente ou altération.`);
+        // Trace dans la chaîne elle-même : la rupture reste détectable par /v1/audit/verify et n'est jamais « réparée ».
+        ctx.audit.append({
+          actor: { kind: 'system', id: 'persistance' }, action: 'audit.chain.restored_unverified', resourceType: 'audit_chain', outcome: 'FAILURE',
+          details: { reason: auditCheck.reason ?? 'inconnu', brokenAt: auditCheck.brokenAt ?? null, length: auditCheck.length, accepted: accepted || isDemoMode() ? (accepted ? 'MOSOLO_AUDIT_ACCEPT_UNVERIFIED' : 'demonstration') : null },
+        });
       }
     }
 

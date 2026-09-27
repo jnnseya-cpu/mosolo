@@ -8,12 +8,19 @@ Contrat d'interface : [`specs/contrat-api.md`](../specs/contrat-api.md) · spéc
 Depuis la racine du dépôt :
 
 ```bash
-npm run dev -w backend        # serveur avec rechargement (port PORT ou 8080, CORS actif)
-npm test -w backend           # tests (vitest + fastify.inject)
+npm run dev -w backend        # serveur avec rechargement, MODE DÉMONSTRATION explicite (--demo), port PORT ou 8080
+npm test -w backend           # tests (vitest + fastify.inject ; vitest.config.ts active MOSOLO_DEMO_MODE=true)
 npm run typecheck -w backend  # TypeScript strict
 ```
 
 Le serveur démarre avec des **données de démonstration** en mémoire (voir « Utilisateurs de démonstration »).
+
+**Sûr par défaut.** Le mode démonstration (en-tête `x-demo-user`, `/v1/demo/users`, comptes et codes affichés, boîte
+d'envoi du bac à sable, CORS ouvert, secrets publics `demo-…`) n'est actif **que** si `MOSOLO_DEMO_MODE=true` (ou
+l'option `--demo` des points d'entrée) et **jamais** lorsque `NODE_ENV=production` : le démarrage est alors refusé.
+Hors démonstration, le serveur refuse de démarrer sans secrets réels des prestataires (voir « Variables
+d'environnement ») ; `npm start` / `npm run start:persistent` démarrent dans ce mode sûr, `npm run start:demo` en
+démonstration.
 
 ```bash
 curl localhost:8080/health
@@ -136,7 +143,7 @@ OBL=$(curl -s -H 'x-demo-user: u-contribuable' localhost:8080/v1/obligations | n
 REF=$(curl -s -X POST -H 'x-demo-user: u-contribuable' -H 'content-type: application/json' -H "Idempotency-Key: $(uuidgen)" \
   -d '{"channel":"MOBILE_MONEY"}' localhost:8080/v1/obligations/$OBL/payment-orders | node -pe 'JSON.parse(require("fs").readFileSync(0)).paymentReference')
 
-# Rappel du prestataire « mm-operator-a » (secret de démo : demo-secret-mm-operator-a)
+# Rappel du prestataire « mm-operator-a » (secret PUBLIC de démo : demo-secret-mm-operator-a — refusé hors démonstration)
 BODY="{\"providerTxnId\":\"TXN-$RANDOM\",\"paymentReference\":\"$REF\",\"amount\":{\"amount\":\"150.00\",\"currency\":\"USD\"},\"status\":\"SUCCESS\",\"completedAt\":\"$(date -u +%FT%TZ)\"}"
 SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac demo-secret-mm-operator-a -hex | awk '{print $2}')
 curl -s -X POST -H 'content-type: application/json' -H "x-signature: $SIG" -H "x-nonce: $(uuidgen)" -H "x-timestamp: $(date -u +%FT%TZ)" \
@@ -150,7 +157,8 @@ curl -s localhost:8080/v1/public/receipts/<receiptCode>        # VALID / RECONCI
 ```
 
 Terminaux terrain : `x-device-signature` = HMAC-SHA256 hexadécimal du corps brut avec la clé de l'appareil
-(`dev-terrain-001` → `demo-device-key-001`, affecté à `u-agent-terrain`).
+(`dev-terrain-001` → `demo-device-key-001`, affecté à `u-agent-terrain` — en démonstration seulement ; hors démonstration,
+clés fournies par `MOSOLO_DEVICE_KEYS`, sinon clé aléatoire : aucune clé publique n'est acceptée).
 
 ## Connecteurs de prestataires : BitriPay et KODA
 
@@ -229,9 +237,18 @@ Rejouer exactement la même requête renvoie 200 avec `"replayed": true`, sans s
 | Variable | Rôle |
 |---|---|
 | `PORT`, `HOST` | écoute (défaut `8080`, `0.0.0.0`) |
-| `MOSOLO_AUDIT_HMAC_KEY` | clé de signature du journal d'audit (aléatoire au démarrage si absente) |
-| `MOSOLO_PROVIDER_SECRET_MM_OPERATOR_A`, `…_BANK_A`, `…_CARD_GATEWAY` | secrets HMAC des prestataires (défauts de démo `demo-secret-…`) |
-| `KODA_*`, `BITRIPAY_*` | connecteurs de prestataires (voir « Connecteurs de prestataires : BitriPay et KODA ») |
+| `MOSOLO_DEMO_MODE` | `true` : mode démonstration (défaut : **désactivé**) ; interdit avec `NODE_ENV=production` (démarrage refusé) |
+| `NODE_ENV` | `production` : refuse `MOSOLO_DEMO_MODE=true` et `MOSOLO_DEMO_CREDENTIALS=true` |
+| `MOSOLO_DEMO_CREDENTIALS` | `true` : sème le mot de passe et les secrets TOTP de démonstration hors mode démo (préproduction) ; interdit en production |
+| `MOSOLO_AUDIT_HMAC_KEY` | clé de signature du journal d'audit (aléatoire au démarrage si absente ; **obligatoire** avec `DATABASE_URL` hors démonstration) |
+| `MOSOLO_AUDIT_ACCEPT_UNVERIFIED` | `true` : démarrer malgré une chaîne d'audit restaurée non vérifiée (après enquête ; tracé dans la chaîne). Sinon, démarrage refusé hors démonstration |
+| `MOSOLO_PROVIDER_SECRET_MM_OPERATOR_A`, `…_BANK_A`, `…_CARD_GATEWAY` | secrets HMAC des prestataires : **obligatoires hors démonstration** (16 caractères minimum, jamais une valeur `demo-…`) ; défauts publics `demo-secret-…` en démonstration seulement |
+| `MOSOLO_DEVICE_KEYS` | clés HMAC des terminaux terrain, `id=clé,id=clé` ; hors démonstration, un terminal semé sans clé reçoit une clé aléatoire |
+| `MOSOLO_CORS_ORIGINS` | origines autorisées, séparées par des virgules ; sans liste : toutes en démonstration, **aucune** hors démonstration (`*` refusé hors démonstration) |
+| `MOSOLO_TRUST_PROXY` | mandataire(s) inverse(s) de confiance (`true`, nombre de sauts, ou adresses/CIDR) ; défaut : aucun, `X-Forwarded-For` ignoré (limitation de débit par adresse réelle) |
+| `MOSOLO_PUBLIC_URL` | adresse publique officielle (QR des pages imprimables `/l/imprimer`) ; obligatoire hors démonstration pour l'impression |
+| `SMS_GATEWAY_SECRET`, `SVI_GATEWAY_SECRET` | signature HMAC (`x-mosolo-signature`) des passerelles SMS / SVI entrantes (`/v1/sms/inbound`, `/v1/public/integrite/reports/sms` et `/svi`) ; sans secret : simulateur en démonstration, refus (403) sinon |
+| `KODA_*`, `BITRIPAY_*` | connecteurs de prestataires (voir « Connecteurs de prestataires : BitriPay et KODA ») ; hors démonstration, un connecteur sans `…_WEBHOOK_SECRET` réel n'est pas enregistré |
 | `MOSOLO_EMAIL_PROVIDER_KEY`, `MOSOLO_SMS_PROVIDER_KEY`, `MOSOLO_PUSH_PROVIDER_KEY`, `MOSOLO_WHATSAPP_PROVIDER_KEY`, `MOSOLO_USSD_PROVIDER_KEY`, `MOSOLO_SVI_PROVIDER_KEY`, `MOSOLO_COURRIER_PROVIDER_KEY` | clés fournisseurs ; absente ⇒ canal en bac à sable (`journalise`) |
 
 ## Ce qui relève de la démonstration et ce qui est prêt pour la suite

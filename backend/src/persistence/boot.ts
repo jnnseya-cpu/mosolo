@@ -3,6 +3,7 @@
  * Avec DATABASE_URL : migrations, chargement de l'instantané, moteur rendu actif pour le plugin « socle »
  * qui l'attache au contexte après les données de démonstration.
  */
+import { ConfigurationError, isDemoMode } from '../core/auth.js';
 import { openPgStore } from './store.js';
 import { PersistenceRuntime, setActivePersistence } from './runtime.js';
 
@@ -26,6 +27,8 @@ export async function preparePersistence(env: NodeJS.ProcessEnv = process.env, l
     return undefined;
   }
   if (!env.MOSOLO_AUDIT_HMAC_KEY) {
+    // Clé aléatoire à chaque démarrage : la chaîne restaurée ne serait jamais vérifiable (une altération passerait inaperçue).
+    if (!isDemoMode(env)) throw new ConfigurationError('MOSOLO_AUDIT_HMAC_KEY obligatoire avec DATABASE_URL hors mode démonstration : sans elle, la chaîne d’audit persistée ne peut pas être vérifiée.');
     log.warn('MOSOLO_AUDIT_HMAC_KEY absente : la clé du journal d’audit change à chaque démarrage et la chaîne restaurée ne pourra pas être vérifiée.');
   }
   const store = await openPgStore(url);
