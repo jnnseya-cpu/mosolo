@@ -12,6 +12,7 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { sha256Hex } from '../../lib/crypto';
 import '../referentiel/referentiel.css';
+import { ContratsVisuels } from './visuels';
 
 interface Expiry { kind: 'CONTRAT' | 'AUTORISATION'; id: string; reference: string; deviceId: string; until: string; daysLeft: number; expiringSoon: boolean; expired: boolean; advertiser?: string; beyondAuthorization?: boolean; renewalPending?: boolean }
 interface Device { id: string; reference: string; address: string }
@@ -47,6 +48,7 @@ export default function AdContrats() {
           {err && <p className="notice notice-err" role="alert">{err}</p>}
           {exp.loading && <Loading />}
           {!!exp.error && <ErrorState error={exp.error} onRetry={exp.reload} />}
+          {exp.data && <ContratsVisuels items={exp.data.items} noticeDays={exp.data.noticeDays} />}
           {exp.data && (
             <section className="panel">
               <div className="panel-head"><h2 className="panel-title"><Icon name="clock" size={18} /> Échéances (préavis {exp.data.noticeDays} jours)</h2><span className="count">{exp.data.items.length}</span></div>

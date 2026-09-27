@@ -36,6 +36,10 @@ export function registerVerticalRoutes(app: FastifyInstance, ctx: AppContext, sv
   }));
 
   app.get<{ Params: { slug: string } }>('/v1/verticales/:slug', async (req) => svc.catalogueDetail(svc.vertical(req.params.slug)));
+  // Fiche publique d'une verticale sous un chemin sans collision (27/09/2026) : « /v1/verticales/actifs » est aussi la
+  // liste du patrimoine (réservée), qui masquait la fiche de la verticale « actifs » dans /services/actifs. L'ancien
+  // chemin est conservé ; l'espace /services/:slug lit désormais celui-ci.
+  app.get<{ Params: { slug: string } }>('/v1/verticales/catalogue/:slug', async (req) => svc.catalogueDetail(svc.vertical(req.params.slug)));
 
   // ---------------------------------------------------------------- espace de l'usager
   app.get<{ Querystring: { taxpayerId?: string } }>('/v1/verticales/me/summary', async (req) => {

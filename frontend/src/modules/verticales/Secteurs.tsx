@@ -16,6 +16,7 @@ import { api, describeError } from '../../lib/api';
 import { COMMUNES } from '../../verticals/catalogue';
 import '../referentiel/referentiel.css';
 import './verticales.css';
+import { SecteursVisuels } from './visuels';
 
 interface CredType { code: string; label: string; activable: boolean; reason: string | null }
 interface KindDef { kind: string; label: string; keys: Record<string, string> }
@@ -227,6 +228,7 @@ export default function Secteurs() {
       {cat.data && (
         <div className="stack">
           <div className="callout callout-info"><Icon name="info" size={18} /><p>{cat.data.notice}</p></div>
+          <SecteursVisuels modules={cat.data.items} withDeclarations={agent || taxpayer} />
           <div className="g3-cards">
             {cat.data.items.map((m) => (
               <article key={m.module} className="g3-card">

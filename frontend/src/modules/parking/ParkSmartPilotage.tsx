@@ -17,6 +17,7 @@ import { api } from '../../lib/api';
 import { DemoTag, ErrorLine, hasRole, Kpis, Money, pctText, ReasonForm, useAction } from './shared';
 import './parking.css';
 import { TarificationDynamiqueTab } from './TarificationDynamique';
+import { ParkSmartVisuels } from './visuels';
 
 // ------------------------------------------------------------------ Types (contrat /v1/parking, chapitre 11A)
 
@@ -73,6 +74,7 @@ export default function ParkSmartPilotage() {
       <PageHead eyebrow="MOSOLO Parking · chapitre 11A" title="ParkSmart — pilotage"
         lead="Toute grille tarifaire est une règle du registre, approuvée avant activation. Le système mesure et recommande ; une personne décide. Aucun blocage ni fourrière n’est déclenché par l’algorithme." />
       <ExampleNotice text="Valeurs marquées [EXEMPLE] : grilles fictives de démonstration, non opposables. Les grilles réelles restent « acte requis »." />
+      <ParkSmartVisuels />
       <div className="seg seg-wrap pk-tabs" role="tablist" aria-label="Rubriques">
         {TABS.map(([k, l]) => <button key={k} type="button" role="tab" aria-pressed={tab === k} aria-selected={tab === k} onClick={() => setTab(k)}>{l}</button>)}
       </div>

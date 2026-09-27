@@ -13,6 +13,7 @@ import { api } from '../../lib/api';
 import { Section } from '../pilotage/shared';
 import { Callout, Notice, useRunner } from '../pilotage/planif';
 import { hasRole, NOTE_NUMEROTATION, pct, StateBadge, Tile, Tiles } from './common';
+import { CentresVisuels } from './visuels';
 
 interface Centre {
   id: string; publicCode: string; name: string; kindLabel: string; commune: string; status: string; categories: string[]; activities: string[];
@@ -39,6 +40,7 @@ export default function CentresAgrees() {
     <div className="page page-wide">
       <PageHead eyebrow={`Chaîne véhicule · module 84 (${NOTE_NUMEROTATION})`} title="Centres agréés et tiers de confiance" lead="Centres de contrôle technique, opérateurs de fourrière et autres tiers de confiance : agrément, habilitations, quotas et conformité." />
       <Notice msg={r.msg} />
+      <CentresVisuels ind={list.data?.indicators} items={list.data?.items} an={an.data} loading={list.loading} error={list.error} onRetry={reload} />
       {list.loading && !list.data ? <Loading /> : list.error ? <ErrorState error={list.error} onRetry={reload} /> : list.data && (
         <>
           <Tiles>

@@ -20,6 +20,7 @@ import { AD_TYPE, CASE_STATUS, DEVICE_STATUS, FINDING, LIGHTING, PLACEMENT, RIGH
 import { AdPhotoUpload, adPhotoView, type PhotoPosition, type UploadedPhoto } from './AdPhotoUpload';
 import { AdAround, AdVehicle, type ConstatPreset } from './AdTerrain';
 import '../parking/parking.css';
+import { InspectorVisuels } from './visuels';
 
 type Tab = 'around' | 'vehicles' | 'control' | 'inventory' | 'verify' | 'mine';
 interface InspectionDone { inspection: { reference: string }; case: Case | null; penalitesImpayees?: OverduePenaltiesData; autoMatched?: string | null }
@@ -58,6 +59,7 @@ export default function AdInspector() {
         {isInspector && badge.data && <StatusBadge tone={badge.data.accredited ? 'good' : 'critical'} icon="shieldCheck" label={badge.data.accredited ? `Accrédité·e jusqu’au ${badge.data.validUntil} (${badge.data.communes.join(', ')})` : 'Non accrédité·e : constat impossible'} />}
         {isInspector && badge.data?.accredited && badge.data.validUntil && <ValidityCountdown compact from={badge.data.validFrom} until={badge.data.validUntil} label="Accréditation" />}
       </PageHead>
+      <InspectorVisuels tick={tick} />
       <div className="seg seg-wrap pk-tabs" role="tablist" aria-label="Rubriques">
         {tabs.map(([k, l]) => <button key={k} type="button" role="tab" aria-pressed={tab === k} aria-selected={tab === k} onClick={() => setTab(k)}>{l}</button>)}
       </div>

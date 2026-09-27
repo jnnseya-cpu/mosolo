@@ -10,6 +10,7 @@ import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
+import { PlastiqueViz } from './visuels';
 
 interface PlasticView {
   active: boolean; ruleCode: string | null; ruleStatus: string; notice: string; roles: string[]; categories: Record<string, string>;
@@ -49,6 +50,7 @@ export default function Plastique() {
         <Icon name="leaf" size={18} />
         <div><p><strong>{d.active ? 'Module activé' : 'Module désactivé'}</strong> — {d.notice}</p><p className="small">Assujettis identifiés : {d.indicators.assujettis} · simulations réalisées : {d.indicators.simulations} · déclarations : {d.indicators.declarations}</p></div>
       </div>
+      <PlastiqueViz ind={d.indicators} declarations={d.declarations} />
       {msg && <p className={msg.ok ? 'notice notice-ok' : 'err'} role={msg.ok ? 'status' : 'alert'}>{msg.text}</p>}
       {study && (
         <section className="panel stack-sm">

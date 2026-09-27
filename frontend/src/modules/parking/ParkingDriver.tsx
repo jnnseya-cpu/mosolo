@@ -21,6 +21,7 @@ import { EvidencePhotos } from './EvidencePhotos';
 import { TextChannelPanel } from './Stationnement14';
 import './parking.css';
 import { PrintProofLink } from '../preuves/PrintLink';
+import { DriverVisuels } from './visuels';
 
 type Tab = 'sessions' | 'start' | 'reservations' | 'violations' | 'partners' | 'texte';
 const DURATIONS = [15, 30, 60, 120, 180, 240];
@@ -49,6 +50,7 @@ export default function ParkingDriver() {
       ) : (
         <>
           <ExampleNotice text="Seules les zones de démonstration sont payantes ici (règle fictive). Les zones réelles restent « acte requis » tant que le zonage et la grille ne sont pas publiés." />
+          <DriverVisuels sessions={sessions.data} loading={sessions.loading} error={sessions.error} onRetry={sessions.reload} />
           <div className="seg seg-wrap pk-tabs" role="tablist" aria-label="Rubriques">
             {([['sessions', 'Mes sessions'], ['start', 'Démarrer'], ['reservations', 'Réservations'], ['violations', 'Constats'], ['partners', 'Parkings partenaires'], ['texte', 'USSD / SMS']] as [Tab, string][]).map(([k, l]) => (
               <button key={k} type="button" role="tab" aria-pressed={tab === k} aria-selected={tab === k} onClick={() => setTab(k)}>{l}</button>

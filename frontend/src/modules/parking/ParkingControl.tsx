@@ -25,6 +25,7 @@ import { EvidencePhotos } from './EvidencePhotos';
 import { GpsQualityLine } from '../../components/GpsQuality';
 import { usePreciseLocation, withPresence, type PreciseFix } from '../../lib/geo';
 import './parking.css';
+import { ViolationsVisuels } from './visuels';
 
 interface PenaltyLine { module: string; reference: string; nature: string; status: string; createdAt: string; decidedAt: string | null; amount: MoneyJSON | null; payment: string; unpaid: boolean; overdueDays: number | null; zone?: string; obligationId?: string | null }
 interface ControlResult { checkId: string; plate: string; zone: { id: string; code: string; name: string } | null; light: Light; title: string | null; validUntil: string | null; checkedAt: string; guidance: string; penalties?: PenaltyLine[]; penaltiesUnpaid?: number; penalitesImpayees?: OverduePenaltiesData; presenceVerified?: boolean; activeTitles?: ActiveTitle[] }
@@ -50,6 +51,7 @@ export default function ParkingControl() {
     <div className="page page-wide">
       <PageHead eyebrow="MOSOLO Parking · terminal de contrôle" title={isAgent ? 'Contrôle par plaque' : 'Vérification des constats'}
         lead="Le contrôle constate ; il ne sanctionne pas. Toute suite est décidée, avec motif, par une personne habilitée distincte. Aucun agent n’encaisse d’espèces." />
+      <ViolationsVisuels violations={violations.data} title={isAgent ? 'Mes constats' : 'Constats du périmètre'} loading={violations.loading} error={violations.error} onRetry={violations.reload} />
       <div className="pk-grid pk-grid-2">
         {isAgent ? <ControlPanel zones={zones.data ?? []} loading={zones.loading} onRecorded={() => setTick((n) => n + 1)} /> : <VerifyQueue state={violations} onChange={() => setTick((n) => n + 1)} />}
         <RecentList state={violations} title={isAgent ? 'Mes constats récents' : 'Constats du périmètre'} />

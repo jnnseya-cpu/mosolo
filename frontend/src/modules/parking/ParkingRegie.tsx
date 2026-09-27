@@ -19,6 +19,7 @@ import { EvidencePhotos } from './EvidencePhotos';
 import { AgentCommissions } from './AgentEarnings';
 import { ExemptionsPanel } from './Stationnement14';
 import './parking.css';
+import { ParkingRegieVisuels } from './visuels';
 
 type Tab = 'decisions' | 'reservations' | 'zones' | 'partners' | 'commissions' | 'exemptions';
 
@@ -41,6 +42,7 @@ export default function ParkingRegie() {
         lead="Le système prépare ; la régie décide, avec motif. Aucune zone n’est payante sans acte de zonage et grille publiée au registre (quatre visas).">
         <button type="button" className="btn btn-secondary btn-sm" onClick={refresh}><Icon name="refresh" size={16} /> Actualiser</button>
       </PageHead>
+      <ParkingRegieVisuels tick={tick} />
       <div className="seg seg-wrap pk-tabs" role="tablist" aria-label="Rubriques">
         {([['decisions', 'Décisions sur constats'], ['reservations', 'Réservations'], ['zones', 'Zones'], ['partners', 'Partenaires'], ['commissions', 'Commissions des agents (10 %)'], ['exemptions', 'Exemptions']] as [Tab, string][]).map(([k, l]) => (
           <button key={k} type="button" role="tab" aria-pressed={tab === k} aria-selected={tab === k} onClick={() => setTab(k)}>{l}</button>

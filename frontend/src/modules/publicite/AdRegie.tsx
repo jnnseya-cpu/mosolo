@@ -15,6 +15,7 @@ import { api } from '../../lib/api';
 import { ErrorLine, hasRole, Money, ReasonForm, useAction } from '../parking/shared';
 import { AD_TYPE, CASE_STATUS, FINDING, PIECE, REQUEST_STATUS, type AuthRequest, type Case } from './types';
 import '../parking/parking.css';
+import { RegieVisuels } from './visuels';
 
 type Tab = 'requests' | 'cases' | 'accreditations';
 
@@ -37,6 +38,7 @@ export default function AdRegie() {
         lead="Instruction et décision sont confiées à deux personnes distinctes. La liquidation applique la règle publiée au registre ; sans règle active, aucun montant n’est exigible.">
         <button type="button" className="btn btn-secondary btn-sm" onClick={refresh}><Icon name="refresh" size={16} /> Actualiser</button>
       </PageHead>
+      <RegieVisuels tick={tick} />
       <div className="seg seg-wrap pk-tabs" role="tablist" aria-label="Rubriques">
         {([['requests', 'Demandes d’autorisation'], ['cases', 'Dossiers de constat'], ['accreditations', 'Accréditations']] as [Tab, string][]).map(([k, l]) => (
           <button key={k} type="button" role="tab" aria-pressed={tab === k} aria-selected={tab === k} onClick={() => setTab(k)}>{l}</button>

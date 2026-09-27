@@ -17,6 +17,7 @@ import { api } from '../../lib/api';
 import { DemoTag, Kpis, Money, pctText, ZONE_STATUS } from './shared';
 import { AgentCommissions } from './AgentEarnings';
 import './parking.css';
+import { ParkingDashboardVisuels } from './visuels';
 
 interface ZoneRow {
   zoneId: string; code: string; name: string; commune: string; kind: string; legalStatus: 'OUVERTE' | 'ACTE_REQUIS' | 'SUSPENDUE'; demo: boolean;
@@ -64,6 +65,7 @@ export default function ParkingDashboard() {
         { label: 'Constats à traiter', value: t.violationsPending, sub: `${t.violationsContested} contesté(s)` },
       ]} />
 
+      <ParkingDashboardVisuels d={d} />
       <div className="dash-grid">
         <ChartCard className="span-7" title="Taux d’occupation par zone" subtitle="Bande verte : cible de 15 à 25 % de places libres (soit 75 à 85 % d’occupation)." example
           height={Math.max(200, chart.length * 56 + 40)}

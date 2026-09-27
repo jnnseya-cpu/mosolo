@@ -11,6 +11,7 @@ import { DataTable } from '../../components/DataTable';
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { DemoTag, ErrorLine, hasRole, useAction } from './shared';
+import { TarifHeuresViz } from './visuels';
 
 export interface DynamicZone {
   zoneId: string; code: string; name: string; commune: string; demo: boolean; mode: 'AUTOMATIQUE' | 'RECOMMANDATION_SEULEMENT'; reason: string;
@@ -52,6 +53,7 @@ export function TarificationDynamiqueTab() {
           {z.mode === 'AUTOMATIQUE' && (
             <>
               <p className="small">Tarif en vigueur à {hh(z.currentHour)} : <strong>{z.currentRate ?? '—'} {z.rule?.currency}</strong> / unité de la formule (règle {z.rule?.code} v{z.rule?.version})</p>
+              <TarifHeuresViz code={z.code} currency={z.rule?.currency} hours={z.hours} example={z.demo || !!z.rule?.demo} />
               <DataTable caption={`Fourchettes et tarifs par heure — ${z.code}`} rows={z.hours.filter((h) => h.band)} rowKey={(h) => String(h.hour)} columns={[
                 { key: 'h', label: 'Heure', render: (h) => hh(h.hour) },
                 { key: 'min', label: 'Minimum (acte)', num: true, render: (h) => h.band!.min },

@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1514 routes** dans 49 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1515 routes** dans 49 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -34,7 +34,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1514 routes** dans 4
 | extension titres | 22 |
 | extension tresor | 43 |
 | extension vehicules-controle | 84 |
-| extension verticales | 193 |
+| extension verticales | 194 |
 | module ai | 3 |
 | module alerts | 1 |
 | module appeals | 12 |
@@ -1533,6 +1533,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1514 routes** dans 4
 | POST | `/v1/verticales/cases/:id/request-info` |
 | POST | `/v1/verticales/cases/:id/take` |
 | POST | `/v1/verticales/cases/:id/visits` |
+| GET | `/v1/verticales/catalogue/:slug` |
 | GET | `/v1/verticales/domaine-public/emprises` |
 | GET | `/v1/verticales/entreprises/etablissements/:objectId/obligations` |
 | GET | `/v1/verticales/environnement/registre` |

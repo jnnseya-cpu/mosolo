@@ -13,6 +13,7 @@ import { api } from '../../lib/api';
 import { Section } from '../pilotage/shared';
 import { Callout, Notice, useRunner } from '../pilotage/planif';
 import { hasRole, StateBadge } from './common';
+import { RfckVisuels } from './visuels';
 
 interface Entite {
   entity: { name: string; shortName: string; nature: string; tutelle: string };
@@ -42,6 +43,7 @@ export default function RaccordementRfck() {
     <div className="page page-wide">
       <PageHead eyebrow="Chaîne véhicule · modules 82 à 84" title="Raccordement RFCK et domaine officiel" lead="Interfaces avec la Régie des Fourrières et de Contrôle Technique des Véhicules de Kinshasa, séquence d’intégration et vérification publique." />
       <Notice msg={r.msg} />
+      <RfckVisuels flows={flows.data?.items} steps={steps.data?.steps} reqs={dom.data?.requirements} loading={flows.loading || steps.loading || dom.loading} />
       {ent.loading && !ent.data ? <Loading /> : ent.error ? <ErrorState error={ent.error} onRetry={reload} /> : ent.data && (
         <div className="dash-grid">
           <Section title={ent.data.entity.name} sub={`${ent.data.entity.nature} — tutelle : ${ent.data.entity.tutelle}`}>
