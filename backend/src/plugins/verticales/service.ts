@@ -30,6 +30,7 @@ import {
 import { AviaService } from './avia.js';
 import { CalcuService } from './calcu.js';
 import { P } from './policies.js';
+import { distanceM, presenceOk } from '../parking/field.js';
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Types
@@ -116,8 +117,13 @@ export interface PlateScan {
   id: string; plateCode: string; by: string; at: string; access: Access;
   /** Couleur de situation de l'objet AU MOMENT du scan (rouge = défaut révélé : impayé à l'échéance). */
   situation?: 'green' | 'amber' | 'red' | 'grey';
-  /** Obligations de l'objet exigibles et impayées au moment du scan (seules attribuables au scan). */
+  /** Obligations de l'objet ÉCHUES et impayées au moment du scan (seules attribuables au scan). */
   dueObligationIds?: string[];
+  /** Position du terminal de l'agent au scan (facultative) et distance à l'objet. */
+  gps?: { lat: number; lon: number; accuracyM: number } | null;
+  distanceM?: number | null;
+  /** Présence attestée (GPS précis, près de l'objet) : condition d'un scan ouvrant droit à commission. */
+  presenceVerified?: boolean;
 }
 
 export interface Market { id: string; name: string; commune: string; quartier: string }
@@ -790,14 +796,15 @@ export class VerticalesService {
     const obls = this.ctx.assessment.obligations.find((o) => o.objectId === objectId && o.status !== 'ANNULEE');
     if (!obls.length) return { color: 'grey', label: 'Aucune obligation émise', lastPaymentAt: null, dueIds: [] };
     let late = false; let open = false; let last: string | null = null;
+    // Seules les obligations ÉCHUES et impayées sont « dues » au scan : une obligation pas encore échue n'est pas un
+    // défaut révélé, même si une autre de l'objet est en retard.
     const dueIds: string[] = [];
     for (const o of obls) {
       const paid = this.ctx.payments.byObligation(o.id).filter((p) => CONFIRMED.includes(p.status));
       for (const p of paid) if (p.confirmedAt && (!last || p.confirmedAt > last)) last = p.confirmedAt;
       if (o.status === 'SOLDEE' || paid.length) continue;
       if (o.status === 'CONTESTEE') continue;
-      dueIds.push(o.id);
-      if (o.dueDate < isoDate(this.now()) || o.status === 'EN_RETARD') late = true;
+      if (o.dueDate < isoDate(this.now()) || o.status === 'EN_RETARD') { late = true; dueIds.push(o.id); }
       else open = true;
     }
     if (late) return { color: 'red', label: 'Impayé à l’échéance', lastPaymentAt: last, dueIds };
@@ -805,15 +812,23 @@ export class VerticalesService {
     return { color: 'green', label: 'À jour', lastPaymentAt: last, dueIds };
   }
 
-  /** Scan par un agent habilité : lecture seule, journalisée ; accès minimal sans montant. */
-  scanPlate(user: User, code: string) {
+  /**
+   * Scan par un agent habilité : lecture seule, journalisée ; accès minimal sans montant. Position du terminal
+   * facultative : sans elle (ou loin de l'objet, ou imprécise), le scan reste valable mais n'ouvre aucune commission.
+   */
+  scanPlate(user: User, code: string, gps?: { lat: number; lon: number; accuracyM: number }) {
     const p = this.getPlate(code);
     const access = authorize(user, P.plateScan, { communes: [p.commune] });
     const o = this.ctx.objects.get(p.objectId);
     // Situation constatée au scan, conservée : seul un scan ROUGE (défaut révélé) peut fonder une commission.
     const found = this.objectSituation(o.id);
-    this.scans.append({ id: this.ids.next('SCAN', 8), plateCode: p.code, by: user.id, at: this.now().toISOString(), access, situation: found.color, dueObligationIds: found.dueIds });
-    this.ctx.audit.append({ actor: actorOf(user), action: 'vertical.plate.scanned', resourceType: 'plate', resourceId: p.code, details: { access, objectId: o.id } });
+    const distance = gps ? distanceM(gps, { lat: o.lat, lon: o.lon }) : null;
+    const presenceVerified = presenceOk(gps, distance);
+    this.scans.append({
+      id: this.ids.next('SCAN', 8), plateCode: p.code, by: user.id, at: this.now().toISOString(), access, situation: found.color, dueObligationIds: found.dueIds,
+      gps: gps ?? null, distanceM: distance, presenceVerified,
+    });
+    this.ctx.audit.append({ actor: actorOf(user), action: 'vertical.plate.scanned', resourceType: 'plate', resourceId: p.code, details: { access, objectId: o.id, presenceVerified, distanceM: distance } });
     const leases = this.ctx.objects.leases.find((l) => l.unitObjectId === o.id || this.ctx.objects.objects.get(l.unitObjectId)?.attributes.parcelleId === o.id);
     const occupation = p.kind === 'NFIU' ? (leases.length ? 'MIS_EN_BAIL' : 'OCCUPE_PAR_LE_PROPRIETAIRE_OU_NON_DECLARE') : null;
     const situation = { color: found.color, label: found.label, lastPaymentAt: found.lastPaymentAt };

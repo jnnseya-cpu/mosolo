@@ -10,7 +10,7 @@
 import { Money, type RoleCode } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { AuditActor } from '../../core/audit.js';
-import type { User } from '../../core/auth.js';
+import { isDemoMode, type User } from '../../core/auth.js';
 import { isoDate } from '../../core/clock.js';
 import { canonicalJson, checkChar, hmacSha256Hex, randomCode, randomSecret, safeEqualHex, sha256Hex } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
@@ -56,6 +56,15 @@ export interface MissionInput {
 export interface FindingInput {
   clientRef: string; objectId?: string; outcome: FindingOutcome; observations: string;
   gps: { lat: number; lon: number; accuracyM: number; source?: 'GPS' | 'MANUEL' | 'ZONE' }; photoSha256?: string; capturedAt: string; deviceId?: string; justification?: string;
+}
+
+/**
+ * Clé d'un terminal enrôlé par les données initiales : secret configuré s'il existe ; sinon clé connue en mode
+ * démonstration SEULEMENT, et clé aléatoire hors démonstration (une clé prévisible permettrait de signer des
+ * synchronisations au nom de l'agent).
+ */
+export function seedDeviceKey(deviceId: string, configured: Record<string, string> = {}, demo = isDemoMode()): string {
+  return configured[deviceId] ?? (demo ? `demo-key-${deviceId}` : randomSecret(16));
 }
 
 export class TerrainService {
@@ -1159,7 +1168,8 @@ export class TerrainService {
     for (const [id, name, communes, quartiers, deviceId] of internal) {
       this.registerInternalAgent(regie, id, { displayName: name, declaredQuartiers: quartiers });
       const agent = this.agents.get(id)!;
-      if (!ctx.field.devices.get(deviceId)) ctx.field.enroll(deviceId, id, `demo-key-${deviceId}`);
+      // Clé du terminal : secret configuré, sinon clé connue en démonstration SEULEMENT (aléatoire hors démonstration).
+      if (!ctx.field.devices.get(deviceId)) ctx.field.enroll(deviceId, id, seedDeviceKey(deviceId, ctx.secrets.deviceKeys));
       const habilitation = {
         identityVerified: true, trainingCertificateRef: `CERT-DEMO-${id}`, trainingValidUntil: d(300), ethicsSignedAt: this.now(), deviceId,
         module: 'FONCIER_LOCATIF' as const, communes, validUntil: d(180), decidedBy: dg.id, decidedAt: this.now(),

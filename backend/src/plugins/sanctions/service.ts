@@ -12,6 +12,7 @@ import type { MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import { CommissionService } from './commissions.js';
 import { AgentMonitoring } from './monitoring.js';
+import { CounterChecks, type CounterCheck } from './counterchecks.js';
 import type { User } from '../../core/auth.js';
 import type { ParkingService } from '../parking/service.js';
 import { OVERDUE_VISIBILITY_DAYS } from '../parking/field.js';
@@ -54,11 +55,23 @@ export class SanctionsService {
   readonly commissions: CommissionService;
   /** Surveillance des constats par agent (incitation liée à la commission). */
   readonly monitoring: AgentMonitoring;
+  /** Contre-vérification aléatoire des constats retenus (stationnement, publicité). */
+  readonly counterChecks: CounterChecks;
+  private timer: NodeJS.Timeout | undefined;
 
   constructor(private readonly ctx: AppContext) {
     this.commissions = new CommissionService(ctx);
     this.monitoring = new AgentMonitoring(ctx, this.commissions);
+    this.counterChecks = new CounterChecks(ctx);
   }
+
+  /** Calcul périodique de la surveillance : les signaux « à examiner » ouvrent des alertes (dédoublonnées). */
+  startScheduler(intervalMs: number): void {
+    this.stopScheduler();
+    this.timer = setInterval(() => { try { this.monitoring.report(); } catch { /* journalisé par l'audit */ } }, intervalMs);
+    this.timer.unref?.();
+  }
+  stopScheduler(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; }
 
   /** Pénalités impayées depuis plus de 30 jours (tous modules), pour un titulaire et/ou une plaque. */
   overdue(subject: { taxpayerId?: string | null; plate?: string | null }): OverdueLine[] {
@@ -144,4 +157,10 @@ export function withOverdue<T extends object>(ctx: AppContext, user: User, resul
   const s = ctx.ext.sanctions as SanctionsService | undefined;
   const d = s?.afterControl(user, subject, module, controlRef, opts);
   return d ? { ...result, penalitesImpayees: d } : result;
+}
+
+/** Tirage au sort d'un constat retenu pour contre-vérification, si le registre transversal est chargé. */
+export function sampleForCounterCheck(ctx: AppContext, input: Omit<CounterCheck, 'id' | 'sampledAt' | 'status' | 'outcome'>): CounterCheck | null {
+  const s = ctx.ext.sanctions as SanctionsService | undefined;
+  return s?.counterChecks.maybeSample(input) ?? null;
 }

@@ -19,10 +19,10 @@ import type { User } from '../../core/auth.js';
 import { HOUR_MS, isoDate } from '../../core/clock.js';
 import { checkChar, randomCode } from '../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
-import { assertDistinctPerson, authorize, evaluate, hasAnyGrant } from '../../core/policy.js';
+import { assertDistinctPerson, assertNotRelated, authorize, evaluate, hasAnyGrant } from '../../core/policy.js';
 import { validityView } from '../../core/validity.js';
-import { ParkingField, PHOTO_WINDOW_MINUTES } from './field.js';
-import { withOverdue } from '../sanctions/service.js';
+import { distanceToZoneM, ParkingField, PHOTO_WINDOW_MINUTES, presenceOk, type AgentFix } from './field.js';
+import { sampleForCounterCheck, withOverdue } from '../sanctions/service.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
 import { isCommune } from '../../reference/kinshasa.js';
@@ -126,6 +126,11 @@ export interface ControlCheck {
   title: 'SESSION' | 'RESERVATION' | null;
   agentId: string;
   at: string;
+  /** Position du terminal de l'agent au contrôle (facultative) et distance à la zone contrôlée. */
+  gps?: AgentFix | null;
+  distanceFromZoneM?: number | null;
+  /** Présence attestée (GPS précis, près de la zone) : seule condition d'un contrôle ouvrant droit à commission. */
+  presenceVerified?: boolean;
 }
 
 export interface ViolationEvidence {
@@ -755,16 +760,20 @@ export class ParkingService {
   }
 
   /** Contrôle par plaque (terminal de l'agent) : résultat MINIMAL, jamais de nom ni d'adresse ; journalisé. */
-  control(user: User, plateRaw: string, zoneId?: string) {
+  control(user: User, plateRaw: string, zoneId?: string, gps?: AgentFix) {
     const z = zoneId ? this.getZone(zoneId) : null;
     authorize(user, 'parking:control', { communes: z ? [z.commune] : user.territory ?? [] });
     const plate = this.plate(plateRaw);
     const now = this.now();
     const t = this.titleFor(plate, z?.id ?? null, now);
+    // Présence : position du terminal comparée à la géométrie de la zone (le contrôle sans position reste valable).
+    const distance = z && gps ? distanceToZoneM(z, gps) : null;
+    const presenceVerified = presenceOk(gps, distance);
     const check = this.checks.append({
       id: this.ids.next('CHK'), plate, zoneId: z?.id ?? null, commune: z?.commune ?? null, light: t.light, title: t.title, agentId: user.id, at: now.toISOString(),
+      gps: gps ?? null, distanceFromZoneM: distance, presenceVerified,
     });
-    this.ctx.audit.append({ actor: actorOf(user), action: 'parking.control.checked', resourceType: 'plate', resourceId: plate, details: { zoneId: z?.id ?? null, light: t.light, checkId: check.id } });
+    this.ctx.audit.append({ actor: actorOf(user), action: 'parking.control.checked', resourceType: 'plate', resourceId: plate, details: { zoneId: z?.id ?? null, light: t.light, checkId: check.id, presenceVerified, distanceFromZoneM: distance } });
     const guidance: Record<Light, string> = {
       VERT: 'Titre valide : aucune action.',
       AMBRE: 'Titre bientôt expiré : rappel envoyé à l’usager, prolongation possible à distance. Aucune action.',
@@ -778,6 +787,7 @@ export class ParkingService {
       penalties, penaltiesUnpaid: penalties.filter((p) => p.unpaid).length,
       checkId: check.id, plate, zone: z ? { id: z.id, code: z.code, name: z.name } : null, light: t.light, title: t.title,
       validFrom: t.validFrom, validUntil: t.validUntil, validity: t.validUntil ? validityView(t.validFrom, t.validUntil, now) : null, checkedAt: check.at, guidance: guidance[t.light],
+      presenceVerified,
     };
     // Pénalités des AUTRES modules impayées depuis plus de 30 jours (registre transversal) : `penalitesImpayees`.
     // Celles du stationnement figurent déjà dans `penalties`.
@@ -834,6 +844,11 @@ export class ParkingService {
     return this.violationView(v);
   }
 
+  /** Bénéficiaire d'une décision sur un constat : titulaire relevé au constat, ou titulaire actuel de la plaque. */
+  private beneficiaryOf(v: ParkingViolation): string | null {
+    return v.holderTaxpayerId ?? this.vehicles.findOne((x) => x.plate === v.plate)?.taxpayerId ?? null;
+  }
+
   private getViolation(id: string): ParkingViolation {
     const v = this.violations.get(id) ?? this.violations.findOne((x) => x.reference === id);
     if (!v) throw notFound('PARKING_VIOLATION_NOT_FOUND', `Constat inconnu : ${id}`);
@@ -860,6 +875,7 @@ export class ParkingService {
     authorize(user, 'parking:violation.verify', { communes: [v.commune] });
     if (v.status !== 'CONSTATE') throw conflict('VIOLATION_NOT_PENDING_VERIFICATION', `Constat au statut ${v.status}.`);
     assertDistinctPerson(user.id, [v.agentId], 'Le vérificateur doit être distinct de l’agent auteur du constat.');
+    assertNotRelated(user, this.beneficiaryOf(v), 'Conflit d’intérêts : vous êtes lié au titulaire de la plaque ; la vérification revient à un autre superviseur.');
     const z = this.getZone(v.zoneId);
     const at = this.now().toISOString();
     const updated = this.violations.update({
@@ -886,6 +902,7 @@ export class ParkingService {
     authorize(user, 'parking:violation.decide', { entity: DGTK });
     if (v.status !== 'VERIFIE') throw conflict('VIOLATION_NOT_VERIFIED', `Décision impossible : constat au statut ${v.status} (vérification préalable requise).`);
     assertDistinctPerson(user.id, [v.agentId, v.verification!.by], 'Constat, vérification et décision : trois personnes distinctes sont exigées.');
+    assertNotRelated(user, this.beneficiaryOf(v), 'Conflit d’intérêts : vous êtes lié au titulaire de la plaque ; la décision revient à une autre personne habilitée.');
     const z = this.getZone(v.zoneId);
     let obligationId: string | null = null;
     let effect = 'Constat classé : aucune suite.';
@@ -911,6 +928,8 @@ export class ParkingService {
       actor: actorOf(user), action: input.outcome === 'RETENUE' ? 'parking.violation.decided_retained' : 'parking.violation.decided_dismissed',
       resourceType: 'parking_violation', resourceId: v.id, details: { reason: input.reason, obligationId, effect },
     });
+    // Contre-vérification aléatoire d'un échantillon de constats retenus (superviseur, résultat enregistré).
+    if (updated.status === 'RETENU') sampleForCounterCheck(this.ctx, { module: 'STATIONNEMENT', caseId: v.id, reference: v.reference, agentId: v.agentId, commune: v.commune, involved: [v.agentId, v.verification!.by, user.id] });
     if (v.holderTaxpayerId) {
       this.ctx.comms.publish('inspection.report.issued', [taxpayerRecipient(this.ctx.taxpayers.get(v.holderTaxpayerId))], { reference: v.reference }, { entity: DGTK });
     }

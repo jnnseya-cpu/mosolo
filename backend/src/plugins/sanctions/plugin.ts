@@ -4,6 +4,8 @@
  */
 import { requireUser } from '../../core/auth.js';
 import { forbidden } from '../../core/errors.js';
+import { parse } from '../../core/http.js';
+import { z } from 'zod';
 import { evaluate } from '../../core/policy.js';
 import { definePlugin } from '../types.js';
 import { SanctionsService } from './service.js';
@@ -18,7 +20,13 @@ const OVERVIEW = new Set(['R01', 'R02', 'R05', 'R06', 'R07', 'R17', 'R22', 'R23'
 
 export const sanctionsPlugin = definePlugin<SanctionsService>({
   name: 'sanctions',
-  create: (ctx) => new SanctionsService(ctx),
+  create: (ctx) => {
+    const svc = new SanctionsService(ctx);
+    // Surveillance périodique facultative (MOSOLO_AGENT_MONITORING_MS, 1 minute au moins) : alertes dédoublonnées.
+    const every = Number.parseInt(process.env.MOSOLO_AGENT_MONITORING_MS ?? '', 10);
+    if (Number.isFinite(every) && every >= 60_000) svc.startScheduler(every);
+    return svc;
+  },
   seed: (ctx) => seedSanctions(ctx),
   routes: (app, ctx, svc) => {
     app.get('/v1/agents/me/earnings', async (req) => {
@@ -38,6 +46,10 @@ export const sanctionsPlugin = definePlugin<SanctionsService>({
       ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'agents.monitoring.viewed', resourceType: 'agents', resourceId: 'tous' });
       return svc.monitoring.report(user);
     });
+    // Contre-vérification aléatoire des constats retenus : file et résultat (superviseur non intervenu).
+    app.get<{ Querystring: { status?: string } }>('/v1/agents/counter-checks', async (req) => ({ items: svc.counterChecks.list(requireUser(req), req.query.status) }));
+    app.post<{ Params: { id: string } }>('/v1/agents/counter-checks/:id/record', async (req) =>
+      svc.counterChecks.record(requireUser(req), req.params.id, parse(z.object({ outcome: z.enum(['CONFIRME', 'INFIRME']), note: z.string().trim().min(5).max(2000) }).strict(), req.body)));
   },
 });
 

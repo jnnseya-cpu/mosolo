@@ -91,8 +91,15 @@ export function registerParkingRoutes(app: FastifyInstance, ctx: AppContext, svc
   app.post('/v1/parking/reminders/run', async (req) => svc.runReminders(requireUser(req)));
 
   // Contrôle par plaque (résultat minimal)
-  app.get<{ Params: { plate: string }; Querystring: { zoneId?: string } }>('/v1/parking/control/:plate', async (req) =>
-    svc.control(requireUser(req), req.params.plate, req.query.zoneId || undefined));
+  // Position du terminal facultative : sans elle, le contrôle reste valable mais n'ouvre aucun droit à commission.
+  app.get<{ Params: { plate: string }; Querystring: Record<string, string> }>('/v1/parking/control/:plate', async (req) => {
+    const q = parse(z.object({
+      zoneId: z.string().max(64).optional(), lat: z.coerce.number().min(-90).max(90).optional(), lon: z.coerce.number().min(-180).max(180).optional(),
+      accuracyM: z.coerce.number().min(0).max(100_000).optional(),
+    }), req.query);
+    const gps = q.lat !== undefined && q.lon !== undefined && q.accuracyM !== undefined ? { lat: q.lat, lon: q.lon, accuracyM: q.accuracyM } : undefined;
+    return svc.control(requireUser(req), req.params.plate, q.zoneId || undefined, gps);
+  });
 
   // Constats (RW1)
   app.post('/v1/parking/violations', async (req, reply) => {

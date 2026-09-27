@@ -16,6 +16,9 @@ export function declarePublicitePolicies(): void {
   definePolicy('publicite:authorization.request', { R30: ownTaxpayer, R31: mandant });
   definePolicy('publicite:authorization.instruct', { R07: sameEntity });
   definePolicy('publicite:authorization.decide', { R06: sameEntity, R07: sameEntity });
+  // Liquidation différée (barème devenu ACTIF) : proposée par l'instructeur, approuvée par une autre personne.
+  definePolicy('publicite:liquidation.propose', { R07: sameEntity });
+  definePolicy('publicite:liquidation.approve', { R06: sameEntity, R07: sameEntity });
   definePolicy('publicite:inspection.create', { R11: inTerritory('full') });
   // Terrain : supports proches (couleurs), commerces sans enseigne déclarée, publicité mobile par plaque.
   definePolicy('publicite:nearby', { R11: inTerritory('full'), R09: inTerritory('full'), R06: sameEntity, R07: sameEntity, R22: always, R24: always });

@@ -45,6 +45,18 @@ export const CLOCK_SKEW_WARN_SECONDS = 300;
 export const AGENT_COMMISSION_PCT = 10;
 /** Un paiement de stationnement est attribué à l'agent si la session est créée dans ce délai après son contrôle rouge. */
 export const PAYMENT_ATTRIBUTION_MINUTES = 60;
+/**
+ * Délai de grâce (paramètre à fixer par l'acte) : un paiement effectué dans ce délai après la PREMIÈRE observation
+ * rouge de la plaque dans la zone est présumé spontané (l'usager paie en arrivant) et n'est attribué à aucun contrôle.
+ */
+export const PARKING_GRACE_MINUTES = 10;
+/**
+ * Présence attestée d'un contrôle ouvrant droit à commission (tous modules à contrôle localisé) : position GPS de
+ * l'agent, précision au plus `PRESENCE_MAX_ACCURACY_M`, à au plus `PRESENCE_MAX_DISTANCE_M` de la zone ou de l'objet.
+ * Un contrôle sans position reste valable (feu, constat) mais ne fonde aucune commission.
+ */
+export const PRESENCE_MAX_ACCURACY_M = 100;
+export const PRESENCE_MAX_DISTANCE_M = 150;
 /** Au-delà, une pénalité impayée devient visible des agents de tous les modules après un contrôle. */
 export const OVERDUE_VISIBILITY_DAYS = 30;
 
@@ -96,6 +108,46 @@ export function distanceM(a: { lat: number; lon: number }, b: { lat: number; lon
   const dLat = (b.lat - a.lat) * r; const dLon = (b.lon - a.lon) * r;
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) ** 2;
   return Math.round(2 * R * Math.asin(Math.sqrt(h)));
+}
+
+/** Position déclarée par le terminal de l'agent au moment d'un contrôle. */
+export interface AgentFix { lat: number; lon: number; accuracyM: number }
+
+/** Présence attestée : précision suffisante et distance au lieu contrôlé dans la tolérance. */
+export function presenceOk(fix: AgentFix | null | undefined, distance: number | null): boolean {
+  return !!fix && Number.isFinite(fix.accuracyM) && fix.accuracyM <= PRESENCE_MAX_ACCURACY_M && distance !== null && distance <= PRESENCE_MAX_DISTANCE_M;
+}
+
+/**
+ * Distance (m) d'un point à la géométrie d'une zone : 0 à l'intérieur d'un polygone, sinon distance au bord (segments)
+ * ou à l'artère (ligne). Projection plane locale (écarts de quelques kilomètres : précision largement suffisante).
+ */
+export function distanceToZoneM(zone: { geometry: { type: 'Polygon' | 'LineString'; coordinates: [number, number][] }; center: { lat: number; lon: number } }, p: { lat: number; lon: number }): number {
+  const pts = zone.geometry.coordinates;
+  if (pts.length === 0) return distanceM(p, zone.center);
+  const kx = 111_320 * Math.cos((p.lat * Math.PI) / 180); const ky = 110_574;
+  const xy = ([lon, lat]: [number, number]) => [(lon - p.lon) * kx, (lat - p.lat) * ky] as const;
+  const ring = pts.map(xy);
+  if (zone.geometry.type === 'Polygon' && ring.length >= 3) {
+    // Point dans le polygone (lancer de rayon depuis l'origine = le point).
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i]!; const [xj, yj] = ring[j]!;
+      if ((yi > 0) !== (yj > 0) && 0 < ((xj - xi) * (0 - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    if (inside) return 0;
+  }
+  const segs: [readonly [number, number], readonly [number, number]][] = [];
+  for (let i = 0; i + 1 < ring.length; i++) segs.push([ring[i]!, ring[i + 1]!]);
+  if (zone.geometry.type === 'Polygon' && ring.length >= 3) segs.push([ring[ring.length - 1]!, ring[0]!]);
+  if (!segs.length) return Math.round(Math.hypot(ring[0]![0], ring[0]![1]));
+  let best = Infinity;
+  for (const [[ax, ay], [bx, by]] of segs) {
+    const dx = bx - ax; const dy = by - ay; const len = dx * dx + dy * dy;
+    const t = len > 0 ? Math.max(0, Math.min(1, (-ax * dx - ay * dy) / len)) : 0;
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return Math.round(best);
 }
 
 export interface PenaltyLine {
@@ -299,17 +351,23 @@ export class ParkingField {
         reference: v.reference, plate: v.plate, zone: zoneName(v.zoneId), at: v.decision!.at,
       }, { withBalance: true }));
     }
-    // Attribution des paiements : premier contrôle ROUGE (tous agents) précédant la session dans le délai.
+    // Attribution des paiements : premier contrôle ROUGE à présence attestée (GPS près de la zone), précédant la session
+    // dans le délai ; aucune attribution si la session suit de moins du délai de grâce la PREMIÈRE observation rouge de
+    // la plaque dans la zone (paiement spontané à l'arrivée, quel que soit l'agent).
     const reds = new Map<string, ControlCheck[]>();
     for (const c of this.svc.checks.all()) {
       if (c.light !== 'ROUGE' || !c.zoneId) continue;
-      const l = reds.get(c.plate);
-      if (l) l.push(c); else reds.set(c.plate, [c]);
+      const k = `${c.plate}|${c.zoneId}`;
+      const l = reds.get(k);
+      if (l) l.push(c); else reds.set(k, [c]);
     }
     for (const l of reds.values()) l.sort((a, b) => a.at.localeCompare(b.at));
+    const win = PAYMENT_ATTRIBUTION_MINUTES * 60_000; const grace = PARKING_GRACE_MINUTES * 60_000;
     for (const s of this.svc.sessions.all()) {
       const created = Date.parse(s.createdAt);
-      const trigger = (reds.get(s.plate) ?? []).find((c) => c.zoneId === s.zoneId && Date.parse(c.at) <= created && created - Date.parse(c.at) <= PAYMENT_ATTRIBUTION_MINUTES * 60_000);
+      const seen = (reds.get(`${s.plate}|${s.zoneId}`) ?? []).filter((c) => Date.parse(c.at) <= created && created - Date.parse(c.at) <= win + grace);
+      if (!seen.length || created - Date.parse(seen[0]!.at) < grace) continue;
+      const trigger = seen.find((c) => c.presenceVerified === true && created - Date.parse(c.at) <= win);
       if (!trigger) continue;
       for (const g of s.segments) {
         const ob = this.ctx.assessment.obligations.get(g.obligationId);
@@ -334,7 +392,7 @@ export class ParkingField {
       counts: { penalites: lines.filter((l) => l.source === 'PENALITE').length, paiements: lines.filter((l) => l.source === 'PAIEMENT').length },
       lines,
       rules: [
-        `Commission de ${AGENT_COMMISSION_PCT} % : uniquement sur les pénalités issues de vos constats et sur les paiements de stationnement effectués dans l’heure qui suit votre contrôle rouge.`,
+        `Commission de ${AGENT_COMMISSION_PCT} % : uniquement sur les pénalités issues de vos constats et sur les paiements de stationnement effectués dans l’heure qui suit votre contrôle rouge (position GPS attestée près de la zone ; aucun paiement dans les ${PARKING_GRACE_MINUTES} minutes de la première observation du véhicule).`,
         'Calculée sur des recettes arrivées au compte public ; acquise après rapprochement bancaire ; versée par le Trésor (paie). Vous ne recevez jamais d’argent de l’usager.',
         'Une pénalité n’existe qu’après vérification (superviseur) et décision (régie) par deux autres personnes ; annulée sur recours, elle annule la commission.',
         'Taux fixé par décision du maître d’ouvrage : un acte (arrêté) est requis avant tout versement réel.',

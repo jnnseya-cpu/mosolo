@@ -51,6 +51,13 @@ export function registerPubliciteRoutes(app: FastifyInstance, ctx: AppContext, s
   app.post<{ Params: { id: string } }>('/v1/publicite/authorizations/:id/decide', async (req) =>
     svc.decideRequest(requireUser(req), req.params.id, parse(z.object({ outcome: z.enum(['ACCORDEE', 'REFUSEE']), reason }).strict(), req.body)));
 
+  // Liquidation différée des autorisations accordées sous « acte requis » (barème devenu ACTIF) : quatre yeux.
+  app.get('/v1/publicite/liquidations/pending', async (req) => ({ items: svc.pendingLiquidations(requireUser(req)) }));
+  app.post<{ Params: { id: string } }>('/v1/publicite/authorizations/:id/liquidation/propose', async (req) =>
+    svc.proposeLiquidation(requireUser(req), req.params.id, parse(z.object({ note: reason }).strict(), req.body).note));
+  app.post<{ Params: { id: string } }>('/v1/publicite/authorizations/:id/liquidation/approve', async (req) =>
+    svc.approveLiquidation(requireUser(req), req.params.id, parse(z.object({ reason }).strict(), req.body).reason));
+
   // Inventaire, carte, recherche, inspections et dossiers
   app.get<{ Querystring: { commune?: string; status?: string } }>('/v1/publicite/inventory', async (req) => ({ items: svc.inventory(requireUser(req), req.query) }));
   app.get('/v1/publicite/map', async (req) => ({ items: svc.map(requireUser(req)) }));
@@ -75,6 +82,19 @@ export function registerPubliciteRoutes(app: FastifyInstance, ctx: AppContext, s
     const r = svc.inspect(user, body);
     const owner = svc.devices.get(r.device.id)?.ownerTaxpayerId ?? null;
     return reply.code(201).send(withOverdue(ctx, user, r, { taxpayerId: owner }, 'PUBLICITE', r.inspection.id));
+  });
+  // Caméra de preuve : photo JPEG versée au serveur (empreinte SHA-256 vérifiée), citée ensuite par l'inspection.
+  app.post('/v1/publicite/evidence-photos', { bodyLimit: 1_600_000 }, async (req, reply) => {
+    const body = parse(z.object({
+      imageBase64: z.string().min(100).max(1_300_000), sha256: sha,
+      lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180), accuracyM: z.number().min(0).max(100_000).optional(),
+      gpsSource: z.enum(['GPS', 'MANUEL', 'ZONE']), stampedAt: z.string().datetime({ offset: true }),
+    }).strict(), req.body);
+    return reply.code(201).send(svc.uploadPhoto(requireUser(req), body));
+  });
+  app.get<{ Params: { id: string } }>('/v1/publicite/evidence-photos/:id', async (req, reply) => {
+    const p = svc.readPhoto(requireUser(req), req.params.id);
+    return reply.type(p.mime).header('cache-control', 'private, no-store').header('x-mosolo-sha256', p.sha256).send(p.data);
   });
   app.get<{ Querystring: { inspectorId?: string } }>('/v1/publicite/inspections', async (req) => ({ items: svc.inspectionsOf(requireUser(req), req.query.inspectorId) }));
   app.get<{ Querystring: { status?: string } }>('/v1/publicite/cases', async (req) => ({ items: svc.listCases(requireUser(req), req.query.status) }));
