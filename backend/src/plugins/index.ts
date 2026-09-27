@@ -30,6 +30,7 @@ import { soclePlugin } from './socle/plugin.js';
 import { chainePlugin } from './chaine/plugin.js';
 import { juridiquePlugin } from './juridique/plugin.js';
 import { integriteDetecteursPlugin } from './integrite/detecteurs/plugin.js';
+import { catalogueApiPlugin } from './catalogue-api/plugin.js';
 
 /**
  * Ordre : `acces` en tête (garde des revendications, mandats), puis `fiscal` (il branche les exonérations sur la liquidation), `titres` avant `rakapay`,
@@ -67,5 +68,7 @@ export const DEFAULT_PLUGINS: MosoloPlugin<any>[] = [
   chainePlugin,
   juridiquePlugin,
   integriteDetecteursPlugin,
+  // Routes françaises du catalogue des API (Cahier, ch. 31) : relais vers les routes canoniques de tous les modules.
+  catalogueApiPlugin,
   soclePlugin,
 ];

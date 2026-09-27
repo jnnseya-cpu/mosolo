@@ -445,6 +445,35 @@ GET /v1/public/receipts/Q27KIN0001234567
 
 La spécification OpenAPI complète des routes principales figure dans `specs/openapi.yaml` (dépôt du programme).
 
+## 30.4 Routes françaises du catalogue du Cahier (chapitre 31) — construites (27/09/2026)
+
+Le Cahier (chapitre 31 « Catalogue des API ») nomme le noyau de 20 routes en français. Elles sont désormais **construites comme des routes réelles** (module d'extension `catalogue-api`), à côté des routes canoniques du § 30.2, qui restent inchangées et disponibles (règle d'ajout). Chaque route française **relaie** la requête vers la route canonique par le pipeline complet du serveur : mêmes contrôles d'accès et de périmètre, même idempotence (`Idempotency-Key`), même vérification de signature (corps brut relayé octet pour octet pour les rappels des prestataires et les lots des terminaux), mêmes gardes (plafonds de références, rotation des circuits à quatre yeux, TLS mutuel), même journal d'audit sous le même `X-Request-Id`. La réponse porte l'en-tête `X-Mosolo-Route-Canonique`. La limitation de débit n'est comptée qu'une fois, au palier de la route canonique. La table est aussi servie par `GET /v1/catalogue-api`.
+
+| # | Route française (Cahier) | Objet | Acteur autorisé | Contrôles | Route canonique relayée |
+|---|---|---|---|---|---|
+| 1 | `POST /v1/comptes` | Créer un compte | Public | Vérification téléphone, anti-doublon, journal | `POST /v1/registrations` |
+| 2 | `POST /v1/identites/verification` | Élever le niveau de vérification | Contribuable, agent | Pièces, double validation N3 | POST /v1/acces/identity/{id}/otp · …/otp/verify · …/proofs · POST /v1/acces/identity-proofs/{id}/review (champ `etape`) |
+| 3 | `POST /v1/objets` | Déclarer un objet | Contribuable, agent | Géolocalisation, catégorie, preuve | `POST /v1/fiscal-objects` |
+| 4 | `POST /v1/baux` | Déclarer un bail | Bailleur, locataire | Cohérence loyer, unité, période | `POST /v1/leases` |
+| 5 | `GET /v1/objets/{id}/obligations` | Obligations applicables | Contribuable, agent habilité | Filtrage par rôle et territoire | GET /v1/obligations?objectId={id} (filtre ajouté) |
+| 6 | `POST /v1/liquidations/simulation` | Simuler une liquidation | Contribuable, agent | Règle publiée uniquement | POST /v1/assessments/calculate (simulate: true imposé ; règle non ACTIVE ⇒ 422 RULE_NOT_PUBLISHED) |
+| 7 | `POST /v1/regles` | Proposer une règle | Juriste | Interdiction de créer, valider et publier par la même personne | `POST /v1/legal-rules` |
+| 8 | `POST /v1/regles/{id}/publication` | Publier une règle | Approbateur | Quatre yeux, texte légal obligatoire | `POST /v1/legal-rules/{id}/approve` |
+| 9 | `POST /v1/paiements/ordres` | Créer un ordre de paiement | Contribuable | Idempotence, référence unique, expiration | POST /v1/obligations/{id}/payment-orders (obligation dans le corps, Idempotency-Key relayée) |
+| 10 | `POST /v1/paiements/callback` | Confirmation prestataire | Partenaire agréé | Signature, anti-rejeu, vérification serveur | POST /v1/providers/{provider}/callbacks (prestataire : en-tête X-Provider ou champ `provider` ; corps brut relayé octet pour octet) |
+| 11 | `POST /v1/reglements/import` | Relevé de compte public | Trésorerie, banque | Contrôle d'intégrité, double validation | `POST /v1/settlements/statements` |
+| 12 | `GET /v1/rapprochements/exceptions` | Files d'exception | Trésorerie, contrôle interne | Lecture seule, journalisée | `GET /v1/reconciliation/exceptions` |
+| 13 | `GET /v1/quittances/{ref}/verification` | Vérifier une quittance | Public | Divulgation minimale | `GET /v1/public/receipts/{code}` |
+| 14 | `POST /v1/missions/synchronisation` | Synchroniser le terrain | Agent | Appareil enregistré, résolution de conflits | POST /v1/field-sync/batches (corps brut signé par le terminal) |
+| 15 | `POST /v1/constats` | Enregistrer un constat | Agent habilité | GPS, photo, horodatage, géorepérage | POST /v1/terrain/missions/{id}/findings (mission dans le corps) |
+| 16 | `POST /v1/recours` | Introduire une contestation | Contribuable | Délai légal, accusé de réception | `POST /v1/appeals` |
+| 17 | `GET /v1/alertes-fraude` | Consulter les alertes | Enquêteur, audit | Aucune action automatique | GET /v1/integrite/alerts (ou GET /v1/security/alerts avec `?source=securite`) |
+| 18 | `GET /v1/tableaux/{profil}` | Données de tableau de bord | Selon rôle | Agrégation conforme au périmètre | GET /v1/tableaux/{profil} (déjà construite ; = GET /v1/pilotage/tableaux/{profil}) |
+| 19 | `GET /v1/previsions` | Scénarios de recettes | Direction, Gouverneur | Hypothèses jointes | `GET /v1/pilotage/scenarios` |
+| 20 | `POST /v1/affectations/scenarios` | Générer des scénarios d'affectation | Finances | Aucune exécution de dépense | `POST /v1/pilotage/projets/recommandations` |
+
+Contrôle **ajouté** par la route française de simulation : seule une règle publiée (ACTIVE, en vigueur) est acceptée, et le mode simulation est imposé (aucune obligation n'est jamais créée) ; la route canonique `POST /v1/assessments/calculate` garde son comportement (simulation non opposable possible sur une règle en projet). Tests : `backend/test/catalogue-api.test.ts` (chaque route, cas refusés compris).
+
 # 31. Architecture de sécurité
 
 ## 31.1 Zéro confiance
