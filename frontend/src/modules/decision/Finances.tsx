@@ -34,7 +34,7 @@ export function TableauMinistere() {
   const [motif, setMotif] = useState('');
   const tresor = hasRole(user?.roles, 'R17', 'R18');
   return (
-    <Ecran eyebrow="Pilotage et décision · module 44" title="Tableau de bord ministériel" lead="Les modules de votre ministère et votre part de recettes ; filtrage strict sur le périmètre du ministère." q={q} msg={r.msg}>
+    <Ecran eyebrow="Pilotage et décision · module 44" title="Postes ministériels (Tableau de bord ministériel)" lead="Les modules de votre ministère et votre part de recettes ; filtrage strict sur le périmètre du ministère." q={q} msg={r.msg}>
       {(d) => (<>
         {province && list.data && <Section title="Ministère"><Choice label="Ministère" value={ent} onChange={setEntity} options={list.data.items.map((m) => [m.id, m.name])} /></Section>}
         <Section title={`Indicateurs — ${d.entityName}`} sub={d.rule}><Indicateurs items={d.indicators} /></Section>

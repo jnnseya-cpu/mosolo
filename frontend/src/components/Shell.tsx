@@ -68,6 +68,27 @@ export function visibleNav(roles: string[] | undefined): NavItem[] {
   return [...core, ...extra];
 }
 
+/**
+ * Menu du Gouverneur (Cahier nouvelle version, § 27.5) : cinq entrées, pas davantage. Tout le reste de la plateforme
+ * demeure accessible au Gouverneur au titre de ses habilitations, par la recherche ou par un lien depuis un écran
+ * (les routes restent ouvertes par URL ; `visibleNav` conserve la liste complète des écrans accessibles).
+ */
+export const MENU_GOUVERNEUR: NavItem[] = [
+  { to: '/poste-de-decision/decisions', key: 'nav.more' as UIKey, icon: 'check', group: 'pilotage', label: 'Décisions', short: 'Décisions' },
+  { to: '/poste-de-decision/recettes', key: 'nav.more' as UIKey, icon: 'chart', group: 'pilotage', label: 'Recettes', short: 'Recettes' },
+  { to: '/poste-de-decision/alertes', key: 'nav.more' as UIKey, icon: 'alert', group: 'pilotage', label: 'Alertes', short: 'Alertes' },
+  { to: '/poste-de-decision/communes', key: 'nav.more' as UIKey, icon: 'pin', group: 'pilotage', label: 'Communes', short: 'Communes' },
+  { to: '/poste-de-decision/rechercher', key: 'nav.more' as UIKey, icon: 'sort', group: 'pilotage', label: 'Rechercher', short: 'Rechercher' },
+];
+
+/** Menu affiché : cinq entrées pour le Gouverneur ; ailleurs, les écrans visibles selon les rôles. */
+export function menuDe(roles: string[] | undefined): NavItem[] {
+  return roles?.includes('R01') ? MENU_GOUVERNEUR : visibleNav(roles);
+}
+
+/** Autorités dont l'écran d'accueil est le poste de décision (§ 27.2 : « il s'ouvre là, toujours »). */
+export const AUTORITES_POSTE = ['R01', 'R02', 'R03', 'R04', 'R05'];
+
 /** Libellé d'une entrée (clé traduite, ou libellé fourni par un module). */
 function navLabel(n: NavItem, tr: (k: UIKey) => string, short = false): string {
   if (n.label) return short ? n.short ?? n.label : n.label;
@@ -143,7 +164,7 @@ function Header() {
 
 function Sidebar() {
   const { tr, user } = useApp();
-  const items = visibleNav(user?.roles);
+  const items = menuDe(user?.roles);
   return (
     <nav className="sidebar" aria-label={tr('nav.main')}>
       {GROUPS.filter((g) => items.some((n) => n.group === g.id)).map((g) => (
@@ -167,7 +188,7 @@ function Sidebar() {
 
 function BottomNav() {
   const { tr, user } = useApp();
-  const items = visibleNav(user?.roles);
+  const items = menuDe(user?.roles);
   const hasMore = items.length > 5;
   const bottom = hasMore ? items.slice(0, 4) : items;
   const [more, setMore] = useState(false);

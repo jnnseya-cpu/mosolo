@@ -59,7 +59,9 @@ describe('Référentiels du programme : textes cités mot pour mot (Document ma�
     for (const c of CRITERES_42.slice(0, 10)) expect(inSource(c.critere), c.code).toBe(true);
     for (const c of CRITERES_42.slice(10)) {
       expect(c.origine, c.code).toMatch(/ch\. 27/);
-      expect(c.preuves[0]).toMatchObject({ fichier: FICHIER_POSTES_DECISION, statut: 'PENDING_MERGE', libelle: 'preuve : lot postes de décision (à relier à la fusion)' });
+      // Lot « postes de décision » fusionné : drapeau PENDING_MERGE retiré, preuve = test titré du texte du critère.
+      expect(c.preuves[0]).toMatchObject({ fichier: FICHIER_POSTES_DECISION, titre: `« ${c.critere} »` });
+      expect(c.preuves[0]!.statut).toBeUndefined();
     }
     expect(RECITS_43).toHaveLength(10);
     for (const r of RECITS_43) expect(row(r.recit, r.criteres), r.code).toBe(true);
@@ -145,7 +147,7 @@ describe('Preuves citées : chaque fichier et chaque test existent réellement',
   });
 
   it('chaque critère et chaque récit a au moins un test dédié ; tout élément EXTERNE est suivi', () => {
-    for (const c of CRITERES_42) expect(c.preuves.some((p) => p.fichier.endsWith('recette-criteres.test.ts') || p.fichier.startsWith('frontend/') || p.statut === 'PENDING_MERGE'), c.code).toBe(true);
+    for (const c of CRITERES_42) expect(c.preuves.some((p) => p.fichier.endsWith('recette-criteres.test.ts') || p.fichier.startsWith('frontend/') || p.statut === 'PENDING_MERGE' || p.fichier === FICHIER_POSTES_DECISION), c.code).toBe(true);
     for (const r of RECITS_43) expect(r.preuves.some((p) => p.fichier.endsWith('carnet-recits.test.ts')), r.code).toBe(true);
     const suivis = new Set(SUIVIS_EXTERNES.map((s) => s.code));
     for (const p of STRATEGIE_45) {
@@ -197,7 +199,9 @@ describe('Recette, versions et plan des 100 jours (ch. 42–45, 47)', () => {
     const env = await fullEnv();
     const r = (await env.req('GET', '/v1/pilotage/programme/recette', 'u-auditeur')).json();
     expect(r.criteres).toHaveLength(15);
-    expect(r.criteres.filter((c: { preuves: { statut?: string }[] }) => c.preuves.some((p) => p.statut === 'PENDING_MERGE'))).toHaveLength(5);
+    // Lot « postes de décision » fusionné : plus aucune preuve en attente ; les 5 critères C42-11 à C42-15 sont prouvés par son fichier.
+    expect(r.criteres.filter((c: { preuves: { statut?: string }[] }) => c.preuves.some((p) => p.statut === 'PENDING_MERGE'))).toHaveLength(0);
+    expect(r.criteres.filter((c: { preuves: { fichier: string }[] }) => c.preuves[0]!.fichier === FICHIER_POSTES_DECISION)).toHaveLength(5);
     expect(r.recits).toHaveLength(10);
     expect(r.strategie).toHaveLength(9);
     expect(r.suivis.every((s: { etat: string }) => s.etat === 'A_PLANIFIER')).toBe(true);

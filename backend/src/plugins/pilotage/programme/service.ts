@@ -6,7 +6,7 @@
  * par une personne distincte du demandeur (assertDistinctPerson), motivée et rattachée à une réunion consignée du
  * comité de pilotage. Chaque écriture est journalisée.
  */
-import { ROLES } from '@mosolo/shared';
+import { ROLE_ALIASES, ROLES } from '@mosolo/shared';
 import type { AppContext } from '../../../context.js';
 import { ACR, requireAcr, type User } from '../../../core/auth.js';
 import { kinshasaDay } from '../../../core/clock.js';
@@ -36,7 +36,7 @@ interface Meeting {
   recordedBy: string; recordedAt: string; example?: boolean;
 }
 
-const ROLE_LABELS = new Set<string>(Object.values(ROLES));
+const ROLE_LABELS = new Set<string>([...Object.values(ROLES), ...Object.values(ROLE_ALIASES).flat()]);
 const PROGRAMME_ID = 'PROGRAMME';
 
 export class ProgrammeService {

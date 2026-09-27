@@ -232,10 +232,10 @@ La numérotation 1 à 55 est commune au présent document, au Cahier des exigenc
 | 38 | Gestion documentaire | T | T | R1 |
 | 39 | Notifications et communication | T | T | R1 |
 | 40 | Renseignement anti-fraude | D7 | T | R2 |
-| 41 | Centre de commandement exécutif | D7 | T | R1 |
-| 42 | Tableau de bord DGIPK | D7 | T | R1 |
-| 43 | Tableau de bord DGRK | D7 | T | R1 |
-| 44 | Tableaux de bord ministériels | D7 | T | R2 |
+| 41 | Postes de décision des autorités (ancien « Centre de commandement exécutif ») — corbeille de décisions, seuils de remontée, délégations, note hebdomadaire | D7 | T | R1 |
+| 42 | Poste de travail — régie fiscale (ancien « Tableau de bord régie fiscale », DGIPK) — assiette, liquidation, recouvrement, contentieux | D7 | T | R1 |
+| 43 | Poste de travail — régie des taxes (ancien « Tableau de bord régie des taxes », DGRK/DGTK) — droits, taxes et redevances urbaines | D7 | T | R1 |
+| 44 | Postes ministériels (ancien « Tableaux de bord ministériels ») — périmètre légal de chaque ministère, décisions et exécution | D7 | T | R2 |
 | 45 | Salle de contrôle finances et trésorerie | D7 | T | R1 |
 | 46 | Audit et investigation | D7 | T | R1 |
 | 47 | Prévision des recettes | D7 | T | R2 |

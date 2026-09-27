@@ -37,6 +37,7 @@ import { chainePlugin } from './chaine/plugin.js';
 import { juridiquePlugin } from './juridique/plugin.js';
 import { integriteDetecteursPlugin } from './integrite/detecteurs/plugin.js';
 import { catalogueApiPlugin } from './catalogue-api/plugin.js';
+import { postesPlugin } from './postes/plugin.js';
 import { vehiculesControlePlugin } from './vehicules-controle/plugin.js';
 import { citoyenPlugin } from './citoyen/plugin.js';
 import { decisionPlugin } from './decision/plugin.js';
@@ -95,6 +96,9 @@ export const DEFAULT_PLUGINS: MosoloPlugin<unknown>[] = [
   chainePlugin,
   juridiquePlugin,
   integriteDetecteursPlugin,
+  // Postes de décision des autorités et postes de travail (Cahier nouvelle version, ch. 27 ; catalogue n° 41 à 44) :
+  // lecture seule des circuits de tous les modules ci-dessus, relais vers leurs routes de décision existantes.
+  postesPlugin,
   // Routes françaises du catalogue des API (Cahier, ch. 31) : relais vers les routes canoniques de tous les modules.
   catalogueApiPlugin,
   // Parcours du citoyen (modules 1 à 12) : après fiscal, titres, verticales, canaux et terrain qu'il relit.

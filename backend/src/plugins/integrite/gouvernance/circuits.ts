@@ -274,6 +274,12 @@ export const CIRCUITS: Circuit[] = [
     guard: { url: '/v1/verticales/calcu/fournisseurs/:id/validation', key: (p) => p.id! },
   },
   {
+    // Postes de décision (Cahier nouvelle version, ch. 27) : dossier d'orientation instruit par un service, décidé par
+    // une autorité distincte (approbation ou refus motivés).
+    code: 'POSTES_DOSSIER_ORIENTATION', label: 'Dossier d’orientation d’un poste de décision (instruit par un service → décision de l’autorité)',
+    proposals: ['postes.dossier.soumis'], approvals: ['postes.dossier.approuve'], refusals: ['postes.dossier.refuse'],
+  },
+  {
     code: 'CALCU_LIGNE_BUDGETAIRE', label: 'CALCU — validation d’une ligne budgétaire',
     proposals: ['calcu.budget_line.declared'], approvals: ['calcu.budget_line.validated'], refusals: [],
     guard: { url: '/v1/verticales/calcu/lignes-budgetaires/:id/validation', key: (p) => p.id! },

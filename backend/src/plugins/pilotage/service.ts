@@ -27,15 +27,15 @@ import { buildTransparency, reidentificationCheck, type FundedProjectsSection, t
 import { buildGraph, buildTrail, resolveDossier } from './trail.js';
 
 export const PROFILES = {
-  gouverneur: { label: 'Gouverneur', description: 'Centre de commandement : échelle de la recette, communes, catégories, intégrité.' },
-  'dg-regie': { label: 'Direction générale de régie', description: 'Assiette, liquidation, recouvrement, contentieux, performance des services.' },
+  gouverneur: { label: 'Gouverneur', description: 'Centre de commandement : échelle de la recette, communes, catégories, intégrité.', catalogue: 'n° 41 Postes de décision des autorités (ancien « Centre de commandement exécutif ») — poste : /poste-de-decision' },
+  'dg-regie': { label: 'Direction générale de régie', description: 'Assiette, liquidation, recouvrement, contentieux, performance des services.', catalogue: 'n° 42 Poste de travail — régie fiscale et n° 43 Poste de travail — régie des taxes (anciens « Tableau de bord régie fiscale / des taxes ») — poste : /poste-de-travail' },
   tresor: { label: 'Trésor', description: 'Confirmé, réglé, rapproché, suspens par âge, exceptions, prestataires.' },
   commune: { label: 'Commune', description: 'Recettes attribuées à la commune (fait générateur), couverture, catégories.' },
   audit: { label: 'Audit', description: 'Intégrité des chaînes, opérations sensibles, extractions, pistes par dossier.' },
-  ministre: { label: 'Ministre', description: 'Recettes et indicateurs du périmètre légal propre.' },
+  ministre: { label: 'Ministre', description: 'Recettes et indicateurs du périmètre légal propre.', catalogue: 'n° 44 Postes ministériels (ancien « Tableaux de bord ministériels ») — poste : /poste-de-decision' },
   // § 26.2 : tableaux complémentaires (ajoutés, les six tableaux ci-dessus restent inchangés).
   cabinet: { label: 'Directeur de cabinet', description: 'Coordination et suivi des instructions : émises, en cours, en retard, rapports reçus.' },
-  sg: { label: 'Secrétaire général', description: 'Décisions et mise en œuvre : instructions, décisions humaines journalisées, publications.' },
+  sg: { label: 'Secrétaire exécutif du Gouvernement provincial (Secrétaire général)', description: 'Décisions et mise en œuvre : instructions, décisions humaines journalisées, publications.' },
   juridique: { label: 'Juristes', description: 'État du référentiel juridique : règles actives, à vérifier, suspendues, expirant, conflits.' },
   superviseur: { label: 'Superviseurs', description: 'Charge, productivité et qualité des équipes de terrain du périmètre (résultats vérifiables).' },
   'chef-service': { label: 'Chefs de service', description: 'Performance du service : émissions, rectifications, recouvrement, contentieux, instructions reçues.' },

@@ -871,7 +871,7 @@ le circuit des instructions sans le modifier. Aucune action financière, aucune 
 | Écran | Route | Contenu |
 |---|---|---|
 | Registre des risques (`/pilotage/risques`) | `GET /v1/pilotage/programme/risques` ; revues et propriétaire | 13 risques cités ; carte de chaleur ; mesures reliées au code et aux tests ; revue par une personne, retard signalé |
-| Recette — critères d'acceptation (`/pilotage/recette`) | `GET /v1/pilotage/programme/recette` ; suivis du monde réel | 15 critères (dont 5 à relier à la fusion du lot « postes de décision ») ; 10 récits ; 9 points de stratégie ; 8 suivis externes |
+| Recette — critères d'acceptation (`/pilotage/recette`) | `GET /v1/pilotage/programme/recette` ; suivis du monde réel | 15 critères (dont 5 à relier à la fusion du lot « postes de décision » — reliés à la fusion du 27/09/2026 : un test par critère dans `backend/test/postes-decision-acceptation.test.ts`) ; 10 récits ; 9 points de stratégie ; 8 suivis externes |
 | Plan de livraison par versions (`/pilotage/versions`) | `GET /v1/pilotage/programme/versions` ; état de mise en service | V0.1 à V3.0, modules livrés vérifiés à l'exécution |
 | Plan des 100 premiers jours (`/pilotage/cent-jours`) | `GET /v1/pilotage/programme/cent-jours` ; jour 1 ; actions ; instruction | 6 périodes, 18 actions, responsables |
 | Décisions du Gouvernement provincial (`/pilotage/decisions-gouvernement`) | `GET /v1/pilotage/programme/decisions` ; enregistrement ; validation (second facteur) | 10 décisions, acte et empreinte, deux personnes, verrous calculés, contradiction du § 37A signalée, synthèse 48.2 |
@@ -905,3 +905,44 @@ Le Document maître FR 2 reçu le 27/09/2026 a été rapproché, phrase par phra
 | § 30 et § 12 | Modèle de données (29 entités, états du Cahier ↔ états du code, effectifs sans nom) et matrice des 16 rôles évaluée en direct | `GET /v1/referentiel/modele-donnees`, `GET /v1/referentiel/matrice-habilitations` ; « Modèle de données et habilitations » |
 
 **Contradictions et différences signalées (arbitrage du maître d’ouvrage).** (1) Deux formats d’identifiant géographique coexistent (§ 17.2). (2) Le § 28.1 (« aucune part automatique pour l’administrateur de la plateforme ») contredit le modèle du promoteur (§ 37A) : le § 37A est conservé tel quel. (3) Les modules 59–61 du Cahier (RFCK) entrent en collision avec les numéros 59–61 déjà attribués (grand livre, coffre, découverte). (4) Lignes 41–44 du catalogue et chapitre 27 : repris par le lot « postes de décision ». Tests : `backend/test/document-maitre-fr2.test.ts`, `frontend/test/document-maitre-fr2.test.tsx`.
+
+## I.22 Postes de décision des autorités et postes de travail des opérateurs (Cahier nouvelle version, ch. 27 ; catalogue n° 41 à 44, ajout du 27/09/2026)
+
+**Noms du catalogue (ch. 11, 27/09/2026)** — le nom nouveau d'abord, l'ancien conservé (règle n° 1) : n° 41 « Postes de
+décision des autorités » (ancien « Centre de commandement exécutif ») ; n° 42 « Poste de travail — régie fiscale »
+(ancien « Tableau de bord régie fiscale ») ; n° 43 « Poste de travail — régie des taxes » (ancien « Tableau de bord régie
+des taxes ») ; n° 44 « Postes ministériels » (ancien « Tableaux de bord ministériels »). Les tableaux existants restent
+tous disponibles : tableau du Gouverneur (`/gouverneur`, libellé « Tableau de bord du Gouverneur (Centre de
+commandement) »), tableaux par profil (`/v1/pilotage/tableaux/:profil`), centre de commandement et tableaux des régies et
+des ministères du module « décision » (`/decision/*`, libellés renommés avec l'ancien nom entre parenthèses), instructions,
+arbitrages, validations, élévations, portes de phase. Le rôle R03 s'affiche « Secrétaire exécutif du Gouvernement
+provincial » ; « Secrétaire général » reste reconnu comme alias (`ROLE_ALIASES`).
+
+Module d'extension « postes » (`backend/src/plugins/postes/`) construit **par-dessus** ces écrans. **Il ne modifie aucune
+habilitation** : il présente ce qui attend une décision, relit les circuits des modules sources (lecture seule) et relaie
+« Approuver » et « Refuser » vers la route de décision EXISTANTE de la source (mêmes gardes, mêmes quatre yeux, même
+journal). Aucune route qui modifie une dette, un paiement, une quittance ou un compte bénéficiaire n'est jamais relayée.
+
+| Fonction | Route | Écran | Garde-fous |
+|---|---|---|---|
+| Écran d'accueil sans aucune saisie (Gouverneur, cabinet, secrétariat exécutif, ministres, direction de régie, autorité habilitée) | `GET /v1/postes/accueil` ; export `GET /v1/postes/accueil/export?format=csv\|html[&vue=…]` | `/poste-de-decision` (écran d'accueil des autorités R01 à R05) | Exercice en cours et delta du jour par défaut ; budget d'attention du § 27.2 ; repères et règles communes des maquettes |
+| Corbeille et fiche à neuf blocs | `GET /v1/postes/corbeille` ; `GET /v1/postes/fiches/:id[?finalite=]` ; `POST /v1/postes/fiches/:id/action` | `/poste-de-decision/decisions`, `/poste-de-decision/fiche/:id` | Dix catégories du § 27.4 au-delà de leurs seuils ; fiche sans fondement jamais présentée ; motif obligatoire ; dossier nominatif ouvert sur finalité déclarée et journalisée |
+| Vues des menus (Recettes, Alertes, Communes ; Instruction, Ordre du jour, Suivi, Coordination ; Exécution, Retards, Documentation ; Mes décisions … Mes engagements ; Recettes, Réalisations, Mon habilitation) | `GET /v1/postes/vues/:vue` | `/poste-de-decision/:vue` | Menus des maquettes ; cinq entrées pour le Gouverneur |
+| Dossiers d'orientation instruits par les services | `POST /v1/postes/dossiers` ; `POST /v1/postes/dossiers/:id/reponse` | fiches | Natures de production refusées (« ne remonte jamais ») ; circuit `POSTES_DOSSIER_ORIENTATION` (deux personnes) |
+| Préparation et ordre du jour du cabinet | `POST /v1/postes/cabinet/dossiers/:id/preparation` ; `POST /v1/postes/cabinet/ordre-du-jour` | `/poste-de-decision/instruction`, `/ordre-du-jour` | Transmettre seulement un dossier instruit avec fondement ; différer avec date de réexamen ; trace consultable |
+| Exécution des décisions (Secrétariat exécutif) | `POST /v1/postes/executions/:id/etat` ; `…/relance` ; `…/justification` | `/poste-de-decision/execution`, `/retards`, `/documentation` | État et blocage DÉCLARÉS par le service responsable ; suspension d'un centre agréé constatée à la source |
+| Délégations (§ 27.11) | `GET/POST /v1/postes/delegations` ; `GET /v1/postes/delegations/candidats` ; `POST /v1/postes/delegations/:id/revocation` | `/poste-de-decision/delegations` | Personne nommée de rang inférieur, périmètre et durée déclarés, expiration automatique, révocation ; jamais un compte partagé ; mention « par délégation de … » ; délégation de RÔLE du module 51 reconnue |
+| Autres autorités habilitées (§ 27.9) | `POST /v1/postes/habilitations` ; `…/:id/renouvellement` | `/poste-de-decision` (consultation) | Agrégats seulement ; aucune corbeille ni action ; consultations journalisées ; expiration automatique, renouvellement explicite |
+| Note du lundi | `GET /v1/postes/notes` ; `POST /v1/postes/notes/production` ; `GET /v1/postes/notes/:id[/impression]` | `/poste-de-decision/note` (hors connexion) | Production automatique hebdomadaire ; empreinte SHA-256 reproductible ; historique ; sans IA |
+| Postes de travail (§ 27.13) | `GET /v1/postes/travail` | `/poste-de-travail` | File de travail séparée de la corbeille ; liens vers les postes n° 42 et 43 (`/decision/regie-fiscale`, `/decision/regie-taxes`) |
+| Recherche, notifications, indicateur de taille des corbeilles, référentiel | `GET /v1/postes/recherche` ; `GET /v1/postes/notifications` ; `POST …/plafond` ; `GET /v1/postes/indicateurs` ; `GET /v1/postes/referentiel` | `/poste-de-decision/rechercher`, `/indicateurs` | Recherche dans le périmètre ; plafond fixé par l'autorité puis synthèse unique ; alerte au-delà d'une dizaine d'éléments |
+
+Seuils (registre des seuils, deux personnes, tous PAR_DEFAUT — à confirmer par le maître d'ouvrage) : `postes.seuil.*`
+(dix catégories), `postes.remontee.*` (7 et 15 jours, 50 et 250 millions CDF, gravité critique), `postes.corbeille.*`
+(10 éléments, 5 jours), `postes.delegation.duree_max_jours` (90), `postes.consultation.duree_max_jours` (730),
+`postes.notifications.plafond_defaut` (5), `postes.session.duree_max_min` (30). Ordre de remontée et rangs des autorités :
+PAR_DEFAUT. Données de démonstration [EXEMPLE] : fiches et chiffres illustratifs des maquettes, jamais présentés comme
+réels. Matrice de couverture phrase par phrase : `couverture-ch27-postes-de-decision.md`. Tests :
+`backend/test/postes.test.ts`, `backend/test/postes-decision-acceptation.test.ts` (critères C42-11 à C42-15),
+`frontend/test/postes.test.tsx`.
+

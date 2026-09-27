@@ -26,9 +26,9 @@ export interface PreuveCode { fichier: string; symbole: string }
  */
 export interface PreuveTest { fichier: string; titre: string; statut?: 'PENDING_MERGE'; libelle?: string }
 
-/** Fichier de preuve du lot « postes de décision » (autre branche) : seul fichier autorisé en PENDING_MERGE. */
+/** Fichier de preuve du lot « postes de décision » (fusionné le 27/09/2026 ; le statut PENDING_MERGE reste admis par le type). */
 export const FICHIER_POSTES_DECISION = 'backend/test/postes-decision-acceptation.test.ts';
-export const LIBELLE_PREUVE_POSTES = 'preuve : lot postes de décision (à relier à la fusion)';
+export const LIBELLE_PREUVE_POSTES = 'preuve : lot postes de décision (fusionné — un test par critère C42-11 à C42-15)';
 
 // ————————————————————————————————————————— ch. 41 — registre des risques —————————————————————————————————————————
 
@@ -277,18 +277,19 @@ export const CRITERES_42: CritereAcceptation[] = [
     code: 'C42-10', critere: 'Les tableaux de bord distinguent explicitement potentiel, constaté, encaissé, réglé, rapproché et disponible.',
     preuves: [R('C42-10 — les tableaux de bord distinguent les six états : potentiel, constaté, encaissé, réglé, rapproché, disponible'), T('pilotage.test.ts', 'onze niveaux, mesurés sur le socle ; potentiel et disponible déclarés non mesurés ; jamais additionnés')],
   },
-  // Critères 11 à 15 (ch. 42 porté à 15 critères, 27/09/2026) : postes de décision, construits par un autre lot. Libellés
-  // transmis par le coordinateur, fondés sur le Cahier (nouvelle version), ch. 27 ; texte exact du ch. 42 à confirmer à la fusion.
+  // Critères 11 à 15 (ch. 42 porté à 15 critères, 27/09/2026) : postes de décision (Cahier nouvelle version, ch. 27), texte
+  // du ch. 42 transmis par le maître d'ouvrage. Preuve : backend/test/postes-decision-acceptation.test.ts (lot fusionné —
+  // drapeau PENDING_MERGE retiré à la fusion), un test par critère, titré du texte du critère.
   ...([
-    { code: 'C42-11', critere: 'Une autorité qui ouvre son poste de décision pour la première fois comprend, en moins de quatre-vingt-dix secondes et sans formation, ce qu’on attend d’elle et ce qui ne va pas dans sa ville.', fondement: 'Une autorité qui ouvre la plateforme pour la première fois, sans formation et sans accompagnement, doit pouvoir dire en moins de quatre-vingt-dix secondes ce qu’on attend d’elle et ce qui ne va pas dans sa ville. (ch. 27.2)', partielles: [] },
-    { code: 'C42-12', critere: 'Aucune donnée fiscale individuelle n’apparaît sur l’écran d’accueil d’un poste de décision.', fondement: 'aucune donnée fiscale individuelle sur un écran d’accueil, y compris celui du Gouverneur ; (ch. 27.12)', partielles: [T('pilotage.test.ts', 'tableaux par profil : bons rôles, agrégats sans donnée personnelle')] },
-    { code: 'C42-13', critere: 'Aucun poste de décision ne peut modifier une dette, un paiement, une quittance ou un compte bénéficiaire : test négatif par profil d’autorité.', obligatoire: 'Test négatif par profil d’autorité', fondement: 'aucune action financière directe : on approuve une orientation, on ne modifie ni une dette, ni un paiement, ni un compte bénéficiaire depuis un poste de décision ; (ch. 27.12)', partielles: [T('audit-access.test.ts', 'AC-ACC-02 : le Gouverneur voit les agrégats et ne peut modifier aucune donnée financière'), T('treasury-vault.test.ts', 'personne d’autre ne peut proposer ni approuver')] },
-    { code: 'C42-14', critere: 'Tout montant affiche son état, sa date et son taux de conversion, y compris après export.', fondement: 'Les exports reprennent ces mentions ; un chiffre sorti de la plateforme ne doit jamais perdre son état ni sa date. (ch. 27.10)', partielles: [T('pilotage.test.ts', 'CSV + JSON, empreinte SHA-256, signature HMAC vérifiable ; altération détectée ; export journalisé')] },
-    { code: 'C42-15', critere: 'Toute décision de la corbeille — prise, refusée, déléguée ou différée — est motivée et journalisée avec son auteur.', fondement: 'Approuver · Refuser · Déléguer · Demander un complément | Quatre issues, toutes motivées et journalisées (ch. 27.3)', partielles: [] },
+    { code: 'C42-11', critere: 'Une autorité ouvrant la plateforme sans formation identifie en moins de quatre-vingt-dix secondes ce qui attend sa décision et ce qui ne va pas dans son périmètre.', fondement: 'Une autorité qui ouvre la plateforme pour la première fois, sans formation et sans accompagnement, doit pouvoir dire en moins de quatre-vingt-dix secondes ce qu’on attend d’elle et ce qui ne va pas dans sa ville. (ch. 27.2)', partielles: [] },
+    { code: 'C42-12', critere: 'Aucun écran d’accueil d’un poste de décision n’affiche de donnée fiscale individuelle, y compris celui du Gouverneur.', fondement: 'aucune donnée fiscale individuelle sur un écran d’accueil, y compris celui du Gouverneur ; (ch. 27.12)', partielles: [T('pilotage.test.ts', 'tableaux par profil : bons rôles, agrégats sans donnée personnelle')] },
+    { code: 'C42-13', critere: 'Aucun poste de décision ne permet de modifier une dette, un paiement, une quittance ou un compte bénéficiaire : test négatif obligatoire pour chaque profil d’autorité.', obligatoire: 'Test négatif par profil d’autorité', fondement: 'aucune action financière directe : on approuve une orientation, on ne modifie ni une dette, ni un paiement, ni un compte bénéficiaire depuis un poste de décision ; (ch. 27.12)', partielles: [T('audit-access.test.ts', 'AC-ACC-02 : le Gouverneur voit les agrégats et ne peut modifier aucune donnée financière'), T('treasury-vault.test.ts', 'personne d’autre ne peut proposer ni approuver')] },
+    { code: 'C42-14', critere: 'Tout montant affiché sur un poste de décision porte son état, sa date et, le cas échéant, son taux de conversion, y compris après export.', fondement: 'Les exports reprennent ces mentions ; un chiffre sorti de la plateforme ne doit jamais perdre son état ni sa date. (ch. 27.10)', partielles: [T('pilotage.test.ts', 'CSV + JSON, empreinte SHA-256, signature HMAC vérifiable ; altération détectée ; export journalisé')] },
+    { code: 'C42-15', critere: 'Toute décision prise, refusée, déléguée ou différée depuis une corbeille est motivée et enregistrée au journal d’audit avec son auteur.', fondement: 'Approuver · Refuser · Déléguer · Demander un complément | Quatre issues, toutes motivées et journalisées (ch. 27.3)', partielles: [] },
   ] as { code: string; critere: string; obligatoire?: string; fondement: string; partielles: PreuveTest[] }[]).map((c): CritereAcceptation => ({
     code: c.code, critere: c.critere, ...(c.obligatoire ? { obligatoire: c.obligatoire } : {}), fondement: c.fondement,
-    origine: 'Critère ajouté au ch. 42 (27/09/2026), transmis par le coordinateur ; fondé sur le Cahier (nouvelle version), ch. 27 — postes de décision',
-    preuves: [{ fichier: FICHIER_POSTES_DECISION, titre: `${c.code} — ${LIBELLE_PREUVE_POSTES}`, statut: 'PENDING_MERGE', libelle: LIBELLE_PREUVE_POSTES }, ...c.partielles],
+    origine: 'Critère ajouté au ch. 42 (27/09/2026) par le maître d’ouvrage ; fondé sur le Cahier (nouvelle version), ch. 27 — postes de décision',
+    preuves: [{ fichier: FICHIER_POSTES_DECISION, titre: `« ${c.critere} »`, libelle: LIBELLE_PREUVE_POSTES }, ...c.partielles],
   })),
 ];
 

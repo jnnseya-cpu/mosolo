@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { EVENTS, EVENT_CATEGORIES } from '@mosolo/shared';
 import { useApp } from '../context';
 import { CityNight } from '../components/CityNight';
 import { Icon } from '../components/Icon';
-import { InstallButton, visibleNav } from '../components/Shell';
+import { AUTORITES_POSTE, InstallButton, visibleNav } from '../components/Shell';
 import { MakerMark, Tricolour } from '../components/Brand';
 import type { UIKey } from '../lib/i18n';
 
@@ -80,6 +80,8 @@ export default function Home() {
   const mandatory = EVENTS.filter((e) => e.obligatoire).length;
   const nf = (n: number) => n.toLocaleString(lang === 'en' ? 'en-GB' : 'fr-FR');
   const areas = visibleNav(user?.roles).filter((n) => n.to !== '/');
+  // Autorités (Gouverneur, cabinet, secrétariat exécutif, ministres) : l'écran d'accueil est le poste de décision (§ 27.2).
+  if (user?.roles.some((r) => AUTORITES_POSTE.includes(r))) return <Navigate to="/poste-de-decision" replace />;
   return (
     <div className="landing">
       {/* 1. Ouverture institutionnelle : visuel officiel, non modifié, logo jamais recadré */}
