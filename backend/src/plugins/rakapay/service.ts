@@ -328,7 +328,10 @@ export class RakaPayService {
     authorize(user, 'rakapay:register', { communes: [commune] });
   }
 
-  registerMoto(user: User, input: { plate: string; orderNumber: string; make: string; ownerTaxpayerId?: string; ownerLabel: string; stationId: string; cooperativeId?: string }): Moto {
+  registerMoto(user: User, input: { plate: string; orderNumber: string; make: string; ownerTaxpayerId?: string; ownerLabel?: string; stationId: string; cooperativeId?: string }): Moto {
+    // Compte unique (28/09/2026) : propriétaire rattaché ⇒ son nom est REPRIS du compte (jamais ressaisi).
+    if (!input.ownerLabel && !input.ownerTaxpayerId) throw badRequest('OWNER_REQUIRED', 'Propriétaire : compte rattaché (ownerTaxpayerId) ou désignation (ownerLabel).');
+    const ownerLabel = input.ownerLabel ?? this.ctx.taxpayers.resolve(input.ownerTaxpayerId!).fullName;
     const station = this.station(input.stationId);
     this.assertCanRegister(user, station.commune, input.cooperativeId);
     if (!station.kinds.includes('WEWA')) throw unprocessable('NOT_A_WEWA_STATION', 'Station non ouverte aux wewa.');
@@ -341,7 +344,7 @@ export class RakaPayService {
     const id = this.ids.next('MOTO');
     const moto = this.motos.insert({
       id, plate: input.plate.trim().toUpperCase(), orderNumber: input.orderNumber, make: input.make, ...(input.ownerTaxpayerId ? { ownerTaxpayerId: input.ownerTaxpayerId } : {}),
-      ownerLabel: input.ownerLabel, commune: station.commune, stationId: station.id, ...(input.cooperativeId ? { cooperativeId: input.cooperativeId } : {}),
+      ownerLabel, commune: station.commune, stationId: station.id, ...(input.cooperativeId ? { cooperativeId: input.cooperativeId } : {}),
       status: 'ACTIVE', stickerToken: this.titres.signer.signStatic({ k: 'AUTOCOLLANT', m: id, p: plate }),
       registeredAt: this.ctx.clock.now().toISOString(), registeredBy: user.id, demo: false,
     });
@@ -349,7 +352,19 @@ export class RakaPayService {
     return moto;
   }
 
-  registerDriver(user: User, input: { displayName: string; licenceNo: string; phone?: string; taxpayerId?: string; motoId?: string; cooperativeId?: string; photoRef?: string }): Driver {
+  registerDriver(user: User, input: { displayName?: string; licenceNo: string; phone?: string; taxpayerId?: string; motoId?: string; cooperativeId?: string; photoRef?: string }): Driver {
+    // Compte unique (28/09/2026) : conducteur déjà inscrit ⇒ nom et téléphone REPRIS de son compte, jamais ressaisis ;
+    // sans compte indiqué, un téléphone qui est EXACTEMENT celui d'un compte actif rattache la fiche à ce compte (clé du
+    // compte, § 9.6) — jamais un nom. La fiche reste une fiche de métier (gilet, permis), pas un second compte.
+    if (!input.taxpayerId && input.phone) {
+      const byPhone = this.ctx.taxpayers.findByPhone(input.phone);
+      if (byPhone && !this.drivers.findOne((d) => d.taxpayerId === byPhone.id)) input = { ...input, taxpayerId: byPhone.id };
+    }
+    const account = input.taxpayerId ? this.ctx.taxpayers.resolve(input.taxpayerId) : undefined;
+    if (account) input = { ...input, taxpayerId: account.id };
+    const displayName = input.displayName ?? account?.fullName;
+    if (!displayName) throw badRequest('DISPLAY_NAME_REQUIRED', 'Nom d’usage requis pour un conducteur sans compte MOSOLO.');
+    const phone = input.phone ?? (account?.phone || undefined);
     const moto = input.motoId ? this.moto(input.motoId) : undefined;
     const commune = moto?.commune ?? (input.cooperativeId ? this.cooperative(input.cooperativeId).commune : '');
     if (!commune) throw badRequest('MOTO_OR_COOPERATIVE_REQUIRED', 'Rattacher le conducteur à une moto ou à une coopérative.');
@@ -363,8 +378,8 @@ export class RakaPayService {
     const vestNumber = `W-${commune.slice(0, 3).toUpperCase()}-${String(this.drivers.count() + 1).padStart(4, '0')}`;
     const now = this.ctx.clock.now().toISOString();
     const d = this.drivers.insert({
-      id, ...(input.taxpayerId ? { taxpayerId: input.taxpayerId } : {}), displayName: input.displayName, licenceNo: input.licenceNo,
-      ...(input.phone ? { phone: input.phone } : {}), ...(input.photoRef ? { photoRef: input.photoRef } : {}), vestNumber,
+      id, ...(input.taxpayerId ? { taxpayerId: input.taxpayerId } : {}), displayName, licenceNo: input.licenceNo,
+      ...(phone ? { phone } : {}), ...(input.photoRef ? { photoRef: input.photoRef } : {}), vestNumber,
       vestToken: this.titres.signer.signStatic({ k: 'GILET', d: id, v: vestNumber }), cardCode: `KIN-C-${randomCode(6)}`,
       ...(moto ? { currentMotoId: moto.id } : {}), ...((input.cooperativeId ?? moto?.cooperativeId) ? { cooperativeId: input.cooperativeId ?? moto?.cooperativeId } : {}),
       status: 'ACTIF', registeredAt: now, registeredBy: user.id, demo: false,

@@ -11,6 +11,7 @@ import { RecoveryYieldService } from './rendement.js';
 import { registerRecoveryYieldRoutes } from './routes-rendement.js';
 import { registerRecoveryRoutes } from './routes.js';
 import { RecoveryService } from './service.js';
+import { contribuerCompteUnique } from './compte-unique.js';
 
 export const recouvrementPlugin = definePlugin({
   name: 'recouvrement',
@@ -30,6 +31,8 @@ export const recouvrementPlugin = definePlugin({
       }
       throw conflict('INSTALLMENT_PLAN_SETTLED', 'Toutes les échéances sont déjà couvertes.');
     });
+    // Compte unique (ch. 9) : arriérés et échéanciers.
+    contribuerCompteUnique(ctx, svc);
     return svc;
   },
   seed: (_ctx, svc) => svc.seedDemo(),

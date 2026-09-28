@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../../context.js';
 import { isDemoMode, requireUser } from '../../core/auth.js';
-import { conflict, notFound } from '../../core/errors.js';
+import { conflict, notFound, unprocessable } from '../../core/errors.js';
 import { currentAuditContext, isoDateString, parse, isRealCalendarDate } from '../../core/http.js';
 import { authorize } from '../../core/policy.js';
 import {
@@ -108,8 +108,13 @@ const orgSchema = z.object({
     fonction: z.string().trim().min(2).max(80),
     phone: phone.optional(),
     habilitation: z.enum(['DIRIGEANT', 'MANDATAIRE_HABILITE']),
-  }).strict()).min(1).max(10),
-  declarant: z.object({ fullName: z.string().trim().min(3).max(120), fonction: z.string().trim().min(2).max(80) }).strict(),
+  }).strict()).min(1).max(10).optional(),
+  declarant: z.object({ fullName: z.string().trim().min(3).max(120), fonction: z.string().trim().min(2).max(80) }).strict().optional(),
+  /**
+   * Compte unique (28/09/2026) : une personne CONNECTÉE qui inscrit son organisation ne ressaisit ni son nom ni son
+   * téléphone — elle se désigne comme représentant (fonction et habilitation seulement) ; son identité vérifiée est reprise.
+   */
+  moiCommeRepresentant: z.object({ fonction: z.string().trim().min(2).max(80), habilitation: z.enum(['DIRIGEANT', 'MANDATAIRE_HABILITE']) }).strict().optional(),
   // Aucun rôle de travail ne peut être demandé par le parcours public (AC-INV-01) : `.strict()` le rejette.
 }).strict();
 
@@ -381,10 +386,20 @@ export function registerAccesRoutes(app: FastifyInstance, ctx: AppContext, svc: 
   // ───────── Identité avancée ─────────
   app.post('/v1/acces/organisations', async (req, reply) => {
     const body = parse(orgSchema, req.body);
-    const { rccm, idNat, nif, email, representatives, ...rest } = body;
+    const { rccm, idNat, nif, email, representatives, declarant, moiCommeRepresentant, ...rest } = body;
+    // Personne connectée (compte unique) : son identité vérifiée est reprise, jamais ressaisie.
+    const self = req.user?.taxpayerId && req.user.roles.includes('R30') ? ctx.taxpayers.resolve(req.user.taxpayerId) : undefined;
+    if (moiCommeRepresentant && !self) throw unprocessable('LOGIN_REQUIRED', 'Se désigner comme représentant exige d’être connecté à son compte.');
+    const reps = [
+      ...(self && moiCommeRepresentant ? [{ fullName: self.fullName, fonction: moiCommeRepresentant.fonction, habilitation: moiCommeRepresentant.habilitation, taxpayerId: self.id, ...(self.phone ? { phone: self.phone } : {}) }] : []),
+      ...(representatives ?? []).map((r) => ({ fullName: r.fullName, fonction: r.fonction, habilitation: r.habilitation, ...(r.phone ? { phone: r.phone } : {}) })),
+    ];
+    if (!reps.length) throw unprocessable('REPRESENTATIVE_REQUIRED', 'Au moins un représentant nommé est requis (ou « moiCommeRepresentant » si vous êtes connecté).');
+    const decl = declarant ?? (self ? { fullName: self.fullName, fonction: moiCommeRepresentant?.fonction ?? 'Déclarant' } : undefined);
+    if (!decl) throw unprocessable('DECLARANT_REQUIRED', 'Déclarant requis (nom et fonction).');
     return reply.code(201).send(svc.registerOrganisation({
       ...rest, language: rest.language as never, ...(rccm ? { rccm } : {}), ...(idNat ? { idNat } : {}), ...(nif ? { nif } : {}), ...(email ? { email } : {}),
-      representatives: representatives.map((r) => ({ fullName: r.fullName, fonction: r.fonction, habilitation: r.habilitation, ...(r.phone ? { phone: r.phone } : {}) })),
+      representatives: reps, declarant: decl,
     }));
   });
   app.post<P>('/v1/acces/identity/:id/otp', async (req, reply) => reply.code(201).send(svc.sendPhoneOtp(req.params.id)));

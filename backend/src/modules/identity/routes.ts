@@ -15,6 +15,11 @@ const registrationSchema = z.object({
   language: z.enum(LANGUAGE_CODES as [string, ...string[]]),
   situation: z.enum(RESIDENTIAL_SITUATIONS),
   email: z.string().email().optional(),
+  // Compte unique (28/09/2026) : NIF facultatif (clé du compte quand il existe) et situation choisie (revendication).
+  nif: z.string().trim().min(4).max(40).optional(),
+  intention: z.enum(['PROPRIETAIRE', 'LOCATAIRE', 'EXPLOITANT', 'AUCUNE']).optional(),
+  // Plusieurs situations possibles (spécification v1.0 § 4 : plusieurs rôles et plusieurs biens dans le même compte).
+  intentions: z.array(z.enum(['PROPRIETAIRE', 'LOCATAIRE', 'EXPLOITANT'])).max(3).optional(),
 }).strict();
 
 export function registerIdentityRoutes(app: FastifyInstance, ctx: AppContext): void {

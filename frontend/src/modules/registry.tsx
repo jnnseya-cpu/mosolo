@@ -47,6 +47,11 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/fiscal/dependances', element: lazy(() => import('./fiscal/Dependances')), nav: { label: 'Conditions des services (quitus, vignette)', short: 'Conditions', icon: 'check', group: 'public', roles: [] } },
   { path: '/fiscal/recensement', element: lazy(() => import('./fiscal/Recensement')), nav: { label: 'Vagues de recensement', short: 'Recensement', icon: 'grid', group: 'operations', roles: ['R06', 'R07', 'R11', 'R22', 'R09', 'R10'] } },
   { path: '/fiscal/reprise', element: lazy(() => import('./fiscal/Reprise')), nav: { label: 'Reprise e-DGRK et import par lots', short: 'Reprise', icon: 'upload', group: 'operations', roles: ['R06', 'R07', 'R11', 'R12', 'R22', 'R23'] } },
+  // Compte unique (ch. 9, 28/09/2026) : biens et relations (spécification « Liaison des biens et occupations » v1.0),
+  // vue du propriétaire (occupation masquée) et file de revue (réviseurs habilités, agents de terrain affectés).
+  { path: '/espace/biens-relations', element: lazy(() => import('./compte-unique/BiensRelations')), nav: { label: 'Mes biens et relations', short: 'Mes biens', icon: 'building', group: 'public', roles: ['R30'] } },
+  { path: '/espace/biens/:id', element: lazy(() => import('./compte-unique/VueProprietaire')) },
+  { path: '/biens-relations/revue', element: lazy(() => import('./compte-unique/RevueBiens')), nav: { label: 'Revue des biens et relations', short: 'Revue biens', icon: 'scale', group: 'operations', roles: ['R06', 'R07', 'R11', 'R12', 'R22', 'R23', 'R10', 'R35'] } },
   // Compte unique : profils et espaces § 9.3, récupération contrôlée
   { path: '/mon-espace/profils', element: lazy(() => import('./socle/Profils')), nav: { label: 'Mes profils et espaces', short: 'Profils', icon: 'user', group: 'public', roles: ['R30', 'R31', 'R07', 'R11', 'R12'] } },
   { path: '/recuperation-compte', element: lazy(() => import('./socle/Recuperation')), nav: { label: 'Récupérer mon compte', short: 'Récupérer', icon: 'lock', group: 'public', roles: [] } },

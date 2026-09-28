@@ -10,6 +10,7 @@ import { parse } from '../../core/http.js';
 import { authorize } from '../../core/policy.js';
 import { definePlugin } from '../types.js';
 import { CommunicationExtService, LEGAL_EVENTS, TEMPLATE_MAX_CHARS } from './service.js';
+import { contribuerCompteUnique } from './compte-unique.js';
 
 const LANGS = ['fr', 'ln', 'sw', 'kg', 'lua', 'en'] as const;
 const channel = z.enum(CHANNELS as [Channel, ...Channel[]]);
@@ -17,7 +18,12 @@ const motif = z.string().trim().min(3).max(1000);
 
 export const communicationPlugin = definePlugin<CommunicationExtService>({
   name: 'communication',
-  create: (ctx) => new CommunicationExtService(ctx),
+  create: (ctx) => {
+    const svc = new CommunicationExtService(ctx);
+    // Compte unique (ch. 9) : préférences et consentements.
+    contribuerCompteUnique(ctx, svc);
+    return svc;
+  },
   routes: (app, _ctx, svc) => {
     type P = { Params: { id: string } };
     app.get('/v1/communication/modeles', async (req) => ({ items: svc.listTemplates(requireUser(req)), legalEvents: LEGAL_EVENTS, maxChars: TEMPLATE_MAX_CHARS, languages: LANGS }));

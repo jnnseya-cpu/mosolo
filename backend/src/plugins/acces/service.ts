@@ -1434,18 +1434,40 @@ export class AccesService {
     };
   }
 
+  /**
+   * Garde anti-doublon du compte unique (ch. 9) : un identifiant d'entreprise ou fiscal (NIF, RCCM) déjà porté par un
+   * AUTRE compte actif (preuve non rejetée ou identifiant déclaré d'une organisation) refuse la création d'un second
+   * compte et oriente vers la récupération. Aucune fusion d'office.
+   */
+  assertIdentifierFree(type: 'NIF' | 'RCCM', ref: string, exceptTaxpayerId?: string): void {
+    const norm = ref.trim().toUpperCase();
+    if (!norm) return;
+    const hash = sha256Hex(`${type}:${norm}`);
+    const active = (id: string) => id !== exceptTaxpayerId && this.ctx.taxpayers.taxpayers.get(id)?.status !== 'FUSIONNE';
+    const byProof = this.proofs.findOne((p) => p.type === type && p.referenceHash === hash && p.status !== 'REJETEE' && active(p.taxpayerId));
+    const byOrg = this.organisations.findOne((o) => active(o.taxpayerId) && (type === 'NIF' ? o.nifDeclared : o.rccmDeclared)?.trim().toUpperCase() === norm);
+    const holder = byProof?.taxpayerId ?? byOrg?.taxpayerId;
+    if (holder) {
+      this.log({ kind: 'system', id: 'deduplication' }, 'identity.duplicate_refused', 'taxpayer', holder, { reason: `MEME_${type}` }, 'DENIED');
+      throw conflict(`${type}_ALREADY_REGISTERED`, `Ce ${type} est déjà rattaché à un compte MOSOLO : un seul compte par personne ou organisation. Utilisez la récupération de compte (ou le circuit de fusion contrôlé en cas d’erreur).`, { recovery: '/v1/public/enrolement/recuperations' });
+    }
+  }
+
   registerOrganisation(input: {
     raisonSociale: string; forme: Organisation['forme']; rccm?: string; idNat?: string; nif?: string; phone: string; email?: string;
-    language: Taxpayer['language']; representatives: { fullName: string; fonction: string; phone?: string; habilitation: Representative['habilitation'] }[];
+    language: Taxpayer['language']; representatives: { fullName: string; fonction: string; phone?: string; habilitation: Representative['habilitation']; taxpayerId?: string }[];
     declarant: { fullName: string; fonction: string };
   }, opts: { demo?: boolean } = {}) {
+    // Compte unique : même NIF ou même RCCM ⇒ refus et récupération, jamais un second compte d'entreprise.
+    if (input.nif) this.assertIdentifierFree('NIF', input.nif);
+    if (input.rccm) this.assertIdentifierFree('RCCM', input.rccm);
     const t = this.ctx.taxpayers.register({
       phone: input.phone, fullName: input.raisonSociale, language: input.language, situation: 'other', kind: 'PERSONNE_MORALE', ...(input.email ? { email: input.email } : {}),
     });
     const org = this.organisations.insert({
       id: this.ids.next('ORG', 5), taxpayerId: t.id, raisonSociale: input.raisonSociale, forme: input.forme,
       ...(input.rccm ? { rccmDeclared: input.rccm } : {}), ...(input.idNat ? { idNatDeclared: input.idNat } : {}), ...(input.nif ? { nifDeclared: input.nif } : {}),
-      representatives: input.representatives.map((r) => ({ fullName: r.fullName, fonction: r.fonction, habilitation: r.habilitation, ...(r.phone ? { phoneMasked: maskPhone(normalizePhone(r.phone)) } : {}) })),
+      representatives: input.representatives.map((r) => ({ fullName: r.fullName, fonction: r.fonction, habilitation: r.habilitation, ...(r.phone ? { phoneMasked: maskPhone(normalizePhone(r.phone)) } : {}), ...(r.taxpayerId ? { taxpayerId: r.taxpayerId } : {}) })),
       createdAt: this.now(), ...(opts.demo ? { demo: true } : {}),
     });
     const declarant = `inscription:${input.declarant.fullName}`;

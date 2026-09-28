@@ -159,7 +159,8 @@ export default function Registration() {
     setBusy(true); setApiError(null);
     try {
       const phone = v.phone.replace(/\s/g, '');
-      const r = await api<RegistrationResult>('/v1/registrations', { method: 'POST', body: { ...v, phone, fullName: v.fullName.trim() } });
+      const { intentions, ...rest } = v;
+      const r = await api<RegistrationResult>('/v1/registrations', { method: 'POST', body: { ...rest, phone, fullName: v.fullName.trim(), ...(intentions && intentions.length ? { intentions } : {}) } });
       setResult({ ...r, kind: 'PP', phone, phoneVerified: false });
       safeSet('mosolo.taxpayerId', r.taxpayerId);
       draft.reset();
@@ -269,6 +270,20 @@ export default function Registration() {
                       ))}
                     </div>
                     {errors.situation && <span id="reg-sit-err" className="err">{errors.situation}</span>}
+                  </fieldset>
+                  {/* Compte unique (28/09/2026) : plusieurs rôles possibles ; chacun ouvre une revendication à compléter
+                      dans « Mes biens et relations » — jamais une relation établie ni un lien avec une autre personne. */}
+                  <fieldset className="field">
+                    <legend className="label">Mes rôles (facultatif, plusieurs choix possibles)</legend>
+                    <div className="radio-list">
+                      {([['PROPRIETAIRE', 'Propriétaire d’un bien'], ['LOCATAIRE', 'Locataire ou occupant'], ['EXPLOITANT', 'Exploitant d’une activité']] as const).map(([k, l]) => (
+                        <label key={k} className={`radio ${(v.intentions ?? []).includes(k) ? 'checked' : ''}`}>
+                          <input type="checkbox" checked={(v.intentions ?? []).includes(k)} onChange={(e) => set('intentions', e.target.checked ? [...(v.intentions ?? []), k] : (v.intentions ?? []).filter((x) => x !== k))} />
+                          <span>{l}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <span className="hint">Chaque rôle ouvre une revendication, vérifiée plus tard par une personne habilitée. Aucun nom ni téléphone d’une autre personne n’est demandé.</span>
                   </fieldset>
                   <AutosaveBar draft={draft} />
                   {apiError && <p className="notice notice-err" role="alert">{apiError}</p>}

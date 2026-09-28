@@ -50,7 +50,7 @@ export function registerCitoyenRoutes(app: FastifyInstance, ctx: AppContext, svc
 
   // ───────── Module 2 : contrôle des pièces, score de confiance, rapprochements, revue des cas à risque ─────────
   app.post('/v1/citoyen/enrolement/pieces', async (req, reply) => reply.code(201).send(svc.pieces.controler(requireUser(req), parse(z.object({
-    type: z.enum(TYPES_PIECE), numero: z.string().trim().min(3).max(40), nomDeclare: z.string().trim().min(2).max(120), taxpayerId: z.string().max(60).optional(),
+    type: z.enum(TYPES_PIECE), numero: z.string().trim().min(3).max(40), nomDeclare: z.string().trim().min(2).max(120).optional(), taxpayerId: z.string().max(60).optional(),
     telephone: z.string().regex(/^\+?\d{9,15}$/).optional(), photoSha256: z.string().regex(/^[0-9a-f]{64}$/).optional(), dateExpiration: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isRealCalendarDate, 'date inexistante au calendrier').optional(),
     lectureAuto: z.object({ texte: z.string().max(4000).optional(), nom: z.string().max(200).optional(), numero: z.string().max(40).optional(), mrzLigne2: z.string().max(60).optional() }).strict().optional(),
     canal: z.enum(['EN_LIGNE', 'APPLICATION', 'GUICHET', 'AGENT']).optional(),

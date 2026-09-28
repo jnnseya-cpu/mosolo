@@ -229,7 +229,7 @@ export class ParkingComplements {
    */
   handle(channel: TextChannel, msisdnRaw: string, text: string, via: TextExchange['via']) {
     const msisdn = msisdnRaw.replace(/[\s-]/g, '');
-    const tp = this.ctx.taxpayers.taxpayers.findOne((t) => t.phone === msisdn);
+    const tp = this.ctx.taxpayers.findByPhone(msisdn); // compte unique (fusion suivie)
     const parts = (channel === 'USSD' ? text.split('*') : text.trim().split(/\s+/)).map((p) => p.trim()).filter(Boolean);
     const verb = ({ '1': 'STAT', '2': 'PROL', '3': 'FIN', '4': 'ETAT' } as Record<string, string>)[parts[0] ?? ''] ?? (parts[0] ?? '').toUpperCase();
     const at = this.now().toISOString();

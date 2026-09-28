@@ -75,6 +75,36 @@ export interface FiscalObject {
   lifecycle?: { state: 'SUSPENDU' | 'CLOS'; motif: string; reason: string; since: string; decidedBy: string[] };
   /** Historique des changements d'état du cycle de vie (ajout seul). */
   lifecycleHistory?: { at: string; from: ObjectLifecycleState; to: ObjectLifecycleState; by: string[]; motif: string; reason: string }[];
+  /**
+   * Liaison des biens et occupations (spécification v1.0 du 28/09/2026, § 3 et § 6) — AJOUT, les champs existants restent.
+   * Statut de l'enregistrement du bien, distinct du statut des relations : PROVISIONAL (auto-déclaré ou non qualifié),
+   * CANONICAL (bien de référence), ARCHIVED_ALIAS (ancien identifiant conservé après une fusion revue).
+   * Absent : déduit (VALIDE ⇒ CANONICAL, sinon PROVISIONAL).
+   */
+  recordStatus?: RecordStatus;
+  /** Bien canonique dont cet enregistrement est devenu l'alias (fusion revue, réversible par décision). */
+  aliasOf?: string;
+  /** Provenance de l'enregistrement (SELF_REPORTED : saisi par une personne, sans identifiant officiel). */
+  recordProvenance?: 'SELF_REPORTED' | 'AGENT_TERRAIN' | 'ADMINISTRATION' | 'IMPORT';
+  /** Identifiant officiel du bien : valeur, émetteur et espace de noms (§ 5) ; vérifié par une personne habilitée. */
+  officialRef?: { value: string; issuer: string; namespace: string; verified: boolean };
+  /** Adresse telle que saisie (conservée, jamais écrasée par la normalisation). */
+  addressEntered?: Record<string, string>;
+  /** Libellés de la hiérarchie : bâtiment (« B ») et unité (« 2 », « MAIN » pour une maison individuelle). */
+  buildingLabel?: string;
+  unitLabel?: string;
+  floor?: string;
+  useType?: 'RESIDENTIAL' | 'COMMERCIAL' | 'MIXED';
+}
+
+export type RecordStatus = 'PROVISIONAL' | 'CANONICAL' | 'ARCHIVED_ALIAS';
+export const RECORD_STATUS_LABELS: Record<RecordStatus, string> = {
+  PROVISIONAL: 'Provisoire (non qualifié)', CANONICAL: 'Bien de référence', ARCHIVED_ALIAS: 'Alias archivé (fusion revue)',
+};
+
+/** Statut de l'enregistrement du bien (explicite, ou déduit de la validation). */
+export function recordStatusOf(o: Pick<FiscalObject, 'recordStatus' | 'status'>): RecordStatus {
+  return o.recordStatus ?? (o.status === 'VALIDE' ? 'CANONICAL' : 'PROVISIONAL');
 }
 
 /** États du cycle de vie d'un objet fiscal (§ 30 du Document maître FR 2, nouvelle version). */
@@ -257,6 +287,8 @@ export class ObjectService {
       igf: o.igf ? { ...o.igf, ...(!o.igf.cahierCode && igf.cahierCode ? { cahierCode: igf.cahierCode } : {}) } : { ...igf, assignedAt: now, assignedBy: by.id },
       validatedBy: by.id,
       validatedAt: now,
+      // Liaison des biens (28/09/2026) : un bien validé devient le bien de référence (un alias archivé le reste).
+      ...(o.recordStatus === 'PROVISIONAL' ? { recordStatus: 'CANONICAL' as const } : {}),
     });
     this.audit.append({
       actor: { kind: 'user', id: by.id, roles: by.roles }, action: 'object.validated', resourceType: 'fiscal_object', resourceId: id,
@@ -285,6 +317,35 @@ export class ObjectService {
       ...(change.localityRank !== undefined ? { rankStatus: 'CONFIRME' as const, rankSource: 'CORRECTION' as const, rankConfirmedBy: change.by[change.by.length - 1]! } : {}),
       history: [...(o.history ?? []), entry],
     });
+  }
+
+  /**
+   * Enregistrement PROVISOIRE d'un bien auto-déclaré (plot → bâtiment → unité) : sans redevable, sans identifiant
+   * officiel, provenance SELF_REPORTED ; aucun effet fiscal avant qualification (garde de liquidation du module fiscal).
+   */
+  createSelfReported(actorId: string, input: Omit<CreateObjectInput, 'taxpayerId'> & Pick<FiscalObject, 'buildingLabel' | 'unitLabel' | 'floor' | 'useType' | 'addressEntered' | 'officialRef'>): FiscalObject {
+    if (!isCommune(input.commune)) throw badRequest('UNKNOWN_COMMUNE', `Commune inconnue : ${input.commune}`);
+    if (input.parentObjectId) this.get(input.parentObjectId);
+    const certified = certifiedRankOf(input.commune, input.quartier);
+    const obj = this.objects.insert({
+      id: this.ids.next('OBJ'), category: input.category, commune: input.commune, quartier: input.quartier,
+      localityRank: certified ? certified.rank : input.localityRank, lat: input.lat, lon: input.lon, attributes: { ...input.attributes, origine: 'REVENDICATION' },
+      observed: {}, status: 'PROVISOIRE', probativeStatus: 'DECLARE', rankStatus: certified ? 'CONFIRME' : 'PROVISOIRE', rankSource: certified ? 'TABLE_CERTIFIEE' : 'DECLARANT',
+      createdBy: actorId, createdAt: this.clock.now().toISOString(),
+      ...(input.parentObjectId ? { parentObjectId: input.parentObjectId } : {}), ...(input.avenue ? { avenue: input.avenue } : {}),
+      recordStatus: 'PROVISIONAL', recordProvenance: 'SELF_REPORTED',
+      ...(input.buildingLabel ? { buildingLabel: input.buildingLabel } : {}), ...(input.unitLabel ? { unitLabel: input.unitLabel } : {}),
+      ...(input.floor ? { floor: input.floor } : {}), ...(input.useType ? { useType: input.useType } : {}),
+      ...(input.addressEntered ? { addressEntered: input.addressEntered } : {}), ...(input.officialRef ? { officialRef: input.officialRef } : {}),
+    });
+    this.audit.append({ actor: { kind: 'user', id: actorId, roles: [] }, action: 'object.self_reported', resourceType: 'fiscal_object', resourceId: obj.id, details: { category: obj.category, commune: obj.commune, recordStatus: 'PROVISIONAL', provenance: 'SELF_REPORTED', parent: obj.parentObjectId ?? null } });
+    return obj;
+  }
+
+  /** Métadonnées d'enregistrement (statut, alias, identifiant officiel, libellés) — l'appelant journalise et contrôle. */
+  setRecordMeta(id: string, patch: Partial<Pick<FiscalObject, 'recordStatus' | 'aliasOf' | 'officialRef' | 'buildingLabel' | 'unitLabel' | 'parentObjectId' | 'useType'>>): FiscalObject {
+    const o = this.get(id);
+    return this.objects.update({ ...o, ...patch });
   }
 
   /** Rattache le redevable principal d'un objet provisoire (après validation d'une relation de propriété). */

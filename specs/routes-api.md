@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1535 routes** dans 49 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1557 routes** dans 49 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -14,7 +14,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1535 routes** dans 4
 | extension decision | 30 |
 | extension documents | 17 |
 | extension equipements | 11 |
-| extension fiscal | 91 |
+| extension fiscal | 110 |
 | extension ia | 40 |
 | extension integrite | 86 |
 | extension juridique | 11 |
@@ -45,7 +45,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1535 routes** dans 4
 | module drafts | 3 |
 | module field | 1 |
 | module fx | 1 |
-| module identity | 2 |
+| module identity | 5 |
 | module objects | 2 |
 | module payments | 10 |
 | module receipts | 2 |
@@ -414,6 +414,15 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1535 routes** dans 4
 
 | Méthode | Chemin |
 |---|---|
+| GET | `/v1/biens-candidats` |
+| POST | `/v1/biens-declares` |
+| GET | `/v1/biens-relations/configuration` |
+| GET | `/v1/biens/:id/vue-proprietaire` |
+| GET | `/v1/dossiers-revue` |
+| GET | `/v1/dossiers-revue/:id` |
+| POST | `/v1/dossiers-revue/:id/affectation` |
+| POST | `/v1/dossiers-revue/:id/constat-terrain` |
+| POST | `/v1/dossiers-revue/:id/decision` |
 | GET | `/v1/enrolement/espaces` |
 | POST | `/v1/enrolement/nif/:id` |
 | GET | `/v1/enrolement/recuperations` |
@@ -499,12 +508,22 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1535 routes** dans 4
 | POST | `/v1/fiscal/relationships/:id/contest` |
 | POST | `/v1/fiscal/relationships/:id/validate` |
 | GET | `/v1/fiscal/relationships/queue` |
+| POST | `/v1/invitations-biens/:jeton/reponse` |
+| GET | `/v1/moi/relations-biens` |
 | GET | `/v1/public/enrolement/profils` |
 | POST | `/v1/public/enrolement/recuperations` |
 | GET | `/v1/public/fiscal/clearances/:code` |
 | GET | `/v1/public/fiscal/dependances` |
 | GET | `/v1/public/fiscal/lease-attestations/:code` |
 | GET | `/v1/public/fiscal/plates/:code` |
+| GET | `/v1/relations-biens/effectives` |
+| POST | `/v1/revendications-biens` |
+| POST | `/v1/revendications-biens/:id/appel` |
+| POST | `/v1/revendications-biens/:id/choix-candidat` |
+| POST | `/v1/revendications-biens/:id/contestations` |
+| POST | `/v1/revendications-biens/:id/fin` |
+| POST | `/v1/revendications-biens/:id/invitations` |
+| POST | `/v1/revendications-biens/:id/preuves` |
 
 ## Extension ia
 
@@ -1741,6 +1760,9 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1535 routes** dans 4
 
 | Méthode | Chemin |
 |---|---|
+| GET | `/v1/compte-unique/:taxpayerId` |
+| GET | `/v1/compte-unique/fiches-metier` |
+| GET | `/v1/compte-unique/me` |
 | POST | `/v1/registrations` |
 | GET | `/v1/taxpayers/:id` |
 
