@@ -170,6 +170,9 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
         details: { code: apiErr.code, detail: apiErr.message },
       });
     }
+    // Prestataire déclaré indisponible (disjoncteur, confirmation serveur à serveur) : délai de nouvelle tentative explicite.
+    const retryAfter = apiErr.extensions.retryAfterSeconds;
+    if (typeof retryAfter === 'number' && Number.isFinite(retryAfter) && retryAfter > 0) reply.header('retry-after', String(Math.ceil(retryAfter)));
     return reply.code(apiErr.status).type('application/problem+json').send(apiErr.toProblem(req.url));
   });
 

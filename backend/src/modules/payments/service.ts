@@ -23,9 +23,10 @@ import type { VaultService } from '../vault/service.js';
 import { DEFAULT_KEY_ID, NonceStore, isValidNonce, signCallback, verifyCallbackSignature, type ProviderKey } from './callback-signing.js';
 import { ProviderHttpError } from './connectors/http-client.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
+import { CONNECTOR_IDS } from './connectors/types.js';
 import {
   WebhookPayloadError, WebhookVerificationError, type ConfirmationMethod, type ConnectorId, type HeaderBag,
-  type HoldEvent, type PaymentEvent, type SettlementEvent, type WebhookChecks,
+  type ConnectionTestResult, type HoldEvent, type NormalizedProviderEvent, type PaymentConnector, type PaymentEvent, type SettlementEvent, type VerifiedWebhook, type WebhookChecks,
 } from './connectors/types.js';
 
 export const PAYMENT_CHANNELS = ['MOBILE_MONEY', 'BANK', 'CARD', 'AGENT_POINT', 'USSD', 'QR', 'TRANSFER'] as const;
@@ -71,6 +72,11 @@ export interface PaymentOrder {
   payerInstrumentHash?: string;
   /** Version du compte bénéficiaire (coffre) en vigueur à l'émission : un crédit reçu sous une autre version est signalé. */
   beneficiaryAccountVersion?: number;
+  /**
+   * Confirmation SERVEUR À SERVEUR de l'état de l'intention chez le prestataire, préalable à la quittance (Cahier § 19.2 :
+   * « rappel signé, contrôle anti-rejeu, vérification serveur à serveur »). BAC_A_SABLE_LOCAL : démonstration seulement.
+   */
+  serverToServerCheck?: ServerToServerCheck;
 }
 
 /** Fermeture d'une référence INITIE sans paiement : état terminal ECHOUE de la table partagée, motif explicite. */
@@ -223,6 +229,69 @@ export interface WebhookEventResult {
   replayed?: boolean;
 }
 
+/** Essai de connexion à un prestataire (résultat sans aucune donnée secrète). */
+export interface ConnectionTestRecord extends ConnectionTestResult {
+  id: string;
+  provider: string;
+  at: string;
+  by: string;
+}
+
+/** Confirmation serveur à serveur portée par l'ordre (voir PaymentOrder.serverToServerCheck). */
+export interface ServerToServerCheck {
+  method: 'INTERROGATION_STATUT' | 'BAC_A_SABLE_LOCAL';
+  at: string;
+  rawStatus: string | null;
+  queryId?: string;
+}
+
+/** Réception d'un webhook (y compris refusé) : vue de raccordement et piste d'exploitation. Aucune donnée secrète. */
+export interface WebhookReception {
+  id: string;
+  provider: string;
+  receivedAt: string;
+  /** Résultat de la vérification de signature : VALIDE, ou code du refus (INVALID_SIGNATURE, TIMESTAMP_OUT_OF_WINDOW…). */
+  verification: string;
+  /** Code HTTP renvoyé au prestataire et issue (CONFIRME, REJOUE, AMOUNT_MISMATCH…). */
+  httpStatus: number;
+  outcome: string;
+  eventIds: string[];
+  eventTypes: string[];
+  /** Empreinte du corps brut (jamais le corps lui-même). */
+  bodySha256: string;
+}
+
+/** Interrogation serveur à serveur de l'état d'une intention (préalable à la quittance). */
+export interface StatusQueryRecord {
+  id: string;
+  provider: string;
+  providerIntentId: string;
+  paymentReference?: string;
+  eventId?: string;
+  at: string;
+  /** CONFIRME : payé, montant concordant ; EN_ATTENTE : non final ; CONTREDIT : échec ou montant différent ; ECHEC_APPEL : injoignable. */
+  outcome: 'CONFIRME' | 'EN_ATTENTE' | 'CONTREDIT' | 'ECHEC_APPEL';
+  rawStatus: string | null;
+  detail: string;
+}
+
+/**
+ * Événement de paiement signé mais NON imputable (référence inconnue, montant ou devise différents, état contredit par
+ * l'interrogation serveur à serveur) : mis EN SUSPENS, jamais porté sur une obligation. Une seule entrée par événement.
+ */
+export interface ProviderSuspense {
+  id: string;
+  provider: string;
+  eventId: string;
+  reason: 'REFERENCE_INCONNUE' | 'ECART_MONTANT' | 'ECART_DEVISE' | 'ETAT_CONTREDIT';
+  paymentReference?: string;
+  providerIntentId?: string;
+  amount?: MoneyJSON;
+  expected?: MoneyJSON;
+  detail: string;
+  receivedAt: string;
+}
+
 interface WebhookEventRecord {
   id: string;
   provider: string;
@@ -295,6 +364,14 @@ export class PaymentService {
   readonly verificationEvidence = new InMemoryAppendOnlyRepository<VerificationEvidenceRecord>();
   readonly unappliedPayments = new InMemoryAppendOnlyRepository<UnappliedPayment>();
   readonly unappliedStates = new InMemoryRepository<UnappliedState>();
+  /** Réceptions de webhooks connecteurs, acceptées ou refusées (persistées : `payments.webhookReceptions`). */
+  readonly webhookReceptions = new InMemoryAppendOnlyRepository<WebhookReception>();
+  /** Interrogations serveur à serveur de l'état des intentions (persistées : `payments.statusQueries`). */
+  readonly statusQueries = new InMemoryAppendOnlyRepository<StatusQueryRecord>();
+  /** Événements signés non imputables, mis en suspens (persistés : `payments.providerSuspense`). */
+  readonly providerSuspense = new InMemoryAppendOnlyRepository<ProviderSuspense>();
+  /** Essais « Tester la connexion » (appel réel inoffensif ou validation à blanc), persistés : `payments.connectionTests`. */
+  readonly connectionTests = new InMemoryAppendOnlyRepository<ConnectionTestRecord>();
   private readonly unappliedListeners: ((u: UnappliedPayment) => void)[] = [];
   /** Nonces des rappels génériques (anneau borné persisté : `payments.nonces.slots`, rejeu refusé après redémarrage). */
   readonly nonces = new NonceStore();
@@ -477,6 +554,10 @@ export class PaymentService {
     if (!input.provider) return this.createOrder(user, obligationId, input);
     const connector = this.connectors.get(input.provider);
     if (!connector) throw unprocessable('UNKNOWN_PROVIDER', `Prestataire non connecté : ${input.provider}`);
+    // Hors démonstration, un connecteur sans clé API (configuration partielle) ne crée jamais d'intention simulée.
+    if (connector.mode === 'SANDBOX_LOCAL' && !this.connectors.demoMode) {
+      throw new ApiError(503, 'PROVIDER_NOT_CONFIGURED', `${connector.label} n'est pas raccordé (clé API absente) : choisissez un autre canal de paiement.`, { provider: connector.id });
+    }
     if (input.channel !== 'MOBILE_MONEY' && input.channel !== 'QR') {
       throw unprocessable('PROVIDER_CHANNEL_UNSUPPORTED', `Le prestataire ${connector.label} n'est proposé que pour les canaux MOBILE_MONEY et QR.`);
     }
@@ -613,7 +694,7 @@ export class PaymentService {
 
   private reject(provider: string, status: number, code: string, detail: string, context: Record<string, unknown>): never {
     this.alerts.raise({
-      type: code, severity: code === 'AMOUNT_MISMATCH' || code === 'INVALID_SIGNATURE' ? 'CRITICAL' : 'HIGH',
+      type: code, severity: code === 'AMOUNT_MISMATCH' || code === 'INVALID_SIGNATURE' || code === 'PROVIDER_STATUS_CONTRADICTION' ? 'CRITICAL' : 'HIGH',
       source: `prestataire:${provider}`, detail, context, actor: { kind: 'provider', id: provider },
     });
     throw new ApiError(status, code, detail);
@@ -831,17 +912,58 @@ export class PaymentService {
   }
 
   /**
-   * Webhook signé d'un prestataire connecté (BitriPay, KODA). Signature vérifiée à temps constant par le connecteur
-   * (invalide ⇒ 401 + alerte), unicité de l'identifiant d'événement (rejeu ⇒ 200, aucun double effet), puis :
-   * paiement ⇒ `confirmFromProvider` ; annonce de règlement ⇒ indice de rapprochement SEULEMENT ; autre ⇒ ignoré + audit.
+   * Webhook signé d'un prestataire connecté (BitriPay, KODA) — voie SYNCHRONE : bac à sable local (démonstration,
+   * simulation). Signature vérifiée à temps constant par le connecteur (invalide ⇒ 401 + alerte), unicité de
+   * l'identifiant d'événement (rejeu ⇒ 200, aucun double effet), puis : paiement ⇒ `confirmFromProvider` ; annonce de
+   * règlement ⇒ indice de rapprochement SEULEMENT ; autre ⇒ ignoré + audit. Un paiement réussi d'un connecteur en
+   * mode réel exige la voie asynchrone `receiveConnectorWebhook` (confirmation serveur à serveur).
    */
   handleConnectorWebhook(providerId: string, headers: HeaderBag, rawBody: string): { received: true; results: WebhookEventResult[] } {
     const connector = this.connectors.get(providerId);
     if (!connector) throw notFound('UNKNOWN_PROVIDER', `Prestataire non connecté : ${providerId}`);
-    let verified;
+    const verified = this.verifyConnectorWebhook(connector, headers, rawBody);
+    const checks = new Map<string, ServerToServerCheck>();
+    return this.logged(connector.id, verified, rawBody, () => {
+      for (const ev of this.pendingSuccesses(connector.id, verified.events)) {
+        if (connector.mode !== 'SANDBOX_LOCAL') {
+          throw conflict('SERVER_TO_SERVER_CONFIRMATION_REQUIRED', `${connector.label} en mode réel : la confirmation serveur à serveur est exigée avant toute quittance.`);
+        }
+        checks.set(ev.eventId, this.sandboxCheck(connector));
+      }
+      return this.processVerifiedWebhook(providerId, verified, checks);
+    });
+  }
+
+  /**
+   * Webhook signé d'un prestataire connecté — voie de PRODUCTION (route `/v1/providers/{p}/webhooks`) : signature
+   * vérifiée sur le corps BRUT, puis, pour chaque paiement réussi non encore traité, interrogation SERVEUR À SERVEUR de
+   * l'état de l'intention chez le prestataire (BitriPay GET /payment_intents/{id}, KODA GET /intents/{id}) AVANT toute
+   * quittance. Prestataire injoignable ⇒ 503 (événement non mémorisé : le prestataire le renverra) ; état non final ⇒
+   * 409 ; état contredit (échec, montant différent) ⇒ 422 + alerte critique + mise en suspens, sans effet sur l'ordre.
+   */
+  async receiveConnectorWebhook(providerId: string, headers: HeaderBag, rawBody: string): Promise<{ received: true; results: WebhookEventResult[] }> {
+    const connector = this.connectors.get(providerId);
+    if (!connector) throw notFound('UNKNOWN_PROVIDER', `Prestataire non connecté : ${providerId}`);
+    const verified = this.verifyConnectorWebhook(connector, headers, rawBody);
+    const checks = new Map<string, ServerToServerCheck>();
     try {
-      verified = connector.verifyWebhook(headers, rawBody, this.clock.now());
+      for (const ev of this.pendingSuccesses(connector.id, verified.events)) {
+        checks.set(ev.eventId, await this.confirmServerToServer(connector, ev));
+      }
     } catch (e) {
+      this.recordReception(connector.id, verified, rawBody, e);
+      throw e;
+    }
+    return this.logged(connector.id, verified, rawBody, () => this.processVerifiedWebhook(providerId, verified, checks));
+  }
+
+  /** Vérification de signature (temps constant, corps brut) ; tout refus est journalisé dans les réceptions. */
+  private verifyConnectorWebhook(connector: PaymentConnector, headers: HeaderBag, rawBody: string): VerifiedWebhook {
+    const providerId = connector.id;
+    try {
+      return connector.verifyWebhook(headers, rawBody, this.clock.now());
+    } catch (e) {
+      this.recordReception(providerId, null, rawBody, e);
       if (e instanceof WebhookVerificationError) this.reject(providerId, 401, e.code, e.message, { channel: 'webhook' });
       if (e instanceof WebhookPayloadError) {
         if (e.code === 'INVALID_JSON') throw badRequest('INVALID_JSON', e.message);
@@ -849,6 +971,148 @@ export class PaymentService {
       }
       throw e;
     }
+  }
+
+  private logged(providerId: string, verified: VerifiedWebhook, rawBody: string, fn: () => { received: true; results: WebhookEventResult[] }) {
+    try {
+      const res = fn();
+      this.recordReception(providerId, verified, rawBody, null, res.results);
+      return res;
+    } catch (e) {
+      this.recordReception(providerId, verified, rawBody, e);
+      throw e;
+    }
+  }
+
+  private recordReception(providerId: string, verified: VerifiedWebhook | null, rawBody: string, error: unknown, results: WebhookEventResult[] = []): void {
+    const known = error instanceof ApiError || error instanceof WebhookVerificationError || error instanceof WebhookPayloadError;
+    const status = error instanceof ApiError ? error.status : !error ? 200 : error instanceof WebhookVerificationError ? 401 : error instanceof WebhookPayloadError ? (error.code === 'INVALID_JSON' ? 400 : 422) : 500;
+    const code = known ? (error as { code: string }).code : error ? 'ERREUR' : undefined;
+    const verification = !verified && error instanceof WebhookVerificationError ? error.code : !verified && error ? 'CORPS_REFUSE' : 'VALIDE';
+    const outcome = code ?? (results.length > 0 && results.every((r) => r.replayed) ? 'REJOUE' : results.map((r) => r.status ?? r.outcome).join(',') || 'TRAITE');
+    this.webhookReceptions.append({
+      id: this.ids.next('WHREC'), provider: providerId, receivedAt: this.clock.now().toISOString(), verification, httpStatus: status, outcome,
+      eventIds: verified?.events.map((e) => e.eventId) ?? [], eventTypes: verified?.events.map((e) => e.eventType) ?? [], bodySha256: sha256Hex(rawBody),
+    });
+  }
+
+  /** Paiements réussis d'un webhook qui ne sont ni un rejeu d'événement, ni une transaction déjà traitée. */
+  private pendingSuccesses(providerId: string, events: NormalizedProviderEvent[]): PaymentEvent[] {
+    return events.filter((ev): ev is PaymentEvent =>
+      ev.kind === 'PAYMENT' && ev.status === 'SUCCESS' && !this.webhookEvents.get(`${providerId}:${ev.eventId}`)
+      && !this.confirmations.findOne((c) => c.provider === providerId && c.providerTxnId === ev.providerTxnId));
+  }
+
+  /** Bac à sable local : aucune interrogation possible — admis en démonstration SEULEMENT. */
+  private sandboxCheck(connector: PaymentConnector): ServerToServerCheck {
+    if (!this.connectors.demoMode) {
+      throw new ApiError(503, 'PROVIDER_NOT_CONFIGURED', `${connector.label} : clé API absente, la confirmation serveur à serveur est impossible ; aucune quittance ne peut être émise.`, { provider: connector.id });
+    }
+    return { method: 'BAC_A_SABLE_LOCAL', at: this.clock.now().toISOString(), rawStatus: null };
+  }
+
+  /** Interrogation serveur à serveur de l'état de l'intention, préalable à la quittance. */
+  private async confirmServerToServer(connector: PaymentConnector, ev: PaymentEvent): Promise<ServerToServerCheck> {
+    if (connector.mode === 'SANDBOX_LOCAL' || !connector.fetchIntentStatus) return this.sandboxCheck(connector);
+    const order = ev.providerIntentId ? this.orders.findOne((o) => o.provider === connector.id && o.providerIntentId === ev.providerIntentId) : undefined;
+    const paymentReference = order?.paymentReference ?? ev.paymentReference;
+    if (!ev.providerIntentId) {
+      this.reject(connector.id, 422, 'PROVIDER_INTENT_MISSING', 'Paiement sans identifiant d’intention : confirmation serveur à serveur impossible.', { eventId: ev.eventId });
+    }
+    const intentId = ev.providerIntentId;
+    const query = (outcome: StatusQueryRecord['outcome'], rawStatus: string | null, detail: string) => this.statusQueries.append({
+      id: this.ids.next('S2S'), provider: connector.id, providerIntentId: intentId, eventId: ev.eventId, ...(paymentReference ? { paymentReference } : {}),
+      at: this.clock.now().toISOString(), outcome, rawStatus, detail,
+    });
+    let st;
+    try {
+      st = await connector.fetchIntentStatus(intentId);
+    } catch (e) {
+      const code = e instanceof ApiError ? e.code : 'PROVIDER_UNAVAILABLE';
+      query('ECHEC_APPEL', null, `Interrogation impossible (${code}).`);
+      this.audit.append({ actor: { kind: 'system', id: 'paiements' }, action: 'payment.s2s_status.unavailable', resourceType: 'provider_event', resourceId: ev.eventId, outcome: 'FAILURE', details: { provider: connector.id, code } });
+      throw new ApiError(503, 'PROVIDER_STATUS_UNAVAILABLE',
+        `Confirmation serveur à serveur impossible auprès de ${connector.label} (${code}) : événement non mémorisé, aucune quittance ; le prestataire doit le renvoyer.`,
+        { provider: connector.id, retryAfterSeconds: 60 });
+    }
+    const readAmount = st.amount;
+    const sentAmount = ev.amount;
+    let amountOk = true;
+    if (readAmount && sentAmount) {
+      try {
+        amountOk = Money.parseStrict(readAmount).equals(Money.parseStrict(sentAmount));
+      } catch {
+        amountOk = false;
+      }
+    }
+    if (st.status === 'SUCCEEDED' && amountOk) {
+      const q = query('CONFIRME', st.rawStatus, readAmount ? 'Payé chez le prestataire ; montant concordant.' : 'Payé chez le prestataire (montant non renvoyé : contrôlé sur l’ordre).');
+      return { method: 'INTERROGATION_STATUT', at: q.at, rawStatus: st.rawStatus, queryId: q.id };
+    }
+    if (st.status === 'PENDING' || st.status === 'UNKNOWN') {
+      query('EN_ATTENTE', st.rawStatus, 'État non final chez le prestataire : aucune quittance.');
+      throw new ApiError(409, 'PROVIDER_STATUS_NOT_FINAL',
+        `${connector.label} ne confirme pas encore le paiement (état « ${st.rawStatus ?? 'inconnu'} ») : événement non mémorisé, à renvoyer.`, { provider: connector.id });
+    }
+    const detail = st.status === 'FAILED' || !readAmount || !sentAmount
+      ? `Webhook « payé » contredit par l'état « ${st.rawStatus ?? 'inconnu'} » lu chez le prestataire.`
+      : `Montant lu chez le prestataire (${readAmount.amount} ${readAmount.currency}) différent du webhook (${sentAmount.amount} ${sentAmount.currency}).`;
+    query('CONTREDIT', st.rawStatus, detail);
+    this.recordSuspense(connector.id, ev, 'ETAT_CONTREDIT', detail, order);
+    return this.reject(connector.id, 422, 'PROVIDER_STATUS_CONTRADICTION', `${detail} Signature valide mais contenu démenti : secret de webhook possiblement compromis.`, {
+      eventId: ev.eventId, providerIntentId: intentId, paymentReference,
+    });
+  }
+
+  /**
+   * « Tester la connexion » (R17, R26, R28) : appel réel inoffensif documenté si le connecteur en propose un et qu'une
+   * clé API est présente, sinon validation à blanc de la configuration. Le résultat dit explicitement lequel.
+   */
+  async testProviderConnection(user: User, providerId: string): Promise<ConnectionTestRecord> {
+    authorize(user, 'provider.readiness');
+    if (!(CONNECTOR_IDS as readonly string[]).includes(providerId)) throw notFound('UNKNOWN_PROVIDER', `Prestataire inconnu : ${providerId}`);
+    const connector = this.connectors.get(providerId);
+    let result: ConnectionTestResult;
+    if (!connector || !connector.testConnection) {
+      const setup = this.connectors.setup.find((x) => x.id === providerId);
+      result = {
+        kind: 'VALIDATION_A_BLANC', ok: false,
+        checks: (setup?.variables ?? []).filter((v) => v.requiredForReal).map((v) => ({ label: `${v.name} présente`, ok: v.present })),
+        proves: 'Validation à blanc : aucun appel au prestataire. Le connecteur n’est pas enregistré (aucun secret de webhook réel).',
+        detail: 'Connecteur non configuré : renseigner les variables manquantes puis redémarrer le service.',
+      };
+    } else {
+      result = await connector.testConnection();
+      if (!this.connectors.validAlias(connector.settlementAccountAlias)) {
+        result = { ...result, ok: false, checks: [...result.checks, { label: 'Alias de règlement inscrit au coffre', ok: false, detail: connector.settlementAccountAlias }] };
+      } else {
+        result = { ...result, checks: [...result.checks, { label: 'Alias de règlement inscrit au coffre', ok: true, detail: connector.settlementAccountAlias }] };
+      }
+    }
+    const rec = this.connectionTests.append({ id: this.ids.next('CXTEST'), provider: providerId, at: this.clock.now().toISOString(), by: user.id, ...result });
+    this.audit.append({
+      actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'provider.connection.tested', resourceType: 'provider', resourceId: providerId,
+      outcome: result.ok ? 'SUCCESS' : 'FAILURE', details: { kind: result.kind, endpoint: result.endpoint ?? null, httpStatus: result.httpStatus ?? null },
+    });
+    return rec;
+  }
+
+  /** Mise en suspens d'un événement non imputable (une seule fois par événement) ; jamais d'effet sur l'obligation. */
+  private recordSuspense(providerId: string, ev: PaymentEvent, reason: ProviderSuspense['reason'], detail: string, order?: PaymentOrder): void {
+    if (this.providerSuspense.all().some((x) => x.provider === providerId && x.eventId === ev.eventId)) return;
+    const paymentReference = order?.paymentReference ?? ev.paymentReference;
+    const s = this.providerSuspense.append({
+      id: this.ids.next('SUSP'), provider: providerId, eventId: ev.eventId, reason, detail, receivedAt: this.clock.now().toISOString(),
+      ...(paymentReference ? { paymentReference } : {}), ...(ev.providerIntentId ? { providerIntentId: ev.providerIntentId } : {}),
+      ...(ev.amount ? { amount: ev.amount } : {}), ...(order ? { expected: order.amount } : {}),
+    });
+    this.audit.append({
+      actor: { kind: 'provider', id: providerId }, action: 'payment.provider_event.suspense', resourceType: 'provider_event', resourceId: ev.eventId, outcome: 'FAILURE',
+      details: { suspenseId: s.id, reason, paymentReference: paymentReference ?? null, note: 'Mis en suspens : jamais porté sur une obligation.' },
+    });
+  }
+
+  private processVerifiedWebhook(providerId: string, verified: VerifiedWebhook, checks: Map<string, ServerToServerCheck>): { received: true; results: WebhookEventResult[] } {
     const results: WebhookEventResult[] = [];
     for (const ev of verified.events) {
       const key = `${providerId}:${ev.eventId}`;
@@ -859,7 +1123,7 @@ export class PaymentService {
         continue;
       }
       let result: WebhookEventResult;
-      if (ev.kind === 'PAYMENT') result = this.applyPaymentEvent(providerId, ev, verified.checks);
+      if (ev.kind === 'PAYMENT') result = this.applyPaymentEventOrSuspend(providerId, ev, verified.checks, checks.get(ev.eventId));
       else if (ev.kind === 'SETTLEMENT') result = this.announceSettlement(providerId, ev);
       else if (ev.kind === 'HOLD') result = this.recordHold(providerId, ev);
       else {
@@ -872,10 +1136,37 @@ export class PaymentService {
         result = { eventId: ev.eventId, eventType: ev.eventType, outcome: 'IGNORED', reason: ev.reason };
       }
       // Enregistré seulement après succès : un événement refusé (422) peut être re-présenté et sera re-contrôlé.
+      // Mémoire persistée (`payments.webhookEvents`) : un rejeu reste sans effet après un redémarrage.
       this.webhookEvents.insert({ id: key, provider: providerId, eventId: ev.eventId, receivedAt: this.clock.now().toISOString(), result });
       results.push(result);
     }
     return { received: true, results };
+  }
+
+  /** Paiement : confirmation commune ; référence inconnue, montant ou devise différents ⇒ suspens (et refus 422). */
+  private applyPaymentEventOrSuspend(providerId: string, ev: PaymentEvent, checks: WebhookChecks, s2s?: ServerToServerCheck): WebhookEventResult {
+    try {
+      const r = this.applyPaymentEvent(providerId, ev, checks);
+      if (s2s && r.status === 'CONFIRME' && !r.replayed && r.paymentReference) {
+        const o = this.byReference(r.paymentReference);
+        if (o) {
+          this.orders.update({ ...o, serverToServerCheck: s2s });
+          this.audit.append({ actor: { kind: 'provider', id: providerId }, action: 'payment.s2s_status.confirmed', resourceType: 'payment_order', resourceId: o.id, details: { ...s2s, eventId: ev.eventId } });
+        }
+      }
+      return r;
+    } catch (e) {
+      if (e instanceof ApiError && ev.status === 'SUCCESS') {
+        const order = ev.providerIntentId ? this.orders.findOne((o) => o.provider === providerId && o.providerIntentId === ev.providerIntentId)
+          : ev.paymentReference ? this.byReference(ev.paymentReference) : undefined;
+        if (e.code === 'UNKNOWN_PAYMENT_REFERENCE') this.recordSuspense(providerId, ev, 'REFERENCE_INCONNUE', e.message);
+        else if (e.code === 'AMOUNT_MISMATCH' || e.code === 'AMOUNT_PRECISION') {
+          const currencyDiffers = !!order && !!ev.amount && ev.amount.currency !== order.amount.currency;
+          this.recordSuspense(providerId, ev, currencyDiffers ? 'ECART_DEVISE' : 'ECART_MONTANT', e.message, order);
+        }
+      }
+      throw e;
+    }
   }
 
   /** Référence MOSOLO d'un événement : métadonnées (référence, ordre) et intention stockée doivent concorder. */

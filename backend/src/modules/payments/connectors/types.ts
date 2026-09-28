@@ -118,6 +118,33 @@ export interface VerificationEvidenceResult {
 
 export type HeaderBag = Record<string, string | string[] | undefined>;
 
+/**
+ * État d'une intention lu chez le prestataire par une interrogation SERVEUR À SERVEUR (BitriPay
+ * GET /payment_intents/{id}, KODA GET /intents/{id}) : exigé avant toute quittance (Cahier § 19.2-19.3).
+ */
+export interface ProviderIntentStatus {
+  providerIntentId: string;
+  /** SUCCEEDED : payé ; FAILED : échec terminal / annulé ; PENDING : en cours ; UNKNOWN : statut non reconnu. */
+  status: 'SUCCEEDED' | 'FAILED' | 'PENDING' | 'UNKNOWN';
+  /** Libellé brut renvoyé par le prestataire (ex. `succeeded`, `verified`). */
+  rawStatus: string | null;
+  amount?: MoneyJSON;
+}
+
+/** Résultat de « Tester la connexion » : appel réel inoffensif, ou validation à blanc (aucun appel). */
+export interface ConnectionTestResult {
+  kind: 'APPEL_REEL' | 'VALIDATION_A_BLANC';
+  ok: boolean;
+  /** Point d'appel utilisé (méthode et chemin) ; absent pour une validation à blanc. */
+  endpoint?: string;
+  httpStatus?: number;
+  durationMs?: number;
+  /** Ce que l'essai prouve, et ce qu'il ne prouve pas (explicite pour l'exploitant). */
+  proves: string;
+  detail: string;
+  checks: { label: string; ok: boolean; detail?: string }[];
+}
+
 export interface PaymentConnector {
   readonly id: ConnectorId;
   readonly label: string;
@@ -133,8 +160,26 @@ export interface PaymentConnector {
   requestVerificationEvidence(input: VerificationEvidenceInput): Promise<VerificationEvidenceResult>;
   /** Interrogation « ce paiement a-t-il eu lieu ? » (si le prestataire la propose) : pièce de dossier uniquement. */
   resolvePayment?(providerIntentId: string, paymentReference: string): Promise<ProviderResolution>;
+  /** Interrogation serveur à serveur de l'état d'une intention (absente en bac à sable local). */
+  fetchIntentStatus?(providerIntentId: string): Promise<ProviderIntentStatus>;
+  /** « Tester la connexion » : point d'appel inoffensif documenté, sinon validation de configuration à blanc. */
+  testConnection?(): Promise<ConnectionTestResult>;
+  /** Schéma de signature attendu des webhooks (texte affichable). */
+  readonly signatureScheme?: string;
+  /** Opérateurs proposés au payeur. */
+  readonly operators?: readonly string[];
   /** Configuration affichable (clés masquées). */
   describe(): Record<string, unknown>;
+}
+
+/** Lecture tolérante d'un statut d'intention (listes de libellés documentées + hypothèses, À CONFIRMER). */
+export function classifyIntentStatus(raw: string | undefined, succeeded: readonly string[], failed: readonly string[], pending: readonly string[]): ProviderIntentStatus['status'] {
+  if (!raw) return 'UNKNOWN';
+  const v = raw.toLowerCase();
+  if (succeeded.includes(v)) return 'SUCCEEDED';
+  if (failed.includes(v)) return 'FAILED';
+  if (pending.includes(v)) return 'PENDING';
+  return 'UNKNOWN';
 }
 
 /** Signature absente / invalide / horodatage hors fenêtre → 401 + alerte de sécurité. */

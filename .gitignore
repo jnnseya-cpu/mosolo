@@ -36,3 +36,5 @@ infra/vps/amorcage/
 infra/gcp/.rendu/
 infra/static/.rendu/
 infra/.validation/
+# Variables non secrètes des prestataires de paiement (propres au déploiement ; modèle : prestataires.env.example)
+infra/gcp/prestataires.env

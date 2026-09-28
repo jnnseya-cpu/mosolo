@@ -23,13 +23,13 @@
  */
 import { createPublicKey, verify as edVerify, type KeyObject } from 'node:crypto';
 import { hmacSha256Hex, randomSecret, safeEqualHex, sha256Hex } from '../../../core/crypto.js';
-import { ProviderHttpClient } from './http-client.js';
-import type { ConnectorRuntime } from './koda.js';
+import { ProviderHttpClient, type CircuitSnapshot } from './http-client.js';
+import { runtimeHttpOptions, type ConnectorRuntime } from './koda.js';
 import { fromMinorUnits, parseMinorInput, toMinorUnits, toSafeJsonInteger, type ExponentTable } from './minor-units.js';
 import {
-  ConnectorConfigError, headerValue, maskSecret, modeFromKey, pick, pickString, pickTimestamp, WebhookPayloadError, WebhookVerificationError,
+  classifyIntentStatus, ConnectorConfigError, headerValue, maskSecret, modeFromKey, pick, pickString, pickTimestamp, WebhookPayloadError, WebhookVerificationError,
   type ConnectorMode, type CreatedIntent, type HeaderBag, type IntentRequest, type NormalizedProviderEvent, type PaymentConnector,
-  type VerificationEvidenceInput, type VerificationEvidenceResult, type VerifiedWebhook, type WebhookChecks,
+  type ConnectionTestResult, type ProviderIntentStatus, type VerificationEvidenceInput, type VerificationEvidenceResult, type VerifiedWebhook, type WebhookChecks,
 } from './types.js';
 
 export const BITRIPAY_DEFAULT_BASE_URL = 'https://api.bitripay.com/v1';
@@ -40,6 +40,12 @@ export const BITRIPAY_TOLERANCE_SECONDS = 300;
 export const BITRIPAY_OPERATORS = ['orange_cd', 'mpesa_cd', 'airtel_cd', 'africell_cd'] as const;
 export const BITRIPAY_ACCOUNT_HEADER = 'bitripay-account';
 const CONNECTED_ACCOUNT_RE = /^acct_[A-Za-z0-9_]{4,64}$/;
+/** Statuts d'intention (GET /payment_intents/{id}) — schéma « à la Stripe » supposé [À CONFIRMER AVEC LE PRESTATAIRE]. */
+export const BITRIPAY_STATUS_SUCCEEDED = ['succeeded', 'settled'] as const;
+export const BITRIPAY_STATUS_FAILED = ['canceled', 'cancelled', 'failed', 'expired'] as const;
+export const BITRIPAY_STATUS_PENDING = ['requires_payment_method', 'requires_action', 'processing', 'pending', 'ambiguous_hold', 'created'] as const;
+/** « Tester la connexion » : clé publique de la plateforme publiée à GET /v1/keys (documenté, lecture seule, sans effet). */
+export const BITRIPAY_PING_PATH = '/keys';
 
 /** Numéros « magiques » du bac à sable BitriPay (clé de test) : chaque issue du moteur de tentatives. */
 export const BITRIPAY_SANDBOX_MSISDNS = {
@@ -96,6 +102,7 @@ export class BitriPayConnector implements PaymentConnector {
   private readonly http?: ProviderHttpClient;
   private readonly edKey?: KeyObject;
   private readonly tolerance: number;
+  readonly signatureScheme: string;
 
   constructor(private readonly config: BitriPayConfig, runtime: ConnectorRuntime = {}) {
     this.mode = modeFromKey('BitriPay', config.apiKey);
@@ -104,6 +111,10 @@ export class BitriPayConnector implements PaymentConnector {
     this.exponents = { CDF: config.cdfExponent, USD: 2 };
     this.tolerance = config.toleranceSeconds ?? BITRIPAY_TOLERANCE_SECONDS;
     if (config.ed25519PublicKey) this.edKey = parseEd25519PublicKey(config.ed25519PublicKey);
+    this.signatureScheme = [
+      `HMAC-SHA256 (en-tête BitriPay-Signature « t=<unix>,v1=<hex> » sur « <t>.<corps brut> », fenêtre ±${this.tolerance} s)${config.hmacRequired ? ' — exigée' : ' — facultative'}`,
+      `Ed25519 (en-tête BitriPay-Signature-Ed25519, base64 sur le corps brut, clé épinglée)${config.ed25519Required ? ' — exigée' : this.edKey ? ' — vérifiée si présente' : ' — clé non configurée'}`,
+    ].join(' ; ');
     if (config.ed25519Required && !this.edKey) throw new ConnectorConfigError('Ed25519 exigé mais BITRIPAY_ED25519_PUBLIC_KEY absente.');
     if (!config.hmacRequired && !config.ed25519Required) throw new ConnectorConfigError('BitriPay : au moins un schéma de signature doit être exigé.');
     if (config.connectedAccountId !== undefined && !CONNECTED_ACCOUNT_RE.test(config.connectedAccountId)) {
@@ -114,8 +125,7 @@ export class BitriPayConnector implements PaymentConnector {
         provider: 'bitripay', baseUrl: config.baseUrl, apiKey: config.apiKey,
         // BitriPay documente l'Idempotency-Key : un POST rejoué avec la même clé est sans double effet.
         idempotentPostsWithKey: true,
-        ...(runtime.fetch ? { fetch: runtime.fetch } : {}), ...(runtime.logger ? { logger: runtime.logger } : {}),
-        ...(runtime.sleep ? { sleep: runtime.sleep } : {}), ...(runtime.timeoutMs ? { timeoutMs: runtime.timeoutMs } : {}),
+        ...runtimeHttpOptions(runtime),
         ...(config.connectedAccountId ? { extraHeaders: { [BITRIPAY_ACCOUNT_HEADER]: config.connectedAccountId } } : {}),
       });
     }
@@ -123,6 +133,76 @@ export class BitriPayConnector implements PaymentConnector {
 
   get sandbox(): boolean {
     return this.mode !== 'LIVE';
+  }
+
+  get operators(): readonly string[] {
+    return this.config.allowedOperators;
+  }
+
+  circuitSnapshot(): CircuitSnapshot | null {
+    return this.http?.circuitSnapshot() ?? null;
+  }
+
+  /** GET /payment_intents/{id} (documenté) ; forme de la réponse [À CONFIRMER AVEC LE PRESTATAIRE] : parseur tolérant. */
+  async fetchIntentStatus(providerIntentId: string): Promise<ProviderIntentStatus> {
+    if (!this.http) throw new WebhookPayloadError('STATUS_QUERY_UNAVAILABLE', 'BitriPay : bac à sable local, aucune interrogation serveur à serveur possible.');
+    const res = await this.http.request<Record<string, unknown>>('GET', `/payment_intents/${encodeURIComponent(providerIntentId)}`);
+    const obj = pick(res, 'data.object', 'data') ?? res;
+    const rawStatus = pickString(obj, 'status') ?? null;
+    let amount;
+    try {
+      amount = this.amountOf(obj, false);
+    } catch {
+      amount = undefined;
+    }
+    return {
+      providerIntentId: pickString(obj, 'id') ?? providerIntentId,
+      status: classifyIntentStatus(rawStatus ?? undefined, BITRIPAY_STATUS_SUCCEEDED, BITRIPAY_STATUS_FAILED, BITRIPAY_STATUS_PENDING),
+      rawStatus, ...(amount ? { amount } : {}),
+    };
+  }
+
+  /**
+   * « Tester la connexion » : en mode réel, GET /v1/keys (clé publique Ed25519 de la plateforme, documentée) — appel
+   * inoffensif ; si une clé Ed25519 est épinglée, elle est comparée à celle publiée. En bac à sable local : validation
+   * à blanc de la configuration, sans aucun appel.
+   */
+  async testConnection(): Promise<ConnectionTestResult> {
+    const checks: ConnectionTestResult['checks'] = [
+      { label: 'Secret de webhook présent', ok: !!this.config.webhookSecret },
+      { label: 'Au moins un schéma de signature exigé', ok: this.config.hmacRequired || this.config.ed25519Required },
+      { label: 'Alias du compte de règlement défini', ok: !!this.settlementAccountAlias, detail: this.settlementAccountAlias },
+      { label: 'Opérateurs définis', ok: this.config.allowedOperators.length > 0, detail: this.config.allowedOperators.join(', ') },
+      { label: 'URL de l’API en https', ok: /^https:\/\//.test(this.config.baseUrl) || this.mode !== 'LIVE', detail: this.config.baseUrl },
+    ];
+    if (!this.http) {
+      return {
+        kind: 'VALIDATION_A_BLANC', ok: checks.every((c) => c.ok), checks,
+        proves: 'Validation à blanc : cohérence de la configuration seulement. Aucun appel n’a été fait au prestataire (bac à sable local, aucune clé API).',
+        detail: 'Bac à sable local : renseigner BITRIPAY_API_KEY pour un essai réel.',
+      };
+    }
+    const started = Date.now();
+    try {
+      const res = await this.http.request<unknown>('GET', BITRIPAY_PING_PATH);
+      if (this.edKey) {
+        const pinned = this.edKey.export({ format: 'der', type: 'spki' }).subarray(12).toString('base64');
+        const published = JSON.stringify(res);
+        const pem = this.edKey.export({ format: 'pem', type: 'spki' }).toString().replace(/-----[^-]+-----|\s/g, '');
+        checks.push({ label: 'Clé Ed25519 épinglée identique à celle publiée par GET /v1/keys', ok: published.includes(pinned) || published.includes(pem) });
+      }
+      return {
+        kind: 'APPEL_REEL', ok: checks.every((c) => c.ok), endpoint: `GET ${BITRIPAY_PING_PATH}`, httpStatus: 200, durationMs: Date.now() - started, checks,
+        proves: 'Appel réel inoffensif (lecture des clés publiques de la plateforme) : prouve la joignabilité de l’API BitriPay et, si ce point exige l’authentification, la validité de la clé (À CONFIRMER AVEC LE PRESTATAIRE).',
+        detail: 'API BitriPay joignable.',
+      };
+    } catch (e) {
+      const status = e instanceof Error && 'providerStatus' in e ? (e as { providerStatus?: number }).providerStatus : undefined;
+      return {
+        kind: 'APPEL_REEL', ok: false, endpoint: `GET ${BITRIPAY_PING_PATH}`, ...(status !== undefined ? { httpStatus: status } : {}), durationMs: Date.now() - started, checks,
+        proves: 'Appel réel inoffensif en échec : l’API BitriPay n’a pas répondu correctement.', detail: e instanceof Error ? e.message : 'erreur',
+      };
+    }
   }
 
   async createIntent(req: IntentRequest): Promise<CreatedIntent> {

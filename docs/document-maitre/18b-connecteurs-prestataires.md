@@ -176,3 +176,65 @@ Ce modèle est compatible avec la doctrine de MOSOLO **à quatre conditions**, q
 
 **Bac à sable.** Avec une clé de test, les numéros suivants pilotent le moteur de tentatives de BitriPay et permettent la recette de chaque issue sans opérateur : `+243000000501` réussite ; `+243000000404` portefeuille introuvable ; `+243000000408` résultat ambigu (`payment_intent.ambiguous_hold`) ; `+243000000500` délai puis réussite ; `+243000000503` opérateur indisponible ; tout numéro finissant par `0000` refus du payeur. Les autres services de BitriPay (transferts, virements groupés, change, abonnements, crédit, diaspora, paiements hors ligne, agents d'IA) **ne sont pas raccordés** : ils sortent du périmètre d'une recette publique et exigeraient chacun une base légale et une convention propres.
 
+
+## 18.16 Prêts à recevoir les clés et le webhook : confirmation serveur à serveur, suspens, disjoncteur, état de raccordement (28/09/2026)
+
+Ajout, sans rien retirer des §§ 18.7 à 18.15. Mode d'emploi complet (quoi demander à chaque prestataire, où coller chaque
+valeur, adresse du webhook, essai, mise en service, retour au bac à sable) : [`docs/prestataires-paiement.md`](../prestataires-paiement.md).
+
+**Confirmation serveur à serveur avant quittance.** Le Cahier (§ 19.2 et 19.3) exige, pour la confirmation du
+prestataire, « rappel signé, contrôle anti-rejeu, vérification serveur à serveur ». En mode réel (clé de test ou de
+production), chaque paiement réussi annoncé par webhook, une fois la signature vérifiée sur le corps brut, déclenche une
+interrogation de l'état de l'intention chez le prestataire (BitriPay `GET /payment_intents/{id}`, KODA `GET /intents/{id}`)
+**avant** toute quittance : payé et montant concordant ⇒ confirmation commune (§ 18.7) et l'ordre porte la preuve
+`serverToServerCheck` ; état non final ⇒ 409, prestataire injoignable ⇒ 503 avec `Retry-After` (événement non mémorisé :
+le prestataire le renvoie) ; état contredit ⇒ 422, alerte **critique** `PROVIDER_STATUS_CONTRADICTION` et mise en suspens.
+Harmonisation : la quittance **provisoire** reste émise à la confirmation (désormais webhook + interrogation), la
+quittance **définitive** reste émise au rapprochement avec le relevé du compte public (§ 18.9) ; en bac à sable local
+(démonstration seulement), l'ordre porte `BAC_A_SABLE_LOCAL`. La voie synchrone (simulation) refuse un connecteur réel.
+
+**Suspens.** Un événement signé portant une référence inconnue, un montant ou une devise différents, ou un état contredit
+est **mis en suspens** (`payments.providerSuspense`, une entrée par événement, jamais portée sur une obligation) et
+apparaît dans les files d'exception du Trésor : `PROVIDER_EVENT_UNKNOWN_REFERENCE` (paiement sans obligation) et
+`PROVIDER_EVENT_MISMATCH` (écart de montant). Le refus 422 et l'alerte existants sont conservés.
+
+**Rejeu après redémarrage.** La mémoire des identifiants d'événement (`payments.webhookEvents`) est persistée : un rejeu
+reste sans effet après un redémarrage, sans appel au prestataire (seule garde pour KODA, qui ne signe pas d'horodatage).
+
+**Appels sortants.** Délai 10 s, 2 nouvelles tentatives bornées, **disjoncteur** (ouvert après 5 échecs consécutifs
+pendant 30 s, puis un appel d'essai) — valeurs par défaut, à confirmer par le maître d'ouvrage. Prestataire déclaré
+indisponible ⇒ `503 PROVIDER_CIRCUIT_OPEN` clair avec `Retry-After`, aucun appel tenté. Le `502 PROVIDER_UNAVAILABLE`
+d'un appel en échec est conservé. Hors démonstration, un connecteur sans clé API (configuration partielle) ne crée
+aucune intention (`503 PROVIDER_NOT_CONFIGURED`).
+
+**Démarrage.** Refus supplémentaires, avec un message nommant la variable : secret de démonstration avec une vraie clé ;
+`BITRIPAY_ACCOUNT_ID` sans clé ; URL de l'API ou URL de retour KODA non https en réel.
+
+**État de raccordement.** Écran « Prestataires de paiement — état de raccordement » (dans « Prestataires connectés »),
+routes `GET /v1/providers/readiness` et `POST /v1/providers/{p}/test-connection`, droit `provider.readiness` (R17, R26,
+R28 ; R28 reçoit aussi `provider.read`) : variables présentes ou manquantes (**noms seulement**, jamais une valeur
+secrète), mode, adresse exacte du webhook construite depuis `MOSOLO_PUBLIC_URL`, schéma de signature, dernier webhook
+et résultat de sa vérification (`payments.webhookReceptions`, y compris les refus), dernière interrogation serveur à
+serveur (`payments.statusQueries`), opérateurs, alias de règlement du coffre, disjoncteur, points à confirmer avec le
+prestataire ; graphiques « webhooks par résultat » et « ordres par état et par prestataire ». « Tester la connexion » :
+BitriPay `GET /v1/keys` (appel réel inoffensif, compare la clé Ed25519 épinglée), KODA `GET /v1/openapi.json`
+(joignabilité seulement) ; sans clé : validation à blanc ; le résultat dit lequel.
+
+**Déploiement.** `infra/gcp/secrets-prestataires.sh <bitripay|koda>` (saisie sans écho vers Secret Manager), raccordement
+automatique par `deploy.sh` (`EXTRA_SECRETS`), variables non secrètes dans `infra/gcp/prestataires.env` ; VPS :
+`infra/vps/.env.example` commenté.
+
+**Points à vérifier (compléments du § 18.14).** Les sites des prestataires n'étaient pas joignables le 28/09/2026 depuis
+l'environnement de construction : aucune hypothèse n'a pu être vérifiée en ligne.
+
+| # | Prestataire | Point | Hypothèse retenue dans le socle |
+|---|---|---|---|
+| 20 | Les deux | Forme de la réponse de l'interrogation d'état | Champ `status` (BitriPay `succeeded`… ; KODA `verified`, `paid`…), montant en unités mineures [À CONFIRMER AVEC LE PRESTATAIRE] |
+| 21 | Les deux | URL de bac à sable distincte | Aucune : le mode est choisi par la clé [À CONFIRMER AVEC LE PRESTATAIRE] |
+| 22 | Les deux | Politique de renvoi des webhooks, codes d'erreur, adresses IP d'émission | Toute réponse non 2xx est renvoyée ; aucun filtrage IP [À CONFIRMER AVEC LE PRESTATAIRE] |
+| 23 | BitriPay | `GET /v1/keys` comme essai de connexion | Sans effet ; authentification exigée ou non inconnue [À CONFIRMER AVEC LE PRESTATAIRE] |
+| 24 | KODA | Point d'appel authentifié sans effet (« ping », « solde ») | Aucun connu : `GET /v1/openapi.json`, joignabilité seulement [À CONFIRMER AVEC LE PRESTATAIRE] |
+| 25 | BitriPay | Push Mobile Money direct (numéro du payeur) | Non envoyé : page / QR du prestataire [À CONFIRMER AVEC LE PRESTATAIRE] |
+
+Tests : `backend/test/prestataires-raccordement.test.ts` (simulateur HTTP local, charges utiles signées réalistes, les deux
+prestataires, parcours complet et cas négatifs).

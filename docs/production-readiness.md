@@ -661,3 +661,30 @@ inchangés dans leur comportement.
 16. **Bloqueurs restants** : B1 – B10.
 17. **Actions externes requises** : prestataires de paiement, banque, opérateurs télécom (identifiants réels), HSM, hébergement national, domaine officiel et TLS, actes juridiques, pentest tiers, astreinte, équipe d'exploitation.
 18. **Conclusion** : un socle logiciel sérieux et testé ; la production réelle dépend désormais d'actions externes, pas du code.
+
+---
+
+## 20. Prestataires de paiement BitriPay et KODA : prêts pour les clés et le webhook (28/09/2026)
+
+Ajout ; les sections précédentes sont inchangées. Le bloqueur **B1** reste **EXTERNE** (clés, conventions, habilitation
+BCC), mais le logiciel est désormais prêt à recevoir les clés et à déclarer l'adresse du webhook. Mode d'emploi :
+[`docs/prestataires-paiement.md`](prestataires-paiement.md).
+
+| Exigence | État | Preuve |
+|---|---|---|
+| Connecteur réel enregistré avec de vraies clés hors démonstration ; secrets de démonstration refusés ; démarrage refusé en configuration partielle (message nommant la variable) | FAIT | `prestataires-raccordement.test.ts` « Configuration réelle et démarrage » |
+| Signature sur le corps brut, temps constant, fenêtre d'horodatage (BitriPay), rejeu sans effet **après redémarrage** | FAIT | idem, « rejeu … APRÈS REDÉMARRAGE », « horodatage signé trop ancien » |
+| Référence inconnue, écart de montant ou de devise ⇒ suspens, jamais sur l'obligation ; doublon ; événement hors ordre ignoré et journalisé | FAIT | idem |
+| Confirmation serveur à serveur avant quittance | FAIT | idem, parcours de bout en bout (409 puis 200) et « contredit » |
+| Règlement toujours à l'alias verrouillé du coffre | FAIT | idem, « compte de règlement » |
+| Délai, nouvelles tentatives bornées, disjoncteur, 503 clair | FAIT (valeurs par défaut, à confirmer) | idem, « délai dépassé » |
+| Écran d'état de raccordement (R17, R26, R28), « Tester la connexion » explicite | FAIT | idem, « Vue … » |
+| Secret Manager (saisie sans écho) et Cloud Run (`EXTRA_SECRETS`), `.env` VPS commenté, `MOSOLO_PUBLIC_URL` | FAIT (DRY_RUN) | `DRY_RUN=1 … secrets-prestataires.sh bitripay`, `DRY_RUN=1 … deploy.sh` ; shellcheck sans avertissement |
+| Contrat d'API vérifié sur la documentation publique des prestataires | **NON FAIT — EXTERNE** | Sites injoignables depuis l'environnement de construction ; hypothèses listées « À CONFIRMER AVEC LE PRESTATAIRE » |
+| Essai réel en bac à sable du prestataire, rapprochement avec un relevé réel, habilitation BCC, validation du compte à deux personnes | **NON FAIT — EXTERNE** | Liste de contrôle de mise en service (`prestataires-paiement.md` § 7) |
+
+Écart signalé au maître d'ouvrage pour arbitrage (harmonisé, rien retiré) : le Cahier réserve la quittance
+**définitive** à la confirmation serveur à serveur, le document maître la réserve au rapprochement. Le socle applique
+les deux : quittance **provisoire** seulement après webhook signé **et** interrogation serveur à serveur, quittance
+**définitive** au rapprochement avec le relevé. De même, un secret de webhook sans clé API hors démonstration reste
+admis au démarrage (comportement existant, testé) mais ne permet plus ni intention ni quittance (503).

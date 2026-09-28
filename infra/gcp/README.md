@@ -77,6 +77,8 @@ Paramètres (tous facultatifs sauf `PROJECT_ID`) — valeurs chiffrées **par d�
 | `INGRESS`, `TRUST_PROXY` | `all`, `1` | Avec domaine : `INGRESS=internal-and-cloud-load-balancing` ferme l'adresse `*.run.app` |
 | `SKIP_BUILD`, `IMAGE_TAG` | `0`, `<commit>-<horodatage>` | Republier une image existante (changement de secret, de paramètre) |
 | `EXTRA_SECRETS` | — | `MOSOLO_SMS_PROVIDER_KEY=mosolo-sms-provider-key,…` : secrets ajoutés plus tard (créer le secret d'abord) |
+| `PRESTATAIRES_SECRETS` | `auto` | Raccorde au service les secrets `mosolo-bitripay-*` / `mosolo-koda-*` qui ont une version (saisie : `./infra/gcp/secrets-prestataires.sh <bitripay\|koda>`, sans écho) ; `non` : aucun |
+| `PRESTATAIRES_ENV_FILE` | `infra/gcp/prestataires.env` | Variables NON secrètes des prestataires (URL, opérateurs, alias du coffre, `KODA_SUCCESS_URL`) ; modèle `prestataires.env.example` ; tout nom de secret y est refusé. Voir `docs/prestataires-paiement.md` |
 | `DEMO_MIN_INSTANCES` | `0` | Démonstration : 0 = mise en veille hors visite (données réinitialisées) |
 
 ## Variables de l'application

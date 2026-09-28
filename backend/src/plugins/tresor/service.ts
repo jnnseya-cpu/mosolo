@@ -52,6 +52,7 @@ export const REFUND_EXTRA_APPROVAL_THRESHOLDS: Partial<Record<CurrencyCode, Mone
 export const MONEY_EXCEPTION_TYPES: ReadonlySet<ExceptionType> = new Set<ExceptionType>([
   'ORPHAN_CREDIT', 'CREDIT_WITHOUT_CONFIRMATION', 'UNKNOWN_ACCOUNT', 'DUPLICATE_CREDIT', 'AMOUNT_MISMATCH', 'MISSING_SETTLEMENT',
   'PROVIDER_AMBIGUOUS', 'UNAPPLIED_PAYMENT', 'WRONG_ACCOUNT', 'ACCOUNT_VERSION_MISMATCH', 'RECEIPT_NOT_FINALIZABLE', 'CREDIT_GROUPE_ECART',
+  'PROVIDER_EVENT_UNKNOWN_REFERENCE', 'PROVIDER_EVENT_MISMATCH',
 ]);
 
 /** Écritures appartenant à un objet métier : corrigées par leur propre opération (contrepassation, remboursement, apurement). */

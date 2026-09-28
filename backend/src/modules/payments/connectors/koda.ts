@@ -11,12 +11,12 @@
  * préfixe des clés de test, corps de POST /intents/{id}/verify.
  */
 import { hmacSha256Hex, randomSecret, safeEqualHex, sha256Hex } from '../../../core/crypto.js';
-import { ProviderHttpClient, type FetchLike, type HttpLogger } from './http-client.js';
+import { ProviderHttpClient, type CircuitOptions, type CircuitSnapshot, type FetchLike, type HttpLogger } from './http-client.js';
 import { fromMinorUnits, parseMinorInput, toMinorUnits, toSafeJsonInteger, type ExponentTable } from './minor-units.js';
 import {
-  headerValue, maskSecret, modeFromKey, pick, pickString, pickTimestamp, WebhookPayloadError, WebhookVerificationError,
+  classifyIntentStatus, headerValue, maskSecret, modeFromKey, pick, pickString, pickTimestamp, WebhookPayloadError, WebhookVerificationError,
   type ConnectorMode, type CreatedIntent, type HeaderBag, type IntentRequest, type NormalizedProviderEvent, type PaymentConnector,
-  type VerificationEvidenceInput, type VerificationEvidenceResult, type VerifiedWebhook,
+  type ConnectionTestResult, type ProviderIntentStatus, type VerificationEvidenceInput, type VerificationEvidenceResult, type VerifiedWebhook,
 } from './types.js';
 
 export const KODA_DEFAULT_BASE_URL = 'https://kodajnn.com/v1';
@@ -25,6 +25,12 @@ export const KODA_SIGNATURE_HEADER = 'x-koda-signature';
 /** CDF à zéro décimale chez KODA (≠ MOSOLO : 2 décimales). */
 export const KODA_EXPONENTS: ExponentTable = { CDF: 0, USD: 2 };
 export const KODA_SUCCESS_EVENTS = ['payment.verified', 'payment.verified.late'] as const;
+/** Libellés de statut d'intention KODA (GET /intents/{id}) — [À CONFIRMER AVEC LE PRESTATAIRE] : non documentés. */
+export const KODA_STATUS_SUCCEEDED = ['verified', 'paid', 'succeeded', 'completed'] as const;
+export const KODA_STATUS_FAILED = ['failed', 'canceled', 'cancelled', 'expired'] as const;
+export const KODA_STATUS_PENDING = ['pending', 'created', 'processing', 'requires_payment'] as const;
+/** Point d'appel de « Tester la connexion » : spécification publiée /v1/openapi.json (lecture seule, sans effet). */
+export const KODA_PING_PATH = '/openapi.json';
 
 export interface KodaConfig {
   apiKey?: string;
@@ -41,6 +47,21 @@ export interface ConnectorRuntime {
   logger?: HttpLogger;
   sleep?: (ms: number) => Promise<void>;
   timeoutMs?: number;
+  maxRetries?: number;
+  /** Disjoncteur (défauts : DEFAULT_CIRCUIT, à confirmer). */
+  circuit?: Partial<CircuitOptions>;
+  /** Horloge du disjoncteur et des mesures (tests). */
+  now?: () => number;
+}
+
+/** Options communes du client HTTP d'un connecteur, tirées de l'environnement d'exécution. */
+export function runtimeHttpOptions(runtime: ConnectorRuntime) {
+  return {
+    ...(runtime.fetch ? { fetch: runtime.fetch } : {}), ...(runtime.logger ? { logger: runtime.logger } : {}),
+    ...(runtime.sleep ? { sleep: runtime.sleep } : {}), ...(runtime.timeoutMs ? { timeoutMs: runtime.timeoutMs } : {}),
+    ...(runtime.maxRetries !== undefined ? { maxRetries: runtime.maxRetries } : {}),
+    ...(runtime.circuit ? { circuit: runtime.circuit } : {}), ...(runtime.now ? { now: runtime.now } : {}),
+  };
 }
 
 /** Signature attendue d'un webhook KODA (utilitaire démo / tests). */
@@ -54,6 +75,7 @@ export class KodaConnector implements PaymentConnector {
   readonly mode: ConnectorMode;
   readonly settlementAccountAlias: string;
   readonly exponents: ExponentTable;
+  readonly signatureScheme = 'HMAC-SHA256 hexadécimal du corps brut, en-tête x-koda-signature (préfixe « sha256= » toléré) ; aucun horodatage signé connu : anti-rejeu par identifiant d’événement persistant';
   private readonly http?: ProviderHttpClient;
 
   constructor(private readonly config: KodaConfig, runtime: ConnectorRuntime = {}) {
@@ -65,14 +87,81 @@ export class KodaConnector implements PaymentConnector {
         provider: 'koda', baseUrl: config.baseUrl, apiKey: config.apiKey,
         // Idempotence d'un POST rejoué non documentée chez KODA : aucune nouvelle tentative de POST [À VÉRIFIER].
         idempotentPostsWithKey: false,
-        ...(runtime.fetch ? { fetch: runtime.fetch } : {}), ...(runtime.logger ? { logger: runtime.logger } : {}),
-        ...(runtime.sleep ? { sleep: runtime.sleep } : {}), ...(runtime.timeoutMs ? { timeoutMs: runtime.timeoutMs } : {}),
+        ...runtimeHttpOptions(runtime),
       });
     }
   }
 
   get sandbox(): boolean {
     return this.mode !== 'LIVE';
+  }
+
+  get operators(): readonly string[] {
+    return this.config.operators;
+  }
+
+  /** État du disjoncteur des appels sortants (absent en bac à sable local). */
+  circuitSnapshot(): CircuitSnapshot | null {
+    return this.http?.circuitSnapshot() ?? null;
+  }
+
+  /** GET /intents/{id} (documenté) ; forme de la réponse [À CONFIRMER AVEC LE PRESTATAIRE] : parseur tolérant. */
+  async fetchIntentStatus(providerIntentId: string): Promise<ProviderIntentStatus> {
+    if (!this.http) throw new WebhookPayloadError('STATUS_QUERY_UNAVAILABLE', 'KODA : bac à sable local, aucune interrogation serveur à serveur possible.');
+    const res = await this.http.request<Record<string, unknown>>('GET', `/intents/${encodeURIComponent(providerIntentId)}`);
+    const rawStatus = pickString(res, 'status', 'intent.status', 'data.status') ?? null;
+    const minor = parseMinorInput(pick(res, 'amount', 'intent.amount', 'data.amount'));
+    const currency = pickString(res, 'currency', 'intent.currency', 'data.currency')?.toUpperCase();
+    let amount;
+    if (minor !== undefined && currency) {
+      try {
+        amount = fromMinorUnits(minor, currency, this.exponents);
+      } catch {
+        amount = undefined;
+      }
+    }
+    return {
+      providerIntentId: pickString(res, 'intent_id', 'id', 'intent.id') ?? providerIntentId,
+      status: classifyIntentStatus(rawStatus ?? undefined, KODA_STATUS_SUCCEEDED, KODA_STATUS_FAILED, KODA_STATUS_PENDING),
+      rawStatus, ...(amount ? { amount } : {}),
+    };
+  }
+
+  /**
+   * « Tester la connexion » : KODA ne documente (à notre connaissance) aucun point d'appel « ping » ou « solde ». En mode
+   * réel : GET /v1/openapi.json (spécification publiée, lecture seule) — prouve la joignabilité, PAS la validité de la
+   * clé. En bac à sable local : validation à blanc de la configuration, sans aucun appel.
+   */
+  async testConnection(): Promise<ConnectionTestResult> {
+    const checks = [
+      { label: 'Secret de webhook présent', ok: !!this.config.webhookSecret },
+      { label: 'Alias du compte de règlement défini', ok: !!this.settlementAccountAlias, detail: this.settlementAccountAlias },
+      { label: 'Opérateurs définis', ok: this.config.operators.length > 0, detail: this.config.operators.join(', ') },
+      { label: 'URL de retour (success_url) en https', ok: /^https:\/\//.test(this.config.successUrl) || this.mode === 'SANDBOX_LOCAL', detail: this.config.successUrl },
+      { label: 'URL de l’API en https', ok: /^https:\/\//.test(this.config.baseUrl) || this.mode !== 'LIVE', detail: this.config.baseUrl },
+    ];
+    if (!this.http) {
+      return {
+        kind: 'VALIDATION_A_BLANC', ok: checks.every((c) => c.ok), checks,
+        proves: 'Validation à blanc : cohérence de la configuration seulement. Aucun appel n’a été fait au prestataire (bac à sable local, aucune clé API).',
+        detail: 'Bac à sable local : renseigner KODA_API_KEY pour un essai réel.',
+      };
+    }
+    const started = Date.now();
+    try {
+      await this.http.request('GET', KODA_PING_PATH);
+      return {
+        kind: 'APPEL_REEL', ok: checks.every((c) => c.ok), endpoint: `GET ${KODA_PING_PATH}`, httpStatus: 200, durationMs: Date.now() - started, checks,
+        proves: 'Appel réel inoffensif (lecture de la spécification publiée) : prouve la joignabilité de l’API KODA. Ne prouve PAS la validité de la clé API (point d’appel authentifié sans effet non documenté — À CONFIRMER AVEC LE PRESTATAIRE).',
+        detail: 'API KODA joignable.',
+      };
+    } catch (e) {
+      const status = e instanceof Error && 'providerStatus' in e ? (e as { providerStatus?: number }).providerStatus : undefined;
+      return {
+        kind: 'APPEL_REEL', ok: false, endpoint: `GET ${KODA_PING_PATH}`, ...(status !== undefined ? { httpStatus: status } : {}), durationMs: Date.now() - started, checks,
+        proves: 'Appel réel inoffensif en échec : l’API KODA n’a pas répondu correctement.', detail: e instanceof Error ? e.message : 'erreur',
+      };
+    }
   }
 
   async createIntent(req: IntentRequest): Promise<CreatedIntent> {

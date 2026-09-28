@@ -19,6 +19,7 @@ import type { UIKey } from '../../lib/i18n';
 import { BarChartViz, ChartGrid, StatusDistribution, fmtNombre } from '../../components/viz';
 import { countBy } from '../../lib/aggregate';
 import { etatsDepuis } from '../../pages/visuels';
+import { Raccordement } from './Raccordement';
 
 interface Connector {
   id: string; label: string; mode: 'SANDBOX_LOCAL' | 'TEST' | 'LIVE'; baseUrl: string; apiKey: string; webhookSecret: string;
@@ -50,6 +51,8 @@ export default function Prestataires() {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const canSimulate = !!user?.roles.some((r) => r === 'R17' || r === 'R26');
+  // État de raccordement (clés, webhook, signature) : Trésor, administration de la plateforme, sécurité.
+  const canReadiness = !!user?.roles.some((r) => r === 'R17' || r === 'R26' || r === 'R28');
 
   async function simulate(o: Order, event: 'succeeded' | 'settled' | 'ambiguous') {
     setBusy(`${o.paymentReference}:${event}`); setMsg(null);
@@ -72,6 +75,7 @@ export default function Prestataires() {
       <ExampleNotice text="Prestataires candidats, non désignés : l’activation en production exige l’agrément BCC, une convention et une procédure de passation. Sans clé API, chaque connecteur fonctionne en bac à sable local." />
       {/* Habilitation des agrégateurs et prestataires (J9, J20) : l'activation en production attend la base légale. */}
       <AttenteBaseLegale fonction="AGREGATEURS_ACTIVATION" />
+      {canReadiness && <Raccordement />}
       {q.loading && <Loading />}
       {!!q.error && <ErrorState error={q.error} onRetry={q.reload} />}
       {q.data && (

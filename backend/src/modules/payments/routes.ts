@@ -13,6 +13,7 @@ import { signKodaWebhook, KODA_DEMO_WEBHOOK_SECRET } from './connectors/koda.js'
 import { toMinorUnits } from './connectors/minor-units.js';
 import { randomUUID } from 'node:crypto';
 import { orderView, PAYMENT_CHANNELS } from './service.js';
+import { buildReadiness } from './readiness.js';
 
 // `.strict()` : le client ne peut fournir ni montant ni compte bénéficiaire.
 const orderSchema = z.object({
@@ -61,7 +62,8 @@ export function registerPaymentRoutes(app: FastifyInstance, ctx: AppContext): vo
   // Webhooks serveur à serveur des prestataires connectés : corps BRUT vérifié avant toute interprétation.
   for (const provider of CONNECTOR_IDS) {
     app.post(`/v1/providers/${provider}/webhooks`, async (req, reply) => {
-      const res = ctx.payments.handleConnectorWebhook(provider, req.headers, req.rawBody ?? '');
+      // Signature vérifiée sur le corps BRUT, puis confirmation serveur à serveur avant toute quittance.
+      const res = await ctx.payments.receiveConnectorWebhook(provider, req.headers, req.rawBody ?? '');
       return reply.code(200).send(res);
     });
   }
@@ -102,6 +104,19 @@ export function registerPaymentRoutes(app: FastifyInstance, ctx: AppContext): vo
         'Le prestataire règle au compte public du coffre ; aucun frais n’est prélevé sur la recette.',
       ],
     };
+  });
+
+  // « Prestataires de paiement — état de raccordement » (R17, R26, R28) : noms de variables et présence, jamais de valeur.
+  app.get('/v1/providers/readiness', async (req) => {
+    const user = requireUser(req);
+    authorize(user, 'provider.readiness');
+    return buildReadiness(ctx);
+  });
+
+  // « Tester la connexion » : appel réel inoffensif documenté, sinon validation à blanc (le résultat dit lequel).
+  app.post<{ Params: { provider: string } }>('/v1/providers/:provider/test-connection', async (req) => {
+    const user = requireUser(req);
+    return ctx.payments.testProviderConnection(user, req.params.provider);
   });
 
   // Démonstration : simule l'envoi, par le prestataire, d'un webhook SIGNÉ (secret de démonstration) vers la route réelle.

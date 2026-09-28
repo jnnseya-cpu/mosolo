@@ -55,6 +55,12 @@ BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
 SECRET_LOCATIONS="${SECRET_LOCATIONS:-$REGION}"
 BOOTSTRAP_FILE="${BOOTSTRAP_FILE:-}"             # fichier local mosolo-amorcage/1 (facultatif)
 EXTRA_SECRETS="${EXTRA_SECRETS:-}"               # « VARIABLE=nom-du-secret,… » (clés fournisseurs ajoutées plus tard)
+# Prestataires de paiement BitriPay / KODA (docs/prestataires-paiement.md) : « auto » raccorde au service chaque secret
+# mosolo-bitripay-* / mosolo-koda-* qui possède une version (saisie : ./infra/gcp/secrets-prestataires.sh <prestataire>) ;
+# « non » n'en raccorde aucun. Variables non secrètes (URL, opérateurs, alias du coffre) : PRESTATAIRES_ENV_FILE.
+PRESTATAIRES_SECRETS="${PRESTATAIRES_SECRETS:-auto}"
+PRESTATAIRES_ENV_FILE="${PRESTATAIRES_ENV_FILE:-${LIB_DIR}/prestataires.env}"
+PRESTATAIRES_ENV=()                              # « VARIABLE=valeur » non secrètes, validées (voir lire_prestataires_env)
 
 G=(--project="$PROJECT_ID" --quiet)
 IMAGE_BASE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/mosolo"
@@ -146,6 +152,26 @@ volume_bucket_yaml() { # <nom du volume> <bucket>
   printf '      - name: %s\n        csi:\n          driver: gcsfuse.run.googleapis.com\n          readOnly: false\n          volumeAttributes:\n            bucketName: %s\n            mountOptions: "uid=1000,gid=1000,file-mode=600,dir-mode=700,implicit-dirs"\n' "$1" "$2"
 }
 
+# Variables non secrètes des prestataires : seuls les noms de VARIABLES_PRESTATAIRES_PUBLIQUES sont admis ; un nom de
+# secret (clé API, secret de webhook) est REFUSÉ (il doit passer par Secret Manager). Aucune valeur n'est affichée.
+lire_prestataires_env() {
+  local f="$1" ligne nom valeur admis n
+  [[ -f "$f" ]] || { info "prestataires : ${f#"$REPO_ROOT"/} absent (valeurs par défaut des connecteurs)"; return 0; }
+  while IFS= read -r ligne || [[ -n "$ligne" ]]; do
+    [[ -z "${ligne// }" || "$ligne" == \#* ]] && continue
+    nom="${ligne%%=*}"; valeur="${ligne#*=}"
+    if [[ "$nom" == *_API_KEY || "$nom" == *_WEBHOOK_SECRET || "$nom" == *_ED25519_PUBLIC_KEY ]]; then
+      erreur "${f} : ${nom} est un secret — le saisir par ./infra/gcp/secrets-prestataires.sh, jamais dans ce fichier."; exit 1
+    fi
+    admis=0
+    for n in "${VARIABLES_PRESTATAIRES_PUBLIQUES[@]}"; do [[ "$n" == "$nom" ]] && admis=1; done
+    if [[ "$admis" != 1 ]]; then erreur "${f} : variable non admise « ${nom} »."; exit 1; fi
+    if [[ "$valeur" == *\"* || "$valeur" == *\\* ]]; then erreur "${f} : ${nom} contient un caractère interdit (guillemet, barre oblique inverse)."; exit 1; fi
+    PRESTATAIRES_ENV+=("${nom}=${valeur}")
+  done < "$f"
+  info "prestataires : ${#PRESTATAIRES_ENV[@]} variable(s) non secrète(s) lue(s) dans ${f#"$REPO_ROOT"/} (noms : $(for x in "${PRESTATAIRES_ENV[@]}"; do printf '%s ' "${x%%=*}"; done))"
+}
+
 rendre_service() { # <fichier>
   local public_url="$1" f="$2" pair
   {
@@ -221,6 +247,8 @@ EOF
       env_yaml MOSOLO_BOOTSTRAP_CREDENTIALS_OUT /var/lib/mosolo/identifiants-initiaux.json
     fi
     for pair in "${SECRETS_APP[@]}" $(tr ',' ' ' <<<"$EXTRA_SECRETS"); do secret_yaml "${pair%%=*}" "${pair#*=}"; done
+    # Prestataires de paiement : variables non secrètes (MOSOLO_PUBLIC_URL ci-dessus sert à l'adresse des webhooks).
+    for pair in "${PRESTATAIRES_ENV[@]}"; do env_yaml "${pair%%=*}" "${pair#*=}"; done
     printf '        volumeMounts:\n        - name: donnees\n          mountPath: /var/lib/mosolo\n'
     [[ -n "$BOOTSTRAP_FILE" ]] && printf '        - name: amorcage\n          mountPath: /amorcage\n          readOnly: true\n'
     printf '      volumes:\n'
@@ -487,6 +515,22 @@ if [[ -n "$BOOTSTRAP_FILE" ]]; then
   info "amorçage : une nouvelle version s'ajoute par « gcloud secrets versions add mosolo-bootstrap --data-file=<fichier> »"
 fi
 avertir "secrets des prestataires (mosolo-provider-secret-*) : valeurs aléatoires provisoires, à REMPLACER par celles convenues avec chaque prestataire (gcloud secrets versions add … --data-file=-)."
+
+etape "Prestataires de paiement BitriPay / KODA : secrets saisis → raccordés au service (EXTRA_SECRETS), jamais affichés"
+if [[ "$PRESTATAIRES_SECRETS" == "auto" ]]; then
+  for pair in "${SECRETS_BITRIPAY[@]}" "${SECRETS_KODA[@]}"; do
+    prest="${pair%%_*}"
+    if secret_a_une_version "${pair#*=}"; then
+      case ",${EXTRA_SECRETS}," in *",${pair},"*) ;; *) EXTRA_SECRETS="${EXTRA_SECRETS:+${EXTRA_SECRETS},}${pair}" ;; esac
+      info "${pair%%=*} ← secret ${pair#*=} : raccordé"
+    else
+      info "${pair%%=*} : secret ${pair#*=} absent ou sans version (saisie : ./infra/gcp/secrets-prestataires.sh ${prest,,})"
+    fi
+  done
+else
+  info "PRESTATAIRES_SECRETS=${PRESTATAIRES_SECRETS} : aucun raccordement automatique (EXTRA_SECRETS seulement)"
+fi
+lire_prestataires_env "$PRESTATAIRES_ENV_FILE"
 
 etape "Utilisateur de MIGRATION de la base (le rôle APPLICATIF est créé par la tâche de migration, sans privilège)"
 if ! est_simulation && gcloud sql users list --instance="$SQL_INSTANCE" "${G[@]}" --format='value(name)' | grep -qx "$DB_MIGRATION_USER"; then

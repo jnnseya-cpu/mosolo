@@ -206,7 +206,7 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/juridique/donnees', element: lazy(() => import('./juridique/DonneesConservation')), nav: { label: 'Classification et conservation des données', short: 'Données', icon: 'lock', group: 'operations', roles: ['R25', 'R28', 'R26', 'R22', 'R23'] } },
 
   // Paiements : prestataires connectés (BitriPay, KODA)
-  { path: '/tresor/prestataires', element: lazy(() => import('./prestataires/Prestataires')), nav: { label: 'Prestataires connectés', short: 'Prestataires', icon: 'phone', group: 'operations', roles: ['R17', 'R18', 'R22', 'R26', 'R27'] } },
+  { path: '/tresor/prestataires', element: lazy(() => import('./prestataires/Prestataires')), nav: { label: 'Prestataires connectés', short: 'Prestataires', icon: 'phone', group: 'operations', roles: ['R17', 'R18', 'R22', 'R26', 'R27', 'R28'] } },
 
   // Trésorerie, recouvrement, sous-traitance, détecteurs, CALCU (§ 15A.5, § 20.1, § 21, § 25, § 27A, § 37)
   { path: '/tresor/appariements', element: lazy(() => import('./tresor/Appariements')), nav: { label: 'Rapprochement proposé et crédits groupés', short: 'Appariements', icon: 'ledger', group: 'operations', roles: ['R17', 'R18', 'R22', 'R23'] } },

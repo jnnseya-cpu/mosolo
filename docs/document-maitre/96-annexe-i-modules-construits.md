@@ -1156,3 +1156,22 @@ des obligations du périmètre, états chargement / erreur de l'écart de prévi
 par les décisions, blocs du poste de décision contenus dans le cadre téléphone à 360 px. Détail écran par écran :
 `couverture-visuelle-pilotage.md` ; captures : `docs/captures/visualisation/pilotage/` ; test :
 `frontend/test/pilotage-visuels.test.tsx`.
+
+## I.27 Prestataires de paiement BitriPay et KODA prêts pour les clés et le webhook (28/09/2026)
+
+Ajout par-dessus les connecteurs existants (rien n'est retiré ; détail au § 18.16 et dans
+[`docs/prestataires-paiement.md`](../prestataires-paiement.md)).
+
+| Ajout | Emplacement | Règle |
+|---|---|---|
+| Confirmation serveur à serveur de l'état de l'intention avant quittance (webhook de production) | `backend/src/modules/payments/service.ts` (`receiveConnectorWebhook`), connecteurs `fetchIntentStatus` | Cahier § 19.2-19.3 ; 409 non final, 503 injoignable (non mémorisé), 422 + alerte critique si contredit |
+| Suspens des événements non imputables (référence inconnue, écart de montant, de devise ou d'état) | `payments.providerSuspense` ; exceptions `PROVIDER_EVENT_UNKNOWN_REFERENCE`, `PROVIDER_EVENT_MISMATCH` | Jamais porté sur une obligation ; une entrée par événement |
+| Journal des réceptions de webhooks (y compris refusées) et des interrogations d'état | `payments.webhookReceptions`, `payments.statusQueries` | Empreinte du corps, jamais le corps ni un secret |
+| Disjoncteur des appels sortants, 503 clair avec `Retry-After` | `connectors/http-client.ts` | 5 échecs / 30 s, délai 10 s, 2 nouvelles tentatives — par défaut, à confirmer |
+| Contrôles de démarrage supplémentaires (configuration partielle) | `connectors/registry.ts` | Message nommant la variable |
+| Écran « Prestataires de paiement — état de raccordement » + « Tester la connexion » | `frontend/src/modules/prestataires/Raccordement.tsx` ; `GET /v1/providers/readiness`, `POST /v1/providers/{p}/test-connection` | R17, R26, R28 ; noms de variables et présence seulement |
+| Hypothèses « À CONFIRMER AVEC LE PRESTATAIRE » affichées | `connectors/a-confirmer.ts` | Aucune supposition silencieuse |
+| Saisie des secrets et raccordement Cloud Run | `infra/gcp/secrets-prestataires.sh`, `deploy.sh` (`PRESTATAIRES_SECRETS`, `PRESTATAIRES_ENV_FILE`), `prestataires.env.example` | Saisie sans écho ; secrets refusés dans le fichier non secret |
+| Variables VPS commentées | `infra/vps/.env.example` | — |
+
+Tests : `backend/test/prestataires-raccordement.test.ts` (28 tests, simulateur HTTP local).

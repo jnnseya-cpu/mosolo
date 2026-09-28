@@ -184,6 +184,13 @@ Code : `src/modules/payments/connectors/`. Ils partagent **exactement** les cont
 - Webhooks : `POST /v1/providers/koda/webhooks`, `POST /v1/providers/bitripay/webhooks` (corps brut, `content-type: application/json`).
 - `payment_intent.settled` (BitriPay) = **annonce de règlement** : indice de rapprochement (`payments.settlementAnnouncements`) +
   audit `payment.settlement_announced` ; l'ordre reste `CONFIRME` jusqu'au relevé du compte public.
+- Confirmation **serveur à serveur** (28/09/2026) : en mode réel, chaque paiement réussi annoncé par webhook est vérifié par
+  `GET /payment_intents/{id}` (BitriPay) ou `GET /intents/{id}` (KODA) **avant** la quittance ; 409 si l'état n'est pas
+  final, 503 si le prestataire est injoignable (événement non mémorisé), 422 + suspens si l'état est contredit.
+  Référence inconnue, écart de montant ou de devise : suspens (`payments.providerSuspense`), jamais sur l'obligation.
+- Disjoncteur des appels sortants : `503 PROVIDER_CIRCUIT_OPEN` + `Retry-After` quand le prestataire est déclaré indisponible.
+- État de raccordement : `GET /v1/providers/readiness`, `POST /v1/providers/:provider/test-connection` (R17, R26, R28 ;
+  noms de variables et présence seulement). Mode d'emploi : [`docs/prestataires-paiement.md`](../docs/prestataires-paiement.md).
 - Vérification capture / SMS chez le prestataire : **jamais** proposée au contribuable ; relais réservé à R17/R18/R20
   (`POST /v1/payment-orders/:reference/provider-verification-evidence`) → pièce de dossier `legalEffect: "AUCUN"`.
 

@@ -66,3 +66,27 @@ exiger_projet() {
 # Générateurs de secrets (jamais affichés) : chaîne aléatoire forte, clé privée Ed25519 PKCS#8 (PEM).
 gen_aleatoire() { openssl rand -base64 48 | tr -d '\n=' | tr '+/' '-_'; }
 gen_ed25519() { openssl genpkey -algorithm ed25519; }
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Prestataires de paiement BitriPay et KODA (voir docs/prestataires-paiement.md) : variable de l'application ← secret.
+# Secrets saisis par ./infra/gcp/secrets-prestataires.sh <bitripay|koda> (jamais affichés) ; raccordés automatiquement
+# au service Cloud Run par deploy.sh (EXTRA_SECRETS) dès qu'ils ont une version.
+# ---------------------------------------------------------------------------------------------------------------------
+# shellcheck disable=SC2034  # utilisées par deploy.sh et secrets-prestataires.sh
+SECRETS_BITRIPAY=(
+  "BITRIPAY_API_KEY=mosolo-bitripay-api-key"
+  "BITRIPAY_WEBHOOK_SECRET=mosolo-bitripay-webhook-secret"
+  "BITRIPAY_ED25519_PUBLIC_KEY=mosolo-bitripay-ed25519-public-key"
+)
+# shellcheck disable=SC2034
+SECRETS_KODA=(
+  "KODA_API_KEY=mosolo-koda-api-key"
+  "KODA_WEBHOOK_SECRET=mosolo-koda-webhook-secret"
+)
+# Variables NON secrètes admises dans le fichier prestataires.env (URL, opérateurs, alias du coffre, options).
+# shellcheck disable=SC2034
+VARIABLES_PRESTATAIRES_PUBLIQUES=(
+  BITRIPAY_BASE_URL BITRIPAY_SETTLEMENT_ACCOUNT_ALIAS BITRIPAY_ALLOWED_OPERATORS BITRIPAY_ACCOUNT_ID BITRIPAY_CDF_EXPONENT
+  BITRIPAY_HMAC_REQUIRED BITRIPAY_ED25519_REQUIRED
+  KODA_BASE_URL KODA_SETTLEMENT_ACCOUNT_ALIAS KODA_OPERATORS KODA_SUCCESS_URL
+)

@@ -47,7 +47,11 @@ export type ExceptionType =
   /** Crédit d'un paiement confirmé dont la quittance ne peut devenir définitive (annulée, signalée…) : rien n'est passé. */
   | 'RECEIPT_NOT_FINALIZABLE'
   /** Crédit groupé dont le fichier de détail ne s'apparie pas exactement (total, référence, montant ou compte). */
-  | 'CREDIT_GROUPE_ECART';
+  | 'CREDIT_GROUPE_ECART'
+  /** Webhook prestataire signé portant une référence inconnue : mis en suspens, jamais porté sur une obligation. */
+  | 'PROVIDER_EVENT_UNKNOWN_REFERENCE'
+  /** Webhook prestataire signé dont le montant, la devise ou l'état (interrogation serveur à serveur) diffère : en suspens. */
+  | 'PROVIDER_EVENT_MISMATCH';
 
 /** Cycle de traitement d'une exception (§ 20, C3-113) : ouverte → en cours → résolue ou classée avec motif. */
 export type ExceptionStatus = 'OUVERTE' | 'EN_COURS' | 'RESOLUE' | 'CLASSEE';
@@ -68,6 +72,8 @@ export const EXCEPTION_QUEUE: Record<ExceptionType, ExceptionQueue> = {
   ACCOUNT_VERSION_MISMATCH: 'ECART_MONTANT',
   RECEIPT_NOT_FINALIZABLE: 'REGLEMENT_SANS_PAIEMENT',
   CREDIT_GROUPE_ECART: 'ECART_MONTANT',
+  PROVIDER_EVENT_UNKNOWN_REFERENCE: 'PAIEMENT_SANS_OBLIGATION',
+  PROVIDER_EVENT_MISMATCH: 'ECART_MONTANT',
 };
 
 export interface ReconciliationException {
@@ -615,7 +621,14 @@ export class TreasuryService {
       detail: `Paiement ${u.provider} ${u.providerTxnId} de ${u.amount.amount} ${u.amount.currency} non affecté (${u.reason}) : fonds en compte d'attente, remboursement vers l'instrument d'origine à décider.`,
       status: 'OUVERTE', openedAt: u.receivedAt, computed: true, unappliedId: u.id,
     }));
-    return [...this.exceptions.all(), ...missing, ...held, ...unapplied].map((e) => ({ ...e, queue: EXCEPTION_QUEUE[e.type] }));
+    // Événements prestataires signés non imputables (référence inconnue, écart de montant, de devise ou d'état) : en suspens.
+    const suspended: ReconciliationException[] = this.payments.providerSuspense.all().map((x) => ({
+      id: `EXC-SUSP-${x.id}`, type: x.reason === 'REFERENCE_INCONNUE' ? 'PROVIDER_EVENT_UNKNOWN_REFERENCE' : 'PROVIDER_EVENT_MISMATCH',
+      ...(x.paymentReference ? { paymentReference: x.paymentReference } : {}),
+      detail: `Événement ${x.provider} ${x.eventId} mis en suspens (${x.reason}) : ${x.detail} Aucun effet sur l'obligation ; rapprocher avec le relevé du compte public.`,
+      status: 'OUVERTE', openedAt: x.receivedAt, computed: true,
+    }));
+    return [...this.exceptions.all(), ...missing, ...held, ...unapplied, ...suspended].map((e) => ({ ...e, queue: EXCEPTION_QUEUE[e.type] }));
   }
 
   /** Exceptions ouvertes + « règlement manquant » calculé (confirmation sans crédit après J+1). */

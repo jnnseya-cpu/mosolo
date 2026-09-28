@@ -75,6 +75,8 @@ export const TYPE_LABEL: Record<string, string> = {
   MISSING_SETTLEMENT: 'Règlement manquant (J+1)', PROVIDER_AMBIGUOUS: 'Résultat opérateur inconnu',
   CREDIT_GROUPE_ECART: 'Crédit groupé : fichier de détail non concordant',
   UNAPPLIED_PAYMENT: 'Paiement non affecté (doublon, référence expirée ou obligation soldée) — remboursement au payeur en double validation',
+  PROVIDER_EVENT_UNKNOWN_REFERENCE: 'Webhook prestataire signé : référence inconnue — en suspens, jamais porté sur une obligation',
+  PROVIDER_EVENT_MISMATCH: 'Webhook prestataire signé : écart de montant, de devise ou d’état — en suspens',
 };
 
 export const OP_LABEL: Record<OperationKind, string> = {
