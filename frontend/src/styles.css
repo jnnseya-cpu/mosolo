@@ -463,6 +463,8 @@ input[type='file'] { font-size: 13.5px; max-width: 100%; }
 @media (min-width: 1100px) {
   .dash-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); }
   .span-5 { grid-column: span 5; } .span-6 { grid-column: span 6; } .span-7 { grid-column: span 7; } .span-12 { grid-column: 1 / -1; }
+  /* Ajustement (28/09/2026) : un bloc sans largeur déclarée (ex. grille de graphiques) occupe toute la ligne, pas 1/12. */
+  .dash-grid > :not([class*="span-"]) { grid-column: 1 / -1; }
 }
 .two-col { display: grid; gap: 24px; }
 @media (min-width: 900px) { .two-col { grid-template-columns: 1fr 1fr; } }
@@ -974,6 +976,8 @@ input[type='file'] { font-size: 13.5px; max-width: 100%; }
 .viz-kpi { position: relative; display: grid; align-content: start; gap: 4px; min-width: 0; padding: 12px 12px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--viz-kpi-bg); overflow: hidden; }
 /* Ajustement (28/09/2026) : une seule colonne élastique ; pastilles et titres passent à la ligne au lieu d'être rognés. */
 .viz-kpi { grid-template-columns: minmax(0, 1fr); }
+/* Grille d'indicateurs dans un panneau (souvent en demi-largeur) : colonnes selon la place réelle, jamais sous 150 px. */
+.panel .viz-kpi-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); }
 .viz-kpi .badge, .viz-card .badge { white-space: normal; max-width: 100%; }
 .viz-card .panel-title, .viz-card .panel-head > * { min-width: 0; overflow-wrap: anywhere; }
 .viz-kpi::after { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--viz-accent); }
