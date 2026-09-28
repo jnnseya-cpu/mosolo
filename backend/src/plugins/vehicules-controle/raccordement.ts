@@ -10,7 +10,7 @@
 import { randomInt } from 'node:crypto';
 import type { User } from '../../core/auth.js';
 import { canonicalJson, sha256Hex } from '../../core/crypto.js';
-import { conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
+import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, authorize } from '../../core/policy.js';
 import { InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { taxpayerRecipient } from '../../modules/identity/recipients.js';
@@ -260,13 +260,16 @@ export class RaccordementService {
 
   // ——— Enrôlement dans les centres (compte unique, téléphone vérifié) ———
 
-  startEnrolment(user: User, centreId: string, input: { phone: string; fullName: string; plate?: string }) {
+  startEnrolment(user: User, centreId: string, input: { phone: string; fullName?: string; plate?: string }) {
     authorize(user, 'centres:enrol');
     this.centres.assertMember(user, centreId);
     this.centres.assertCanOperate(centreId, 'ENROLEMENT');
     const phone = input.phone.replace(/[\s-]/g, '');
-    const existing = this.d.ctx.taxpayers.taxpayers.findOne((t) => t.phone === phone);
-    const tp = existing ?? this.d.ctx.taxpayers.register({ phone, fullName: input.fullName, language: 'fr', situation: 'other', kind: 'PERSONNE_PHYSIQUE' });
+    // Compte unique : le numéro retrouve le compte existant (compte fusionné ⇒ compte conservé) ; le nom n'est
+    // demandé que pour une première inscription.
+    const existing = this.d.ctx.taxpayers.findByPhone(phone);
+    if (!existing && !input.fullName) throw badRequest('FULL_NAME_REQUIRED', 'Nom complet requis pour une première inscription.');
+    const tp = existing ?? this.d.ctx.taxpayers.register({ phone, fullName: input.fullName!, language: 'fr', situation: 'other', kind: 'PERSONNE_PHYSIQUE' });
     const code = this.codeGenerator();
     const e = this.enrolments.insert({ id: this.d.ids.next('ENR-CTR', 5), centreId, taxpayerId: tp.id, ...(input.plate ? { plate: this.d.plate(input.plate) } : {}), codeHash: sha256Hex(`enrol|${code}`), status: 'CODE_ENVOYE', by: user.id, at: this.d.now(), attempts: 0 });
     this.d.ctx.comms.publish('auth.otp_code', [taxpayerRecipient(tp)], { code }, { entity: RFCK.id });

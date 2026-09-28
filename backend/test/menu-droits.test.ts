@@ -63,6 +63,8 @@ const LECTURES: Record<string, string[]> = {
   '/documents': ['/v1/documents', '/v1/documents/categories', '/v1/documents/indicateurs', '/v1/documents/purges/apercu'],
   '/donnees/extractions': ['/v1/socle/exports/requests'],
   '/espace': ['/v1/taxpayers/{taxpayerId}'],
+  '/espace/biens-relations': ['/v1/moi/relations-biens', '/v1/compte-unique/me'],
+  '/biens-relations/revue': ['/v1/dossiers-revue'],
   '/fiscal/anomalies-locatives': ['/v1/fiscal/anomalies/catalogue'],
   '/fiscal/assiette-2026': ['/v1/fiscal/assiette-2026'],
   '/fiscal/biens': ['/v1/fiscal/relationships/queue', '/v1/fiscal/reference'],

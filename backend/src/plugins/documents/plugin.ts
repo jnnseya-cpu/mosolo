@@ -9,6 +9,7 @@ import { parse } from '../../core/http.js';
 import { authorize } from '../../core/policy.js';
 import { definePlugin } from '../types.js';
 import { DOCUMENT_CATEGORIES, DOCUMENT_CATEGORY_CODES, DocumentService, type DocumentCategory } from './service.js';
+import { contribuerCompteUnique } from './compte-unique.js';
 
 const category = z.enum(DOCUMENT_CATEGORY_CODES as [DocumentCategory, ...DocumentCategory[]]);
 const content = {
@@ -21,7 +22,12 @@ const motif = z.string().trim().min(3).max(1000);
 
 export const documentsPlugin = definePlugin<DocumentService>({
   name: 'documents',
-  create: (ctx) => new DocumentService(ctx),
+  create: (ctx) => {
+    const svc = new DocumentService(ctx);
+    // Compte unique (ch. 9) : documents déposés sur le compte.
+    contribuerCompteUnique(ctx, svc);
+    return svc;
+  },
   routes: (app, _ctx, svc) => {
     type P = { Params: { id: string } };
     app.get('/v1/documents/categories', async (req) => {

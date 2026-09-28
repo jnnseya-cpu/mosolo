@@ -10,6 +10,7 @@ import { declareVehiculesPolicies } from './policy.js';
 import { registerVehiculesRoutes } from './routes.js';
 import { seedVehicules } from './seed.js';
 import { VehiculesControleService } from './service.js';
+import { contribuerCompteUnique } from './compte-unique.js';
 
 export { VehiculesControleService } from './service.js';
 
@@ -19,6 +20,8 @@ export const vehiculesControlePlugin = definePlugin<VehiculesControleService>({
     declareVehiculesPolicies();
     const svc = new VehiculesControleService(ctx);
     svc.hookTitres();
+    // Compte unique (ch. 9) : contrôle technique, rendez-vous, fourrière.
+    contribuerCompteUnique(ctx, svc);
     return svc;
   },
   seed: (ctx, svc) => seedVehicules(ctx, svc),

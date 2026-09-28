@@ -7,6 +7,7 @@ import { allAgentRoles, definePolicy, GRANTS } from '../../core/policy.js';
 import { definePlugin } from '../types.js';
 import { registerCanauxRoutes } from './routes.js';
 import { CanauxService } from './service.js';
+import { contribuerCompteUnique } from './compte-unique.js';
 
 // Enrôlement assisté : agent de terrain (dans sa zone) ou agent de guichet ; revue des doublons par un superviseur.
 // Zone de l'agent contrôlée par enregistrement (refus journalisé), non au niveau du lot.
@@ -52,6 +53,8 @@ export const canauxPlugin = definePlugin({
     if (Number.isFinite(every) && every >= 60_000) svc.points.startScheduler(every);
     // Import de relevé au Trésor : les lignes portant un bordereau de versement déclaré sont appariées automatiquement.
     ctx.treasury.addStatementClaimant((statementId, lines) => svc.points.claimStatementLines(statementId, lines));
+    // Compte unique (ch. 9) : cartes MOSOLO du compte.
+    contribuerCompteUnique(ctx, svc);
     return svc;
   },
   seed: (_ctx, svc) => svc.seedDemo(),

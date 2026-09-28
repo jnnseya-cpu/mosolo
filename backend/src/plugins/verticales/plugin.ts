@@ -22,6 +22,7 @@ import { registerVerticalPolicies } from './policies.js';
 import { registerVerticalRoutes } from './routes.js';
 import { seedActifs, seedVerticales } from './seed.js';
 import { VerticalesService } from './service.js';
+import { contribuerCompteUnique } from './compte-unique.js';
 
 export const verticalesPlugin = definePlugin<VerticalesService>({
   name: 'verticales',
@@ -55,6 +56,8 @@ export const verticalesPlugin = definePlugin<VerticalesService>({
     if (nfiuReportSchedulerEnabled(process.env)) svc.nfiu.startScheduler();
     // Module 16 (parcours Telecom) : avis annuel automatique sur règle ACTIVE (même garde de planificateur).
     if (aviaAutoSchedulerEnabled(process.env)) svc.secteurs.startAntennesScheduler();
+    // Compte unique (ch. 9) : démarches, certificats, étals, déclarations sectorielles et AVIA.
+    contribuerCompteUnique(ctx, svc);
     return svc;
   },
   seed: (ctx, svc) => {

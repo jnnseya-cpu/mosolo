@@ -250,3 +250,13 @@ Abréviations : `be:` = backend/test, `fe:` = frontend/test ; `cit` = `backend/s
 | 12 | Autorisation sans règle publiée impossible | EN_ATTENTE_REGLE, activation refusée | be:citoyen.test.ts | BUILT-NOW |
 | 12 | Suspension par décision motivée | proposer/approuver (2 personnes) | be:citoyen.test.ts | BUILT-NOW |
 | 12 | Indicateurs : actives, conformité aux contrôles, renouvellements à temps | `TransportService.indicateurs` | be:citoyen.test.ts | BUILT-NOW |
+
+## Compte unique appliqué à toute la plateforme (ajout du 28/09/2026)
+
+| Module | Item (short) | Implementation (file/route/screen) | Test (file:test name) | Status |
+|---|---|---|---|---|
+| 1 | Une inscription, tous les modules : vue agrégée « Mon compte unique » | `modules/identity/compte-unique*.ts`, `GET /v1/compte-unique/me` ; section de `/espace` | be:compte-unique.test.ts:« bout en bout… » ; fe:compte-unique.test.tsx:« agrège tous les modules… » | BUILT-NOW |
+| 1 | Accès : titulaire, mandataire (mandat « CONSULTER »), agent avec consultation motivée ; sinon 403 | `compte-unique-routes.ts`, portes `plugins/acces/compte-unique.ts` | be:compte-unique.test.ts:« bout en bout… » (mandataire, 403, consultation) | BUILT-NOW |
+| 1 | Anti-doublon : téléphone, NIF, RCCM ⇒ refus + récupération ; canaux suivent la fusion | `TaxpayerService.hooks`, `AccesService.assertIdentifierFree`, `findByPhone` | be:compte-unique.test.ts:« bout en bout… », « organisation… », « canaux… » | BUILT-NOW |
+| 1 | Identité jamais redemandée (wewa, pièces, organisation, démarches, centres agréés) | voir `compte-unique-audit.md` | be:compte-unique.test.ts:« bout en bout… » (aucun champ d'identité envoyé), « fiche de métier… » | BUILT-NOW |
+| 1 | Rôles à l'inscription ⇒ revendications BROUILLON ; biens, unités et occupations reliés par relations vérifiées | `plugins/fiscal/biens-occupations.ts` | be:liaison-biens-occupations.test.ts (CA-1 à CA-9) | BUILT-NOW |

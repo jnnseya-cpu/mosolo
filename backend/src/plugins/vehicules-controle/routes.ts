@@ -138,7 +138,7 @@ export function registerVehiculesRoutes(app: FastifyInstance, s: VehiculesContro
   app.post<{ Params: { id: string } }>('/v1/centres-agrees/:id/retablissement-decision', async (req) => s.centres.decideReinstatement(U(req), req.params.id, parse(decision, req.body)));
   app.get('/v1/centres-agrees/analytique', async (req) => s.centres.analytics(U(req), s.ct.activePvs(), s.ct.stickers.all()));
   app.post('/v1/centres-agrees/analytique/alertes', async (req) => s.centres.analytics(U(req), s.ct.activePvs(), s.ct.stickers.all(), { raise: true }));
-  app.post<{ Params: { id: string } }>('/v1/centres-agrees/:id/enrolements', async (req, reply) => reply.code(201).send(s.raccordement.startEnrolment(U(req), req.params.id, parse(z.object({ phone: z.string().regex(/^\+?\d[\d\s-]{7,18}$/), fullName: t(3, 120), plate: t(3, 20).optional() }).strict(), req.body))));
+  app.post<{ Params: { id: string } }>('/v1/centres-agrees/:id/enrolements', async (req, reply) => reply.code(201).send(s.raccordement.startEnrolment(U(req), req.params.id, parse(z.object({ phone: z.string().regex(/^\+?\d[\d\s-]{7,18}$/), fullName: t(3, 120).optional(), plate: t(3, 20).optional() }).strict(), req.body))));
   app.post<{ Params: { id: string } }>('/v1/centres-agrees/enrolements/:id/code', async (req) => s.raccordement.completeEnrolment(U(req), req.params.id, parse(z.object({ code: z.string().regex(/^\d{6}$/) }).strict(), req.body).code));
 
   // ——— Raccordement RFCK ———

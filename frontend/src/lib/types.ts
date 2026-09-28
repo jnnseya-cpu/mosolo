@@ -50,7 +50,11 @@ export interface PaymentOrder {
 }
 
 export interface RegistrationResult { taxpayerId: string; iuc: string; verificationLevel: VerificationLevel }
-export interface RegistrationInput { phone: string; fullName: string; language: LanguageCode; situation: ResidentialSituation | '' }
+export interface RegistrationInput {
+  phone: string; fullName: string; language: LanguageCode; situation: ResidentialSituation | '';
+  /** Rôles choisis (compte unique, 28/09/2026) : chacun ouvre une revendication BROUILLON, jamais un lien automatique. */
+  intentions?: ('PROPRIETAIRE' | 'LOCATAIRE' | 'EXPLOITANT')[];
+}
 
 export interface PublicReceiptResult {
   status: PublicReceiptCheck; message?: string; amount?: MoneyJSON; date?: string; paidAt?: string; paidOn?: string; category?: string; revenueCategory?: string;

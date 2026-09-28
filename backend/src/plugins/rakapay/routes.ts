@@ -23,11 +23,11 @@ const passSchema = z.object({ motoId: z.string().min(1).max(64), duration: z.enu
 const groupSchema = z.object({ items: z.array(z.object({ motoId: z.string().min(1).max(64), duration: z.enum(WEWA_DURATIONS) }).strict()).min(1).max(200), channel }).strict();
 const motoSchema = z.object({
   plate: z.string().trim().min(4).max(20), orderNumber: z.string().trim().min(2).max(40), make: z.string().trim().min(2).max(80),
-  ownerTaxpayerId: z.string().max(64).optional(), ownerLabel: z.string().trim().min(2).max(120), stationId: z.string().min(1).max(64),
+  ownerTaxpayerId: z.string().max(64).optional(), ownerLabel: z.string().trim().min(2).max(120).optional(), stationId: z.string().min(1).max(64),
   cooperativeId: z.string().max(64).optional(),
 }).strict();
 const driverSchema = z.object({
-  displayName: z.string().trim().min(2).max(120), licenceNo: z.string().trim().min(3).max(40), phone: z.string().trim().max(20).optional(),
+  displayName: z.string().trim().min(2).max(120).optional(), licenceNo: z.string().trim().min(3).max(40), phone: z.string().trim().max(20).optional(),
   taxpayerId: z.string().max(64).optional(), motoId: z.string().max(64).optional(), cooperativeId: z.string().max(64).optional(), photoRef: z.string().max(128).optional(),
 }).strict();
 const controlSchema = z.object({

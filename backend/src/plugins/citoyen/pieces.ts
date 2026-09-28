@@ -17,7 +17,7 @@ import { createHash } from 'node:crypto';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
 import { actorOf } from '../../core/audit.js';
-import { conflict, notFound } from '../../core/errors.js';
+import { badRequest, conflict, notFound } from '../../core/errors.js';
 import { authorize, definePolicy, GRANTS } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import { maskPhone } from '../../modules/identity/service.js';
@@ -110,11 +110,17 @@ export class ControlePiecesService {
   private now() { return this.ctx.clock.now(); }
 
   controler(user: User, input: {
-    type: TypePiece; numero: string; nomDeclare: string; taxpayerId?: string; telephone?: string; photoSha256?: string;
+    type: TypePiece; numero: string; nomDeclare?: string; taxpayerId?: string; telephone?: string; photoSha256?: string;
     dateExpiration?: string; lectureAuto?: { texte?: string; nom?: string; numero?: string; mrzLigne2?: string }; canal?: string;
   }) {
+    // Compte unique (28/09/2026) : le titulaire connecté contrôle SA pièce sans ressaisir son nom ni son téléphone ;
+    // le nom déclaré et le téléphone du compte sont repris (la pièce est rapprochée du compte, jamais l'inverse).
+    if (!input.taxpayerId && user.roles.includes('R30') && user.taxpayerId) input = { ...input, taxpayerId: user.taxpayerId };
     authorize(user, 'citoyen:pieces.controler', input.taxpayerId ? { taxpayerId: input.taxpayerId } : {});
-    if (input.taxpayerId) this.ctx.taxpayers.get(input.taxpayerId);
+    const compte = input.taxpayerId ? this.ctx.taxpayers.get(input.taxpayerId) : undefined;
+    if (!input.nomDeclare && !compte) throw badRequest('NOM_DECLARE_REQUIS', 'Nom déclaré requis quand la pièce n’est rattachée à aucun compte.');
+    input = { ...input, nomDeclare: input.nomDeclare ?? compte!.fullName, ...(!input.telephone && compte?.phone ? { telephone: compte.phone } : {}) };
+    const nomDeclare: string = input.nomDeclare ?? '';
     const w = PONDERATION.valeur;
     const numero = input.numero.trim().toUpperCase().replace(/[\s-]/g, '');
     const facteurs: Facteur[] = [];
@@ -128,7 +134,7 @@ export class ControlePiecesService {
     const nomLu = lu?.nom ?? lu?.texte ?? '';
     if (!lu) add('lectureAuto', 'Lecture automatique (OCR)', 0, 'Aucune lecture automatique fournie.');
     else {
-      const prox = nomLu ? proximiteNoms(nomLu, input.nomDeclare) : 0;
+      const prox = nomLu ? proximiteNoms(nomLu, nomDeclare) : 0;
       const numOk = !!numeroLu && (numeroLu === numero || (lu.texte ?? '').toUpperCase().replace(/[\s-]/g, '').includes(numero));
       add('lectureAuto', 'Lecture automatique (OCR)', (numOk ? 0.5 : 0) + Math.min(prox, 1) * 0.5, `Numéro lu ${numOk ? 'identique' : 'différent ou illisible'} ; nom lu proche à ${Math.round(prox * 100)} %.`);
     }
@@ -145,7 +151,7 @@ export class ControlePiecesService {
     const autres = this.controles.find((c) => c.numeroEmpreinte === hash && !!c.taxpayerId && c.taxpayerId !== input.taxpayerId && c.statut !== 'REJETEE');
     add('unicite', 'Unicité du numéro', autres.length ? 0 : 1, autres.length ? 'Numéro déjà présenté par un autre compte.' : 'Numéro inédit.');
     const score = facteurs.reduce((s, f) => s + f.points, 0);
-    const rapprochements = this.rapprochements({ nom: input.nomDeclare, telephone: input.telephone, autres: autres.map((a) => a.taxpayerId!), exclure: input.taxpayerId });
+    const rapprochements = this.rapprochements({ nom: nomDeclare, telephone: input.telephone, autres: autres.map((a) => a.taxpayerId!), exclure: input.taxpayerId });
     const risque = score < SEUIL_REVUE.valeur || rapprochements.length > 0;
     let proofId: string | undefined;
     const acces = accesOf(this.ctx);
@@ -154,7 +160,7 @@ export class ControlePiecesService {
     }
     const c = this.controles.insert({
       id: this.ids.next('CTP'), type: input.type, numeroMasque: masque(numero), numeroEmpreinte: hash, ...(input.taxpayerId ? { taxpayerId: input.taxpayerId } : {}),
-      nomDeclare: input.nomDeclare, score, facteurs, rapprochements, statut: risque ? 'A_REVOIR' : 'CONFORME', revueHumaine: risque, ...(proofId ? { proofId } : {}),
+      nomDeclare: nomDeclare, score, facteurs, rapprochements, statut: risque ? 'A_REVOIR' : 'CONFORME', revueHumaine: risque, ...(proofId ? { proofId } : {}),
       controlePar: user.id, controleLe: this.now().toISOString(), canal: input.canal ?? (user.roles.includes('R12') ? 'GUICHET' : user.roles.includes('R10') ? 'AGENT' : 'EN_LIGNE'),
     });
     this.ctx.audit.append({ actor: actorOf(user), action: 'enrolement.piece.controlled', resourceType: 'identity_document', resourceId: c.id, details: { type: c.type, score, revueHumaine: risque, rapprochements: rapprochements.length, taxpayerId: c.taxpayerId ?? null } });

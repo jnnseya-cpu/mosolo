@@ -341,6 +341,12 @@ export interface Representative {
   phoneMasked?: string;
   /** Habilitation nominative (mandataire de la personne morale). */
   habilitation: 'DIRIGEANT' | 'MANDATAIRE_HABILITE';
+  /**
+   * Compte unique du représentant (ch. 9, ajout du 28/09/2026) : renseigné seulement quand la personne s'est
+   * désignée elle-même, connectée (identité déjà vérifiée) — jamais déduit d'un nom ni d'un numéro saisi par un tiers.
+   * N'ouvre aucun accès aux données de l'organisation : l'accès passe par un mandat (circuit existant).
+   */
+  taxpayerId?: string;
 }
 
 export interface Organisation {

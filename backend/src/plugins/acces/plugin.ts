@@ -12,6 +12,7 @@ import { registerAccesIndicatorRoutes } from './indicateurs.js';
 import { registerAccesPolicies } from './policy.js';
 import { registerAccesRoutes } from './routes.js';
 import { AccesService } from './service.js';
+import { branchCompteUnique } from './compte-unique.js';
 
 export { AccesService } from './service.js';
 
@@ -167,6 +168,8 @@ export const accesPlugin = definePlugin<AccesService>({
   create: (ctx) => {
     registerAccesPolicies();
     const svc = new AccesService(ctx);
+    // Compte unique (ch. 9) : garde NIF, portes d'accès (mandat, consultation motivée), identité enrichie, contributions.
+    branchCompteUnique(ctx, svc);
     // Garde commune de liquidation : tout fait générateur connu n'est revendiqué que par une seule entité (§ 10A.3),
     // y compris par la route du socle POST /v1/assessments/calculate. Seconde revendication ⇒ 409 + arbitrage ouvert.
     ctx.assessment.addLiquidationGuard(({ user, rule, objectId, at }) => {

@@ -1156,3 +1156,33 @@ des obligations du périmètre, états chargement / erreur de l'écart de prévi
 par les décisions, blocs du poste de décision contenus dans le cadre téléphone à 360 px. Détail écran par écran :
 `couverture-visuelle-pilotage.md` ; captures : `docs/captures/visualisation/pilotage/` ; test :
 `frontend/test/pilotage-visuels.test.tsx`.
+
+## I.27 Compte unique appliqué à tous les modules ; liaison des biens et occupations (28/09/2026)
+
+**Compte unique (ch. 9, § 9.9).** Registre de contributions `backend/src/modules/identity/compte-unique.ts` (socle :
+`compte-unique-socle.ts` ; routes : `compte-unique-routes.ts`) et un fichier `compte-unique.ts` par module d'extension
+(accès, titres, RakaPay, stationnement, publicité, verticales, chaîne véhicule, recouvrement, canaux, communication,
+documents ; fiscal dans `plugins/fiscal/service.ts`). Routes : `GET /v1/compte-unique/me`,
+`GET /v1/compte-unique/:taxpayerId` (titulaire, mandataire dans le mandat, agent avec consultation motivée),
+`GET /v1/compte-unique/fiches-metier`. Crochets du compte (`TaxpayerService.hooks`) : gardes anti-doublon (NIF),
+suites d'inscription (rôles ⇒ revendications BROUILLON), suites de vérification du téléphone (rattachement exact des
+fiches de métier). Corrections sans retrait : NIF et rôles à l'inscription ; organisation déclarée par une personne
+connectée ; NIF / RCCM en double refusés ; conducteur et moto wewa, contrôle des pièces, raison sociale des démarches et
+enrôlement en centre agréé reprennent l'identité du compte ; USSD, SVI et canal texte du stationnement suivent la
+fusion. Écran : section « Mon compte unique » de `/espace` (graphiques de la trousse). Audit : `compte-unique-audit.md`.
+Tests : `backend/test/compte-unique.test.ts` (une inscription, parcelle, bail, revendication, entreprise, stationnement,
+ticket et pass wewa, véhicule et contrôle technique, enseigne, paiement, recours — tout sous un compte, aucune seconde
+fiche, aucune identité redemandée, doublons refusés, mandataire limité, 403), `frontend/test/compte-unique.test.tsx`.
+
+**Liaison des biens et occupations (§ 16.10, spécification v1.0).** `backend/src/plugins/fiscal/biens-occupations.ts`
+(revendications, candidats, pièces, invitations, dossiers de revue, fusion de biens, vue du propriétaire, vue datée),
+`biens-config.ts` (paramètres du § 10, par défaut — à confirmer), `biens-routes.ts` (routes françaises
+`/v1/revendications-biens`, `/v1/biens-candidats`, `/v1/invitations-biens/:jeton/reponse`, `/v1/dossiers-revue`,
+`/v1/biens-declares`, `/v1/biens/:id/vue-proprietaire`, `/v1/relations-biens/effectives`,
+`/v1/moi/relations-biens`, `/v1/biens-relations/configuration` ; alias anglais de la spécification
+`/v1/property-claims…`, `/v1/property-candidates`, `/v1/invitations/:token/respond`, `/v1/review-cases/:id/decision`,
+`/v1/me/property-relationships`). Module 7 étendu (`relations.ts` : rôles ajoutés, `applyValidation`, `effectiveAt`,
+relation portée par la revendication) ; objets fiscaux étendus (`recordStatus`, `recordProvenance`, `officialRef`,
+`addressEntered`, libellés, `createSelfReported`). Écrans : `/espace/biens-relations`, `/espace/biens/:id`,
+`/biens-relations/revue` ; inscription à rôles multiples. Tests : `backend/test/liaison-biens-occupations.test.ts`
+(CA-1 à CA-9 nommés, § 5, § 6–7, § 8, § 10, module 7 conservé). Couverture : `couverture-liaison-biens-occupations.md`.

@@ -23,6 +23,9 @@ import { RentalCoverageService } from './couverture-locative.js';
 import { buildMap, type MapLayer } from './map.js';
 import { PropertyService } from './properties.js';
 import { RelationService, ROLE_LABELS, isHighValue } from './relations.js';
+import { BiensOccupationsService, toClaimRole } from './biens-occupations.js';
+import { recordStatusOf } from '../../modules/objects/service.js';
+import { unprocessable } from '../../core/errors.js';
 import { coverageOf, occupancyOf, situationOf } from './situation.js';
 
 export class FiscalService {
@@ -49,6 +52,8 @@ export class FiscalService {
   readonly lifecycle: ObjectLifecycleService;
   /** § 16.6 (Document maître FR 2) : indicateurs de couverture locative par avenue, quartier et commune. */
   readonly rentalCoverage: RentalCoverageService;
+  /** Liaison des biens et occupations (spécification v1.0 du 28/09/2026) : revendications, candidats, preuves, revue. */
+  readonly biens: BiensOccupationsService;
 
   constructor(readonly ctx: AppContext) {
     this.geo = new GeoRegistry(() => ctx.clock.now().toISOString());
@@ -66,10 +71,52 @@ export class FiscalService {
     this.enrolment = new EnrolmentService(this.d);
     this.lifecycle = new ObjectLifecycleService(this.d);
     this.rentalCoverage = new RentalCoverageService(this.d);
+    this.biens = new BiensOccupationsService(this.d, this.relations);
+    this.branchCompteUnique();
     // Les exonérations approuvées s'appliquent à toute liquidation (trace dans l'explication).
     ctx.assessment.registerAdjuster(this.exemptions.adjuster());
     // Référentiels (idempotents) : fiches À VÉRIFIER de l'édit 2026, dépendances informatives.
     this.seedReference();
+  }
+
+  /**
+   * Compte unique et liaison des biens (28/09/2026) :
+   *  - un bien PROVISOIRE auto-déclaré (revendication) n'est jamais liquidé avant qualification (§ 8, § 10) ;
+   *  - la situation choisie à l'inscription ou au parcours d'enrôlement ouvre une revendication BROUILLON ;
+   *  - contributions du module au compte unique (déclarations, exonérations, quitus, rôles, NIF, relations).
+   */
+  private branchCompteUnique(): void {
+    const ctx = this.ctx;
+    ctx.assessment.addLiquidationGuard(({ objectId }) => {
+      const o = ctx.objects.objects.get(objectId);
+      if (o && o.recordProvenance === 'SELF_REPORTED' && recordStatusOf(o) !== 'CANONICAL') {
+        throw unprocessable('SELF_REPORTED_NOT_QUALIFIED', 'Bien auto-déclaré non qualifié : aucune liquidation définitive avant validation du bien et des règles (§ 10, non validé juridiquement).');
+      }
+    });
+    ctx.taxpayers.hooks.registered.push((t, input) => {
+      const list = [...(typeof input.intention === 'string' ? [input.intention] : []), ...(Array.isArray(input.intentions) ? input.intentions : [])];
+      for (const intention of new Set(list)) {
+        if (intention === 'PROPRIETAIRE' || intention === 'LOCATAIRE' || intention === 'EXPLOITANT') this.biens.draftFromIntention(t.id, toClaimRole(intention), 'INSCRIPTION');
+      }
+    });
+    this.enrolment.onRoleDeclared.push((taxpayerId, profile) => {
+      const role = ({ PROPRIETAIRE_OCCUPANT: 'OWNER', BAILLEUR: 'OWNER', LOCATAIRE: 'TENANT', COMMERCANT_ENTREPRISE: 'OPERATOR', OPERATEUR_INFORMEL: 'OPERATOR' } as const)[profile as 'BAILLEUR'];
+      if (role) this.biens.draftFromIntention(taxpayerId, role, 'ENROLEMENT');
+    });
+    ctx.compteUnique.register({
+      module: 'biens-relations', titre: 'Mes biens et relations', lien: '/espace/biens-relations',
+      collect: (tp) => this.biens.compteElements(tp),
+    });
+    ctx.compteUnique.register({
+      module: 'fiscal', titre: 'Fiscalité : déclarations, exonérations, quitus, enrôlement', lien: '/fiscal/declarations',
+      collect: (tp) => [
+        ...this.declarations.list({ taxpayerId: tp }).map((x) => ({ rubrique: 'DEMARCHE' as const, id: x.id, libelle: `Déclaration ${x.kind} ${x.period}`, nature: 'DECLARATION', statut: x.status, objectId: x.objectId, lien: '/fiscal/declarations' })),
+        ...this.exemptions.exemptions.find((x) => x.taxpayerId === tp).map((x) => ({ rubrique: 'DEMARCHE' as const, id: x.id, libelle: `Demande d’exonération (${x.kind})`, nature: 'EXONERATION', statut: x.status, ...(x.objectId ? { objectId: x.objectId } : {}), lien: '/fiscal/exonerations' })),
+        ...this.clearances.clearances.find((x) => x.taxpayerId === tp).map((x) => ({ rubrique: 'TITRE' as const, id: x.id, libelle: `Quitus fiscal ${x.number}`, nature: 'QUITUS', statut: x.status, echeance: x.validUntil, lien: '/fiscal/quitus' })),
+        ...this.enrolment.roles.find((x) => x.taxpayerId === tp).map((x) => ({ rubrique: 'ROLE' as const, id: x.id, libelle: `Rôle déclaré : ${x.profileLabel}`, nature: x.profile, statut: x.status, date: x.declaredAt, lien: '/fiscal/enrolement' })),
+        ...this.enrolment.nifRequests.find((x) => x.taxpayerId === tp).map((x) => ({ rubrique: 'DEMARCHE' as const, id: x.id, libelle: `Demande de NIF (identifiant provisoire ${x.provisionalId})`, nature: 'NIF', statut: x.status, date: x.requestedAt, lien: '/fiscal/enrolement' })),
+      ],
+    });
   }
 
   /** Vue d'un bien pour un lecteur donné : relations nominatives seulement pour soi ou un agent habilité. */

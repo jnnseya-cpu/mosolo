@@ -75,6 +75,8 @@ export class EnrolmentService {
   readonly nifRequests = new InMemoryRepository<NifRequest>();
   readonly recoveries = new InMemoryRepository<AccountRecovery>();
   private readonly ids = new IdGenerator();
+  /** Suites d'une déclaration de rôle (28/09/2026 : un rôle lié à un bien ouvre une revendication BROUILLON). */
+  readonly onRoleDeclared: ((taxpayerId: string, profile: string) => void)[] = [];
 
   constructor(private readonly d: FiscalDeps) {}
 
@@ -148,6 +150,7 @@ export class EnrolmentService {
       const acces = this.d.ctx.ext['acces'] as { declareProof?(u: User, t: string, i: { type: 'NIF'; reference: string; note?: string }): unknown } | undefined;
       try { acces?.declareProof?.(user, taxpayerId, { type: 'NIF', reference: answers.nif, note: `Déclaré au parcours « ${p.label} »` }); } catch { /* preuve déjà en attente : rien à faire */ }
     }
+    for (const fn of this.onRoleDeclared) { try { fn(taxpayerId, p.code); } catch { /* suite non bloquante */ } }
     this.d.ctx.audit.append({ actor: actorOf(user), action: 'enrolement.role.declared', resourceType: 'taxpayer', resourceId: taxpayerId, details: { declarationId: r.id, profile: p.code, channel: r.channel, objectId: objectId ?? null, nifRequest: nifRequestId ?? null } });
     return r;
   }

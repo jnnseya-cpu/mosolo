@@ -119,6 +119,53 @@ Règles :
 - Un mode diaspora : paiement par carte, mandataire local aux droits limités, quittances à distance.
 - Un quitus fiscal numérique téléchargeable et vérifiable par tout service habilité.
 
+## 9.9 Le compte unique appliqué à toute la plateforme (ajout du 28/09/2026)
+
+*Demande du maître d'ouvrage : « s'assurer que le compte unique s'applique et qu'une inscription partage l'information
+dans toute la plateforme ». Audit complet module par module : `compte-unique-audit.md`.*
+
+**Une inscription, tous les modules.** Chaque module déclare ce qu'il détient pour un compte dans un registre commun
+(`backend/src/modules/identity/compte-unique.ts`) : le socle (objets, baux, obligations, paiements, quittances, recours,
+notifications) et les modules accès (mandats, organisations, rôles, pièces), fiscal (déclarations, exonérations, quitus,
+rôles, NIF, relations aux biens), titres (titres, pass, tickets), RakaPay (fiche de conducteur, motos, coopérative),
+stationnement (sessions, réservations, véhicules, constats), publicité (enseignes, autorisations), verticales (démarches,
+certificats, étals, AVIA, secteurs, grands redevables), chaîne véhicule (contrôle technique, rendez-vous, fourrière),
+recouvrement (arriérés, échéanciers), canaux (cartes MOSOLO), communication (préférences, consentements) et documents.
+La vue « Mon compte unique » (`GET /v1/compte-unique/me`, section de l'espace `/espace`) les agrège sans copier de donnée
+et sans seconde fiche « personne » : objets par nature, obligations par statut ET par devise (jamais additionnées entre
+devises), titres et validité, quittances, recours, mandats donnés et reçus, organisations et rôles, documents,
+consentements, niveau de vérification avec ce que chaque niveau ouvre, graphiques de la trousse partagée et lien vers
+l'écran de chaque module.
+
+**Qui lit un compte (contrôle côté serveur).** Le titulaire ; un mandataire seulement dans le périmètre d'un mandat
+ACTIF comportant « CONSULTER » (objets du mandat ; ni consentements, ni documents, ni notifications) ; un agent habilité
+dans son périmètre seulement avec une consultation motivée active (circuit existant `POST /v1/acces/consultations`) ;
+toute autre personne reçoit 403. Chaque lecture est journalisée avec son motif.
+
+**Ne jamais redemander.** Les modules reprennent l'identité vérifiée du compte : fiche de conducteur wewa et moto
+(nom et téléphone repris), contrôle des pièces (nom et téléphone repris), organisation déclarée par une personne
+connectée (elle se désigne représentante sans ressaisir son identité), raison sociale d'une démarche, enrôlement en
+centre agréé (le numéro retrouve le compte). Une correction passe par la contestation ou la rectification (preuves),
+jamais par une nouvelle saisie.
+
+**Anti-doublon étendu.** Même téléphone ⇒ refus et lien de récupération ; même NIF (inscription ou organisation) ou même
+RCCM ⇒ refus et récupération ; les canaux (USSD, SVI, texte du stationnement, centres agréés) retrouvent le compte
+CONSERVÉ après une fusion. Une fiche de métier saisie par un tiers (conducteur wewa) est rattachée au compte quand la
+personne vérifie par code le téléphone qu'elle porte — jamais sur la ressemblance d'un nom ; les autres cas passent par
+la fusion contrôlée (preuve, deux personnes, réversible).
+
+**Organisations.** Un compte d'entreprise (NIF, RCCM) et ses représentants nommés partagent les données des modules
+entreprises, patentes, publicité, AVIA, télécom et grands redevables par le même compte ; le représentant rattaché voit
+son rôle dans son propre compte, sans accès aux données de l'organisation hors mandat.
+
+## 9.10 Biens, unités et occupations : des relations vérifiées (ajout du 28/09/2026)
+
+Une personne = un compte ; les biens (parcelle → bâtiment → unité, « MAIN » pour une maison individuelle) et les
+occupations restent des enregistrements distincts, reliés par des RELATIONS datées (propriétaire, copropriétaire,
+locataire, sous-locataire, occupant, gestionnaire, exploitant). Le rôle choisi à l'inscription ouvre une revendication
+BROUILLON — il ne définit pas la personne et ne la relie à personne. Détail : § 16.10 et
+`couverture-liaison-biens-occupations.md` (spécification « Liaison des biens et occupations » v1.0 du 28/09/2026).
+
 # 10. Architecture fonctionnelle
 
 ## 10.1 Sept domaines, une responsabilité chacun

@@ -22,6 +22,7 @@ import { registerDraftRoutes } from './modules/drafts/routes.js';
 import { registerFieldRoutes } from './modules/field/routes.js';
 import { registerFxRoutes } from './modules/fx/routes.js';
 import { registerIdentityRoutes } from './modules/identity/routes.js';
+import { registerCompteUniqueRoutes } from './modules/identity/compte-unique-routes.js';
 import { registerObjectRoutes } from './modules/objects/routes.js';
 import { registerPaymentRoutes } from './modules/payments/routes.js';
 import { registerReceiptRoutes } from './modules/receipts/routes.js';
@@ -184,6 +185,7 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
 
   registerSystemRoutes(app, ctx);
   registerIdentityRoutes(app, ctx);
+  registerCompteUniqueRoutes(app, ctx);
   registerObjectRoutes(app, ctx);
   registerRuleRoutes(app, ctx);
   registerAssessmentRoutes(app, ctx);

@@ -12,16 +12,28 @@ import { taxpayerRecipient } from '../../modules/identity/recipients.js';
 import type { FiscalObject } from '../../modules/objects/service.js';
 import { actorOf, basisToPct, pctToBasis, type FiscalDeps } from './common.js';
 
-export const RELATION_ROLES = ['PROPRIETAIRE', 'COPROPRIETAIRE', 'USUFRUITIER', 'HERITIER_PRESUME', 'GESTIONNAIRE'] as const;
+/**
+ * Rôles de relation. Ajout du 28/09/2026 (compte unique, biens et occupations ; spécification « Liaison des biens et
+ * occupations » v1.0) : LOCATAIRE, SOUS_LOCATAIRE, OCCUPANT, EXPLOITANT — les rôles existants restent inchangés.
+ */
+export const RELATION_ROLES = ['PROPRIETAIRE', 'COPROPRIETAIRE', 'USUFRUITIER', 'HERITIER_PRESUME', 'GESTIONNAIRE', 'LOCATAIRE', 'SOUS_LOCATAIRE', 'OCCUPANT', 'EXPLOITANT'] as const;
 export type RelationRole = (typeof RELATION_ROLES)[number];
 export const ROLE_LABELS: Record<RelationRole, string> = {
   PROPRIETAIRE: 'Propriétaire', COPROPRIETAIRE: 'Copropriétaire', USUFRUITIER: 'Usufruitier',
-  HERITIER_PRESUME: 'Héritier présumé', GESTIONNAIRE: 'Gestionnaire',
+  HERITIER_PRESUME: 'Héritier présumé', GESTIONNAIRE: 'Gestionnaire (mandataire du bien)',
+  LOCATAIRE: 'Locataire', SOUS_LOCATAIRE: 'Sous-locataire', OCCUPANT: 'Occupant', EXPLOITANT: 'Exploitant d’activité',
 };
+/** Rôles d'occupation (location, sous-location, occupation) : jamais comptés dans les quotes-parts de propriété. */
+export const OCCUPANCY_ROLES: RelationRole[] = ['LOCATAIRE', 'SOUS_LOCATAIRE', 'OCCUPANT'];
 /** Rôles dont les quotes-parts se cumulent (plafond 100 % sur une même période). */
 const OWNERSHIP: RelationRole[] = ['PROPRIETAIRE', 'COPROPRIETAIRE'];
 
-export const PROOF_TYPES = ['TITRE_FONCIER', 'CERTIFICAT_ENREGISTREMENT', 'ACTE_DE_VENTE', 'CONTRAT_DE_LOCATION', 'ATTESTATION_COUTUMIERE', 'ACTE_SUCCESSORAL', 'MANDAT_DE_GESTION', 'CONSTAT_TERRAIN', 'AUTRE'] as const;
+export const PROOF_TYPES = [
+  'TITRE_FONCIER', 'CERTIFICAT_ENREGISTREMENT', 'ACTE_DE_VENTE', 'CONTRAT_DE_LOCATION', 'ATTESTATION_COUTUMIERE', 'ACTE_SUCCESSORAL', 'MANDAT_DE_GESTION', 'CONSTAT_TERRAIN', 'AUTRE',
+  // Ajout du 28/09/2026 : quittance de loyer, facture d'eau ou d'électricité, invitation acceptée par l'autre partie
+  // (preuve d'APPUI seulement : elle ne vérifie jamais à elle seule), autorisation d'exploitation.
+  'QUITTANCE_LOYER', 'FACTURE_SERVICE', 'INVITATION_ACCEPTEE', 'AUTORISATION_EXPLOITATION',
+] as const;
 export type ProofType = (typeof PROOF_TYPES)[number];
 
 export const CLOSE_REASONS = ['VENTE', 'MUTATION', 'FIN_DE_MANDAT', 'DECES', 'FERMETURE', 'ERREUR_MATERIELLE', 'AUTRE'] as const;
@@ -50,6 +62,14 @@ export interface Relationship {
   closeReason?: string;
   disputeId?: string;
   history: { at: string; by: string; action: string; reason?: string }[];
+  /** Revendication de bien (28/09/2026) qui porte cette relation (même personne, même cible) : son cycle d'états. */
+  claimId?: string;
+  /** Méthode de vérification retenue (INVITATION_ACCEPTEE est une preuve d'appui, jamais suffisante seule). */
+  verificationMethod?: 'PREUVE_DOCUMENTAIRE' | 'AGENT_TERRAIN' | 'INVITATION_ACCEPTEE' | 'INTEGRATION_AUTORISEE';
+  /** Cible d'origine avant une fusion de biens (la relation suit le bien canonique ; l'identifiant d'origine est conservé). */
+  originalObjectId?: string;
+  /** Colocation déclarée : la location n'est pas exclusive (plusieurs locataires sur la même unité). */
+  jointTenancy?: boolean;
 }
 
 export interface OwnershipDispute {
@@ -198,6 +218,18 @@ export class RelationService {
       this.d.ctx.comms.publish('object.link.rejected', [taxpayerRecipient(tp)], { objet: obj.igf?.code ?? obj.id }, { entity: 'DGIPK' });
       return r;
     }
+    return this.applyValidation(user, rel, decision.reason);
+  }
+
+  /**
+   * Validation (contrôles M07-C2, quotes-parts, redevable principal) — appelée par `validate` après ses gardes, et
+   * par la décision d'un dossier de revue des revendications de biens (28/09/2026 : même circuit, même contrôle).
+   */
+  applyValidation(user: User, rel: Relationship, reason: string, method?: Relationship['verificationMethod']): Relationship {
+    const obj = this.d.ctx.objects.get(rel.objectId);
+    const tp = this.d.ctx.taxpayers.get(rel.taxpayerId);
+    const now = this.d.nowIso();
+    const decision = { reason };
     // M07-C2 : rattachement d'un objet de forte valeur réservé au niveau N2 (ou N3).
     if (isHighValue(obj) && !['N2', 'N3'].includes(tp.verificationLevel)) {
       throw forbidden('VERIFICATION_LEVEL_REQUIRED', `Objet de forte valeur : le contribuable doit être vérifié au niveau N2 (actuel : ${tp.verificationLevel}).`, { required: 'N2', current: tp.verificationLevel });
@@ -209,11 +241,12 @@ export class RelationService {
     }
     const r = this.relations.update({
       ...rel, status: 'VALIDEE', probativeStatus: 'VERIFIE', decisionReason: decision.reason, validatedBy: user.id, validatedAt: now,
+      ...(method ? { verificationMethod: method } : {}),
       history: [...rel.history, { at: now, by: user.id, action: 'VALIDEE', reason: decision.reason }],
     });
     // Revendication d'un objet provisoire : le propriétaire validé devient le redevable principal.
     if (OWNERSHIP.includes(rel.role) && !obj.taxpayerId) this.d.ctx.objects.setHolder(obj.id, rel.taxpayerId);
-    this.d.ctx.audit.append({ actor: actorOf(user), action: 'relationship.validated', resourceType: 'relationship', resourceId: id, details: { objectId: obj.id, role: rel.role, share: rel.share ?? null, reason: decision.reason } });
+    this.d.ctx.audit.append({ actor: actorOf(user), action: 'relationship.validated', resourceType: 'relationship', resourceId: rel.id, details: { objectId: obj.id, role: rel.role, share: rel.share ?? null, reason: decision.reason } });
     this.d.ctx.comms.publish('object.link.approved', [taxpayerRecipient(tp)], { objet: obj.igf?.code ?? obj.id }, { entity: 'DGIPK' });
     return r;
   }
@@ -266,6 +299,36 @@ export class RelationService {
     this.d.ctx.audit.append({ actor: actorOf(user), action: 'relationship.closed', resourceType: 'relationship', resourceId: id, details: { to: input.to, reason: input.reason } });
     for (const after of this.apresDetachement) after(r, user);
     return r;
+  }
+
+  /**
+   * Relations VÉRIFIÉES en vigueur à une date (vue datée des modules en aval : IRL, impôt foncier, baux) : statut
+   * VALIDEE ou CLOSE (historique), période couvrant la date, rôle permis. Jamais une revendication non vérifiée.
+   */
+  effectiveAt(objectId: string, date: string, roles?: RelationRole[]): Relationship[] {
+    return this.ofObject(objectId).filter((r) => (r.status === 'VALIDEE' || (r.status === 'CLOSE' && !!r.validatedAt))
+      && r.from <= date && (!r.to || r.to >= date) && (!roles || roles.includes(r.role)));
+  }
+
+  /**
+   * Relation portée par une revendication de bien (28/09/2026) : créée PROPOSÉE quand la revendication a une cible ;
+   * aucune validation ici (seul un réviseur habilité vérifie, par `applyValidation`).
+   */
+  insertFromClaim(input: { claimId: string; taxpayerId: string; objectId: string; role: RelationRole; share?: string; from: string; to?: string; jointTenancy?: boolean; declaredBy: string }): Relationship {
+    const now = this.d.nowIso();
+    const share = input.role === 'PROPRIETAIRE' ? (input.share ?? '100') : input.share;
+    return this.relations.insert({
+      id: this.ids.next('REL'), taxpayerId: input.taxpayerId, objectId: input.objectId, role: input.role, ...(share ? { share } : {}),
+      from: input.from, ...(input.to ? { to: input.to } : {}), proofs: [], probativeStatus: 'DECLARE', status: 'PROPOSEE',
+      declaredBy: input.declaredBy, declaredAt: now, claimId: input.claimId, ...(input.jointTenancy ? { jointTenancy: true } : {}),
+      history: [{ at: now, by: input.declaredBy, action: 'REVENDIQUEE', reason: `Revendication ${input.claimId}` }],
+    });
+  }
+
+  /** Changement d'état porté par le cycle de la revendication (historique complété, jamais effacé). */
+  setFromClaim(id: string, patch: Partial<Pick<Relationship, 'status' | 'to' | 'closeReason' | 'decisionReason' | 'validatedBy' | 'validatedAt' | 'objectId' | 'originalObjectId' | 'probativeStatus'>> & { proofs?: Proof[] }, by: string, action: string, reason?: string): Relationship {
+    const r = this.get(id);
+    return this.relations.update({ ...r, ...patch, history: [...r.history, { at: this.d.nowIso(), by, action, ...(reason ? { reason } : {}) }] });
   }
 
   /** Vue d'une relation pour un contribuable tiers : ni nom, ni identifiant, ni pièce. */

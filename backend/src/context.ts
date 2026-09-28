@@ -18,6 +18,8 @@ import { DraftService } from './modules/drafts/service.js';
 import { FieldService } from './modules/field/service.js';
 import { FxService } from './modules/fx/service.js';
 import { TaxpayerService } from './modules/identity/service.js';
+import { CompteUniqueRegistry } from './modules/identity/compte-unique.js';
+import { registerSocleContributions } from './modules/identity/compte-unique-socle.js';
 import { ObjectService } from './modules/objects/service.js';
 import type { ConnectorRuntime } from './modules/payments/connectors/koda.js';
 import { buildConnectorRegistry } from './modules/payments/connectors/registry.js';
@@ -190,6 +192,11 @@ export function createContext(opts: AppOptions = {}) {
   const drafts = new DraftService(clock, audit);
   const field = new FieldService(clock, audit, comms, alerts, users, objects);
   const appeals = new AppealService(clock, audit, comms, assessment, taxpayers);
+  // Compte unique (ch. 9) : registre des contributions de chaque module ; le socle déclare les siennes ici.
+  const compteUnique = new CompteUniqueRegistry();
+  registerSocleContributions(compteUnique, { objects, assessment, payments, receipts, appeals, comms });
+  // Rattachement exact des fiches de métier au compte dont le téléphone vient d'être vérifié (jamais sur le nom).
+  taxpayers.hooks.phoneVerified.push((t) => { if (t.phone) compteUnique.rattacher(t.id, t.phone); });
 
   // Vue en lecture seule offerte à la couche d'intelligence.
   const snapshot = (): AIDataSnapshot => {
@@ -232,7 +239,7 @@ export function createContext(opts: AppOptions = {}) {
 
   return {
     clock, secrets, users, audit, idempotency, comms, alerts, fx, taxpayers, objects, vault, rules, ledger, connectors,
-    assessment, receipts, payments, treasury, drafts, field, appeals, ai, dashboards,
+    assessment, receipts, payments, treasury, drafts, field, appeals, ai, dashboards, compteUnique,
     /** Services des modules d'extension, par nom (voir plugins/). */
     ext: {} as Record<string, unknown>,
     /**

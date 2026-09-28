@@ -7,6 +7,7 @@ import { runScheduledJob } from '../../core/jobs.js';
 import { definePolicy, GRANTS } from '../../core/policy.js';
 import { definePlugin } from '../types.js';
 import { registerFiscalRoutes } from './routes.js';
+import { registerBiensRoutes } from './biens-routes.js';
 import { FiscalService } from './service.js';
 
 const { always, ownTaxpayer, mandant, inTerritory } = GRANTS;
@@ -37,6 +38,9 @@ definePolicy('fiscal:relation.validate', { R06: always, R07: always, R11: always
 definePolicy('fiscal:relation.contest', { R30: ownTaxpayer, R31: mandant, R11: always, R20: always });
 definePolicy('fiscal:relation.close', { R06: always, R07: always, R11: always });
 definePolicy('fiscal:relation.resolve', { R06: always, R07: always });
+// Liaison des biens et occupations (28/09/2026) : constat de terrain (territoire affecté) et vue datée des modules en aval.
+definePolicy('biens:field.verify', { R10: inTerritory('full'), R35: inTerritory('full') });
+definePolicy('biens:effective.read', { R06: always, R07: always, R11: always, R12: always, R17: always, R22: always, R23: always });
 
 // Déclarations
 definePolicy('fiscal:declaration.file', { R30: ownTaxpayer, R31: mandant, R12: always });
@@ -65,6 +69,8 @@ export const fiscalPlugin = definePlugin<FiscalService>({
   seed: (_ctx, svc) => svc.seedDemo(),
   routes: (app, ctx, svc) => {
     registerFiscalRoutes(app, ctx, svc);
+    // Liaison des biens et occupations (spécification v1.0 du 28/09/2026).
+    registerBiensRoutes(app, ctx, svc);
     // Échéance et révision automatiques des exonérations (module 57) : toutes les heures hors tests.
     const flag = (process.env.MOSOLO_EXONERATIONS_ECHEANCIER ?? '').trim().toLowerCase();
     if (flag === 'on' || (flag !== 'off' && !process.env.VITEST)) {

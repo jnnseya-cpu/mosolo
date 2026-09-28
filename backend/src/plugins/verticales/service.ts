@@ -520,6 +520,11 @@ export class VerticalesService {
       if (this.verticalOf(o) !== v.slug) throw unprocessable('OBJECT_WRONG_VERTICAL', `L’objet ${o.id} ne relève pas de ${v.name}.`);
       commune = o.commune;
     }
+    // Compte unique (28/09/2026) : l'identité déjà connue du compte (raison sociale, nom) n'est jamais redemandée.
+    const identite = this.ctx.taxpayers.get(taxpayerId);
+    if (proc.fields.some((f) => f.key === 'raisonSociale') && !(input.details.raisonSociale ?? '').trim()) {
+      input = { ...input, details: { ...input.details, raisonSociale: identite.fullName } };
+    }
     for (const f of proc.fields) {
       const val = input.details[f.key];
       if (f.required && (val === undefined || String(val).trim() === '')) throw badRequest('FIELD_REQUIRED', `Champ requis : ${f.label}`);

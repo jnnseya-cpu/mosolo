@@ -104,7 +104,8 @@ export class ChannelEngine {
   start(channel: SessionChannel, msisdnRaw: string, lang?: string): ScreenOut {
     const msisdn = msisdnRaw.replace(/[\s-]/g, '');
     const now = this.ctx.clock.now().toISOString();
-    const tp = this.ctx.taxpayers.taxpayers.findOne((t) => t.phone === msisdn);
+    // Compte unique : un même numéro sert toujours le même compte (compte fusionné ⇒ compte conservé).
+    const tp = this.ctx.taxpayers.findByPhone(msisdn);
     // Identifiant aléatoire non devinable (128 bits) : la route de saisie n'est pas authentifiée, l'identifiant de
     // session est le seul lien avec l'appelant — un numéro séquentiel permettrait de reprendre la session d'autrui.
     const session = this.sessions.insert({
