@@ -148,3 +148,27 @@ export function catalogueModule(code: string): CatalogueModule | undefined {
 export function versionsOf(m: CatalogueModule): string[] {
   return VERSIONS_44.filter((v) => v.contenus.some((c) => (c.modules ?? []).some((p) => m.plugins.includes(p)))).map((v) => v.code);
 }
+
+/**
+ * Ministère de tutelle PAR DÉFAUT de chaque module — à confirmer par le maître d'ouvrage (28/09/2026).
+ * Sert UNIQUEMENT au menu des ministres (R04, R05), qui ne voient que les modules de leur ministère et des départements de
+ * sa tutelle (régies dirigées par un directeur général, trésor, services) : un rattachement explicite d'un module à une
+ * entité (écran « Départements, modules et variables ») l'emporte toujours sur cette valeur par défaut. Les modules
+ * transverses (identité, plateforme, IA, audit, intégrité, terrain) n'ont pas de tutelle ministérielle par défaut.
+ */
+const TUTELLE_FINANCES = [1, 2, 3, 7, 8, 9, 15, 16, 17, 18, 19, 22, 23, 26, 27, 28, 29, 30, 31, 32, 33, 36, 37, 42, 43, 44, 45, 47, 48, 54, 56, 57, 59, 60, 61, 63, 64, 65, 66, 68, 70, 72, 73, 77, 79, 80];
+const TUTELLE_TRANSPORTS = [11, 12, 13, 14, 24, 25, 62, 75, 76, 78, 81];
+const TUTELLE_ECONOMIE = [10, 20, 21];
+const VERTICALES_TUTELLE: Record<string, string> = {
+  rakapay: 'MIN-TRANSPORTS', mobilite: 'MIN-TRANSPORTS', stationnement: 'MIN-TRANSPORTS', ports: 'MIN-TRANSPORTS', avia: 'MIN-TRANSPORTS',
+  entreprises: 'MIN-ECONOMIE', marches: 'MIN-ECONOMIE', evenements: 'MIN-ECONOMIE',
+  propriete: 'MINFIN', locatif: 'MINFIN', publicite: 'MINFIN', telecom: 'MINFIN', 'domaine-public': 'MINFIN', environnement: 'MINFIN',
+  construction: 'MINFIN', actifs: 'MINFIN', recouvrement: 'MINFIN',
+};
+const code = (n: number) => `M${String(n).padStart(2, '0')}`;
+export const TUTELLE_PAR_DEFAUT: Readonly<Record<string, string>> = Object.freeze({
+  ...Object.fromEntries(TUTELLE_FINANCES.map((n) => [code(n), 'MINFIN'])),
+  ...Object.fromEntries(TUTELLE_TRANSPORTS.map((n) => [code(n), 'MIN-TRANSPORTS'])),
+  ...Object.fromEntries(TUTELLE_ECONOMIE.map((n) => [code(n), 'MIN-ECONOMIE'])),
+  ...Object.fromEntries(Object.entries(VERTICALES_TUTELLE).map(([s, e]) => [`V-${s}`, e])),
+});

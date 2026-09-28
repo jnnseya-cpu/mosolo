@@ -170,10 +170,22 @@ describe('Menu reflétant les rattachements (présentation ; le serveur garde le
     expect(limete.hiddenPaths).not.toContain('/documents');
     expect(limete.attachedModules.map((m: { code: string }) => m.code)).toContain('M38');
     expect(await hidden(env, 'u-gouverneur')).not.toContain('/documents');
-    // Décision du maître d'ouvrage (27/09/2026) : R01 à R05 voient toujours tous les modules, quel que soit le rattachement.
-    for (const u of ['u-gouverneur', 'u-dircab', env.app.ctx.users.all().find((x) => x.roles.includes('R03'))!.id, 'u-ministre-transports', 'u-ministre-finances']) {
+    // Décisions du maître d'ouvrage : R01 à R03 voient toujours tous les modules (27/09/2026) ; les ministres (R04, R05)
+    // ne voient que ceux de leur ministère et des départements de sa tutelle (28/09/2026).
+    for (const u of ['u-gouverneur', 'u-dircab', env.app.ctx.users.all().find((x) => x.roles.includes('R03'))!.id]) {
       expect((await env.req('GET', '/v1/acces/menu-rattachements', u)).json()).toMatchObject({ exempt: true, hiddenPaths: [] });
     }
+    const minFin = (await env.req('GET', '/v1/acces/menu-rattachements', 'u-ministre-finances')).json();
+    expect(minFin).toMatchObject({ exempt: false, perimetre: 'MINISTERE_ET_DEPARTEMENTS' });
+    expect(minFin.hiddenPaths).toContain('/documents'); // rattaché à Limete : hors du périmètre du ministère des Finances
+    const minTr = (await env.req('GET', '/v1/acces/menu-rattachements', 'u-ministre-transports')).json();
+    expect(minTr.hiddenPaths).toContain('/documents');
+    // Sans rattachement explicite : tutelle ministérielle par défaut (à confirmer) — stationnement aux Transports, trésor aux Finances.
+    const codes = (r: { attachedModules: { code: string }[] }) => r.attachedModules.map((m) => m.code);
+    expect(codes(minTr)).toContain('M14');
+    expect(codes(minTr)).not.toContain('M29');
+    expect(codes(minFin)).toContain('M29');
+    expect(codes(minFin)).not.toContain('M14');
     expect(await hidden(env, 'u-auditeur')).toEqual([]);
     expect(await hidden(env, 'u-contribuable')).toEqual([]);
     // Les droits restent ceux du serveur : la route n'est ni ouverte ni fermée par le rattachement.

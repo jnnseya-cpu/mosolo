@@ -49,6 +49,8 @@ données de démonstration.
   du secrétaire général et des ministres (R01–R05) ; la mention « Document de travail soumis à validation juridique… »
   n'est plus affichée.
 
-- **Menus des autorités (27/09/2026)** : Gouverneur, directeur de cabinet, secrétaire exécutif et ministres (R01–R05)
-  voient toujours tous les modules, quel que soit leur rattachement à un département.
+- **Menus des autorités (27/09/2026, corrigé le 28/09/2026)** : Gouverneur, directeur de cabinet et secrétaire exécutif
+  (R01–R03) voient toujours tous les modules. Les ministres (R04, R05) ne voient que les modules de leur ministère et des
+  départements de sa tutelle (régies dirigées par un directeur général, trésor, services) : rattachement explicite
+  d'abord, sinon ministère de tutelle par défaut du module (à confirmer).
 - **Contrats partenaires (27/09/2026)** : approuvés par le directeur de cabinet (R02) seul.

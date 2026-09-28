@@ -179,9 +179,13 @@ motif, date d'effet, date de fin facultative et historique complet :
   R26 et décidée par le Gouverneur ou le Cabinet ; retrait proposé puis décidé par une personne distincte).
 
 Effet : les personnes de l'entité (et de sa lignée) voient le module dans leur menu, filtré par rôle comme aujourd'hui ;
-les autres ne le voient plus — sauf le Gouverneur, le Directeur de cabinet, le Secrétaire exécutif et les ministres
-(R01 à R05), qui voient toujours tous les modules quel que soit leur rattachement (décision du maître d'ouvrage du
-27/09/2026). Présentation seulement : le serveur continue d'appliquer les droits sur chaque route
+les autres ne le voient plus — sauf le Gouverneur, le Directeur de cabinet et le Secrétaire exécutif (R01 à R03), qui
+voient toujours tous les modules quel que soit leur rattachement (décision du maître d'ouvrage du 27/09/2026). Les
+ministres (R04, R05) ne voient que les modules de leur ministère et des départements de sa tutelle — régies dirigées par
+un directeur général, trésor, services (décision du 28/09/2026) : un rattachement explicite l'emporte ; à défaut, le
+ministère de tutelle par défaut du module s'applique (`TUTELLE_PAR_DEFAUT` — Finances : recettes, trésor, régies ;
+Transports : véhicules, transport, stationnement, ports, péage, RakaPay, AVIA ; Économie : patentes, marchés,
+spectacles — par défaut, à confirmer par le maître d'ouvrage). Présentation seulement : le serveur continue d'appliquer les droits sur chaque route
 (ABAC) et chaque donnée d'entité reste cloisonnée à son entité.
 
 **Variables par département.** Les paramètres du registre des seuils déclarés « modulables par entité » (liste par

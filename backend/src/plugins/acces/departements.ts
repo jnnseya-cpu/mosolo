@@ -23,7 +23,7 @@ import { kinshasaDate } from '../../core/clock.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, authorize } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
-import { catalogueModule, MODULE_CATALOGUE, versionsOf, type CatalogueModule } from './catalogue-modules.js';
+import { catalogueModule, MODULE_CATALOGUE, TUTELLE_PAR_DEFAUT, versionsOf, type CatalogueModule } from './catalogue-modules.js';
 import {
   ENTITY_KIND_LABELS, FIELD_ROLES, LEVEL_INFO, LEVEL_RANK, ROLE_LEVEL, SECOND_VALIDATION_ROLES, SENSITIVE_ROLES,
   type AccessLevel, type ModuleConfig, type ModuleLink, type PartnerContract,
@@ -35,9 +35,12 @@ const ALL_ROLES = Object.keys(ROLES) as RoleCode[];
 const PUBLIC_ROLES: RoleCode[] = ['R30', 'R31'];
 const SPECIAL_LEVELS: AccessLevel[] = ['AUDIT', 'ADMIN_TECHNIQUE'];
 /** Rôles transverses (audit, exploitation, sécurité) : menu jamais restreint par les rattachements d'entités. */
-// Décision du maître d'ouvrage (27/09/2026) : Gouverneur, Directeur de cabinet, Secrétaire exécutif et ministres (R01–R05)
-// voient toujours tous les modules, quel que soit leur rattachement (présentation ; les droits restent vérifiés par le serveur).
-const MENU_EXEMPT: RoleCode[] = ['R01', 'R02', 'R03', 'R04', 'R05', 'R22', 'R23', 'R26', 'R27', 'R28'];
+// Décisions du maître d'ouvrage : Gouverneur, Directeur de cabinet et Secrétaire exécutif (R01–R03) voient toujours tous les
+// modules, quel que soit leur rattachement (27/09/2026). Les ministres (R04, R05) ne voient QUE les modules de leur
+// périmètre : ceux rattachés à leur ministère ou à un département de sa tutelle, dont les régies dirigées par un
+// directeur général (28/09/2026). Présentation seulement : les droits restent vérifiés par le serveur sur chaque route.
+const MENU_EXEMPT: RoleCode[] = ['R01', 'R02', 'R03', 'R22', 'R23', 'R26', 'R27', 'R28'];
+const MENU_PERIMETRE_STRICT: RoleCode[] = ['R04', 'R05'];
 const REQUIREMENT_LABELS: Record<string, string> = {
   HORS_BANDE_CABINET: 'Confirmation hors bande par le Cabinet ou le Secrétariat général',
   AUTORITE_AUDIT: 'Validation par l’autorité d’audit',
@@ -391,10 +394,24 @@ export class DepartementsService {
     const reachable = new Set(att.filter((a) => lineage.has(a.entity)).map((a) => a.moduleCode));
     const byPath = new Map<string, CatalogueModule[]>();
     for (const m of MODULE_CATALOGUE) for (const p of m.screens) byPath.set(p, [...(byPath.get(p) ?? []), m]);
-    const hidden = exempt ? [] : [...byPath].filter(([, ms]) => ms.every((m) => governed.has(m.code) && !reachable.has(m.code))).map(([p]) => p).sort();
+    // Ministres : périmètre strict — uniquement les modules rattachés à leur ministère ou à ses départements (sous-arbre,
+    // sans les entités de tutelle) ; un module rattaché nulle part n'est pas « le leur » et n'apparaît pas.
+    const strict = !exempt && user.roles.some((r) => MENU_PERIMETRE_STRICT.includes(r));
+    // Rattachement explicite d'abord ; à défaut de tout rattachement, tutelle ministérielle PAR DÉFAUT (à confirmer).
+    const sousArbre = strict ? this.svc.subtree(user.entity) : new Set<string>();
+    const own = strict
+      ? new Set([
+        ...att.filter((a) => sousArbre.has(a.entity)).map((a) => a.moduleCode),
+        ...MODULE_CATALOGUE.filter((m) => !governed.has(m.code) && TUTELLE_PAR_DEFAUT[m.code] && sousArbre.has(TUTELLE_PAR_DEFAUT[m.code]!)).map((m) => m.code),
+      ])
+      : reachable;
+    const hidden = exempt ? [] : strict
+      ? [...byPath].filter(([, ms]) => ms.every((m) => !own.has(m.code))).map(([p]) => p).sort()
+      : [...byPath].filter(([, ms]) => ms.every((m) => governed.has(m.code) && !reachable.has(m.code))).map(([p]) => p).sort();
     return {
       userId: user.id, entity: user.entity, exempt,
-      attachedModules: MODULE_CATALOGUE.filter((m) => reachable.has(m.code)).map((m) => ({ code: m.code, label: m.label, screens: m.screens })),
+      perimetre: strict ? 'MINISTERE_ET_DEPARTEMENTS' : exempt ? 'TOUS_MODULES' : 'LIGNEE',
+      attachedModules: MODULE_CATALOGUE.filter((m) => own.has(m.code)).map((m) => ({ code: m.code, label: m.label, screens: m.screens })),
       hiddenPaths: hidden,
       note: 'Présentation seulement : les droits restent appliqués par le serveur sur chaque route (ABAC).',
     };
