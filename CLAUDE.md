@@ -54,3 +54,11 @@ données de démonstration.
   départements de sa tutelle (régies dirigées par un directeur général, trésor, services) : rattachement explicite
   d'abord, sinon ministère de tutelle par défaut du module (à confirmer).
 - **Contrats partenaires (27/09/2026)** : approuvés par le directeur de cabinet (R02) seul.
+- **Compte unique, biens et occupations (28/09/2026)** : une personne = un compte ; biens, unités et occupations restent
+  des enregistrements distincts, reliés par des RELATIONS datées (propriétaire, copropriétaire, locataire, occupant,
+  gestionnaire, exploitant). Le choix « propriétaire / locataire » à l'inscription ouvre une revendication, jamais un lien
+  automatique. Rapprochement sur identifiant du bien, GPS, adresse et numéro d'unité — jamais sur le téléphone ou le nom
+  seuls ; confirmation par la personne, puis vérification (invitation acceptée par l'autre partie, preuve, ou agent de
+  terrain habilité) ; contestation → revue. Historique conservé (qui occupait quelle unité, quand). Aucune suggestion ne
+  divulgue les données privées de l'autre partie avant vérification ; le lien sert les démarches et la fiscalité, jamais
+  un accès au compte de l'autre.
