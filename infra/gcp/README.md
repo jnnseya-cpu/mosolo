@@ -80,6 +80,7 @@ Paramètres (tous facultatifs sauf `PROJECT_ID`) — valeurs chiffrées **par d�
 | `PRESTATAIRES_SECRETS` | `auto` | Raccorde au service les secrets `mosolo-bitripay-*` / `mosolo-koda-*` qui ont une version (saisie : `./infra/gcp/secrets-prestataires.sh <bitripay\|koda>`, sans écho) ; `non` : aucun |
 | `PRESTATAIRES_ENV_FILE` | `infra/gcp/prestataires.env` | Variables NON secrètes des prestataires (URL, opérateurs, alias du coffre, `KODA_SUCCESS_URL`) ; modèle `prestataires.env.example` ; tout nom de secret y est refusé. Voir `docs/prestataires-paiement.md` |
 | `DEMO_MIN_INSTANCES` | `0` | Démonstration : 0 = mise en veille hors visite (données réinitialisées) |
+| `DEMO_ACCESS` | `mot-de-passe` | Démonstration (ajout du 28/09/2026, troisième passe, D3-06) : mot de passe d'accès commun généré dans Secret Manager (`DEMO_ACCESS_SECRET`, défaut `mosolo-demo-access-password`), exigé par le navigateur (HTTP Basic, puis témoin HttpOnly) — sans lui, tout visiteur pourrait agir sous n'importe quel rôle fictif par l'en-tête `x-demo-user`. Lecture : `gcloud secrets versions access latest --secret=mosolo-demo-access-password`. `public` : comportement antérieur (ouvert à tous), conservé. Variable applicative : `MOSOLO_DEMO_ACCESS_PASSWORD` (≥ 12 caractères, démonstration seulement) |
 
 ## Variables de l'application
 

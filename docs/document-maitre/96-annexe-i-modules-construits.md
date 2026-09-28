@@ -1204,3 +1204,24 @@ relation portée par la revendication) ; objets fiscaux étendus (`recordStatus`
 `addressEntered`, libellés, `createSelfReported`). Écrans : `/espace/biens-relations`, `/espace/biens/:id`,
 `/biens-relations/revue` ; inscription à rôles multiples. Tests : `backend/test/liaison-biens-occupations.test.ts`
 (CA-1 à CA-9 nommés, § 5, § 6–7, § 8, § 10, module 7 conservé). Couverture : `couverture-liaison-biens-occupations.md`.
+
+## I.29 Troisième passe GO / NO-GO : durcissements de la liaison des biens, du compte unique et de la démonstration hébergée (28/09/2026)
+
+Ajouts de la troisième passe (`docs/production-readiness.md`, § 21) ; rien n'est retiré (règle n° 1).
+
+- **Invitations de la liaison des biens** (`biens-occupations.ts`) : le bien visé par une invitation
+  (`target_unit_id`) doit appartenir à la branche du bien revendiqué (même parcelle, bâtiment ou unité) — un bien étranger
+  ou inexistant reçoit la même erreur `INVITATION_TARGET_OUT_OF_CLAIM` (422, aucune sonde d'existence) ; à la réponse,
+  la cible est résolue avant toute écriture (aucune pièce ajoutée si la réponse échoue).
+- **Contestation** : la version n'est contrôlée qu'après l'autorisation (un tiers reçoit 403, jamais la version
+  courante). **Fin d'une relation par un réviseur** : territoire et absence de conflit d'intérêts, comme la décision.
+- **Compte unique** (`compte-unique-routes.ts`) : pour une personne du public (R30, R31), un identifiant inexistant
+  reçoit le même refus qu'un compte existant d'autrui ; les agents gardent le 404.
+- **Démonstration hébergée** (`backend/src/core/demo-gate.ts`) : mot de passe d'accès commun facultatif
+  `MOSOLO_DEMO_ACCESS_PASSWORD` (démonstration seulement, ≥ 12 caractères, HTTP Basic puis témoin HttpOnly ; `/health`
+  et webhooks signés exemptés). Kit Google Cloud : `DEMO_ACCESS=mot-de-passe` (défaut, secret
+  `mosolo-demo-access-password`) ou `public` (comportement antérieur conservé) — choix à confirmer par le maître d'ouvrage.
+- **Menu** (`shared/src/menu.ts`, présentation seulement) : entrée « Audit » masquée pour le super-administrateur (R26),
+  dont les trois lectures de l'écran sont refusées par le serveur ; route, page et droits inchangés.
+- Tests : `backend/test/liaison-biens-adverse.test.ts` (D3-01 à D3-04, en échec sur la version candidate 7168652),
+  `backend/test/demo-acces.test.ts` (D3-06) ; contrôle ajouté à `infra/valider.sh`.

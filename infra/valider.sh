@@ -96,6 +96,9 @@ for s in ["DATABASE_URL", "MOSOLO_RECEIPT_SIGNING_KEY", "MOSOLO_CLOSURE_SIGNING_
 demo = yaml.safe_load(open(sys.argv[2], encoding="utf-8"))
 dc = demo["spec"]["template"]["spec"]["containers"][0]
 assert dc["args"] == ["demo"] and demo["metadata"]["name"] != prod["metadata"]["name"]
+# Troisième passe (D3-06) : par défaut, la démonstration exige un mot de passe d'accès tiré de Secret Manager.
+denv = {e["name"]: e for e in dc["env"]}
+assert "secretKeyRef" in denv["MOSOLO_DEMO_ACCESS_PASSWORD"]["valueFrom"], "MOSOLO_DEMO_ACCESS_PASSWORD"
 EOF
 
 echo "5. Docker Compose"

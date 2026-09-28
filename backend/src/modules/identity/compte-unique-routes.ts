@@ -85,7 +85,18 @@ export function registerCompteUniqueRoutes(app: FastifyInstance, ctx: AppContext
   const reg = ctx.compteUnique;
 
   const view = (user: User, taxpayerIdRaw: string, headers: Record<string, string | string[] | undefined>, consultationId?: string) => {
-    const tp = ctx.taxpayers.resolve(taxpayerIdRaw);
+    // Troisième passe (D3-04) : pour une personne du public (titulaire R30, mandataire R31), un identifiant inexistant
+    // reçoit le MÊME refus qu'un compte existant d'autrui (aucune sonde d'existence) ; les agents gardent le 404.
+    const publicOnly = user.roles.every((r) => r === 'R30' || r === 'R31');
+    let tp: ReturnType<typeof ctx.taxpayers.resolve>;
+    try {
+      tp = ctx.taxpayers.resolve(taxpayerIdRaw);
+    } catch (err) {
+      if (!publicOnly) throw err;
+      throw user.roles.includes('R31')
+        ? forbidden('MANDATE_SCOPE', 'Aucun mandat actif vous autorisant à consulter ce compte (action « CONSULTER »).')
+        : forbidden('FORBIDDEN', 'Compte unique : accès réservé au titulaire, à son mandataire et aux agents habilités dans leur périmètre.');
+    }
     let viewer: Viewer;
     let objectIds: string[] = [];
     let mandateId: string | null = null;

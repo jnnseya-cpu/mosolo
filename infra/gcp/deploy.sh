@@ -49,6 +49,12 @@ CONCURRENCY="${CONCURRENCY:-80}"
 INGRESS="${INGRESS:-all}"                        # internal-and-cloud-load-balancing : seulement via l'équilibreur
 TRUST_PROXY="${TRUST_PROXY:-1}"
 DEMO_MIN_INSTANCES="${DEMO_MIN_INSTANCES:-0}"
+# Accès à la DÉMONSTRATION (troisième passe, D3-06) : « mot-de-passe » (défaut) = mot de passe d'accès commun généré dans
+# Secret Manager (mosolo-demo-access-password), exigé par le navigateur avant tout écran — en démonstration, l'en-tête
+# x-demo-user permet sinon à tout visiteur d'agir sous n'importe quel rôle ; « public » = comportement antérieur
+# (ouvert à tous), conservé et disponible. Choix à confirmer par le maître d'ouvrage.
+DEMO_ACCESS="${DEMO_ACCESS:-mot-de-passe}"
+DEMO_ACCESS_SECRET="${DEMO_ACCESS_SECRET:-mosolo-demo-access-password}"
 SCHEDULER_REGION="${SCHEDULER_REGION:-$REGION}"
 BACKUP_SCHEDULE="${BACKUP_SCHEDULE:-15 2 * * *}" # tous les jours à 02:15, heure de Kinshasa
 BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
@@ -314,10 +320,9 @@ spec:
         env:
         - name: MOSOLO_STATIC_DIR
           value: "frontend/dist"
-  traffic:
-  - percent: 100
-    latestRevision: true
 EOF
+  [[ "$DEMO_ACCESS" == "public" ]] || secret_yaml MOSOLO_DEMO_ACCESS_PASSWORD "$DEMO_ACCESS_SECRET" >> "$f"
+  printf '  traffic:\n  - percent: 100\n    latestRevision: true\n' >> "$f"
 }
 
 rendre_job() { # <nom> <compte> <arguments> <fichier> <volume: oui|non> puis paires VAR=valeur / VAR=@secret
@@ -385,6 +390,7 @@ est_simulation || gcloud --version | head -n 1 | sed 's/^/    /'
 # ---------------------------------------------------------------------------------------------------------------------
 etape "Activation des API"
 API=(run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com iam.googleapis.com storage.googleapis.com)
+[[ "$DEMO" == "true" && "$DEMO_ACCESS" != "public" ]] && API+=(secretmanager.googleapis.com)
 [[ "$DEMO" == "true" ]] || API+=(sqladmin.googleapis.com secretmanager.googleapis.com cloudscheduler.googleapis.com compute.googleapis.com servicenetworking.googleapis.com)
 run gcloud services enable "${API[@]}" "${G[@]}"
 
@@ -432,6 +438,15 @@ fi
 # Variante DÉMONSTRATION : service séparé, --demo, mémoire, sans base ni secret (remplace Render).
 # =====================================================================================================================
 if [[ "$DEMO" == "true" ]]; then
+  case "$DEMO_ACCESS" in public|mot-de-passe) ;; *) echo "DEMO_ACCESS : « mot-de-passe » ou « public »" >&2; exit 2 ;; esac
+  if [[ "$DEMO_ACCESS" != "public" ]]; then
+    etape "Mot de passe d'accès à la démonstration (Secret Manager ${DEMO_ACCESS_SECRET}, jamais affiché)"
+    secret_assurer "$DEMO_ACCESS_SECRET" gen_aleatoire
+    secret_acces "$DEMO_ACCESS_SECRET" "$SA_DEMO"
+    info "à communiquer à l'équipe du Gouverneur par un canal sûr : gcloud secrets versions access latest --secret=${DEMO_ACCESS_SECRET} --project=${PROJECT_ID}"
+  else
+    info "ATTENTION : DEMO_ACCESS=public — démonstration ouverte à tout visiteur, qui peut agir sous n'importe quel rôle fictif."
+  fi
   etape "Service de démonstration ${DEMO_SERVICE} (--demo, données non contractuelles)"
   rendre_service_demo "$RENDU/service-demo.yaml"
   info "description rendue : infra/gcp/.rendu/service-demo.yaml"

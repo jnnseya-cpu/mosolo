@@ -284,6 +284,8 @@ describe('Menu aligné sur les droits de lecture', () => {
       [['R17'], '/terrain/sous-traitants'], [['R10'], '/vehicules/fourrieres'], [['R10'], '/citoyen/cadastre'], [['R10'], '/citoyen/activites'],
       [['R10'], '/citoyen/vehicules'], [['R10'], '/citoyen/transport'], [['R30'], '/documents'], [['R30'], '/verticales/fiches'],
       [['R30'], '/rakapay/cooperative'], [['R03'], '/gouverneur'], [['R04'], '/gouverneur'], [['R05'], '/tresor'], [['R05'], '/rakapay/pilotage'],
+      // Troisième passe (28/09/2026, D3-08) : écran d'audit entièrement refusé au super-administrateur.
+      [['R26'], '/audit'],
     ];
     const registry = readFileSync(new URL('modules/registry.tsx', FRONT), 'utf8');
     for (const [roles, path] of cases) {

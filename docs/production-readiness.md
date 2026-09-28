@@ -688,3 +688,182 @@ BCC), mais le logiciel est désormais prêt à recevoir les clés et à déclare
 les deux : quittance **provisoire** seulement après webhook signé **et** interrogation serveur à serveur, quittance
 **définitive** au rapprochement avec le relevé. De même, un secret de webhook sans clé API hors démonstration reste
 admis au démarrage (comportement existant, testé) mais ne permet plus ni intention ni quittance (503).
+
+---
+
+## 21. Troisième passe « réalité » GO / NO-GO (28/09/2026)
+
+Ajout ; les sections 1 à 20 sont inchangées. **NON TESTÉ n'est jamais compté comme RÉUSSI** ; aucun système n'est
+« inviolable » ; rien n'a été déployé sur un nuage ; aucune valeur secrète n'a été affichée ni journalisée.
+
+### 21.1 Périmètre et version candidate
+
+Version candidate : **7168652** (branche `claude/beautiful-hawking-3tw7gb`), travaillée sur la branche locale
+`rc-gonogo`. Six axes : (1) compte unique et liaison des biens et occupations v1.0 ; (2) comptes, départements et
+menus ; (3) paiements BitriPay / KODA ; (4) écrans de graphiques ; (5) kit de déploiement ; (6) non-régression
+complète. Rien n'a été retiré (règle n° 1) ; données de démonstration inchangées.
+
+### 21.2 Méthode
+
+EXÉCUTER plutôt que lire : serveur de démonstration réel (`tsx src/server.ts --demo`, application web construite servie
+par le même processus), requêtes HTTP réelles (scripts Node, défi anti-robots résolu comme le ferait le navigateur),
+prestataire simulé dans un **processus séparé** (BitriPay + KODA, pilotable : panne, état contredit, montant),
+Chromium réel (Playwright 1.56, `/opt/pw-browsers`) à **360 px et 1 280 px**. Chaque défaut : REPRODUIRE → CAUSE →
+CORRECTIF minimal → test qui **échoue sur 7168652** et passe après → RETESTER. Scripts et journaux : dossier de travail
+`scratchpad/gonogo3/` (`attack-liaison.mjs`, `attack-paiements.mjs`, `mock-provider.mjs`, `crawl.cjs`,
+`gate-browser.cjs`, journaux `*.log`, résultats `*.json`).
+
+### 21.3 Environnement
+
+Linux, Node 22.22, npm 10 ; ShellCheck 0.11 ; hadolint 2.15 ; Chromium 1194 (Playwright 1.56.1) ; binaires
+PostgreSQL 16 présents mais **non démarrables** ici (démon Docker arrêté, changement d'utilisateur refusé par le bac à
+sable) ; `gcloud` absent. Aucun accès aux prestataires réels.
+
+### 21.4 Résultats par axe
+
+| Axe | Résultat | Preuve |
+|---|---|---|
+| 1. Compte unique et liaison des biens | **PASS après correctifs** : 9 critères d'acceptation re-vérifiés (tests CA-1 à CA-9 verts) ; attaque HTTP réelle 39/46 au premier passage → 4 défauts réels (D3-01 à D3-04), 3 faux positifs du script expliqués (numéro de test contenu dans l'avenue ; chemin demandé renvoyé dans `instance`) ; après correctif, les 4 tests nouveaux passent | `backend/test/liaison-biens-adverse.test.ts` (4 tests, en échec sur 7168652) ; `attack-liaison.log` |
+| 2. Comptes, départements, menus | **PASS avec réserves** : R01–R03 « tous modules » (`/v1/acces/menu-rattachements` : `TOUS_MODULES`) ; R05 périmètre strict ministère + tutelle (53 écrans masqués, 55 modules) ; **aucune « Vérification publique »** dans le menu de R01, R02, R05 (Chromium, 360 et 1 280 px) ; contrats partenaires : décision refusée (403) à R01, R05, R06, R26, admise à R02 seul ; 1 écart corrigé (D3-08), 2 à arbitrer (D3-10, D3-11) | `crawl.log`, `menu-droits.test.ts` |
+| 3. Paiements BitriPay / KODA | **PASS** : 19/19 contrôles par prestataire, de bout en bout en HTTP entre deux processus ; 1 observation (D3-05) | `attack-paiements.log` |
+| 4. Écrans de graphiques | **PASS** : 864 pages visitées (205 écrans distincts, 8 rôles, 360 et 1 280 px), **0 erreur JavaScript, 0 réponse 5xx, 0 débordement horizontal, 0 « NaN / undefined / [object Object] » visible** ; 92 écrans rendent au moins un graphique (59 pour le Gouverneur) | `crawl.log`, `crawl-results.json` |
+| 5. Kit de déploiement | **PASS (hors ligne)** : ShellCheck 0 avertissement (11 scripts) ; `./infra/valider.sh` conforme ; `DRY_RUN=1` Google Cloud (production 91 commandes, démonstration 15) sans aucun appel `gcloud` (absent) ; production refusée sans secrets, message nommant `MOSOLO_RECEIPT_SIGNING_KEY`, `MOSOLO_CLOSURE_SIGNING_KEY`, `DATABASE_URL` ; `NODE_ENV=production` + `MOSOLO_DEMO_MODE=true` refusé ; 1 défaut pour la démonstration hébergée (D3-06, corrigé) | `valider-apres.log`, `prod-nosecrets.log`, `prod-demo.log`, `nodemo.log` |
+| 6. Non-régression | **PASS** : porte complète verte (21.8) ; `npm audit --omit=dev` : **0 vulnérabilité** | `gate-final.log` |
+
+### 21.5 Attaques tentées et résultats
+
+| Attaque | Résultat |
+|---|---|
+| IDOR : un tiers lit les candidats, choisit, dépose une pièce, invite, conteste, fait appel, termine, complète le brouillon d'une revendication d'autrui ; alias anglais | 403 (`NOT_YOUR_CLAIM` / `NOT_A_PARTY`) partout ; **sauf** contestation avec une version fausse ⇒ 409 révélant `currentVersion` → **D3-02** |
+| IDOR vue du propriétaire, file et dossier de revue, `GET /v1/compte-unique/:taxpayerId` | 403 ; identifiant inexistant ⇒ 404 (oracle d'existence) → **D3-04** |
+| Divulgation dans les candidats, invitations, vues du revendicateur (nom, téléphone, compte de l'autre partie) | Aucune fuite (toutes les réponses reçues par le locataire et le tiers analysées) |
+| Jeton d'invitation réutilisé, inventé, refusé puis réutilisé ; chronométrie (20 essais, médiane) | Même erreur `INVITATION_INVALID` ; 2,15 ms contre 2,39 ms (aucun écart exploitable mesuré en local) ; refus et expiration indiscernables pour l'invitant (`SANS_SUITE`) |
+| Invitation dirigée vers un bien étranger ou inexistant (`target_unit_id`) | **Acceptée (201)** ; à la réponse, pièce ajoutée à la revendication PUIS 404 (écriture partielle) → **D3-01** |
+| Énumération : inscription en double ; connexion ; invitation vers un numéro connu / inconnu | Inscription : 409 `PHONE_ALREADY_REGISTERED` (comportement existant et testé ; défi anti-robots + palier public 60/min) → **D3-09** (arbitrage) ; connexion et invitation : même forme de réponse |
+| Clé d'idempotence : même clé / même contenu, autre contenu, autre compte, absente | Rejeu identique (`idempotent-replayed`), 409, aucune fuite entre comptes, 400 |
+| Version périmée ; dates incohérentes ; `account_id` dans le corps | 409 ; 422 ; 400 (compte toujours déduit de la session) |
+| Administrateur technique (R26) ou contribuable qui décide ; agent de terrain hors territoire, non affecté, constat GPS à distance | 403 ; 403 ; 422 `OUT_OF_TERRITORY` / 403 / 422 `GPS_TOO_FAR` ; vérification sans pièce acceptée : 422 |
+| Réviseur hors territoire qui termine une relation vérifiée | **Admis** → **D3-03** |
+| Fusion avec identifiants officiels vérifiés divergents ; bien auto-déclaré liquidé | Bloquée et escaladée (CA-8) ; liquidation refusée `SELF_REPORTED_NOT_QUALIFIED` (test § 8 / § 10) |
+| Webhooks : mauvaise signature ; état non final ; rejeu ; référence inconnue ; écart de montant ; état contredit ; prestataire injoignable ; panne prolongée | 401 ; 409 non mémorisé ; 200 réponse mémorisée (`replayed: true`), même quittance ; 422 `UNKNOWN_PAYMENT_REFERENCE` (renvoi identique) ; 422 `AMOUNT_MISMATCH` ; 422 `PROVIDER_STATUS_CONTRADICTION` ; 503 + `Retry-After: 60` ; disjoncteur OUVERT après 5 échecs, 503 sans appel. Intention inconnue du prestataire (404 à l'interrogation) ⇒ 503 → **D3-05** |
+| Secrets : 4 secrets aléatoires (clés API, secrets de webhook) recherchés dans 60 réponses HTTP, le journal du serveur et celui du simulateur | **0 occurrence** ; aucun `client_secret` du prestataire renvoyé ; règlement toujours vers `KIN-DGIPK-RECETTES-01` (alias du coffre) |
+| Démonstration hébergée : n'importe quel visiteur envoie `x-demo-user: u-tresor` | Admis (service Cloud Run `allUsers`) → **D3-06** |
+
+### 21.6 Tableau des défauts
+
+| ID | Gravité | Constat (reproduction) | Cause | État |
+|---|---|---|---|---|
+| D3-01 | **P2** | `POST …/invitations {target_unit_id: <bien d'autrui ou inexistant>}` ⇒ 201 ; l'invité qui accepte avec `creer_ma_revendication` crée une revendication sur ce bien (ou 404 après avoir ajouté une pièce `INVITATION_ACCEPTEE` à la revendication de l'invitant) | Aucun contrôle d'appartenance de la cible ; résolution de la cible APRÈS la première écriture | **CORRIGÉ** : cible limitée à la branche du bien revendiqué, même erreur 422 pour étranger et inexistant ; cible résolue avant toute écriture |
+| D3-02 | P3 | Tiers : `…/contestations {version: 99}` ⇒ 409 avec `currentVersion` | Contrôle de version avant l'autorisation | **CORRIGÉ** (403) |
+| D3-03 | P3 | Réviseur dont le territoire exclut la commune termine une relation vérifiée | `end()` sans contrôle de territoire ni de conflit d'intérêts (contrairement à `decide()`) | **CORRIGÉ** (403 `OUT_OF_TERRITORY`, `assertNotRelated`) |
+| D3-04 | P3 | Contribuable : `GET /v1/compte-unique/TP-999999` ⇒ 404, compte d'autrui ⇒ 403 | Résolution de l'identifiant avant l'autorisation | **CORRIGÉ** pour R30 / R31 (même 403) ; agents : 404 conservé. Résidu : identifiants séquentiels (`TP-000032`) |
+| D3-05 | P3 | Webhook signé pour une intention que le prestataire déclare inexistante (404) ⇒ 503 `PROVIDER_STATUS_UNAVAILABLE` (renvois sans fin, ni suspens ni alerte critique) | 4xx définitif de l'interrogation traité comme une indisponibilité | **OUVERT — EXTERNE** : la signification d'un 404 de `GET /payment_intents/{id}` / `GET /intents/{id}` est « À CONFIRMER AVEC LE PRESTATAIRE » |
+| D3-06 | **P2** (démonstration) | Service de démonstration public (`allUsers`) en mode démonstration : tout visiteur agit sous n'importe quel rôle fictif par `x-demo-user` | Aucun contrôle d'accès à la démonstration hébergée | **CORRIGÉ** (ajout) : `MOSOLO_DEMO_ACCESS_PASSWORD` + kit `DEMO_ACCESS=mot-de-passe` par défaut (`public` conservé) — **choix à confirmer par le maître d'ouvrage** |
+| D3-07 | **P2** | Hors démonstration, une invitation de la liaison des biens n'est **jamais délivrée** (ni SMS ni courriel ; jeton rendu seulement en bac à sable) : la vérification appuyée par l'invitation est inutilisable en production. Lorsqu'elle sera raccordée, seul le palier global (600 requêtes/min) limite les envois vers des numéros tiers | Aucun appel au service de communication dans `createInvitation` | **OUVERT** : libellé du message envoyé à un tiers et base juridique (décision du maître d'ouvrage et du juriste), événement du catalogue, prestataire SMS réel (EXTERNE) ; plafond par compte à ajouter au raccordement |
+| D3-08 | P3 | R26 : l'entrée « Audit » du menu affiche un écran dont les 3 lectures sont refusées (Chromium) | Menu par rôle (`ROLE_ROUTES`) non aligné sur la séparation des tâches | **CORRIGÉ** (présentation seulement, `shared/src/menu.ts` ; route, page et droits inchangés) |
+| D3-09 | P3 | L'inscription révèle qu'un numéro a déjà un compte (409) | Choix existant (orientation vers la récupération de compte), testé | **ARBITRAGE** ; atténué par le défi anti-robots et le palier public |
+| D3-10 | P3 | R02 : `/apprentissage/certifications` et `/acces/invitations` affichent un encart refusé (une lecture sur plusieurs en 403) | Décision « R01–R03 voient tous les modules » sans élargissement des droits | **ARBITRAGE** (aucun droit élargi) |
+| D3-11 | P4 | Menu du Gouverneur limité à 5 entrées (Cahier § 27.5) alors que la décision du 27/09 dit « R01–R03 voient toujours tous les modules » | Deux consignes | **ARBITRAGE** : le reste reste accessible (recherche, liens, `menu-rattachements` = `TOUS_MODULES`) ; rien changé |
+| D3-12 | P3 | `npm audit` (dépendances de développement) : `vite` (élevée), `vitest` (critique), `esbuild`, `vite-node`, `@vitest/mocker` | Outils de construction / test | **OUVERT** : absents de l'image d'exécution (`--omit=dev` : 0) ; montée de version majeure à planifier |
+
+### 21.7 Correctifs et preuves
+
+| Défaut | Fichiers | Preuve (échec sur 7168652 → succès) |
+|---|---|---|
+| D3-01 à D3-03 | `backend/src/plugins/fiscal/biens-occupations.ts` (`onClaimBranch`, contrôles dans `createInvitation`, `respond`, `dispute`, `end`) | `liaison-biens-adverse.test.ts` D3-01, D3-02, D3-03 : **4 / 4 en échec** avec les fichiers de 7168652, 4 / 4 réussis après ; `liaison-biens-occupations.test.ts` et `compte-unique.test.ts` toujours verts (22 / 22) |
+| D3-04 | `backend/src/modules/identity/compte-unique-routes.ts` | idem, D3-04 |
+| D3-06 | `backend/src/core/demo-gate.ts` (nouveau), `backend/src/app.ts`, `infra/gcp/deploy.sh` (`DEMO_ACCESS`, `DEMO_ACCESS_SECRET`), `infra/valider.sh` (contrôle), `infra/gcp/README.md` | `demo-acces.test.ts` (3 tests) ; processus réel : `/health` 200, API et page 401 sans mot de passe, 200 avec ; Chromium avec identifiants : page `/poste-de-decision/recettes` chargée, 8 appels API 2xx, 0 erreur, témoin `HttpOnly SameSite=Strict` ; mot de passe absent du journal ; `DRY_RUN=1` : secret créé sans affichage et référencé par `secretKeyRef` |
+| D3-08 | `shared/src/menu.ts`, `backend/test/menu-droits.test.ts` (cas ajouté) | Cas `[R26] /audit` en échec avec le `menu.ts` de 7168652, réussi après ; écarts « autres rôles » 78 → 77 |
+
+Document maître : annexe I, § I.29 (ajout). Aucune route ajoutée ni modifiée (`tools/gen_routes.py` non requis).
+
+### 21.8 Comptes de tests
+
+| Commande | Version candidate 7168652 | Après correctifs |
+|---|---|---|
+| `npm run typecheck` | 3 paquets, 0 erreur | 3 paquets, 0 erreur |
+| `npm run lint` | 0 erreur | 0 erreur |
+| `npm test` | shared 32 ; backend **1 175** (+ 1 ignoré, 126 fichiers) ; frontend 414 ; **1 621 réussis** | shared 32 ; backend **1 182** (+ 1 ignoré, 128 fichiers : `liaison-biens-adverse` 4, `demo-acces` 3) ; frontend 414 ; **1 628 réussis**, 0 échec |
+| `npm run build -w frontend` | réussi (360 entrées pré-cachées) | réussi (360 entrées pré-cachées) |
+| `./infra/valider.sh` | conforme | conforme (contrôle D3-06 ajouté) |
+| `npm audit --omit=dev` | 0 vulnérabilité | 0 vulnérabilité |
+
+Aucun test ignoré ni désactivé par cette passe (le test ignoré est celui qui exige un PostgreSQL réel).
+
+### 21.9 Performance (observations locales, pas un essai de charge)
+
+Chromium, serveur local unique : chargement jusqu'au repos réseau **médiane 904 ms, p95 1 064 ms, maximum 2 497 ms**
+sur 864 pages ; aucune page au-delà de 4 s. Réponses des invitations ≈ 2 ms. Aucun essai de charge sur
+l'infrastructure réelle (**NON TESTÉ — EXTERNE**).
+
+### 21.10 Sécurité
+
+Quatre failles d'autorisation ou de divulgation de la liaison des biens et du compte unique corrigées (D3-01 à D3-04) ;
+démonstration hébergée fermée par défaut (D3-06). Webhooks : signature, rejeu, confirmation serveur à serveur,
+suspens, disjoncteur prouvés entre processus ; aucune valeur secrète dans 60 réponses ni dans les journaux. Restent :
+D3-05 (externe), D3-07, D3-09, D3-12, résidus des passes précédentes ; **aucun test d'intrusion par un tiers**.
+
+### 21.11 Données et vie privée
+
+Aucune réponse au locataire ou à un tiers ne contient le nom, le téléphone ou le compte du propriétaire, ni
+l'inverse ; l'agent de terrain affecté ne voit ni l'identité ni les pièces ; lectures sensibles journalisées.
+Oracles d'existence réduits (D3-04) ; D3-09 à arbitrer. Envoi d'invitations à un tiers (D3-07) : base juridique et
+libellé à approuver avant raccordement. Données de démonstration intactes ; le mode production ne les charge pas
+(`deploiement.test.ts`).
+
+### 21.12 Accessibilité et mobile
+
+360 px et 1 280 px : **0 débordement horizontal** sur 864 pages ; aucune valeur « NaN » ou « undefined » affichée ;
+écrans vides sans plantage (0 erreur JavaScript). Parcours au clavier : inchangé depuis § 18 (non rejoué). Lecteurs
+d'écran réels : **NON TESTÉ**.
+
+### 21.13 Déploiement
+
+Kit validé hors ligne (ShellCheck, hadolint, 11 simulations, YAML / JSON stricts) ; relecture du Dockerfile : deux
+étapes, dépendances de production seules, utilisateur `node`, HEALTHCHECK, mode `demo` par défaut (historique,
+conservé), `production` refuse `MOSOLO_DEMO_MODE` ; `.dockerignore` exclut `.env*`, clés et `.git`. Démarrage de
+production sans secrets : refus nommant les variables. Exécution réelle Google Cloud / VPS : **NON TESTÉE (EXTERNE)**
+(K-1 à K-3 inchangés).
+
+### 21.14 Observabilité et sauvegarde
+
+Vue de raccordement : état du disjoncteur (OUVERT, échecs, réouverture), dernier webhook, dernière interrogation,
+réservée à R17 / R26 / R28 (contribuable : 403). Journal du serveur sans secret. Sauvegarde / restauration et rejeu
+après redémarrage : prouvés aux passes précédentes (pg-mem, PostgreSQL réel) et par `prestataires-raccordement.test.ts`
+(dépôt persistant simulé) ; **non rejoués ici sur un processus réel redémarré** (PostgreSQL indisponible dans cet
+environnement).
+
+### 21.15 Décisions ouvertes du maître d'ouvrage
+
+1. D3-06 : démonstration Google Cloud protégée par mot de passe **par défaut** (`DEMO_ACCESS=mot-de-passe`) ou publique.
+2. D3-07 : libellé et base juridique du message d'invitation envoyé au contact d'un tiers ; canal (SMS, courriel) ;
+   plafond d'invitations par compte et par jour (valeur par défaut — à confirmer).
+3. D3-09 : conserver le 409 explicite à l'inscription (ergonomie) ou une réponse neutre (confidentialité).
+4. D3-10 / D3-11 : « R01–R03 voient tous les modules » face au menu à cinq entrées du Gouverneur (Cahier § 27.5) et aux
+   lectures refusées à R02 ; aucun droit n'a été élargi.
+5. Toujours ouverts : paramètres du § 10 de la spécification de liaison (preuves par rôle, espace de noms officiel,
+   vérificateurs, divulgation), marqués « par défaut — à confirmer ».
+
+### 21.16 Bloqueurs externes
+
+Contrat d'API et bac à sable réels BitriPay / KODA (dont D3-05), habilitation BCC, conventions, clés ; prestataire SMS
+réel (D3-07) ; actes juridiques et validation juridique du dispositif de liaison (§ 10) ; hébergement réel (Google
+Cloud ou national) et domaine officiel avec TLS ; test d'intrusion par un tiers ; essai de charge sur
+l'infrastructure réelle ; astreinte et équipe d'exploitation ; lecteurs d'écran réels. Inchangés par cette passe :
+B1 – B10 (§ 2).
+
+### 21.17 Verdicts
+
+**(a) Lancement en production : NO-GO — 61 / 100** (60 à la deuxième passe ; + 1 : deux P2 et quatre P3 corrigés et
+prouvés, compensés en partie par un P2 fonctionnel nouveau et ouvert, D3-07). Motifs : bloqueurs externes B1 – B10
+inchangés (prestataires réels, juridique, hébergement, pentest, charge, exploitation) ; vérification par invitation
+inopérante hors démonstration ; paramètres de la liaison non approuvés. Aucun élément de cette passe ne permet
+d'affirmer que la plateforme est prête pour la production.
+
+**(b) Démonstration Google Cloud pour l'équipe du Gouverneur : GO conditionnel.** Le logiciel de démonstration est
+sain dans un navigateur réel (864 pages, 0 erreur, 0 débordement, graphiques rendus, menus des autorités conformes) et
+le kit est validé hors ligne. Conditions : (1) déployer avec `DEMO=true` et `DEMO_ACCESS=mot-de-passe` (défaut) et
+transmettre le mot de passe par un canal sûr ; (2) `DEMO_MIN_INSTANCES=1` pendant la séance (sinon, mise en veille et
+données réinitialisées) ; (3) répétition complète sur le projet Google Cloud la veille (l'exécution réelle de
+`deploy.sh` n'a jamais eu lieu : K-1) ; (4) aucune donnée réelle saisie, mention « données de démonstration non
+contractuelles » rappelée en séance. Si l'une de ces conditions ne peut être tenue : NO-GO pour la séance.

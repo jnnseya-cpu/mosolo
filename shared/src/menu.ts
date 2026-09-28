@@ -28,6 +28,9 @@ export const MENU_MASQUE_SANS_LECTURE: Readonly<Record<string, readonly string[]
   // Ministre des Finances (R05) : Trésor et pilotage RakaPay refusés en lecture.
   '/tresor': ['R05'],
   '/rakapay/pilotage': ['R05'],
+  // Super-administrateur (R26) : les trois lectures de l'écran d'audit lui sont refusées (séparation des tâches :
+  // l'administrateur technique ne lit pas la piste d'audit) — relevé par la troisième passe (D3-08, navigateur réel).
+  '/audit': ['R26'],
 };
 
 /** Vrai si l'entrée de menu `path` est masquée pour une personne portant `roles` (tous ses rôles doivent être concernés). */

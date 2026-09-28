@@ -580,6 +580,11 @@ export class BiensOccupationsService {
   private createInvitation(by: string, c: PropertyClaim, input: { contact: string; channel?: PropertyInvitation['deliveryChannel']; inviteRole?: string; targetUnitId?: string }) {
     const contact = input.contact.replace(/[\s-]/g, '').toLowerCase();
     if (contact.length < 6) throw badRequest('INVALID_CONTACT', 'Contact invalide.');
+    // Troisième passe (D3-01) : le bien visé par l'invitation appartient à la branche du bien revendiqué (même parcelle,
+    // bâtiment ou unité) ; un bien étranger ou inexistant est refusé avec la MÊME erreur (aucune sonde d'existence).
+    if (input.targetUnitId && !this.onClaimBranch(c, input.targetUnitId)) {
+      throw unprocessable('INVITATION_TARGET_OUT_OF_CLAIM', 'Le bien visé par l’invitation doit appartenir au bien de la revendication (même parcelle, bâtiment ou unité).');
+    }
     const token = randomBytes(24).toString('base64url');
     const at = this.now();
     const inv = this.invitations.insert({
@@ -595,6 +600,21 @@ export class BiensOccupationsService {
     this.event({ kind: 'system', id: by }, 'property_invitation.created', 'property_invitation', inv.id, null, { status: inv.status, claimId: c.id }, 'Invitation d’une partie connue', { channel: inv.deliveryChannel });
     // Réponse identique qu'un compte existe ou non pour ce contact (aucune découverte de compte).
     return { invitationId: inv.id, expiresAt: inv.expiresAt, statut: 'ENVOYEE', contact: inv.contactMasked, ...(sandbox ? { jetonBacASable: token } : {}) };
+  }
+
+  /** Le bien `objectId` est-il la cible de la revendication, l'un de ses ancêtres ou l'un de ses descendants ? */
+  private onClaimBranch(c: PropertyClaim, objectId: string): boolean {
+    if (!c.targetId) return false;
+    const o = this.ctx.objects.objects.get(objectId);
+    const t = this.ctx.objects.objects.get(c.targetId);
+    if (!o || !t || recordStatusOf(o) === 'ARCHIVED_ALIAS') return false;
+    const up = (x: FiscalObject): Set<string> => {
+      const ids = new Set<string>([x.id]);
+      let cur: FiscalObject | undefined = x;
+      for (let i = 0; cur && i < 4; i++) { const pid = parentIdOf(cur); cur = pid ? this.ctx.objects.objects.get(pid) : undefined; if (cur) ids.add(cur.id); }
+      return ids;
+    };
+    return up(o).has(t.id) || up(t).has(o.id);
   }
 
   /** Réponse à une invitation (jeton à usage unique) : jamais de vérification automatique, jamais de divulgation. */
@@ -614,6 +634,12 @@ export class BiensOccupationsService {
     const status: PropertyInvitation['status'] = input.response === 'ACCEPTER' ? 'ACCEPTEE' : input.response === 'REFUSER' ? 'REFUSEE' : 'BIEN_ERRONE_SIGNALE';
     let resultClaimId: string | undefined;
     if (input.response === 'ACCEPTER') {
+      // Troisième passe (D3-01) : la cible de la revendication à créer est résolue AVANT toute écriture (aucune pièce
+      // ajoutée si la réponse échoue ensuite).
+      const targetId = input.creerMaRevendication && inv.inviteRole ? inv.targetUnitId ?? c.targetId : undefined;
+      if (targetId && (!this.ctx.objects.objects.get(targetId) || (inv.targetUnitId && !this.onClaimBranch(c, inv.targetUnitId)))) {
+        throw unprocessable('INVITATION_TARGET_OUT_OF_CLAIM', 'Le bien visé par l’invitation n’appartient plus au bien de la revendication : aucune réponse enregistrée.');
+      }
       // Preuve d'APPUI seulement : la revendication reste à vérifier par un réviseur habilité.
       const sha = sha256Hex(`${inv.id}:${accountId}:${nowIso}`);
       this.appendEvidence(c, user.id, { evidenceType: 'INVITATION_ACCEPTEE', sha256: sha });
@@ -644,11 +670,12 @@ export class BiensOccupationsService {
   /** Le revendicateur, ou le titulaire d'une relation VÉRIFIÉE sur la même cible (ou un niveau supérieur), conteste. */
   dispute(user: User, claimId: string, input: { reason: string; version?: number }) {
     let c = this.claim(claimId);
-    this.checkVersion(c, input.version);
     const me = user.taxpayerId ? this.ctx.taxpayers.resolve(user.taxpayerId).id : undefined;
     const own = me === c.accountId;
     const party = !own && me && c.targetId ? this.verifiedHolderOnBranch(me, c.targetId) : false;
     if (!own && !party) throw forbidden('NOT_A_PARTY', 'Seules les parties concernées peuvent contester cette revendication.');
+    // Troisième passe (D3-02) : version contrôlée APRÈS l'autorisation (un tiers n'apprend pas la version courante).
+    this.checkVersion(c, input.version);
     if (!TRANSITIONS[c.status].includes('DISPUTED')) throw conflict('INVALID_CLAIM_TRANSITION', `Revendication au statut ${c.status} : contestation impossible.`);
     c = this.transition(c, 'DISPUTED', user, input.reason);
     const rc = this.openCase(user, { reasonCode: 'CONTESTATION', claimId: c.id, relatedClaimIds: [c.id], commune: c.targetId ? this.ctx.objects.get(c.targetId).commune : c.address?.commune ?? '', note: input.reason });
@@ -669,6 +696,13 @@ export class BiensOccupationsService {
     const me = user.taxpayerId ? this.ctx.taxpayers.resolve(user.taxpayerId).id : undefined;
     const reviewer = this.isReviewer(user);
     if (me !== c.accountId && !reviewer) throw forbidden('NOT_YOUR_CLAIM', 'Seul le titulaire de la revendication, ou un réviseur habilité, la termine.');
+    // Troisième passe (D3-03) : un réviseur qui n'est pas le titulaire termine seulement dans son territoire et sans
+    // conflit d'intérêts (mêmes gardes que la décision).
+    if (me !== c.accountId) {
+      const commune = c.targetId ? this.ctx.objects.objects.get(c.targetId)?.commune ?? c.address?.commune ?? '' : c.address?.commune ?? '';
+      if (!this.inTerritory(user, commune)) throw forbidden('OUT_OF_TERRITORY', 'Revendication hors de votre territoire.');
+      assertNotRelated(user, c.accountId, 'Conflit d’intérêts : le réviseur est lié à la personne titulaire de la revendication.');
+    }
     this.checkVersion(c, input.version);
     this.checkDates(c.validFrom, input.validTo);
     if (c.status !== 'VERIFIED') throw conflict('INVALID_CLAIM_TRANSITION', 'Seule une relation vérifiée se termine (les autres se retirent ou se contestent).');

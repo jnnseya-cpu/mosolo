@@ -3,6 +3,7 @@
  */
 import { loggerOptions } from './plugins/plateforme/supervision.js';
 import { staticSiteFromEnv } from './core/static-site.js';
+import { installDemoAccessGate } from './core/demo-gate.js';
 import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { createContext, type AppContext, type AppOptions } from './context.js';
@@ -106,6 +107,8 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
   const app = Fastify({ logger: opts.logger ? loggerOptions() : false, bodyLimit: 1_048_576, trustProxy: trustProxyFromEnv(process.env), ...(https ? { https } : {}) }) as unknown as FastifyInstance;
   // Corrélation (X-Request-Id) et contexte d'audit : PREMIER crochet, avant l'authentification.
   installRequestCorrelation(app);
+  // Démonstration hébergée : mot de passe d'accès commun si MOSOLO_DEMO_ACCESS_PASSWORD est fournie (troisième passe, D3-06).
+  installDemoAccessGate(app);
   const ctx = createContext(opts);
   const plugins = opts.plugins ?? DEFAULT_PLUGINS;
   const seeded = shouldSeed(opts);
