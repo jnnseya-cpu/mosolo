@@ -31,9 +31,15 @@ export function demoAccessPassword(env: NodeJS.ProcessEnv = process.env): string
   return v;
 }
 
+const STATIC_FILE = /^\/(?!v1\/)(?:assets|media|icons|map|ocr|tiles|fonts)\/[^?#]+$|^\/(?!v1\/)[^/?#]+\.(?:js|mjs|css|png|webp|svg|ico|webmanifest|json|woff2?)$/;
+
 function exempt(method: string, url: string): boolean {
   const path = url.split('?')[0] ?? url;
-  return method === 'OPTIONS' || path === '/health' || /^\/v1\/providers\/[^/]+\/webhooks$/.test(path);
+  if (method === 'OPTIONS' || path === '/health' || /^\/v1\/providers\/[^/]+\/webhooks$/.test(path)) return true;
+  // Fichiers statiques de l'application (code public, aucune donnée) : exemptés pour que la page se charge même quand
+  // un navigateur (onglets intégrés des applications mobiles) ne renvoie ni l'identifiant Basic ni le témoin pour les
+  // ressources de la page (28/09/2026). Les pages HTML et toute l'API /v1 restent protégées.
+  return (method === 'GET' || method === 'HEAD') && STATIC_FILE.test(path);
 }
 
 /** Installe le garde (premier crochet utile, avant la résolution de l'utilisateur de démonstration). */

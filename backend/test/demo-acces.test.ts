@@ -51,6 +51,19 @@ describe('Démonstration hébergée : mot de passe d’accès (D3-06)', () => {
     await a.close();
   });
 
+  it('fichiers statiques de l’application exemptés (la page se charge dans tout navigateur) ; pages et API /v1 protégées', async () => {
+    process.env.MOSOLO_DEMO_ACCESS_PASSWORD = PASSWORD;
+    const a = await app();
+    for (const url of ['/assets/index-abc123.js', '/assets/index-abc123.css', '/media/couverture-ville-de-kinshasa.webp', '/icons/icon-192.png', '/manifest.webmanifest', '/sw.js', '/workbox-868b6a08.js']) {
+      expect((await a.inject({ method: 'GET', url })).statusCode, url).not.toBe(401);
+    }
+    for (const url of ['/', '/gouverneur', '/v1/obligations', '/v1/assets/x.js', '/v1/media/x.png']) {
+      expect((await a.inject({ method: 'GET', url, headers: { 'x-demo-user': 'u-gouverneur' } })).statusCode, url).toBe(401);
+    }
+    expect((await a.inject({ method: 'POST', url: '/assets/x.js' })).statusCode).toBe(401);
+    await a.close();
+  });
+
   it('mot de passe trop court : refus de démarrer ; hors démonstration : variable sans effet', () => {
     expect(() => demoAccessPassword({ MOSOLO_DEMO_MODE: 'true', MOSOLO_DEMO_ACCESS_PASSWORD: 'court' })).toThrow(/12 caractères/);
     expect(demoAccessPassword({ MOSOLO_DEMO_MODE: 'false', MOSOLO_DEMO_ACCESS_PASSWORD: PASSWORD })).toBeNull();
