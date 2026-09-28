@@ -289,7 +289,8 @@ export function ServicesVisuel({ items, legalTone, mine }: {
     const cur = parStatut.get(v.legal) ?? { key: v.legal, label: v.legalLabel, tone: legalTone[v.legal] ?? 'neutral', count: 0 };
     cur.count += 1; parStatut.set(v.legal, cur);
   }
-  const nom = new Map(items.map((v) => [v.slug, v.name]));
+  // Libellé d'axe court : nom français seul, sans la marque entre parenthèses (le nom complet reste dans la vue tableau).
+  const nom = new Map(items.map((v) => [v.slug, v.name.replace(/\s*\(.*\)\s*$/, '')]));
   const rows = (mine ?? []).filter((m) => m.objects + m.toPay + m.openCases > 0).map((m) => ({ key: m.slug, label: nom.get(m.slug) ?? m.slug, values: { o: m.objects, p: m.toPay, c: m.openCases } }));
   return (
     <ChartGrid min={300}>
