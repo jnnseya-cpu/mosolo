@@ -23,6 +23,7 @@ import { ConnectorConfigError } from '../src/modules/payments/connectors/types.j
 import { publicBaseUrl, webhookUrlFor } from '../src/modules/payments/readiness.js';
 import { DEMO } from '../src/seed.js';
 import { postStatement } from './helpers.js';
+import { BITRI_ED_PUBLIC, bitriEdHeader } from './signature-ed25519-test.js';
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Simulateur HTTP local des deux prestataires (formes documentées ; hypothèses « à confirmer » isolées ici).
@@ -99,7 +100,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     const i = mock.intents.get(decodeURIComponent(m[1]!));
     return i ? send(res, 200, view(i, 'bitripay')) : send(res, 404, { error: { code: 'resource_missing' } });
   }
-  if (req.method === 'GET' && path === '/bitripay/v1/keys') return send(res, 200, { keys: [{ kid: 'k1', alg: 'Ed25519', public_key: 'AAAA' }] });
+  if (req.method === 'GET' && path === '/bitripay/v1/keys') return send(res, 200, { keys: [{ kid: 'k1', alg: 'Ed25519', public_key: BITRI_ED_PUBLIC }] });
   // GET /status : état de fonctionnement (operational, guardian, degraded).
   if (req.method === 'GET' && path === '/bitripay/v1/status') {
     return send(res, 200, { operating_state: mock.bitriState, guardian: mock.bitriState === 'guardian', degraded: mock.bitriState === 'degraded', message: mock.bitriState === 'operational' ? null : 'Opérateur orange_cd lent' });
@@ -160,7 +161,7 @@ const KODA_KEY = 'sk_test_KODA_RACCORDEMENT_0001';
 const KODA_WHSEC = 'whsec_test_koda_raccordement_0001';
 
 const realEnv = () => ({
-  BITRIPAY_API_KEY: BITRI_KEY, BITRIPAY_WEBHOOK_SECRET: BITRI_WHSEC, BITRIPAY_BASE_URL: `${base}/bitripay/v1`,
+  BITRIPAY_ED25519_PUBLIC_KEY: BITRI_ED_PUBLIC, BITRIPAY_API_KEY: BITRI_KEY, BITRIPAY_WEBHOOK_SECRET: BITRI_WHSEC, BITRIPAY_BASE_URL: `${base}/bitripay/v1`,
   KODA_API_KEY: KODA_KEY, KODA_WEBHOOK_SECRET: KODA_WHSEC, KODA_BASE_URL: `${base}/koda/v1`, KODA_SUCCESS_URL: 'https://portail.exemple.cd/espace',
 });
 
@@ -220,7 +221,7 @@ function postBitripay(env: Env, payload: unknown, opts: { secret?: string; t?: n
   const t = opts.t ?? Math.floor(env.clock.now().getTime() / 1000);
   return env.app.inject({
     method: 'POST', url: '/v1/providers/bitripay/webhooks', payload: raw,
-    headers: { 'content-type': 'application/json', 'bitripay-signature': signBitriPayWebhook(opts.secret ?? BITRI_WHSEC, raw, t) },
+    headers: { 'content-type': 'application/json', 'bitripay-signature': signBitriPayWebhook(opts.secret ?? BITRI_WHSEC, raw, t), 'bitripay-signature-ed25519': bitriEdHeader(raw, t) },
   });
 }
 
@@ -250,7 +251,7 @@ describe('Configuration réelle et démarrage (mode démonstration désactivé)'
     const json = JSON.stringify(reg.setup);
     for (const secret of [BITRI_KEY, BITRI_WHSEC, KODA_KEY, KODA_WHSEC]) expect(json).not.toContain(secret);
     expect(reg.setup[0]!.variables.find((v) => v.name === 'BITRIPAY_API_KEY')).toMatchObject({ present: true, secret: true });
-    const live = buildConnectorRegistry({ ...realEnv(), BITRIPAY_API_KEY: 'sk_live_X', BITRIPAY_BASE_URL: 'https://api.bitripay.com/v1' }, {}, false);
+    const live = buildConnectorRegistry({ ...realEnv(), BITRIPAY_ED25519_PUBLIC_KEY: BITRI_ED_PUBLIC, BITRIPAY_API_KEY: 'sk_live_X', BITRIPAY_BASE_URL: 'https://api.bitripay.com/v1' }, {}, false);
     expect(live.get('bitripay')!.mode).toBe('LIVE');
   });
 
@@ -267,7 +268,9 @@ describe('Configuration réelle et démarrage (mode démonstration désactivé)'
     expect(() => buildConnectorRegistry(without('KODA_WEBHOOK_SECRET'), {}, false)).toThrow(/KODA : secret de webhook obligatoire/);
     expect(() => buildConnectorRegistry(without('KODA_SUCCESS_URL'), {}, false)).toThrow(/KODA_SUCCESS_URL est obligatoire/);
     expect(() => buildConnectorRegistry({ BITRIPAY_ACCOUNT_ID: 'acct_VilleKinshasa01', BITRIPAY_WEBHOOK_SECRET: BITRI_WHSEC }, {}, false)).toThrow(/BITRIPAY_ACCOUNT_ID fourni sans BITRIPAY_API_KEY/);
-    expect(() => buildConnectorRegistry({ ...env, BITRIPAY_ED25519_REQUIRED: 'true' }, {}, false)).toThrow(/BITRIPAY_ED25519_PUBLIC_KEY/);
+    expect(() => buildConnectorRegistry({ ...without('BITRIPAY_ED25519_PUBLIC_KEY'), BITRIPAY_ED25519_REQUIRED: 'true' }, {}, false)).toThrow(/BITRIPAY_ED25519_PUBLIC_KEY/);
+    // Décision du 29/09/2026 : exigée par défaut dès qu'une clé BitriPay est configurée.
+    expect(() => buildConnectorRegistry(without('BITRIPAY_ED25519_PUBLIC_KEY'), {}, false)).toThrow(/BITRIPAY_ED25519_PUBLIC_KEY/);
     // Réel : https exigé (URL de l'API et URL de retour) ; http admis seulement vers la boucle locale en clé de test.
     expect(() => buildConnectorRegistry({ ...env, KODA_API_KEY: 'sk_live_K', KODA_BASE_URL: `${base}/koda/v1` }, {}, false)).toThrow(/KODA_BASE_URL doit être en https/);
     expect(() => buildConnectorRegistry({ ...env, KODA_SUCCESS_URL: 'http://portail.exemple.cd/retour' }, {}, false)).toThrow(/KODA_SUCCESS_URL doit être en https/);
@@ -369,7 +372,7 @@ for (const provider of ['bitripay', 'koda'] as const) {
       const tampered = provider === 'koda'
         ? await postKoda(env, null, { raw: raw.replace('15000', '15001'), signedRaw: raw })
         : await env.app.inject({ method: 'POST', url: '/v1/providers/bitripay/webhooks', payload: raw.replace('15000', '15001'),
-          headers: { 'content-type': 'application/json', 'bitripay-signature': signBitriPayWebhook(BITRI_WHSEC, raw, Math.floor(env.clock.now().getTime() / 1000)) } });
+          headers: { 'content-type': 'application/json', 'bitripay-signature': signBitriPayWebhook(BITRI_WHSEC, raw, Math.floor(env.clock.now().getTime() / 1000)), 'bitripay-signature-ed25519': bitriEdHeader(raw, Math.floor(env.clock.now().getTime() / 1000)) } });
       expect(tampered.statusCode).toBe(401);
       expect(env.app.ctx.payments.byReference(order.paymentReference)!.status).toBe('INITIE');
       expect(env.app.ctx.alerts.alerts.find((a) => a.type === 'INVALID_SIGNATURE' && a.source === `prestataire:${provider}`).length).toBe(2);
@@ -601,7 +604,7 @@ describe('Vue « Prestataires de paiement — état de raccordement » et « Tes
     expect(v.providers.map((p: { id: string }) => p.id)).toEqual(['bitripay', 'koda']);
     const b = v.providers[0];
     expect(b.variables.find((x: { name: string }) => x.name === 'BITRIPAY_WEBHOOK_SECRET')).toMatchObject({ present: true, secret: true });
-    expect(b.variables.find((x: { name: string }) => x.name === 'BITRIPAY_ED25519_PUBLIC_KEY')).toMatchObject({ present: false });
+    expect(b.variables.find((x: { name: string }) => x.name === 'BITRIPAY_ED25519_PUBLIC_KEY')).toMatchObject({ present: true }); // clé épinglée désormais exigée (29/09/2026) : présence seulement, jamais la valeur
     expect(b.signatureScheme).toMatch(/BitriPay-Signature/);
     expect(v.providers[1].signatureScheme).toMatch(/x-koda-signature/);
     expect(b.settlementAccount).toMatchObject({ alias: DEMO.dgipkAlias, inVault: true, locked: true });

@@ -20,6 +20,7 @@ import { accesPlugin, type AccesService } from '../src/plugins/acces/plugin.js';
 import { createSoclePlugin, type SocleService } from '../src/plugins/socle/plugin.js';
 import { DEFAULT_RATE_LIMITS, tierOf } from '../src/plugins/socle/rate-limit.js';
 import { MAX_PHONE_CHALLENGES } from '../src/plugins/socle/service.js';
+import { bitriEdHeader } from './signature-ed25519-test.js';
 
 const SECRETS = { auditHmacKey: 'test-audit-key', providerSecrets: { 'mm-operator-a': 'test-secret-mm-operator-a' }, commsProviderKeys: {} };
 const REAL_PROVIDER_ENV = {
@@ -132,7 +133,7 @@ describe('Secrets des prestataires et des terminaux', () => {
     const t = Math.floor(c.now().getTime() / 1000);
     const r = await app.inject({
       method: 'POST', url: '/v1/providers/bitripay/webhooks', payload: raw,
-      headers: { 'content-type': 'application/json', 'bitripay-signature': signBitriPayWebhook(BITRIPAY_DEMO_WEBHOOK_SECRET, raw, t) },
+      headers: { 'content-type': 'application/json', 'bitripay-signature': signBitriPayWebhook(BITRIPAY_DEMO_WEBHOOK_SECRET, raw, t), 'bitripay-signature-ed25519': bitriEdHeader(raw, t) },
     });
     expect(r.statusCode).toBe(404);
     expect(r.json()).toMatchObject({ code: 'UNKNOWN_PROVIDER' });

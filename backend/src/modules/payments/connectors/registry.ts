@@ -69,7 +69,7 @@ export const PROVIDER_ENV_VARS: Record<ConnectorId, { name: string; secret: bool
     { name: 'BITRIPAY_WEBHOOK_SECRET', secret: true, requiredForReal: true, role: 'Secret whsec_… du point de terminaison de webhook (HMAC)' },
     { name: 'BITRIPAY_ED25519_PUBLIC_KEY', secret: false, requiredForReal: false, role: 'Clé publique Ed25519 de la plateforme (GET /v1/keys), épinglée' },
     { name: 'BITRIPAY_HMAC_REQUIRED', secret: false, requiredForReal: false, role: 'Exiger la signature HMAC (défaut : true)' },
-    { name: 'BITRIPAY_ED25519_REQUIRED', secret: false, requiredForReal: false, role: 'Exiger la signature Ed25519 (défaut : true en production avec une clé réelle, false ailleurs)' },
+    { name: 'BITRIPAY_ED25519_REQUIRED', secret: false, requiredForReal: false, role: 'Exiger la signature Ed25519 (défaut : true dès qu’une clé BitriPay est configurée — décision du 29/09/2026)' },
     { name: 'BITRIPAY_BASE_URL', secret: false, requiredForReal: false, role: `URL de l'API (défaut : ${BITRIPAY_DEFAULT_BASE_URL})` },
     { name: 'BITRIPAY_SETTLEMENT_ACCOUNT_ALIAS', secret: false, requiredForReal: true, role: 'Alias du compte public de règlement, inscrit au coffre' },
     { name: 'BITRIPAY_ALLOWED_OPERATORS', secret: false, requiredForReal: false, role: 'Opérateurs proposés (défaut : orange_cd, mpesa_cd, airtel_cd, africell_cd)' },
@@ -260,9 +260,11 @@ export function buildConnectorRegistry(env: NodeJS.ProcessEnv | Record<string, s
   if (cdf !== 0 && cdf !== 2) throw new ConnectorConfigError('BITRIPAY_CDF_EXPONENT doit valoir 0 ou 2.');
   const bitripaySecret = webhookSecret('BitriPay', env.BITRIPAY_API_KEY, env.BITRIPAY_WEBHOOK_SECRET, BITRIPAY_DEMO_WEBHOOK_SECRET, demoMode);
   // Parcours confirmé par BitriPay (29/09/2026) : les DEUX signatures (HMAC et Ed25519 de la plateforme) sont vérifiées.
-  // En production déclarée (NODE_ENV=production) avec une clé réelle, la signature Ed25519 est exigée par défaut
-  // (BITRIPAY_ED25519_REQUIRED=false pour l'écarter explicitement) ; ailleurs, elle est vérifiée si elle est présente.
-  const bitriEdDefault = isProduction(process.env) && bitriLive;
+  // Décision du maître d'ouvrage (29/09/2026) : la signature Ed25519 est EXIGÉE PARTOUT dès qu'une clé BitriPay est
+  // configurée (test ou réelle, quel que soit l'environnement) ; seule la démonstration sans clé (simulateur) en est
+  // dispensée. L'ancienne règle (production + clé réelle) reste couverte ; BITRIPAY_ED25519_REQUIRED=false l'écarte
+  // explicitement (à justifier).
+  const bitriEdDefault = (isProduction(process.env) && bitriLive) || !!env.BITRIPAY_API_KEY;
   const bitripay = bitripaySecret === undefined ? null : new BitriPayConnector(
     {
       ...(env.BITRIPAY_API_KEY ? { apiKey: env.BITRIPAY_API_KEY } : {}),

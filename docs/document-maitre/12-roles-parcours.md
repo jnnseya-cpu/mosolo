@@ -195,6 +195,55 @@ motif et date d'effet. Résolution : entité → entité parente → valeur glob
 donne la valeur et sa provenance). Les variables des barèmes juridiques restent gouvernées par le registre des règles
 et ses quatre visas : **aucune surcharge par entité**.
 
+## 12.9 Parcours par rôle : chacun ne voit que ce qu'il a à faire (ajout du 29/09/2026)
+
+Demande du maître d'ouvrage : dans une plateforme « tout-en-un », chaque utilisateur n'accède qu'à ce qu'il a à faire,
+pas à tout — pour éviter la fatigue et la perte de temps. Mesure réelle : un compte de démonstration par rôle (R01 à
+R37) parcouru dans le navigateur (menu, chaque entrée, chaque lien interne), et contrôle serveur de chaque entrée de
+menu des 113 comptes de démonstration (voir annexe I.36 pour la matrice). Tout est **présentation** : aucune route,
+page ni droit n'est retiré ou élargi ; le serveur décide toujours.
+
+| Mécanisme | Règle |
+|---|---|
+| **Mon travail du jour** | Pour chaque rôle, les écrans de ses tâches quotidiennes (`TRAVAIL_DU_JOUR`, `shared/src/menu.ts`, liste par défaut — à confirmer) s'affichent en tête du menu. Une entrée n'y figure que si elle est déjà dans le menu de la personne. |
+| **Tous mes écrans** | Au-delà de 12 entrées, les autres écrans sont repliés sous « Tous mes écrans (N) » (dépliage mémorisé sur l'appareil) ; une recherche « Rechercher un écran… » filtre tout le menu (sans accents ni casse). Aucune entrée retirée. |
+| **Écran d'accueil du rôle** | L'accueil s'ouvre sur le premier écran du travail du jour (ex. agent de terrain → Terrain ; Trésor → Trésor ; contribuable → Mon espace ; auditeur → Audit). Autorités R01–R05 : poste de décision (inchangé). La présentation publique reste la page d'accueil des visiteurs et s'ouvre avec `/?presentation`. |
+| **Menu aligné sur la lecture** | Une entrée dont la lecture qui décide de l'écran est refusée au rôle est masquée pour ce rôle (`MENU_MASQUE_SANS_LECTURE`, listes complétées) ; lorsque le refus dépend de l'**entité** (données d'une entité exploitante : DGTK pour stationnement, publicité, environnement, grands redevables ; RFCK pour le contrôle technique et les fourrières ; DGIPK pour la régie fiscale ; ministère des Finances pour le patrimoine), l'entrée n'est masquée qu'aux personnes des autres entités (`MENU_LECTURE_PAR_ENTITE`, correspondance par défaut — à confirmer ; les rattachements de modules du § 12.8 restent la voie de gestion en production). |
+| **Gouverneur, cabinet, secrétariat exécutif (R01–R03)** | Tous les modules restent visibles (décision du 27/09/2026). Si le serveur refuse la lecture détaillée, l'écran affiche « **Lecture agrégée** » (dossiers lus par l'entité exploitante ; chiffres agrégés au poste de décision et dans les indicateurs) au lieu d'un refus. |
+| **Liens dans les écrans** | Un lien vers un écran que le rôle n'utilise pas affiche « **Réalisé par : <rôle>** » (ou n'est pas proposé), au lieu de mener à « Accès réservé » (`components/LienEcran.tsx`, généralisation du motif des parcours des verticales). |
+| **Écrans vides** | Un écran sans élément à traiter propose la **prochaine action utile** : les autres écrans du travail du jour (poste de travail, instructions, assignations, consultations, arbitrages, revue des biens, inspection, documents, remises, non-valeurs). |
+| **Écrans des usagers hors menu** | La « Carte de mes biens » de l'espace contribuable (lecture serveur autorisée) reste ouverte au contribuable et au mandataire malgré la garde des écrans d'agents (`ECRANS_USAGERS_HORS_MENU`). |
+
+**Travail du jour par rôle (par défaut — à confirmer)** :
+
+| Rôle | Écrans, dans l'ordre |
+|---|---|
+| R01 Gouverneur | Poste de décision (menu de cinq entrées inchangé) |
+| R02 Directeur de cabinet | Poste de décision, instructions, décisions du Gouvernement, types de comptes (contrats partenaires), centre de commandement, tableaux par profil |
+| R03 Secrétaire exécutif | Poste de décision, instructions, décisions du Gouvernement, points juridiques, centre de commandement |
+| R04 / R05 Ministres | Poste de décision, tableau ministériel, (R05 : salle de contrôle), indicateurs, (R05 : répartition, régie fiscale), (R04 : instructions, contrôle technique) |
+| R06 Directeur général | Poste de travail, régie fiscale ou régie des taxes (selon la régie), recouvrement, supervision terrain, validation des commissions, quitus |
+| R07 Chef de service | Poste de travail, régie de son entité, biens et relations, revue des biens, recouvrement, supervision terrain |
+| R08 Administrateur d'entité | Invitations et comptes, départements, entités et modules, revue des accès, délégations |
+| R09 Superviseur | Supervision terrain, terrain, contrôle qualité, validation des commissions, inspection |
+| R10 Agent de terrain | Terrain, inspection et constat, contrôle des titres, scan du véhicule, enrôlement assisté, mes gains |
+| R11 Contrôleur | Poste de travail, terrain, inspection, déclarations, contrôle des titres, contrôle du stationnement |
+| R12 Guichet | Poste de travail, enrôlement assisté, contrôle des pièces, déclarations, contestation sans écrit, vérification |
+| R13–R16 Juristes, validation, publication | Registre des règles, points juridiques, (R13 : exonérations ; R15 : répartition, salle de contrôle, CALCU ; R16 : décisions du Gouvernement), poste de travail |
+| R17 / R18 Trésor, rapprochement | Trésor, rapprochement proposé, points agréés (supervision, contrats), prestataires, prévision (R17) ; jours de caisse (R18) |
+| R19 Détenteur de clé | Poste de travail, Trésor (registre du coffre) |
+| R20 / R21 Contentieux, décideur | Réclamations et recours, recouvrement / remises, non-valeurs, renseignement (R21), poste de travail |
+| R22 / R23 Auditeurs | Audit, piste d'audit par dossier, audit et investigation, scellement, (R22 : Trésor, chaîne) |
+| R24 Enquêteur | Enquêtes, renseignement, collusion, contrôles mystère, audit et investigation |
+| R25 Délégué à la protection des données | Protection des données, extractions, classification des données, incidents |
+| R26–R28 Plateforme, exploitation, sécurité | Administration, supervision, invitations, départements, prestataires ; incidents, revue des accès, clés, accès juste-à-temps, scellement |
+| R29 Modèles d'IA | Registre des modèles, journal IA, boîte IA |
+| R30 Contribuable | Mon espace, arriérés et échéances, biens et relations, déclarations, véhicules, où payer |
+| R31 Mandataire | Mes mandats, déclarations, arriérés, biens, où payer |
+| R32–R37 Partenaires et services | Console du point agréé ; vérification et preuves ; contrôle technique et centres (R34) ; fourrières et sous-traitance (R35) ; poste de décision (R36) ; quitus et conditions des services (R37) |
+
+**Décisions demandées au maître d'ouvrage** (aucun droit accordé d'office) : voir annexe I.36.
+
 
 # 13. Parcours des contribuables
 

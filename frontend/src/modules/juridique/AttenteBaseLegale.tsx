@@ -5,6 +5,8 @@
 import { useApi } from '../../hooks/useApi';
 import { api } from '../../lib/api';
 import { Icon } from '../../components/Icon';
+// Parcours par rôle (29/09/2026) : liens adaptés au compte — un écran que le rôle n'utilise pas affiche « Réalisé par : … ».
+import { LienEcran } from '../../components/LienEcran';
 
 export type FonctionConditionnee = 'ECHEANCIERS_MOBILE_MONEY' | 'COMMISSIONS_VERSEMENT' | 'AGREGATEURS_ACTIVATION' | 'QUITTANCE_ELECTRONIQUE' | 'RECOUPEMENT_DONNEES';
 
@@ -30,7 +32,7 @@ export function AttenteBaseLegale({ fonction, compact = false }: { fonction: Fon
   return (
     <p className={`callout callout-warn${compact ? ' small' : ''}`} role="note" data-fonction={fonction}>
       <Icon name="scale" size={16} />
-      <span>{message} <a href="/juridique/points" className="small">Registre des points juridiques</a></span>
+      <span>{message} <LienEcran masquer to="/juridique/points" className="small">Registre des points juridiques</LienEcran></span>
     </p>
   );
 }

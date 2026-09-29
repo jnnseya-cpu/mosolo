@@ -76,3 +76,10 @@ données de démonstration.
   l'encaissement d'espèces ») ne s'applique pas aux agents de terrain : les espèces ne sont reçues qu'aux points de
   paiement agréés et aux guichets bancaires (déclaration, vérification, dépôt, appariement, rapprochement), puis
   réparties par le même moteur.
+- **Décisions du 29/09/2026 (suite)** : signature Ed25519 de BitriPay **exigée partout** dès qu'une clé est configurée
+  (en plus du HMAC) ; codes BitriPay « frais publics » (GOVERNMENT_FEE) pour droits administratifs et redevances de
+  service, « impôt » (TAX) sinon ; la valeur définie dans l'environnement du serveur prime sur la console « Clés et
+  raccordements » ; la console des clés et le **registre des modèles d'IA** sont réservés à l'administration (R26, et
+  R29 pour l'IA ; R28 pour la sécurité) et n'apparaissent pas au menu des autorités ; `KODA_SUCCESS_URL` laissé vide
+  pour le retour vers MOSOLO ; le **Gouverneur** dispose du « Centre de commandement » (tableau complet) en plus des
+  cinq entrées de son poste de décision.

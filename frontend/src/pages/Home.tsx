@@ -4,7 +4,7 @@ import { EVENTS, EVENT_CATEGORIES } from '@mosolo/shared';
 import { useApp } from '../context';
 import { CityNight } from '../components/CityNight';
 import { Icon } from '../components/Icon';
-import { AUTORITES_POSTE, InstallButton, visibleNav } from '../components/Shell';
+import { accueilDuRole, AUTORITES_POSTE, InstallButton, visibleNav } from '../components/Shell';
 import { MakerMark, Tricolour } from '../components/Brand';
 import type { UIKey } from '../lib/i18n';
 import { ChartGrid } from '../components/viz';
@@ -81,9 +81,14 @@ export default function Home() {
   const { tr, lang, user } = useApp();
   const mandatory = EVENTS.filter((e) => e.obligatoire).length;
   const nf = (n: number) => n.toLocaleString(lang === 'en' ? 'en-GB' : 'fr-FR');
-  const areas = visibleNav(user?.roles).filter((n) => n.to !== '/');
+  const areas = visibleNav(user?.roles, user?.entity).filter((n) => n.to !== '/');
+  const vitrine = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('presentation');
   // Autorités (Gouverneur, cabinet, secrétariat exécutif, ministres) : l'écran d'accueil est le poste de décision (§ 27.2).
   if (user?.roles.some((r) => AUTORITES_POSTE.includes(r))) return <Navigate to="/poste-de-decision" replace />;
+  // Parcours par rôle (29/09/2026) : chaque compte s'ouvre sur son propre travail (premier écran de « Mon travail du
+  // jour ») ; la présentation publique reste la page d'accueil des visiteurs et s'ouvre avec « ?presentation ».
+  const accueil = accueilDuRole(user?.roles, user?.entity);
+  if (accueil && accueil !== '/' && !vitrine) return <Navigate to={accueil} replace />;
   return (
     <div className="landing">
       {/* 1. Ouverture institutionnelle : visuel officiel, non modifié, logo jamais recadré */}

@@ -15,6 +15,7 @@ import { signBitriPayWebhook } from '../src/modules/payments/connectors/bitripay
 import { signKodaWebhook } from '../src/modules/payments/connectors/koda.js';
 import { DEMO } from '../src/seed.js';
 import { ProviderSimulator } from './simulateur-prestataires.js';
+import { BITRI_ED_PUBLIC, bitriEdHeader } from './signature-ed25519-test.js';
 
 const sim = new ProviderSimulator();
 beforeAll(async () => { await sim.start(); });
@@ -31,7 +32,7 @@ const PUBLIC = 'https://mosolo.kinshasa.cd';
 function env(extra: Record<string, string> = {}) {
   return {
     MOSOLO_PUBLIC_URL: PUBLIC,
-    BITRIPAY_API_KEY: BITRI_KEY, BITRIPAY_WEBHOOK_SECRET: BITRI_WHSEC, BITRIPAY_BASE_URL: `${sim.base}/bitripay/v1`, BITRIPAY_RETURN_URL_FIELD: 'return_url',
+    BITRIPAY_ED25519_PUBLIC_KEY: BITRI_ED_PUBLIC, BITRIPAY_API_KEY: BITRI_KEY, BITRIPAY_WEBHOOK_SECRET: BITRI_WHSEC, BITRIPAY_BASE_URL: `${sim.base}/bitripay/v1`, BITRIPAY_RETURN_URL_FIELD: 'return_url',
     KODA_API_KEY: KODA_KEY, KODA_WEBHOOK_SECRET: KODA_WHSEC, KODA_BASE_URL: `${sim.base}/koda/v1`,
     ...extra,
   };
@@ -70,7 +71,7 @@ function bitripayWebhook(e: Env, order: { providerIntentId: string; paymentRefer
     id, object: 'event', type, created: t, livemode: false,
     data: { object: { id: order.providerIntentId, object: 'payment_intent', amount_minor: 15000, currency: 'usd', metadata: { payment_reference: order.paymentReference } } },
   });
-  return e.app.inject({ method: 'POST', url: '/v1/providers/bitripay/webhooks', payload: raw, headers: { 'content-type': 'application/json', 'bitripay-signature': signBitriPayWebhook(BITRI_WHSEC, raw, t) } });
+  return e.app.inject({ method: 'POST', url: '/v1/providers/bitripay/webhooks', payload: raw, headers: { 'content-type': 'application/json', 'bitripay-signature': signBitriPayWebhook(BITRI_WHSEC, raw, t), 'bitripay-signature-ed25519': bitriEdHeader(raw, t) } });
 }
 
 function kodaWebhook(e: Env, order: { providerIntentId: string; paymentReference: string }, type: 'payment.verified' | 'payment.verified.late') {
@@ -370,7 +371,7 @@ describe('BitriPay — OpenAPI 2026-09-01 : événements, erreurs, clés restrei
   });
 
   it('clé restreinte rk_test_… admise pour BitriPay (portées), refusée pour KODA ; purpose_code GOVERNMENT_FEE pour un droit administratif', async () => {
-    const e = await boot({ extra: { BITRIPAY_API_KEY: 'rk_test_RESTREINTE_ALLER_RETOUR_01' } });
+    const e = await boot({ extra: { BITRIPAY_ED25519_PUBLIC_KEY: BITRI_ED_PUBLIC, BITRIPAY_API_KEY: 'rk_test_RESTREINTE_ALLER_RETOUR_01' } });
     expect(e.app.ctx.connectors.get('bitripay')!.mode).toBe('TEST');
     await e.app.close();
     expect(() => buildApp({ plugins: [], connectorEnv: env({ KODA_API_KEY: 'rk_test_LECTURE_SEULE_KODA_0001' }) })).toThrow(/rk_… refusée/);
@@ -391,8 +392,11 @@ describe('BitriPay — OpenAPI 2026-09-01 : événements, erreurs, clés restrei
     } finally {
       process.env.NODE_ENV = saved;
     }
-    // Hors production : vérifiée si présente (comportement antérieur conservé) ; URL par défaut de la page développeur.
-    const reg = buildConnectorRegistry(live, {}, false);
+    // Décision du maître d'ouvrage (29/09/2026) : Ed25519 exigée PARTOUT dès qu'une clé BitriPay est configurée —
+    // hors production aussi, la clé épinglée est obligatoire (l'ancien « vérifiée si présente » ne vaut plus qu'en
+    // démonstration sans clé) ; URL par défaut de la page développeur.
+    expect(() => buildConnectorRegistry(live, {}, false)).toThrow(/BITRIPAY_ED25519_PUBLIC_KEY/);
+    const reg = buildConnectorRegistry({ ...live, BITRIPAY_ED25519_PUBLIC_KEY: BITRI_ED_PUBLIC }, {}, false);
     expect(reg.get('bitripay')!.describe().baseUrl).toBe('https://api.bitripay.com/v1');
   });
 

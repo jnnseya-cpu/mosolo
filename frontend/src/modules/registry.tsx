@@ -275,5 +275,5 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/ia/autonomie', element: lazy(() => import('./ia/AutonomyPage')) },
   { path: '/ia/memoire', element: lazy(() => import('./ia/MemoryPage')) },
   { path: '/ia/journal', element: lazy(() => import('./ia/JournalPage')), nav: { label: 'Journal IA', short: 'Journal IA', icon: 'history', group: 'pilotage', roles: ['R22', 'R23', 'R25', 'R29'] } },
-  { path: '/ia/modeles', element: lazy(() => import('./ia/ModelesPage')), nav: { label: 'Registre des modèles d’IA', short: 'Modèles IA', icon: 'analysis', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R22', 'R23', 'R25', 'R26', 'R28', 'R29'] } },
+  { path: '/ia/modeles', element: lazy(() => import('./ia/ModelesPage')), nav: { label: 'Registre des modèles d’IA', short: 'Modèles IA', icon: 'analysis', group: 'pilotage', roles: ['R26', 'R29'] } }, // Décision du 29/09/2026 : menu réservé à l’administration (R26, R29) ; lectures d’audit, DPD et sécurité inchangées côté serveur
 ];

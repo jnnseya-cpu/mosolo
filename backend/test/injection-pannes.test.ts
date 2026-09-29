@@ -16,6 +16,7 @@ import { createSoclePlugin } from '../src/plugins/socle/plugin.js';
 import { DEFAULT_RATE_LIMITS } from '../src/plugins/socle/rate-limit.js';
 import { DEMO } from '../src/seed.js';
 import { PROVIDER_SECRET } from './helpers.js';
+import { BITRI_ED_PUBLIC } from './signature-ed25519-test.js';
 
 const SECRETS = { auditHmacKey: 'test-audit-key', providerSecrets: { 'mm-operator-a': PROVIDER_SECRET }, commsProviderKeys: {} };
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -158,7 +159,7 @@ describe('Prestataire de paiement en erreur ou hors délai', () => {
     const clock = new ManualClock('2026-09-26T09:00:00.000Z');
     const app = buildApp({
       clock, plugins: [], secrets: SECRETS,
-      connectorEnv: { BITRIPAY_API_KEY: 'sk_live_BITRISECRET99887766', BITRIPAY_WEBHOOK_SECRET: 'whsec_live' },
+      connectorEnv: { BITRIPAY_ED25519_PUBLIC_KEY: BITRI_ED_PUBLIC, BITRIPAY_API_KEY: 'sk_live_BITRISECRET99887766', BITRIPAY_WEBHOOK_SECRET: 'whsec_live' },
       // Conversion justifiée : faux `fetch` minimal de test (seuls signal et rejet sont utilisés).
       connectorRuntime: { fetch: fetch as never, sleep: async () => {}, timeoutMs: 20 },
     });

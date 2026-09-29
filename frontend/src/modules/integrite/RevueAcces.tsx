@@ -1,6 +1,6 @@
 /** Revue périodique des habilitations : chaque accès est confirmé ou retiré par un responsable distinct, avec motif. */
 import { useMemo, useState } from 'react';
-import { PageHead } from '../../components/Shell';
+import { lectureAgregee, PageHead } from '../../components/Shell';
 import { DataTable } from '../../components/DataTable';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
@@ -33,6 +33,10 @@ export default function RevueAcces() {
   const camp = list.data?.find((c) => c.id === campId) ?? list.data?.[0];
   const rows = useMemo(() => (camp?.items ?? []).filter((i) => filter === 'all' || (filter === 'todo' ? i.decision === 'A_CONFIRMER' : i.privileged)), [camp, filter]);
 
+  // Gouverneur, directeur de cabinet, secrétaire exécutif (29/09/2026) : lecture agrégée plutôt qu'un refus.
+  if (!allowed && lectureAgregee(user?.roles)) {
+    return <div className="page"><PageHead eyebrow="Gouvernance des accès" title="Revue des accès" /><EmptyState title="Lecture agrégée" icon="chart">La revue nominative des accès est conduite par le responsable sécurité, les administrateurs d’entité, l’audit et le DPO ; ses résultats agrégés remontent au poste de décision.</EmptyState></div>;
+  }
   if (!allowed) {
     return <div className="page"><PageHead eyebrow="Gouvernance des accès" title="Revue des accès" /><EmptyState title="Accès réservé" icon="lock">Réservé au responsable sécurité, aux administrateurs d’entité, à l’audit et au DPO.</EmptyState></div>;
   }

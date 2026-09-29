@@ -15,6 +15,8 @@ import { Area, Choice, Field, hasRole, Notice, useRunner } from './planif';
 import './pilotage.css';
 import { BarChartViz, DonutViz, fmtNombre, KpiTile, StatusDistribution, TimelineStrip } from '../../components/viz';
 import { etatsDe, lignesCompte, Tuiles, Visuels } from './visuels';
+// Parcours par rôle (29/09/2026) : un écran vide propose la prochaine action utile du travail du jour.
+import { SuiteDuTravail } from '../../components/SuiteDuTravail';
 
 export interface InstructionRow {
   id: string; number: string; authority: string; origin: string; originLabel: string; subject: string; body: string; deadline: string; status: string; overdue: boolean; daysLeft: number;
@@ -75,7 +77,7 @@ export default function Instructions() {
         <Section title="Instructions" sub="Visibles de l’autorité, de l’audit et du service destinataire">
           <Notice msg={r.msg} />
           {q.loading && !q.data ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : (
-            <DataTable caption="Instructions" rows={q.data?.items ?? []} rowKey={(i) => i.id} empty={<EmptyState title="Aucune instruction" icon="check" />} columns={[
+            <DataTable caption="Instructions" rows={q.data?.items ?? []} rowKey={(i) => i.id} empty={<EmptyState title="Aucune instruction" icon="check"><SuiteDuTravail /></EmptyState>} columns={[
               { key: 'n', label: 'Instruction', primary: true, render: (i) => <><strong>{i.number} — {i.subject}</strong><span className="small muted" style={{ display: 'block' }}>{i.authority} · {i.originLabel}</span></> },
               { key: 'd', label: 'Destinataire', render: (i) => `${i.assignee.entity}${i.assignee.role ? ` (${i.assignee.role})` : ''}` },
               { key: 'e', label: 'Échéance', render: (i) => <>{i.deadline}{i.overdue && <StatusBadge tone="critical" label="En retard" />}</> },

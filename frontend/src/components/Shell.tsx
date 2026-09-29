@@ -8,7 +8,7 @@ import { CityLogo, MakerMark, Tricolour } from './Brand';
 import { Icon } from './Icon';
 import { CurrencySelector, DemoUserSelector, LanguageSelector } from './Selectors';
 import { MODULE_ROUTES } from '../modules/registry';
-import { menuMasque } from '@mosolo/shared';
+import { menuMasque, ROLES_TOUS_MODULES, travailDuJour } from '@mosolo/shared';
 import { focusables, useFocusTrap } from '../hooks/useFocusTrap';
 import { ID_ANNONCES } from '../lib/annonce';
 import { sansMasques, useMenuRattachements } from '../hooks/useMenuRattachements';
@@ -52,6 +52,16 @@ const ROLE_ROUTES: [string[], string[]][] = [
   [['R09', 'R17', 'R20', 'R24', 'R29'], ['/ia']],
 ];
 
+/**
+ * Rôles qui ont une entrée du menu principal (sections de travail : pilotage, opérations) — 29/09/2026, pour savoir
+ * qui utilise un écran du socle (liens « Réalisé par », démonstration guidée). Les entrées publiques renvoient [].
+ */
+export function rolesDuMenuPrincipal(path: string): string[] {
+  const n = NAV.find((x) => x.to === path);
+  if (!n || n.group === 'public') return [];
+  return [...new Set(ROLE_ROUTES.filter(([, routes]) => routes.includes(path)).flatMap(([rs]) => rs))];
+}
+
 /** Profils « usagers » (contribuable, mandataire, partenaires) qui voient les entrées publiques des modules. */
 const PUBLIC_USER_ROLES = ['R30', 'R31', 'R32', 'R33', 'R34', 'R36', 'R37'];
 
@@ -60,7 +70,7 @@ const MODULE_NAV: NavItem[] = MODULE_ROUTES.filter((m) => m.nav).map((m) => ({
   to: m.path, key: 'nav.more' as UIKey, icon: m.nav!.icon, group: m.nav!.group, label: m.nav!.label, short: m.nav!.short ?? m.nav!.label, roles: m.nav!.roles,
 }));
 
-export function visibleNav(roles: string[] | undefined): NavItem[] {
+export function visibleNav(roles: string[] | undefined, entity?: string): NavItem[] {
   if (!roles) return [...NAV, ...MODULE_NAV]; // utilisateurs inconnus (hors ligne) : tout afficher
   const allowed = new Set<string>(['/']);
   for (const [rs, routes] of ROLE_ROUTES) if (roles.some((r) => rs.includes(r))) routes.forEach((x) => allowed.add(x));
@@ -71,7 +81,8 @@ export function visibleNav(roles: string[] | undefined): NavItem[] {
   const extra = MODULE_NAV.filter((n) => (n.roles!.length === 0 ? isPublicUser : n.roles!.some((r) => roles.includes(r))));
   // Présentation seulement (27/09/2026) : pas d'entrée de menu dont la lecture principale est refusée au rôle ; la route
   // et la page restent accessibles par leur adresse (voir shared/src/menu.ts).
-  return [...core, ...extra].filter((n) => !menuMasque(n.to, roles));
+  // Parcours par rôle (29/09/2026) : l'entité de la personne complète le masque (écrans lus par une entité exploitante).
+  return [...core, ...extra].filter((n) => !menuMasque(n.to, roles, entity));
 }
 
 /**
@@ -85,11 +96,42 @@ export const MENU_GOUVERNEUR: NavItem[] = [
   { to: '/poste-de-decision/alertes', key: 'nav.more' as UIKey, icon: 'alert', group: 'pilotage', label: 'Alertes', short: 'Alertes' },
   { to: '/poste-de-decision/communes', key: 'nav.more' as UIKey, icon: 'pin', group: 'pilotage', label: 'Communes', short: 'Communes' },
   { to: '/poste-de-decision/rechercher', key: 'nav.more' as UIKey, icon: 'sort', group: 'pilotage', label: 'Rechercher', short: 'Rechercher' },
+  // Décision du maître d'ouvrage (29/09/2026) : le Gouverneur dispose aussi du centre de commandement (tableau complet).
+  { to: '/gouverneur', key: 'nav.more' as UIKey, icon: 'gauge', group: 'pilotage', label: 'Centre de commandement', short: 'Commandement' },
 ];
 
 /** Menu affiché : cinq entrées pour le Gouverneur ; ailleurs, les écrans visibles selon les rôles. */
-export function menuDe(roles: string[] | undefined): NavItem[] {
-  return roles?.includes('R01') ? MENU_GOUVERNEUR : visibleNav(roles);
+export function menuDe(roles: string[] | undefined, entity?: string): NavItem[] {
+  return roles?.includes('R01') ? MENU_GOUVERNEUR : visibleNav(roles, entity);
+}
+
+/**
+ * Parcours par rôle (29/09/2026) : « Mon travail du jour » d'abord (shared/src/menu.ts, TRAVAIL_DU_JOUR), puis tous les
+ * autres écrans du menu. Présentation seulement : seules les entrées déjà présentes dans le menu sont reprises.
+ */
+export function menuOrganise(items: NavItem[], roles: string[] | undefined): { jour: NavItem[]; reste: NavItem[] } {
+  const jour = roles ? travailDuJour(roles).map((p) => items.find((n) => n.to === p)).filter((n): n is NavItem => !!n) : [];
+  return { jour, reste: items.filter((n) => !jour.includes(n)) };
+}
+
+/** Au-delà de ce nombre d'entrées, « Tous mes écrans » est replié sous « Mon travail du jour » (fatigue du menu). */
+export const SEUIL_MENU_COURT = 12;
+
+/** Écran d'accueil du rôle : premier écran de son travail du jour présent dans son menu ; sinon aucun (page d'accueil). */
+export function accueilDuRole(roles: string[] | undefined, entity?: string): string | null {
+  if (!roles?.length) return null;
+  const items = menuDe(roles, entity);
+  return travailDuJour(roles).find((p) => items.some((n) => n.to === p)) ?? null;
+}
+
+/** Vrai pour le Gouverneur, le directeur de cabinet et le secrétaire exécutif (tous les modules, lecture agrégée). */
+export function lectureAgregee(roles: readonly string[] | undefined): boolean {
+  return !!roles?.some((r) => ROLES_TOUS_MODULES.includes(r));
+}
+
+/** Recherche insensible aux accents et à la casse. */
+function plat(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 /** Autorités dont l'écran d'accueil est le poste de décision (§ 27.2 : « il s'ouvre là, toujours »). */
@@ -168,12 +210,10 @@ function Header() {
   );
 }
 
-function Sidebar() {
-  const { tr, user } = useApp();
-  // Rattachements de modules aux entités (27/09/2026) : présentation seulement, les droits restent ceux du serveur.
-  const items = sansMasques(menuDe(user?.roles), useMenuRattachements(user?.id));
+/** Liste d'entrées groupées (public, pilotage, opérations). */
+function GroupesMenu({ items, tr }: { items: NavItem[]; tr: (k: UIKey) => string }) {
   return (
-    <nav className="sidebar" aria-label={tr('nav.main')}>
+    <>
       {GROUPS.filter((g) => items.some((n) => n.group === g.id)).map((g) => (
         <div className="side-group" key={g.id}>
           <p className="side-label">{tr(g.key)}</p>
@@ -188,6 +228,79 @@ function Sidebar() {
           </ul>
         </div>
       ))}
+    </>
+  );
+}
+
+const CLE_TOUS = 'mosolo.menu.tousMesEcrans';
+function lireOuvert(): boolean { try { return localStorage.getItem(CLE_TOUS) === '1'; } catch { return false; } }
+function ecrireOuvert(v: boolean) { try { localStorage.setItem(CLE_TOUS, v ? '1' : '0'); } catch { /* stockage indisponible */ } }
+
+/**
+ * Menu organisé (29/09/2026, « chacun ne voit que ce qu'il a à faire ») : « Mon travail du jour » en tête ; pour un menu
+ * long, les autres écrans sont repliés sous « Tous mes écrans (N) » et une recherche filtre l'ensemble. Aucune entrée
+ * retirée : tout reste accessible par la recherche, le dépliage et l'adresse.
+ */
+export function MenuOrganise({ items, roles }: { items: NavItem[]; roles: string[] | undefined }) {
+  const { tr } = useApp();
+  const loc = useLocation();
+  const { jour, reste } = menuOrganise(items, roles);
+  const long = jour.length > 0 && items.length > SEUIL_MENU_COURT;
+  const [q, setQ] = useState('');
+  const [ouvert, setOuvert] = useState(lireOuvert);
+  const actifDansReste = reste.some((n) => n.to !== '/' && (loc.pathname === n.to || loc.pathname.startsWith(`${n.to}/`)));
+  const deplie = ouvert || actifDansReste;
+  if (!jour.length) return <GroupesMenu items={items} tr={tr} />;
+  const trouves = q.trim().length >= 2 ? items.filter((n) => plat(`${navLabel(n, tr)} ${n.to}`).includes(plat(q.trim()))) : null;
+  return (
+    <>
+      {long && (
+        <div className="side-search">
+          <label className="sr-only" htmlFor="menu-recherche">Rechercher un écran</label>
+          <input id="menu-recherche" type="search" placeholder="Rechercher un écran…" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" />
+        </div>
+      )}
+      {trouves ? (
+        <div className="side-group">
+          <p className="side-label">Résultats ({trouves.length})</p>
+          <ul>
+            {trouves.map((n) => (
+              <li key={n.to}><NavLink to={n.to} end={n.to === '/'} className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`}><Icon name={n.icon} size={18} /> <span>{navLabel(n, tr)}</span></NavLink></li>
+            ))}
+            {!trouves.length && <li className="side-empty small muted">Aucun écran de votre menu ne correspond.</li>}
+          </ul>
+        </div>
+      ) : (
+        <>
+          <div className="side-group side-jour">
+            <p className="side-label">Mon travail du jour</p>
+            <ul>
+              {jour.map((n) => (
+                <li key={n.to}><NavLink to={n.to} end={n.to === '/'} className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`}><Icon name={n.icon} size={18} /> <span>{navLabel(n, tr)}</span></NavLink></li>
+              ))}
+            </ul>
+          </div>
+          {reste.length > 0 && (long ? (
+            <div className="side-tous">
+              <button type="button" className="side-toggle" aria-expanded={deplie} aria-controls="menu-tous" onClick={() => { setOuvert(!deplie); ecrireOuvert(!deplie); }}>
+                <Icon name="chevronDown" size={16} className={deplie ? 'side-rot' : undefined} /> <span>Tous mes écrans ({reste.length})</span>
+              </button>
+              {deplie && <div id="menu-tous"><GroupesMenu items={reste} tr={tr} /></div>}
+            </div>
+          ) : <GroupesMenu items={reste} tr={tr} />)}
+        </>
+      )}
+    </>
+  );
+}
+
+function Sidebar() {
+  const { tr, user } = useApp();
+  // Rattachements de modules aux entités (27/09/2026) : présentation seulement, les droits restent ceux du serveur.
+  const items = sansMasques(menuDe(user?.roles, user?.entity), useMenuRattachements(user?.id));
+  return (
+    <nav className="sidebar" aria-label={tr('nav.main')}>
+      <MenuOrganise items={items} roles={user?.roles} />
       <div className="side-foot"><InstallButton variant="link" /></div>
     </nav>
   );
@@ -195,7 +308,10 @@ function Sidebar() {
 
 function BottomNav() {
   const { tr, user } = useApp();
-  const items = sansMasques(menuDe(user?.roles), useMenuRattachements(user?.id));
+  // Parcours par rôle (29/09/2026) : le travail du jour vient en premier dans la barre du bas.
+  const tous = sansMasques(menuDe(user?.roles, user?.entity), useMenuRattachements(user?.id));
+  const { jour, reste } = menuOrganise(tous, user?.roles);
+  const items = [...jour, ...reste];
   const hasMore = items.length > 5;
   const bottom = hasMore ? items.slice(0, 4) : items;
   const [more, setMore] = useState(false);
@@ -229,20 +345,7 @@ function BottomNav() {
       {more && (
         <div className="sheet-backdrop" onClick={() => setMore(false)}>
           <div ref={sheet} className="sheet" id="more-sheet" role="dialog" aria-modal="true" aria-label={tr('nav.more')} onClick={(e) => e.stopPropagation()}>
-            {GROUPS.filter((g) => items.some((n) => n.group === g.id)).map((g) => (
-              <div key={g.id} className="sheet-group">
-                <p className="side-label">{tr(g.key)}</p>
-                <ul>
-                  {items.filter((n) => n.group === g.id).map((n) => (
-                    <li key={n.to}>
-                      <NavLink to={n.to} end={n.to === '/'} className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`}>
-                        <Icon name={n.icon} size={18} /> <span>{navLabel(n, tr)}</span>
-                      </NavLink>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+            <div className="sheet-group"><MenuOrganise items={tous} roles={user?.roles} /></div>
             <InstallButton variant="secondary" />
           </div>
         </div>

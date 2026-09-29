@@ -11,6 +11,7 @@ import { BarChartViz, HeatGrid, KpiGrid, KpiTile, LadderFunnel, StatusDistributi
 import type { Tone } from '../../components/StatusBadge';
 import { kinshasaMonth, periodLabel, periodRange } from '../../lib/aggregate';
 import { ChiffreView, usePosteApi, type Chiffre } from './common';
+import { useEcranAccessible } from '../../components/LienEcran';
 
 /** Rangée de /v1/pilotage/drill/month (niveaux de l'échelle par mois de Kinshasa). */
 interface DrillMonth { rows: { key: string; values: Record<string, { consolidatedCdf: MoneyJSON | null }> }[] }
@@ -37,6 +38,9 @@ const num = (v: string | null | undefined) => (v === null || v === undefined || 
 
 /** Bloc 2 : tuiles avec courbes miniatures, puis les fiches chiffrées complètes (état, comparaison, date, taux, source). */
 export function VilleAujourdhui({ chiffres }: { chiffres: Chiffre[] }) {
+  // Parcours par rôle (29/09/2026) : la tuile ne renvoie à sa source que si l'écran est utilisable par la personne.
+  const utilisable = useEcranAccessible();
+  const sourceUtilisable = (p: string | undefined) => (p && utilisable(p) ? p : undefined);
   const drill = usePosteApi<DrillMonth>('/v1/pilotage/drill/month', 'drill.month');
   const mois = douzeMois();
   const labels = mois.map((m) => periodLabel(m, 'month'));
@@ -49,7 +53,7 @@ export function VilleAujourdhui({ chiffres }: { chiffres: Chiffre[] }) {
           const money = c.unite === 'CDF' || c.unite === 'USD';
           const fmt = money ? fmtCompact : (x: number) => fmtNombre(x);
           return (
-            <KpiTile key={c.code} label={c.libelle} value={v} unit={c.unite} format={fmt} href={c.source.chemin[Math.min(1, c.source.chemin.length - 1)]}
+            <KpiTile key={c.code} label={c.libelle} value={v} unit={c.unite} format={fmt} href={sourceUtilisable(c.source.chemin[Math.min(1, c.source.chemin.length - 1)])}
               state={{ label: c.etatLabel, tone: TON[c.etat] ?? 'neutral' }} example={c.exemple} reason={c.comparaison.libelle}
               delta={c.comparaison.type === 'PERIODE_PRECEDENTE' ? { current: v, previous: num(c.comparaison.valeur), versus: 'vs N−1', format: fmt } : undefined}
               spark={niveau && !drill.error && drill.data ? { values: serieNiveau(drill.data, niveau, mois), labels, label: `${c.libelle} — 12 derniers mois (contre-valeur CDF)`, format: fmtCompact } : undefined}
@@ -102,6 +106,9 @@ export function VignetteCommunes({ com }: { com: { mesure: boolean; note: string
 
 /** Tuiles d'un groupe de chiffres du poste (état, comparaison, source) ; les fiches complètes restent affichées. */
 export function TuilesChiffres({ chiffres, label, max = 3 }: { chiffres: Chiffre[]; label: string; max?: 2 | 3 | 4 }) {
+  // Parcours par rôle (29/09/2026) : la tuile ne renvoie à sa source que si l'écran est utilisable par la personne.
+  const utilisable = useEcranAccessible();
+  const sourceUtilisable = (p: string | undefined) => (p && utilisable(p) ? p : undefined);
   if (!chiffres.length) return null;
   return (
     <KpiGrid max={max} label={label}>
@@ -110,7 +117,7 @@ export function TuilesChiffres({ chiffres, label, max = 3 }: { chiffres: Chiffre
         const money = c.unite === 'CDF' || c.unite === 'USD';
         const fmt = money ? fmtCompact : (x: number) => fmtNombre(x);
         return (
-          <KpiTile key={c.code} label={c.libelle} value={v} unit={c.unite} format={fmt} example={c.exemple} href={c.source.chemin[Math.min(1, c.source.chemin.length - 1)]}
+          <KpiTile key={c.code} label={c.libelle} value={v} unit={c.unite} format={fmt} example={c.exemple} href={sourceUtilisable(c.source.chemin[Math.min(1, c.source.chemin.length - 1)])}
             state={{ label: c.etatLabel, tone: TON[c.etat] ?? 'neutral' }} reason={c.hypotheses?.join(' ; ') || c.comparaison.libelle}
             delta={c.comparaison.type === 'PERIODE_PRECEDENTE' ? { current: v, previous: num(c.comparaison.valeur), versus: 'vs N−1', format: fmt } : undefined} />
         );

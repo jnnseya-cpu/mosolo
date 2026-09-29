@@ -6,6 +6,8 @@
  */
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+// Parcours par rôle (29/09/2026) : liens adaptés au compte — un écran que le rôle n'utilise pas n'est pas proposé.
+import { LienEcran } from '../../components/LienEcran';
 import { formatMoney } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
@@ -144,7 +146,7 @@ export function MonCompteUnique({ taxpayerId, self }: { taxpayerId: string | nul
 
       <nav className="cu-modules" aria-label="Modules rattachés au compte">
         {v.sections.filter((x) => x.elements.length > 0 || x.erreur).map((x) => (
-          <Link key={x.module} className="chip" to={x.lien}>{x.titre} ({x.elements.length}){x.erreur ? ' — section indisponible' : ''}</Link>
+          <LienEcran masquer key={x.module} className="chip" to={x.lien}>{x.titre} ({x.elements.length}){x.erreur ? ' — section indisponible' : ''}</LienEcran>
         ))}
         <Link className="chip" to="/espace/biens-relations"><Icon name="building" size={14} /> Mes biens et relations</Link>
       </nav>
@@ -163,7 +165,7 @@ function ElementRow({ e }: { e: CompteElement & { moduleTitre: string; moduleLie
       <div className="row-side">
         {e.montant && <span className="mono small">{formatMoney(e.montant)}</span>}
         {e.statut && <StatusBadge tone={toneOf(e.statut)} label={e.statut} />}
-        <Link className="btn btn-ghost btn-sm" to={e.lien ?? e.moduleLien} aria-label={`Ouvrir — ${e.libelle}`}>Ouvrir</Link>
+        <LienEcran className="btn btn-ghost btn-sm" to={e.lien ?? e.moduleLien} aria-label={`Ouvrir — ${e.libelle}`}>Ouvrir</LienEcran>
       </div>
     </li>
   );

@@ -11,6 +11,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { randomUUID } from 'node:crypto';
+import { BITRI_ED_PUBLIC } from './signature-ed25519-test.js';
 
 export interface SimIntent {
   id: string;
@@ -117,7 +118,7 @@ export class ProviderSimulator {
       const resolution = !i ? 'NOT_FOUND' : i.resolution ?? (i.status === 'succeeded' ? 'CONFIRMED' : 'PENDING');
       return this.send(res, 200, { object: 'payment_resolution', reference: ref, payment_intent: i?.id ?? null, resolution });
     }
-    if (method === 'GET' && path === '/bitripay/v1/keys') return this.send(res, 200, { keys: [{ kid: 'k1', alg: 'Ed25519', public_key: 'AAAA' }] }, { etag: '"k1"' });
+    if (method === 'GET' && path === '/bitripay/v1/keys') return this.send(res, 200, { keys: [{ kid: 'k1', alg: 'Ed25519', public_key: BITRI_ED_PUBLIC }] }, { etag: '"k1"' });
     // ------------------------------------------------------------------ KODA
     if (method === 'GET' && path === '/koda/v1/ping') return this.send(res, 200, { ok: true, livemode: false });
     if (method === 'POST' && path === '/koda/v1/intents') {

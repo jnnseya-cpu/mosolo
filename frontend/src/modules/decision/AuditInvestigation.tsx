@@ -4,6 +4,8 @@
  */
 import { useState } from 'react';
 import { useApp } from '../../context';
+// Parcours par rôle (29/09/2026) : liens adaptés au compte (« Réalisé par : … » si l'écran n'est pas le sien).
+import { LienEcran, useEcranAccessible } from '../../components/LienEcran';
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/StatusBadge';
 import { api, describeError } from '../../lib/api';
@@ -25,13 +27,14 @@ const GRAVITE: Record<string, { label: string; tone: Tone }> = { CRITIQUE: { lab
 function VisuelsAudit({ d }: { d: Vue }) {
   const constats = d.items.flatMap((m) => m.findings);
   const recos = constats.flatMap((f) => f.recommendations);
+  const utilisable = useEcranAccessible();
   return (
     <>
       <Tuiles label="Audit et investigation — chiffres clés" max={4}>
         <KpiTile hero label="Missions d’audit" value={d.items.length} format={entier} state={{ label: `${d.items.filter((m) => m.status !== 'CLOSE').length} en cours`, tone: 'info' }} />
         <KpiTile label="Constats" value={constats.length} format={entier} state={{ label: 'Revue humaine', tone: 'neutral' }} />
         <KpiTile label="Recommandations" value={recos.length} format={entier} state={{ label: `${recos.filter((x) => x.status === 'MISE_EN_OEUVRE_VERIFIEE').length} vérifiée(s)`, tone: 'good' }} />
-        <KpiTile label="Journal d’audit chaîné" value={d.integrity.length} format={entier} unit="événements" state={d.integrity.ok ? { label: 'Chaîne intègre', tone: 'good' } : { label: 'Chaîne rompue', tone: 'critical' }} href="/audit" />
+        <KpiTile label="Journal d’audit chaîné" value={d.integrity.length} format={entier} unit="événements" state={d.integrity.ok ? { label: 'Chaîne intègre', tone: 'good' } : { label: 'Chaîne rompue', tone: 'critical' }} href={utilisable('/audit') ? '/audit' : undefined} />
       </Tuiles>
       <TuilesIndicateurs items={d.indicators} label="Indicateurs de l’audit" />
       <Visuels label="Audit en graphiques">
@@ -94,7 +97,7 @@ export default function AuditInvestigation() {
             { key: 'm', label: 'Racine de Merkle', render: (x) => <span className="mono">{x.merkleRoot.slice(0, 16)}…</span> },
             { key: 't', label: 'Horodatée / publiée', render: (x) => `${x.timestamped ? 'oui' : 'non'} / ${x.published ? 'oui' : 'non'}` },
           ]} />
-          <p className="small">{d.dailyRoots.lastCheck ? `Dernier contrôle : ${date(d.dailyRoots.lastCheck.at)} — ${d.dailyRoots.lastCheck.ok ? 'conforme' : `${d.dailyRoots.lastCheck.findings} constat(s)`}` : 'Aucun contrôle.'} <a href={d.dailyRoots.link}>Scellement du journal</a> · <a href="/pilotage/piste-audit">Piste d’audit par dossier</a> · <a href="/audit">Journal chaîné</a></p>
+          <p className="small">{d.dailyRoots.lastCheck ? `Dernier contrôle : ${date(d.dailyRoots.lastCheck.at)} — ${d.dailyRoots.lastCheck.ok ? 'conforme' : `${d.dailyRoots.lastCheck.findings} constat(s)`}` : 'Aucun contrôle.'} <LienEcran to={d.dailyRoots.link}>Scellement du journal</LienEcran> · <LienEcran to="/pilotage/piste-audit">Piste d’audit par dossier</LienEcran> · <LienEcran to="/audit">Journal chaîné</LienEcran></p>
         </Section>
         {auditor && (
           <Section title="Nouvelle mission">

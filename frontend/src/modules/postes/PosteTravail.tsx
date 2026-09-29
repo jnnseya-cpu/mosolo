@@ -5,12 +5,15 @@
  * La file relit les éléments que la personne peut traiter selon les modules sources ; chaque élément ouvre l'écran de
  * la source, où la décision est prise (mêmes gardes, mêmes quatre yeux).
  */
-import { Link } from 'react-router-dom';
+// Parcours par rôle (29/09/2026) : liens adaptés au compte — un écran que le rôle n'utilise pas affiche « Réalisé par : … ».
+import { LienEcran as Link } from '../../components/LienEcran';
 import { PageHead } from '../../components/Shell';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { StatusBadge } from '../../components/StatusBadge';
 import { BandeauHorsLigne, Bloc, usePosteApi } from './common';
 import { VisuelsFile } from './visuels';
+// Parcours par rôle (29/09/2026) : un écran vide propose la prochaine action utile du travail du jour.
+import { SuiteDuTravail } from '../../components/SuiteDuTravail';
 
 export interface Travail {
   famille: string; question: string; enAttente: number;
@@ -40,7 +43,7 @@ export function TravailVue({ t }: { t: Travail }) {
             <li key={w.id}><Link to={w.ecran}><strong>{w.objet}</strong></Link> {w.enRetard && <StatusBadge tone="critical" label="En retard" />}
               <span className="ps-small"> {w.module} · déposé le {w.depose.slice(0, 10)}{w.echeance ? ` · échéance ${w.echeance}` : ''} · {w.demandeur}</span></li>
           ))}</ul>
-        ) : <EmptyState title="Rien à traiter aujourd’hui" icon="check" />}
+        ) : <EmptyState title="Rien à traiter aujourd’hui" icon="check"><SuiteDuTravail /></EmptyState>}
       </Bloc>
       {t.corbeille && <Bloc titre="Corbeille de décision (séparée)"><p className="ps-small">{t.corbeille.note}</p><Link className="btn btn-secondary btn-sm" to={t.corbeille.lien}>Ouvrir le poste de décision</Link></Bloc>}
     </>

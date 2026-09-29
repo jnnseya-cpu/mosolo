@@ -70,8 +70,10 @@ const accueilGouverneur = () => ({
 
 describe('Menu et noms (§ 27.5, catalogue n° 41 à 44)', () => {
   it('menu du Gouverneur : cinq entrées, pas davantage ; les autres profils gardent leurs écrans ; les anciens tableaux restent accessibles', () => {
-    expect(menuDe(['R01']).map((n) => n.label)).toEqual(['Décisions', 'Recettes', 'Alertes', 'Communes', 'Rechercher']);
-    expect(menuDe(['R01'])).toHaveLength(5);
+    // Cinq entrées du § 27.5, puis le centre de commandement ajouté par décision du maître d'ouvrage (29/09/2026).
+    expect(menuDe(['R01']).map((n) => n.label)).toEqual(['Décisions', 'Recettes', 'Alertes', 'Communes', 'Rechercher', 'Centre de commandement']);
+    expect(menuDe(['R01'])).toHaveLength(6);
+    expect(menuDe(['R01']).at(-1)!.to).toBe('/gouverneur');
     expect(menuDe(['R01']).some((n) => n.to === '/verifier')).toBe(false);
     for (const r of ['R02', 'R03', 'R04', 'R05']) expect(menuDe([r]).some((n) => n.to === '/poste-de-decision'), r).toBe(true);
     expect(visibleNav(['R10']).some((n) => n.to === '/poste-de-decision')).toBe(false);

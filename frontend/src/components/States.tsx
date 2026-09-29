@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ROLES_TOUS_MODULES } from '@mosolo/shared';
 import { useApp } from '../context';
 import { ApiError, describeError } from '../lib/api';
 import { Icon } from './Icon';
@@ -15,10 +16,25 @@ export function EmptyState({ title, children, icon = 'file' }: { title: string; 
 }
 
 export function ErrorState({ error, onRetry, children }: { error: unknown; onRetry?: () => void; children?: ReactNode }) {
-  const { tr } = useApp();
+  const { tr, user } = useApp();
   const d = describeError(error);
   // Refus d'accès (cloisonnement par rôle, entité ou territoire) : information neutre, pas une panne.
   const denied = error instanceof ApiError && error.status === 403;
+  // Gouverneur, directeur de cabinet, secrétaire exécutif (29/09/2026) : ils voient tous les modules (décision du
+  // 27/09/2026) mais les dossiers restent lus par l'entité qui exploite le module — état « lecture agrégée » clair,
+  // avec le chemin vers les chiffres agrégés, au lieu d'un refus. Aucun droit élargi : le serveur a refusé la lecture.
+  if (denied && user?.roles.some((r) => ROLES_TOUS_MODULES.includes(r))) {
+    return (
+      <div className="state state-empty" role="status">
+        <Icon name="chart" size={28} />
+        <p className="state-title">Lecture agrégée</p>
+        <p className="state-body">Ce module relève de votre autorité ; ses dossiers détaillés sont lus par l’entité qui l’exploite (moindre privilège, chaque consultation est journalisée). Ses chiffres agrégés figurent dans votre poste de décision et dans les indicateurs.</p>
+        <p className="state-body"><a className="btn btn-secondary btn-sm" href="/poste-de-decision">Poste de décision</a> <a className="btn btn-ghost btn-sm" href="/pilotage/indicateurs">Indicateurs</a></p>
+        {d.code && d.code !== 'FORBIDDEN' && <p className="state-body small muted">Motif : {d.code}</p>}
+        {children}
+      </div>
+    );
+  }
   if (denied) {
     return (
       <div className="state state-empty" role="status">

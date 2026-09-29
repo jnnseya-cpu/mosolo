@@ -4,7 +4,8 @@
  * proposés avec les identités existantes (jamais de fusion automatique), cas à risque soumis à revue humaine.
  */
 import { useState, type ChangeEvent, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+// Parcours par rôle (29/09/2026) : liens adaptés au compte — un écran que le rôle n'utilise pas affiche « Réalisé par : … ».
+import { LienEcran as Link } from '../../components/LienEcran';
 import { useApp } from '../../context';
 import { PageHead } from '../../components/Shell';
 import { StatusBadge } from '../../components/StatusBadge';

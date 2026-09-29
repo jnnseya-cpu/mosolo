@@ -6,6 +6,7 @@
 import { Link } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
 import { rolesDeLEcran } from '../../components/DemoRoleSwitch';
+import { realisePar, useEcranAccessible } from '../../components/LienEcran';
 import { useApp } from '../../context';
 
 const PUBLICS = ['R30', 'R31', 'R36'];
@@ -17,7 +18,10 @@ export function ParcoursPanel({ parcours }: { parcours: ParcoursVerticale }) {
   const { user } = useApp();
   // Compte public : une étape servie par un écran d'agent est décrite (« réalisée par … »), sans lien vers l'outil.
   const publicSeul = !!user && user.roles.every((r) => PUBLICS.includes(r));
-  const accessible = (ecran: string) => { const rs = rolesDeLEcran(ecran.split('?')[0]!); return !publicSeul || !rs.length || rs.some((r) => user!.roles.includes(r)); };
+  // Parcours par rôle (29/09/2026) : règle généralisée à tous les comptes (components/LienEcran.tsx) ; la règle
+  // d'origine des comptes publics reste appliquée en premier.
+  const utilisable = useEcranAccessible();
+  const accessible = (ecran: string) => { const rs = rolesDeLEcran(ecran.split('?')[0]!); return (!publicSeul || !rs.length || rs.some((r) => user!.roles.includes(r))) && utilisable(ecran); };
   return (
     <section className="panel" aria-labelledby="vx-parcours">
       <div className="panel-head">
@@ -33,7 +37,7 @@ export function ParcoursPanel({ parcours }: { parcours: ParcoursVerticale }) {
               <p className="small muted">Modules {e.modules.join(', ')} · <span className="mono">{e.route}</span></p>
               {e.garde && <p className="small"><Icon name="scale" size={13} /> {e.garde}</p>}
             </div>
-            <div className="row-side">{accessible(e.ecran) ? <Link className="btn btn-small" to={e.ecran}>Ouvrir l’écran</Link> : <span className="small muted">Réalisé par un agent habilité</span>}</div>
+            <div className="row-side">{accessible(e.ecran) ? <Link className="btn btn-small" to={e.ecran}>Ouvrir l’écran</Link> : <span className="small muted">{publicSeul ? 'Réalisé par un agent habilité' : `Réalisé par : ${realisePar(e.ecran.split('?')[0]!)}`}</span>}</div>
           </li>
         ))}
       </ol>

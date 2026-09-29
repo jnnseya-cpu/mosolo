@@ -10,6 +10,7 @@ import { fromMinorUnits, toMinorUnits } from '../src/modules/payments/connectors
 import { ConnectorConfigError } from '../src/modules/payments/connectors/types.js';
 import { DEMO } from '../src/seed.js';
 import { callbackBody, signedCallback, type TestEnv } from './helpers.js';
+import { BITRI_ED_PUBLIC, bitriEdHeader } from './signature-ed25519-test.js';
 
 interface FetchCall { url: string; method: string; headers: Record<string, string>; body?: string }
 
@@ -65,7 +66,7 @@ function bitripayWebhook(env: TestEnv, payload: Record<string, unknown>, opts: {
   const t = opts.t ?? Math.floor(env.clock.now().getTime() / 1000);
   return env.app.inject({
     method: 'POST', url: '/v1/providers/bitripay/webhooks', payload: raw,
-    headers: { 'content-type': 'application/json', 'bitripay-signature': signBitriPayWebhook(opts.secret ?? BITRIPAY_DEMO_WEBHOOK_SECRET, raw, t), ...opts.extra },
+    headers: { 'content-type': 'application/json', 'bitripay-signature': signBitriPayWebhook(opts.secret ?? BITRIPAY_DEMO_WEBHOOK_SECRET, raw, t), 'bitripay-signature-ed25519': bitriEdHeader(raw, t), ...opts.extra },
   });
 }
 
@@ -249,7 +250,7 @@ describe('Connecteur BitriPay', () => {
   it('mode réel : POST /payment_intents avec Idempotency-Key, rejoué sur erreur 5xx avec la même clé', async () => {
     let n = 0;
     const { fetch, calls } = mockFetch(() => (++n < 3 ? { status: 503, body: {} } : { status: 200, body: { id: 'pi_1', checkout_url: 'https://pay.bitripay.com/pi_1', qr_payload: 'BTRP|pi_1', client_secret: 'x' } }));
-    const env = await setupConnectors({ BITRIPAY_API_KEY: 'sk_live_BITRISECRET99887766', BITRIPAY_WEBHOOK_SECRET: 'whsec_live' }, fetch);
+    const env = await setupConnectors({ BITRIPAY_ED25519_PUBLIC_KEY: BITRI_ED_PUBLIC, BITRIPAY_API_KEY: 'sk_live_BITRISECRET99887766', BITRIPAY_WEBHOOK_SECRET: 'whsec_live' }, fetch);
     const res = await createProviderOrder(env, 'bitripay', 'QR');
     expect(res.statusCode).toBe(201);
     expect(res.json()).toMatchObject({ providerIntentId: 'pi_1', qrPayload: 'BTRP|pi_1', sandbox: false });
@@ -265,7 +266,7 @@ describe('Configuration et pièces de dossier', () => {
     expect(() => buildApp({ connectorEnv: { BITRIPAY_SETTLEMENT_ACCOUNT_ALIAS: 'INCONNU' } })).toThrow(/coffre/);
     expect(() => buildApp({ connectorEnv: { KODA_API_KEY: 'pk_live_publishable', KODA_WEBHOOK_SECRET: 'x', KODA_SUCCESS_URL: 'https://portail.exemple/retour' } })).toThrow(/publiable/);
     expect(() => buildApp({ connectorEnv: { KODA_API_KEY: 'sk_live_abc', KODA_WEBHOOK_SECRET: 'x' } })).toThrow(/KODA_SUCCESS_URL/);
-    expect(() => buildApp({ connectorEnv: { BITRIPAY_API_KEY: 'sk_live_abc' } })).toThrow(/secret de webhook/);
+    expect(() => buildApp({ connectorEnv: { BITRIPAY_ED25519_PUBLIC_KEY: BITRI_ED_PUBLIC, BITRIPAY_API_KEY: 'sk_live_abc' } })).toThrow(/secret de webhook/);
     expect(() => buildApp({ connectorEnv: { KODA_SETTLEMENT_ACCOUNT_ALIAS: DEMO.dgtkAlias } })).not.toThrow();
   });
 
@@ -293,7 +294,7 @@ describe('BitriPay : comptes connectés, attente prestataire, résolution', () =
     const { fetch, calls } = mockFetch((c) => (c.method === 'GET'
       ? { status: 200, body: { status: 'CONFIRMED', matches: [] } }
       : { status: 200, body: { id: 'pi_9', checkout_url: 'https://pay.bitripay.com/pi_9', qr_payload: 'BTRP|pi_9' } }));
-    const env = await setupConnectors({ BITRIPAY_API_KEY: 'sk_live_INTEGRATEUR0001', BITRIPAY_WEBHOOK_SECRET: 'whsec_live', BITRIPAY_ACCOUNT_ID: ACCT }, fetch);
+    const env = await setupConnectors({ BITRIPAY_ED25519_PUBLIC_KEY: BITRI_ED_PUBLIC, BITRIPAY_API_KEY: 'sk_live_INTEGRATEUR0001', BITRIPAY_WEBHOOK_SECRET: 'whsec_live', BITRIPAY_ACCOUNT_ID: ACCT }, fetch);
     const order = (await createProviderOrder(env, 'bitripay', 'QR')).json();
     const body = JSON.parse(calls[0]!.body!);
     expect(calls[0]!.headers['bitripay-account']).toBe(ACCT);
@@ -386,7 +387,7 @@ describe('Console des prestataires et simulation du bac à sable', () => {
 
   it('simulation refusée hors bac à sable local, et à un rôle non habilité', async () => {
     const { fetch } = mockFetch(() => ({ status: 200, body: { id: 'pi_live', checkout_url: 'https://pay.bitripay.com/pi_live', qr_payload: 'BTRP|pi_live' } }));
-    const env = await setupConnectors({ BITRIPAY_API_KEY: 'sk_live_SECRET00112233', BITRIPAY_WEBHOOK_SECRET: 'whsec_live' }, fetch);
+    const env = await setupConnectors({ BITRIPAY_ED25519_PUBLIC_KEY: BITRI_ED_PUBLIC, BITRIPAY_API_KEY: 'sk_live_SECRET00112233', BITRIPAY_WEBHOOK_SECRET: 'whsec_live' }, fetch);
     const order = (await createProviderOrder(env, 'bitripay', 'QR')).json();
     const res = await env.req('POST', '/v1/providers/bitripay/sandbox-simulate', 'u-tresor', { paymentReference: order.paymentReference, event: 'succeeded' });
     expect(res.statusCode).toBe(409);

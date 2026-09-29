@@ -14,6 +14,8 @@ import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
 import { ReasonAction } from '../fiscal/common';
 import { DocumentsVisuels } from './visuels';
+// Parcours par rôle (29/09/2026) : un écran vide propose la prochaine action utile du travail du jour.
+import { SuiteDuTravail } from '../../components/SuiteDuTravail';
 
 interface Version { id: string; version: number; fileName: string; contentType: string; size: number; sha256: string; seal: string; encrypted: boolean; ocr: { source: string; chars: number; excerpt: string }; uploadedAt: string }
 export interface DocView {
@@ -219,7 +221,7 @@ export default function Documents() {
       <UploadForm onDone={reload} categories={cats.data ?? []} />
       {docs.loading && <Loading />}
       {docs.error !== null && <ErrorState error={docs.error} onRetry={reload} />}
-      {docs.data && docs.data.length === 0 && <EmptyState title="Aucune pièce." />}
+      {docs.data && docs.data.length === 0 && <EmptyState title="Aucune pièce."><SuiteDuTravail /></EmptyState>}
       <ul className="stack">{(docs.data ?? []).map((d) => <DocCard key={d.id} d={d} categories={cats.data ?? []} onChanged={reload} />)}</ul>
       {staff && <Governance onChanged={reload} />}
     </div>

@@ -17,6 +17,8 @@ import { hasRole, WRITE_OFF_STATUS, type Arrear, type WriteOff } from './types';
 import { Msg, useAction } from './actions';
 import { NonValeursVisuel } from './visuels';
 import './recouvrement.css';
+// Parcours par rôle (29/09/2026) : un écran vide propose la prochaine action utile du travail du jour.
+import { SuiteDuTravail } from '../../components/SuiteDuTravail';
 
 async function load() {
   const [writeOffs, arrears] = await Promise.all([
@@ -133,7 +135,7 @@ export default function NonValeurs() {
             ))}
           </div>
           <div className="rc-grid">
-            {list.length === 0 && <EmptyState title="Aucune admission" icon="check" />}
+            {list.length === 0 && <EmptyState title="Aucune admission" icon="check"><SuiteDuTravail /></EmptyState>}
             {list.map((w) => <WriteOffCard key={w.id} w={w} meId={user?.id} roles={roles} onDone={q.reload} />)}
           </div>
         </>

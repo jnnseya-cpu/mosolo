@@ -7,7 +7,8 @@
  * écrans publics (aucun rôle déclaré) ne sont jamais gardés ; utilisateur inconnu (hors ligne) : écran affiché.
  */
 import type { ReactNode } from 'react';
-import { ROLES } from '@mosolo/shared';
+import { ecranUsagerHorsMenu, ROLES } from '@mosolo/shared';
+import { useLocation } from 'react-router-dom';
 import { useApp } from '../context';
 import { DemoRoleSwitch } from './DemoRoleSwitch';
 import { Icon } from './Icon';
@@ -17,7 +18,10 @@ const PUBLICS = ['R30', 'R31', 'R36'];
 
 export function RouteGuard({ roles, children }: { roles?: readonly string[]; children: ReactNode }) {
   const { user } = useApp();
+  const loc = useLocation();
   if (!roles?.length || !user) return <>{children}</>;
+  // Écran proposé à l'usager depuis son espace, hors de son menu (29/09/2026, shared/src/menu.ts).
+  if (ecranUsagerHorsMenu(loc.pathname, user.roles)) return <>{children}</>;
   if (!user.roles.every((r) => PUBLICS.includes(r))) return <>{children}</>;
   if (user.roles.some((r) => roles.includes(r) || TOUS_MODULES.includes(r))) return <>{children}</>;
   const libelles = roles.map((r) => (ROLES as Record<string, string>)[r] ?? r);
