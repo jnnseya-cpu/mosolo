@@ -41,6 +41,9 @@ import {
   REPARTITION_DUREE_ANS, REPARTITION_NOMBRE_FLUX, REPARTITION_PART_AGENTS_PCT, REPARTITION_PART_GOUVERNEMENT_PCT, REPARTITION_PART_NSEYA_PCT,
   REPARTITION_PART_TUTELLE_PCT,
 } from '../../pilotage/repartition/model.js';
+import {
+  DELAI_GRACE_REGLEMENT_JOURS, POOL_AGENT_DIRECT_PCT, POOL_AGENT_SOUS_TRAITANCE_PCT, POOL_SOUS_TRAITANT_DIRECT_PCT, POOL_SOUS_TRAITANT_SOUS_TRAITANCE_PCT,
+} from '../../pilotage/repartition/moteur/model.js';
 import { ATYPICAL_CANCELLATIONS_MIN, ATYPICAL_SALES_FACTOR, ATYPICAL_SALES_MIN } from '../../rakapay/operateurs.js';
 import { PARAMETRES_SECURITE } from './parametres-securite.js';
 import { PARAMETRES_VEHICULES } from '../../vehicules-controle/parametres.js';
@@ -162,6 +165,15 @@ export const PARAMETRES_CODE: ParamDefinition[] = [
     'Position du promoteur (Cahier v2.9) : clé au statut ACTE_REQUIS, simulation seulement ; la table de taux de la règle CLE-REPARTITION-37A certifiée par acte prévaut.')),
   C('repartition.duree_ans', 'Répartition § 37A : durée du modèle à compter de la mise en service du pilote', 'Répartition des recettes (§ 37A)', REPARTITION_DUREE_ANS, 'ans', code('plugins/pilotage/repartition/model.ts', 'REPARTITION_DUREE_ANS')),
   C('repartition.nombre_flux', 'Répartition § 37A : flux de décaissement admis (tout troisième flux est rejeté)', 'Répartition des recettes (§ 37A)', REPARTITION_NOMBRE_FLUX, 'flux', code('plugins/pilotage/repartition/model.ts', 'REPARTITION_NOMBRE_FLUX')),
+  // Moteur de répartition (spécifications du 29/09/2026) : valeurs de la V1 PROPOSÉE (KIN-DEFAULT), jamais actives sans circuit.
+  ...([
+    ['moteur.pool_agent_direct_pct', 'Pool de terrain : part de l’agent rattaché directement (points de la transaction)', POOL_AGENT_DIRECT_PCT, 'POOL_AGENT_DIRECT_PCT'],
+    ['moteur.pool_sous_traitant_direct_pct', 'Pool de terrain : part du sous-traitant pour un agent direct', POOL_SOUS_TRAITANT_DIRECT_PCT, 'POOL_SOUS_TRAITANT_DIRECT_PCT'],
+    ['moteur.pool_agent_sous_traitance_pct', 'Pool de terrain : part de l’agent d’un sous-traitant (7 points de la transaction)', POOL_AGENT_SOUS_TRAITANCE_PCT, 'POOL_AGENT_SOUS_TRAITANCE_PCT'],
+    ['moteur.pool_sous_traitant_pct', 'Pool de terrain : part du sous-traitant (3 points de la transaction)', POOL_SOUS_TRAITANT_SOUS_TRAITANCE_PCT, 'POOL_SOUS_TRAITANT_SOUS_TRAITANCE_PCT'],
+  ] as const).map(([id, label, v, constant]) => C(id, label, 'Moteur de répartition (29/09/2026)', Number(v), '%', code('plugins/pilotage/repartition/moteur/model.ts', constant),
+    'Décision du maître d’ouvrage du 29/09/2026 ; portée par la version KIN-DEFAULT V1 proposée — activation par le circuit à quatre personnes après l’acte.')),
+  C('moteur.delai_grace_reglement_j', 'Moteur de répartition : délai de grâce avant qu’un droit soit « en retard »', 'Moteur de répartition (29/09/2026)', DELAI_GRACE_REGLEMENT_JOURS, 'jours', code('plugins/pilotage/repartition/moteur/model.ts', 'DELAI_GRACE_REGLEMENT_JOURS')),
   // Trésor et quatre yeux
   C('tresor.remboursement_seuil_usd', 'Remboursement : seuil d’une troisième personne (USD)', 'Trésor et quatre yeux', Number(REFUND_EXTRA_APPROVAL_THRESHOLDS.USD?.amount ?? 0), 'USD', code('plugins/tresor/service.ts', 'REFUND_EXTRA_APPROVAL_THRESHOLDS.USD')),
   C('tresor.remboursement_seuil_cdf', 'Remboursement : seuil d’une troisième personne (CDF)', 'Trésor et quatre yeux', Number(REFUND_EXTRA_APPROVAL_THRESHOLDS.CDF?.amount ?? 0), 'CDF', code('plugins/tresor/service.ts', 'REFUND_EXTRA_APPROVAL_THRESHOLDS.CDF')),

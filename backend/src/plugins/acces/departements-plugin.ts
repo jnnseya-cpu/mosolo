@@ -50,7 +50,7 @@ export const accesDepartementsPlugin = definePlugin<DepartementsService>({
     app.get('/v1/acces/contrats-partenaires', async (req) => ({ items: svc.listContracts(requireUser(req)) }));
     app.post('/v1/acces/contrats-partenaires', async (req, reply) => {
       const b = parse(z.object({
-        entity: z.string().min(2).max(40), reference: z.string().trim().min(3).max(200), roles: z.array(z.enum(['R32', 'R33', 'R34'])).min(1).max(3),
+        entity: z.string().min(2).max(40), reference: z.string().trim().min(3).max(200), roles: z.array(z.enum(['R32', 'R33', 'R34', 'R38'])).min(1).max(4),
         object: z.string().trim().min(5).max(500), validFrom: isoDateString.optional(), validTo: isoDateString.optional(),
       }).strict(), req.body);
       return reply.code(201).send(svc.proposeContract(requireUser(req), { ...b, roles: b.roles as RoleCode[] }));

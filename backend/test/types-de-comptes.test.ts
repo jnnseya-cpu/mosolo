@@ -1,5 +1,5 @@
 /**
- * Types de comptes (27/09/2026) — « tous les types de comptes sont créés » : UN TEST PAR RÔLE (R01 à R37) prouvant,
+ * Types de comptes (27/09/2026) — « tous les types de comptes sont créés » : UN TEST PAR RÔLE (R01 à R38) prouvant,
  * de bout en bout par l'API, que le compte est créé par sa voie RÉELLE (invitation → acceptation → seconde validation ;
  * inscription publique ; inscription du mandataire ; contrat de partenariat ; accréditation du sous-traitant) et que le
  * compte obtenu lit une route propre à son rôle (refusée à un compte sans rôle).
@@ -170,13 +170,14 @@ describe('Types de comptes — un test par rôle : création par la voie réelle
     expect((await env.req('GET', '/v1/acces/mandates', userId)).json().items.some((x: { mandantTaxpayerId: string }) => x.mandantTaxpayerId === DEMO.taxpayerId)).toBe(true);
   });
 
-  for (const [role, kind, url] of [['R32', 'BANQUE_PSP', '/v1/postes/travail'], ['R33', 'BANQUE_PSP', '/v1/postes/travail'], ['R34', 'PARTENAIRE', '/v1/recoupement/sources']] as [RoleCode, string, string][]) {
+  // R38 (Groupe Nseya — super-administrateur en lecture complète, décision du 29/09/2026) : même voie contractuelle.
+  for (const [role, kind, url, level] of [['R32', 'BANQUE_PSP', '/v1/postes/travail', 'OPERATEUR'], ['R33', 'BANQUE_PSP', '/v1/postes/travail', 'OPERATEUR'], ['R34', 'PARTENAIRE', '/v1/recoupement/sources', 'OPERATEUR'], ['R38', 'OPERATEUR_DELEGUE', '/v1/pilotage/moteur-repartition/tableau/groupe-nseya', 'CONSULTATION']] as [RoleCode, string, string, string][]) {
     it(`${role} (${ROLES[role]}) : contrat de partenariat enregistré à deux personnes, puis invitation dans l’entité partenaire`, async () => {
       const entity = `PART-TEST-${role}`;
       await mfa('u-superadmin');
       expect((await env.req('POST', '/v1/acces/entities', 'u-superadmin', { id: entity, name: `Partenaire ${role} (test)`, shortName: `Part. ${role}`, kind, parentId: null, decisionRef: 'Décision FICTIVE CP-TEST' })).statusCode).toBe(201);
       // Sans contrat : invitation refusée.
-      const refused = await env.req('POST', '/v1/acces/invitations', 'u-superadmin', { fullName: 'Sans contrat', phone: nextPhone(), entity, accessLevel: 'OPERATEUR', roles: [role], motif: 'Tentative sans contrat (test)' });
+      const refused = await env.req('POST', '/v1/acces/invitations', 'u-superadmin', { fullName: 'Sans contrat', phone: nextPhone(), entity, accessLevel: level, roles: [role], motif: 'Tentative sans contrat (test)' });
       expect(refused.json().code).toBe('PARTNER_CONTRACT_REQUIRED');
       const c = await env.req('POST', '/v1/acces/contrats-partenaires', 'u-superadmin', { entity, reference: `CONV-FICTIVE-${role}`, roles: [role], object: 'Convention de partenariat fictive (test)' });
       expect(c.statusCode).toBe(201);
@@ -188,7 +189,7 @@ describe('Types de comptes — un test par rôle : création par la voie réelle
       await mfa('u-dircab');
       const d = await env.req('POST', `/v1/acces/contrats-partenaires/${c.json().id}/decision`, 'u-dircab', { approve: true, note: 'Convention signée (test)' });
       expect(d.json().status).toBe('ACTIF');
-      const id = await inviteAndActivate(role, entity, 'OPERATEUR');
+      const id = await inviteAndActivate(role, entity, level);
       await canRead(id, url);
     });
   }
@@ -211,13 +212,13 @@ describe('Types de comptes — un test par rôle : création par la voie réelle
     expect((await env.req('GET', `/v1/terrain/subcontractors/${subcontractor.id}`, managerUserId)).statusCode).toBe(200);
   });
 
-  it('couverture : les 37 rôles ont un parcours testé ci-dessus et au moins un compte de démonstration [EXEMPLE]', async () => {
-    const tested = new Set<string>([...INVITATION_PLAN.map(([r]) => r), 'R30', 'R31', 'R32', 'R33', 'R34', 'R35']);
+  it('couverture : les 38 rôles (R38 ajouté le 29/09/2026) ont un parcours testé ci-dessus et au moins un compte de démonstration [EXEMPLE]', async () => {
+    const tested = new Set<string>([...INVITATION_PLAN.map(([r]) => r), 'R30', 'R31', 'R32', 'R33', 'R34', 'R35', 'R38']);
     expect([...tested].sort()).toEqual(Object.keys(ROLES).sort());
     const demo = (await env.req('GET', '/v1/demo/users')).json() as { roles: string[] }[];
     for (const r of Object.keys(ROLES)) expect(demo.some((u) => u.roles.includes(r)), `utilisateur de démonstration ${r}`).toBe(true);
     const types = (await env.req('GET', '/v1/acces/types-de-comptes', 'u-superadmin')).json();
-    expect(types.types).toHaveLength(37);
+    expect(types.types).toHaveLength(38);
     expect(types.families).toHaveLength(10);
     for (const t of types.types) {
       expect(t.exemples.length, `exemple ${t.code}`).toBeGreaterThan(0);

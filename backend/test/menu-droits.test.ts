@@ -120,6 +120,7 @@ const LECTURES: Record<string, string[]> = {
   '/pilotage/recette': ['/v1/pilotage/programme/recette'],
   '/pilotage/reductions': ['/v1/pilotage/reductions'],
   '/pilotage/repartition': ['/v1/pilotage/repartition', '/v1/pilotage/repartition/cle'],
+  '/pilotage/moteur-repartition': ['/v1/pilotage/moteur-repartition/tableau/executif', '/v1/pilotage/moteur-repartition/tableau/entite', '/v1/pilotage/moteur-repartition/tableau/groupe-nseya', '/v1/pilotage/moteur-repartition/tableau/sous-traitant', '/v1/pilotage/moteur-repartition/tableau/agent', '/v1/pilotage/moteur-repartition/regles'],
   '/pilotage/risques': ['/v1/pilotage/programme/risques'],
   '/pilotage/scenarios': ['/v1/pilotage/scenarios', '/v1/pilotage/scenarios/hypotheses', '/v1/pilotage/scenarios/exemple-illustratif'],
   '/pilotage/tableaux': ['/v1/pilotage/tableaux', '/v1/pilotage/base-reference', '/v1/pilotage/ranv', '/v1/pilotage/instructions'],

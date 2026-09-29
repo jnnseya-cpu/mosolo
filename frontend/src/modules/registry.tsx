@@ -175,6 +175,13 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/pilotage/tableaux', element: lazy(() => import('./pilotage/Tableaux')), nav: { label: 'Tableaux par profil', short: 'Tableaux', icon: 'grid', group: 'pilotage', roles: DASH } },
   { path: '/pilotage/indicateurs', element: lazy(() => import('./pilotage/Indicateurs')), nav: { label: 'Indicateurs', short: 'KPI', icon: 'gauge', group: 'pilotage', roles: DASH } },
   { path: '/pilotage/repartition', element: lazy(() => import('./pilotage/Repartition')), nav: { label: 'Répartition des recettes (§ 37A)', short: 'Répartition', icon: 'scale', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R05', 'R15', 'R16', 'R17', 'R18', 'R22', 'R23', 'R24'] } },
+  // Moteur de répartition et droits (spécifications du 29/09/2026), par-dessus la répartition du § 37A ; écrans de la
+  // spécification v1.0 (§ 15, § 21, § 22, § 24) servis par le même écran (onglet présélectionné), droits côté serveur.
+  { path: '/pilotage/moteur-repartition', element: lazy(() => import('./pilotage/MoteurRepartition')), nav: { label: 'Répartition et droits (moteur)', short: 'Droits', icon: 'scale', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R08', 'R10', 'R14', 'R15', 'R16', 'R17', 'R18', 'R19', 'R22', 'R23', 'R26', 'R27', 'R35', 'R38'] } },
+  { path: '/platform-admin/finance/allocation-rules', element: lazy(() => import('./pilotage/MoteurRepartition')) },
+  { path: '/executive/finance', element: lazy(() => import('./pilotage/MoteurRepartition')) },
+  { path: '/groupe-nseya/command-centre', element: lazy(() => import('./pilotage/MoteurRepartition')) },
+  { path: '/subcontractor/finance', element: lazy(() => import('./pilotage/MoteurRepartition')) },
   { path: '/pilotage/reductions', element: lazy(() => import('./pilotage/Reductions')), nav: { label: 'Réductions de recettes', short: 'Réductions', icon: 'analysis', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R22', 'R23', 'R24'] } },
   // Opportunités de recettes (Cahier v2.9 § 8) : registre et pipeline, recoupement sous protocole, maximisation et leviers.
   { path: '/opportunites', element: lazy(() => import('./opportunites/Registre')), nav: { label: 'Opportunités de recettes', short: 'Opportunités', icon: 'star', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R09', 'R11', 'R13', 'R14', 'R15', 'R22', 'R23', 'R24', 'R25'] } },

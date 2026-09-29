@@ -183,7 +183,7 @@ export class DepartementsService {
     const ent = this.svc.entity(input.entity);
     if (ent.status !== 'ACTIVE') throw unprocessable('ENTITY_SUSPENDED', 'Entité suspendue.');
     const roles = [...new Set(input.roles)];
-    if (!roles.length || roles.some((r) => !ROLES_CONTRAT_PARTENAIRE.includes(r))) throw badRequest('ROLES_INVALID', 'Un contrat de partenariat couvre les rôles R32, R33 ou R34 uniquement.');
+    if (!roles.length || roles.some((r) => !ROLES_CONTRAT_PARTENAIRE.includes(r))) throw badRequest('ROLES_INVALID', 'Un contrat de partenariat couvre les rôles R32, R33, R34 ou R38 (Groupe Nseya) uniquement.');
     const validFrom = input.validFrom ?? this.today();
     if (input.validTo && input.validTo <= validFrom) throw unprocessable('BAD_PERIOD', 'La fin du contrat suit son début.');
     if (this.svc.partnerContracts.findOne((c) => c.entity === input.entity && c.status === 'PROPOSE')) throw conflict('CONTRACT_PENDING', 'Un contrat attend déjà sa seconde validation pour cette entité.');

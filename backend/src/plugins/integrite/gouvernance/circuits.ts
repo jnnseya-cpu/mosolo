@@ -141,6 +141,43 @@ export const CIRCUITS: Circuit[] = [
     proposals: ['repartition.key.activation_proposed'], approvals: ['repartition.key.activated'], refusals: ['repartition.key.activation_rejected'],
     guard: { url: '/v1/pilotage/repartition/cles/:id/activation/decision', key: (p) => p.id!, refusal: approveFalse },
   },
+  // Moteur de répartition (spécifications du 29/09/2026) : matrice versionnée KIN-DEFAULT à quatre personnes distinctes
+  // (rédaction → vérification → approbation → activation), compte de règlement principal, demandes de règlement, coûts.
+  {
+    code: 'MOTEUR_REGLE_VERIFICATION', label: 'Règle de répartition versionnée : vérification (maker → checker)',
+    proposals: ['moteur.regle.proposee'], approvals: ['moteur.regle.verifiee'], refusals: ['moteur.regle.rejetee_verification'],
+    guard: { url: '/v1/pilotage/moteur-repartition/regles/:id/verification', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'MOTEUR_REGLE_APPROBATION', label: 'Règle de répartition versionnée : approbation (checker → approver)',
+    proposals: ['moteur.regle.transmise_approbation'], approvals: ['moteur.regle.approuvee'], refusals: ['moteur.regle.rejetee_approbation'],
+    guard: { url: '/v1/pilotage/moteur-repartition/regles/:id/approbation', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'MOTEUR_REGLE_ACTIVATION', label: 'Règle de répartition versionnée : activation (approver → activation)',
+    proposals: ['moteur.regle.transmise_activation'], approvals: ['moteur.regle.activee'], refusals: ['moteur.regle.rejetee_activation'],
+    guard: { url: '/v1/pilotage/moteur-repartition/regles/:id/activation', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'MOTEUR_COMPTE_REGLEMENT', label: 'Compte de règlement principal du Gouvernement (Trésor → coffre → Gouverneur)',
+    proposals: ['moteur.compte_reglement.propose'], approvals: ['moteur.compte_reglement.autorise'], refusals: ['moteur.compte_reglement.rejete'],
+    guard: { url: '/v1/pilotage/moteur-repartition/comptes-reglement/:id/autorisation', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'MOTEUR_DEMANDE_REGLEMENT', label: 'Demande de règlement d’un droit (examen → approbation du Gouvernement)',
+    proposals: ['moteur.reglement.en_examen'], approvals: ['moteur.reglement.approuve'], refusals: ['moteur.reglement.rejete'],
+    guard: { url: '/v1/pilotage/moteur-repartition/demandes/:id/approbation', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'MOTEUR_COUT_TECHNOLOGIQUE', label: 'Coût technologique saisi puis vérifié (§ 25)',
+    proposals: ['moteur.couts.propose'], approvals: ['moteur.couts.verifie'], refusals: ['moteur.couts.rejete'],
+    guard: { url: '/v1/pilotage/moteur-repartition/couts/:id/verification', key: (p) => p.id!, refusal: approveFalse },
+  },
+  {
+    code: 'MOTEUR_AFFECTATION_AGENT', label: 'Affectation d’un agent (direct ou sous-traitant) proposée puis confirmée',
+    proposals: ['moteur.agent.fiche_proposee'], approvals: ['moteur.agent.fiche_confirmee'], refusals: ['moteur.agent.fiche_rejetee'],
+    guard: { url: '/v1/pilotage/moteur-repartition/agents/affectations/:id/confirmation', key: (p) => p.id!, refusal: approveFalse },
+  },
   {
     // Module 67 : reprise des points fictifs ou frauduleux de la réserve des agents (contrôle qualité → régie).
     code: 'RESERVE_REPRISE_POINTS', label: 'Reprise de points de la réserve des agents (§ 37A.5)',
