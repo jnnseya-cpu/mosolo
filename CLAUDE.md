@@ -72,6 +72,7 @@ données de démonstration.
   transaction), sans pouvoir supprimer ni réécrire l'historique ; toute consultation de données personnelles
   individuelles reste journalisée avec motif (critère C42-05). **Ministre des Finances** : visibilité financière
   complète sur ce moteur. Historique immuable : corrections par contrepassation puis écriture corrigée.
-  À arbitrer : l'encaissement d'espèces « enregistré par l'agent » (§ 13 de la spécification) contredit le principe
-  « les agents de terrain ne reçoivent jamais d'espèces » — espèces limitées aux points agréés et guichets bancaires
-  tant que le maître d'ouvrage n'a pas tranché.
+  **Tranché le 29/09/2026 : aucune espèce pour les agents.** Le § 13 de la spécification (« l'agent enregistre
+  l'encaissement d'espèces ») ne s'applique pas aux agents de terrain : les espèces ne sont reçues qu'aux points de
+  paiement agréés et aux guichets bancaires (déclaration, vérification, dépôt, appariement, rapprochement), puis
+  réparties par le même moteur.
