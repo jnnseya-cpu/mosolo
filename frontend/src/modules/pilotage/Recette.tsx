@@ -3,7 +3,7 @@
  * critère et chaque récit renvoie au test automatisé qui le prouve (fichier et titre) ; ce qui exige le monde réel
  * (recette avec agents réels, test d'intrusion par un tiers, charge sur l'infrastructure cible…) est suivi par statut.
  */
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
 import { PageHead } from '../../components/Shell';
@@ -35,6 +35,20 @@ export function VisuelsRecette({ d }: { d: RecetteData }) {
         <StatusDistribution title="Critères reliés à un test" unitLabel="critères" items={[{ key: 'ok', label: 'Prouvé par un test', tone: 'good', count: prouves }, { key: 'ko', label: 'Sans preuve', tone: 'critical', count: d.criteres.length - prouves }]} />
       </Visuels>
     </>
+  );
+}
+
+/**
+ * Preuves techniques repliées (29/09/2026) : le lecteur voit d'abord le nombre de tests qui prouvent le point ; les
+ * fichiers et titres de test (données brutes destinées aux équipes techniques et aux auditeurs) restent à un clic.
+ */
+function Preuves({ items, extra }: { items: Parameters<typeof preuveTexte>[0][]; extra?: ReactNode }) {
+  if (!items.length && !extra) return <span className="small muted">—</span>;
+  return (
+    <details className="small">
+      <summary>{items.length ? `${items.length} test${items.length > 1 ? 's' : ''} automatisé${items.length > 1 ? 's' : ''}` : 'Suivis'} — voir le détail technique</summary>
+      <ul className="small">{items.map((p) => <li key={preuveTexte(p)}><code>{preuveTexte(p)}</code></li>)}{extra}</ul>
+    </details>
   );
 }
 
@@ -70,21 +84,21 @@ export function RecetteView({ d, onDone }: { d: RecetteData; onDone: () => void 
         <DataTable caption="Recette — critères d’acceptation" rows={d.criteres} rowKey={(c) => c.code} columns={[
           { key: 'c', label: 'Critère', primary: true, render: (c) => <><strong>{c.code}</strong> {c.critere}{c.obligatoire && <span className="small muted" style={{ display: 'block' }}>Exigé : {c.obligatoire}</span>}{c.origine && <span className="small muted" style={{ display: 'block' }}>{c.origine}</span>}</> },
           { key: 's', label: 'État de la preuve', render: (c) => (c.preuves.some((p) => p.statut === 'PENDING_MERGE') ? <StatusBadge tone="warning" label="Preuve : lot postes de décision (à relier à la fusion)" /> : <StatusBadge tone="good" label="Prouvé par test automatisé" />) },
-          { key: 'p', label: 'Tests qui le prouvent', full: true, render: (c) => <ul className="small">{c.preuves.map((p) => <li key={preuveTexte(p)}><code>{preuveTexte(p)}</code></li>)}</ul> },
+          { key: 'p', label: 'Tests qui le prouvent', full: true, render: (c) => <Preuves items={c.preuves} /> },
         ]} />
       </Section>
-      <Section title={`Carnet de développement (${d.recits.length} récits)`} sub="Un test de bout en bout par récit (backend/test/carnet-recits.test.ts)">
+      <Section title={`Carnet de développement (${d.recits.length} récits)`} sub="Un test de bout en bout par récit (détail technique à un clic)">
         <DataTable caption="Récits utilisateurs et critères" rows={d.recits} rowKey={(r) => r.code} columns={[
           { key: 'r', label: 'Récit', primary: true, render: (r) => <><strong>{r.code}</strong> {r.recit}</> },
           { key: 'c', label: 'Critères d’acceptation', render: (r) => <span className="small">{r.criteres}</span> },
-          { key: 'p', label: 'Preuve', full: true, render: (r) => <><ul className="small">{r.preuves.map((p) => <li key={preuveTexte(p)}><code>{preuveTexte(p)}</code></li>)}</ul>{r.construitIci && <span className="small muted">Complété : {r.construitIci}</span>}</> },
+          { key: 'p', label: 'Preuve', full: true, render: (r) => <><Preuves items={r.preuves} />{r.construitIci && <span className="small muted">Complété : {r.construitIci}</span>}</> },
         ]} />
       </Section>
       <Section title="Stratégie de tests (ch. 45)" sub={d.regle}>
         <DataTable caption="Stratégie de tests" rows={d.strategie} rowKey={(p) => p.code} columns={[
           { key: 'p', label: 'Point', primary: true, render: (p) => <><strong>{p.code}</strong> {p.point}<span className="small muted" style={{ display: 'block' }}>{p.note}</span></> },
           { key: 's', label: 'Statut', render: (p) => <StatusBadge tone={p.statut === 'CONSTRUIT' ? 'good' : p.statut === 'PARTIEL' ? 'warning' : 'info'} label={p.statut === 'CONSTRUIT' ? 'Construit et testé' : p.statut === 'PARTIEL' ? 'Construit ; exécution réelle suivie' : 'Monde réel — suivi'} /> },
-          { key: 'e', label: 'Preuves et suivis', full: true, render: (p) => <ul className="small">{p.preuves.map((x) => <li key={preuveTexte(x)}><code>{preuveTexte(x)}</code></li>)}{p.suivis.map((s) => <li key={s.code}>Suivi {s.code} : {s.etatLibelle}</li>)}</ul> },
+          { key: 'e', label: 'Preuves et suivis', full: true, render: (p) => <><Preuves items={p.preuves} extra={p.suivis.map((s) => <li key={s.code}>Suivi {s.code} : {s.etatLibelle}</li>)} />{p.suivis.map((s) => <span key={s.code} className="small muted" style={{ display: 'block' }}>Suivi : {s.etatLibelle}</span>)}</> },
         ]} />
       </Section>
       <Section title="Suivis du monde réel" sub="Jamais simulés : état, échéance et preuve enregistrés par une personne habilitée">

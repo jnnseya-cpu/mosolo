@@ -1238,3 +1238,6 @@ clic, jamais par le menu). Ajout, rien de retiré :
   indicateurs, graphiques, filtres par domaine) reste accessible en un clic. Les autres rôles voient le catalogue
   complet, inchangé. Sélection **par défaut — à confirmer par le maître d'ouvrage** (`SYNTHESE_AUTORITES`).
 - Droits, API et calculs inchangés. Test : `frontend/test/indicateurs-synthese.test.tsx`.
+- **Recette — critères d'acceptation** (`/pilotage/recette`, 29/09/2026) : les fichiers et titres de test (données
+  brutes destinées aux équipes techniques et aux auditeurs) sont repliés sous « N tests automatisés — voir le détail
+  technique » ; synthèse, graphiques, états et suivis inchangés et visibles d'abord. Aucun contenu retiré.
