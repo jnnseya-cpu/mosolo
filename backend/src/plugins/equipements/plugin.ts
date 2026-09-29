@@ -36,11 +36,12 @@ export const equipementsPlugin = definePlugin<EquipementService>({
     }
     type P = { Params: { id: string } };
     app.get('/v1/equipements', async (req) => svc.view(requireUser(req)));
-    app.post('/v1/equipements/terminaux', async (req, reply) => reply.code(201).send(svc.enroll(requireUser(req), parse(z.object({ deviceId: z.string().regex(/^[a-z0-9-]{3,60}$/), userId: z.string().max(80), policyCode: z.string().max(40).optional(), model: z.string().trim().min(2).max(80), os: z.string().trim().min(2).max(80) }).strict(), req.body))));
+    app.post('/v1/equipements/terminaux', async (req, reply) => reply.code(201).send(svc.enroll(requireUser(req), parse(z.object({ deviceId: z.string().regex(/^[a-z0-9-]{3,60}$/), userId: z.string().max(80), policyCode: z.string().max(40).optional(), model: z.string().trim().min(2).max(80), os: z.string().trim().min(2).max(80), ownership: z.enum(['PERSONNEL', 'PROVINCE']).optional() }).strict(), req.body))));
     app.post<P>('/v1/equipements/terminaux/:id/attestation/defi', async (req) => svc.challenge(requireUser(req), req.params.id));
     app.post<P>('/v1/equipements/terminaux/:id/attestation', async (req) => svc.attest(requireUser(req), req.params.id, parse(z.object({ nonce: z.string().max(100), signature: z.string().regex(/^[0-9a-fA-F]{64}$/) }).strict(), req.body)));
     // Signalement signé : x-device-signature = HMAC-SHA256(clé du terminal, corps brut), comme les lots de synchronisation.
     app.post<P>('/v1/equipements/terminaux/:id/signalement', async (req) => svc.checkIn(requireUser(req), req.params.id, req.rawBody ?? '', header(req, 'x-device-signature'), parse(report, req.body)));
+    app.post<P>('/v1/equipements/terminaux/:id/charte', async (req) => svc.acceptCharte(requireUser(req), req.params.id, parse(z.object({ version: z.string().max(10) }).strict(), req.body).version));
     app.post<P>('/v1/equipements/terminaux/:id/effacement', async (req) => svc.wipe(requireUser(req), req.params.id, parse(z.object({ motif }).strict(), req.body).motif));
     app.post<P>('/v1/equipements/terminaux/:id/revocation', async (req) => svc.revoke(requireUser(req), req.params.id, parse(z.object({ motif }).strict(), req.body).motif));
     app.post<P>('/v1/equipements/terminaux/:id/perte', async (req) => svc.revoke(requireUser(req), req.params.id, parse(z.object({ motif }).strict(), req.body).motif, true));

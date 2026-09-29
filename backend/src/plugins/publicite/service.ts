@@ -536,7 +536,7 @@ export class PubliciteService {
       actor: actorOf(user), action: input.outcome === 'ACCORDEE' ? 'publicite.authorization.granted' : 'publicite.authorization.refused', resourceType: 'ad_authorization', resourceId: r.id,
       details: { reason: input.reason, liquidation: updated.liquidation ?? null },
     });
-    this.ctx.comms.publish(input.outcome === 'ACCORDEE' ? 'permit.issued' : 'permit.refused', [taxpayerRecipient(this.ctx.taxpayers.get(r.taxpayerId))], { reference: r.reference }, { entity: DGTK });
+    this.ctx.comms.publish(input.outcome === 'ACCORDEE' ? 'permit.issued' : 'permit.refused', [taxpayerRecipient(this.ctx.taxpayers.get(r.taxpayerId))], { reference: r.reference, ...(input.outcome === 'ACCORDEE' && r.periodTo ? { validUntil: r.periodTo } : {}) }, { entity: DGTK });
     return this.requestView(updated);
   }
 
@@ -593,7 +593,7 @@ export class PubliciteService {
     const at = this.now().toISOString();
     const updated = this.requests.update({ ...r, liquidation, history: [...r.history, { at, by: user.id, action: 'LIQUIDATION_APPROUVEE', note: reason }] });
     this.ctx.audit.append({ actor: actorOf(user), action: 'publicite.liquidation.approved', resourceType: 'ad_authorization', resourceId: r.id, details: { reason, liquidation, proposedBy: r.liquidationProposal.by } });
-    if (liquidation.obligationId) this.ctx.comms.publish('permit.issued', [taxpayerRecipient(this.ctx.taxpayers.get(r.taxpayerId))], { reference: r.reference }, { entity: DGTK });
+    if (liquidation.obligationId) this.ctx.comms.publish('permit.issued', [taxpayerRecipient(this.ctx.taxpayers.get(r.taxpayerId))], { reference: r.reference, validUntil: r.periodTo }, { entity: DGTK });
     return this.requestView(updated);
   }
 

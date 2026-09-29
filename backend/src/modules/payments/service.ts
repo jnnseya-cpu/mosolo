@@ -2,7 +2,7 @@
  * Orchestrateur de paiement (D5, ch. 18) : MOSOLO émet des références et reçoit des confirmations signées ;
  * il ne détient jamais les fonds. Le compte bénéficiaire est un ALIAS résolu dans le coffre.
  */
-import { AmountPrecisionError, Money, PRIMARY_CURRENCY, UNATTRIBUTED_COMMUNE, canTransition, type CurrencyCode, type MoneyJSON, type PaymentStatus, type TerritorialAttribution } from '@mosolo/shared';
+import { AmountPrecisionError, formatMoney, Money, PRIMARY_CURRENCY, UNATTRIBUTED_COMMUNE, canTransition, type CurrencyCode, type MoneyJSON, type PaymentStatus, type TerritorialAttribution } from '@mosolo/shared';
 import { z } from 'zod';
 import type { AuditActor, AuditLog } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
@@ -530,7 +530,7 @@ export class PaymentService {
         ...(order.providerIntentId ? { provider: order.provider, providerIntentId: order.providerIntentId, providerSandbox: order.providerSandbox } : {}),
       },
     });
-    this.comms.publish('payment.reference.issued', [taxpayerRecipient(this.taxpayers.get(order.taxpayerId))], { reference: order.paymentReference }, { entity });
+    this.comms.publish('payment.reference.issued', [taxpayerRecipient(this.taxpayers.get(order.taxpayerId))], { reference: order.paymentReference, montant: formatMoney(order.amount, { style: 'plain' }) }, { entity });
     return order;
   }
 
@@ -901,7 +901,7 @@ export class PaymentService {
       timestampInWindow: checks.timestampInWindow,
     });
     this.audit.append({ actor, action: 'payment.confirmed', resourceType: 'payment_order', resourceId: order.id, details: { providerTxnId: n.providerTxnId, receipt: receipt.number, confirmationMethod: n.confirmationMethod } });
-    const vars = { reference: order.paymentReference };
+    const vars = { reference: order.paymentReference, montant: formatMoney(order.amount, { style: 'plain' }), channel: confirmed.channel };
     this.comms.publish('payment.confirmed', [taxpayerRecipient(tp)], vars, { entity: obligation.entity });
     // Module 6 : quittance par SMS — numéro de quittance et code de vérification (vérifiable par le code court USSD).
     this.comms.publish('receipt.issued_provisional', [taxpayerRecipient(tp)], { reference: receipt.number, numero: receipt.number, code: receipt.code }, { entity: obligation.entity });

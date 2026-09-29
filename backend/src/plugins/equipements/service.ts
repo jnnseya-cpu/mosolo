@@ -14,6 +14,13 @@
  *    incident et alerte ; levée décidée par une personne ;
  *  - indicateurs : terminaux actifs ; incidents ; révocations.
  * Suivi des résultats, pas surveillance intrusive : aucune position ni aucun usage personnel n'est collecté.
+ *
+ * TÉLÉPHONE PERSONNEL (ajout du 29/09/2026 — les agents utilisent leur propre téléphone Android ou iOS avec les
+ * applications MOSOLO) : mode par défaut à l'enrôlement. Politique TERRAIN-PERSONNEL au périmètre APPLICATION : profil
+ * professionnel Android / inscription utilisateur iOS (User Enrollment) ; exigences limitées au verrouillage d'écran, au
+ * chiffrement et à la version minimale du système ; tout effacement (révocation, perte, départ) ne vise QUE les données
+ * de l'application MOSOLO, jamais le téléphone ; charte d'usage acceptée par l'agent et journalisée. Le mode
+ * « terminal de la Province » (politique TERRAIN-STANDARD, périmètre APPAREIL) reste disponible, inchangé.
  */
 import type { AppContext } from '../../context.js';
 import { actorOf } from '../../core/audit.js';
@@ -37,6 +44,8 @@ export interface DevicePolicy {
   sideloadingAllowed: boolean;
   /** Empreintes SHA-256 des signatures des applications officielles admises. */
   approvedAppSignatures: string[];
+  /** Périmètre de gestion : APPAREIL (terminal de la Province) ou APPLICATION (téléphone personnel). Défaut : APPAREIL. */
+  scope?: 'APPAREIL' | 'APPLICATION';
   status: 'PAR_DEFAUT' | 'CONFIRMEE';
   createdBy: string;
   createdAt: string;
@@ -55,7 +64,7 @@ export interface IntegrityReport {
   acknowledgedCommands?: string[];
 }
 
-export interface DeviceCommand { id: string; kind: 'EFFACEMENT' | 'PURGE_DONNEES' | 'POLITIQUE'; at: string; by: string; motif: string; status: 'EN_ATTENTE' | 'EFFECTUE'; ackAt?: string; mdmRef?: string }
+export interface DeviceCommand { id: string; kind: 'EFFACEMENT' | 'PURGE_DONNEES' | 'POLITIQUE'; at: string; by: string; motif: string; status: 'EN_ATTENTE' | 'EFFECTUE'; ackAt?: string; mdmRef?: string; /** Effacement : APPLICATION (données MOSOLO seulement) ou APPAREIL (terminal de la Province). */ perimetre?: 'APPLICATION' | 'APPAREIL' }
 export interface DeviceIncident { id: string; at: string; kind: 'APPAREIL_MODIFIE' | 'SYNC_EN_QUARANTAINE' | 'PERTE_DECLAREE' | 'SIGNATURE_INVALIDE'; detail: string }
 export interface Equipment {
   id: string;
@@ -65,6 +74,10 @@ export interface Equipment {
   model: string;
   os: string;
   mdm: { adapter: string; ref: string };
+  /** Propriété du terminal : PERSONNEL (téléphone de l'agent, défaut) ou PROVINCE. */
+  ownership?: 'PERSONNEL' | 'PROVINCE';
+  /** Charte d'usage du téléphone personnel acceptée par l'agent. */
+  charte?: { version: string; acceptedAt: string };
   enrolledAt: string;
   enrolledBy: string;
   binding: { status: 'A_ATTESTER' | 'ATTESTEE'; challenge?: { nonce: string; expiresAt: string }; attestedAt?: string };
@@ -82,7 +95,7 @@ export interface MdmAdapter {
   readonly name: string;
   readonly external: boolean;
   enroll(deviceId: string, policy: DevicePolicy): string;
-  push(deviceId: string, command: 'EFFACEMENT' | 'PURGE_DONNEES' | 'POLITIQUE'): string;
+  push(deviceId: string, command: 'EFFACEMENT' | 'PURGE_DONNEES' | 'POLITIQUE', perimetre?: 'APPLICATION' | 'APPAREIL'): string;
 }
 export class SandboxMdmAdapter implements MdmAdapter {
   readonly name = 'MDM bac à sable (intégré)';
@@ -90,8 +103,20 @@ export class SandboxMdmAdapter implements MdmAdapter {
   readonly log: { at: number; deviceId: string; op: string }[] = [];
   private n = 0;
   enroll(deviceId: string): string { this.log.push({ at: Date.now(), deviceId, op: 'ENROLEMENT' }); return `sandbox-mdm-${deviceId}`; }
-  push(deviceId: string, command: string): string { this.n++; this.log.push({ at: Date.now(), deviceId, op: command }); return `sandbox-cmd-${this.n}`; }
+  push(deviceId: string, command: string, perimetre?: string): string { this.n++; this.log.push({ at: Date.now(), deviceId, op: perimetre ? `${command}:${perimetre}` : command }); return `sandbox-cmd-${this.n}`; }
 }
+
+/** Charte d'usage du téléphone personnel (version 1) — texte PAR DÉFAUT, à confirmer par le maître d'ouvrage. */
+export const CHARTE_TELEPHONE_PERSONNEL = {
+  version: '1',
+  texte: [
+    'Votre téléphone reste le vôtre : la Province ne voit ni vos photos, ni vos messages, ni vos applications, ni votre position en dehors des constats que vous enregistrez.',
+    'Seule l’application MOSOLO est gérée (profil professionnel Android ou inscription utilisateur iOS). Exigences : verrouillage d’écran, stockage chiffré, système à jour au minimum demandé.',
+    'En cas de perte, de vol, de suspension ou de départ, seules les données de l’application MOSOLO sont effacées à distance ; le reste du téléphone n’est jamais touché.',
+    'Les données de travail en cache expirent automatiquement après la durée fixée par la politique si le téléphone ne se connecte plus.',
+    'Aucun encaissement d’espèces : l’application ne permet que le paiement numérique vers le compte public.',
+  ],
+} as const;
 
 export class EquipementService {
   readonly policies = new InMemoryRepository<DevicePolicy>();
@@ -103,6 +128,11 @@ export class EquipementService {
     this.policies.insert({
       id: 'TERRAIN-STANDARD@1', code: 'TERRAIN-STANDARD', version: 1, label: 'Terminal d’agent de terrain (politique standard)', screenLockMinutes: 5, minOsVersion: 10,
       offlineDataTtlDays: 7, encryptionRequired: true, sideloadingAllowed: false, approvedAppSignatures: [DEMO_APP_SIGNATURE], status: 'PAR_DEFAUT', createdBy: 'systeme', createdAt: at,
+    });
+    // Téléphone personnel de l'agent (29/09/2026) : périmètre APPLICATION — valeurs PAR DÉFAUT, à confirmer.
+    this.policies.insert({
+      id: 'TERRAIN-PERSONNEL@1', code: 'TERRAIN-PERSONNEL', version: 1, label: 'Téléphone personnel de l’agent (application MOSOLO seulement)', screenLockMinutes: 5, minOsVersion: 10,
+      offlineDataTtlDays: 7, encryptionRequired: true, sideloadingAllowed: false, approvedAppSignatures: [DEMO_APP_SIGNATURE], scope: 'APPLICATION', status: 'PAR_DEFAUT', createdBy: 'systeme', createdAt: at,
     });
     // Synchronisation refusée depuis un terminal en quarantaine (données conservées, rien n'est effacé).
     ctx.field.syncGuards.push((device) => {
@@ -119,7 +149,7 @@ export class EquipementService {
       if (e && e.state !== 'REVOQUE') this.markRevoked(e, 'mdm', String(r.details.reason ?? 'Révocation'));
       else if (!e) {
         const d = ctx.field.devices.get(r.resourceId);
-        if (d) this.equipments.insert({ ...this.blank(d.id, d.agentUserId, 'socle', d.enrolledAt), state: 'REVOQUE', revokedAt: this.now(), commands: [this.command(d.id, 'EFFACEMENT', 'mdm', String(r.details.reason ?? 'Révocation'))] });
+        if (d) { const b = this.blank(d.id, d.agentUserId, 'socle', d.enrolledAt); this.equipments.insert({ ...b, state: 'REVOQUE', revokedAt: this.now(), commands: [this.command(d.id, 'EFFACEMENT', 'mdm', String(r.details.reason ?? 'Révocation'), this.perimetre(b))] }); }
       }
     });
   }
@@ -137,8 +167,16 @@ export class EquipementService {
     return { id, userId, policyCode: p.code, policyVersion: p.version, model: 'non déclaré', os: 'non déclaré', mdm: { adapter: this.mdm.name, ref: this.mdm.enroll(id, p) }, enrolledAt: enrolledAt ?? this.now(), enrolledBy: by, binding: { status: 'A_ATTESTER' }, state: 'ACTIF', commands: [], incidents: [] };
   }
 
-  private command(deviceId: string, kind: DeviceCommand['kind'], by: string, motif: string): DeviceCommand {
-    return { id: this.ids.next('CMD'), kind, at: this.now(), by, motif, status: 'EN_ATTENTE', mdmRef: this.mdm.push(deviceId, kind) };
+  private command(deviceId: string, kind: DeviceCommand['kind'], by: string, motif: string, perimetre?: DeviceCommand['perimetre']): DeviceCommand {
+    return { id: this.ids.next('CMD'), kind, at: this.now(), by, motif, status: 'EN_ATTENTE', mdmRef: this.mdm.push(deviceId, kind, perimetre), ...(perimetre ? { perimetre } : {}) };
+  }
+
+  /**
+   * Périmètre d'un effacement : APPAREIL seulement pour un terminal déclaré propriété de la Province ; sinon (téléphone
+   * personnel, ou propriété non déclarée) APPLICATION — jamais d'effacement du téléphone d'un agent.
+   */
+  perimetre(e: Pick<Equipment, 'ownership'>): 'APPLICATION' | 'APPAREIL' {
+    return e.ownership === 'PROVINCE' ? 'APPAREIL' : 'APPLICATION';
   }
 
   private addIncident(e: Equipment, kind: DeviceIncident['kind'], detail: string) {
@@ -156,18 +194,30 @@ export class EquipementService {
     return this.equipments.insert({ ...this.blank(d.id, d.agentUserId, 'socle', d.enrolledAt), ...(d.status === 'REVOQUE' ? { state: 'REVOQUE' as const, revokedAt: d.revokedAt ?? this.now() } : {}) });
   }
 
-  enroll(user: User, input: { deviceId: string; userId: string; policyCode?: string; model: string; os: string }) {
+  enroll(user: User, input: { deviceId: string; userId: string; policyCode?: string; model: string; os: string; ownership?: 'PERSONNEL' | 'PROVINCE' }) {
     authorize(user, 'equipements:manage');
     const agent = this.ctx.users.get(input.userId);
     if (!agent) throw notFound('USER_NOT_FOUND', `Agent inconnu : ${input.userId}`);
     if (!agent.roles.some((r) => ['R09', 'R10', 'R11', 'R12', 'R35'].includes(r))) throw badRequest('NOT_FIELD_AGENT', 'Terminal réservé aux agents de terrain, contrôleurs, superviseurs et guichets.');
     if (this.ctx.field.devices.get(input.deviceId)) throw conflict('DEVICE_EXISTS', 'Identifiant de terminal déjà enrôlé.');
-    const p = this.policy(input.policyCode ?? 'TERRAIN-STANDARD');
+    const ownership = input.ownership ?? 'PERSONNEL';
+    const p = this.policy(input.policyCode ?? (ownership === 'PERSONNEL' ? 'TERRAIN-PERSONNEL' : 'TERRAIN-STANDARD'));
+    if (ownership === 'PERSONNEL' && (p.scope ?? 'APPAREIL') !== 'APPLICATION') throw badRequest('POLICY_SCOPE_PERSONAL', 'Téléphone personnel : seule une politique au périmètre APPLICATION est admise (jamais de gestion de l’appareil entier).');
     const key = randomSecret(24);
     this.ctx.field.enroll(input.deviceId, agent.id, key);
-    const e = this.equipments.insert({ ...this.blank(input.deviceId, agent.id, user.id), policyCode: p.code, policyVersion: p.version, model: input.model, os: input.os, mdm: { adapter: this.mdm.name, ref: this.mdm.enroll(input.deviceId, p) } });
-    this.ctx.audit.append({ actor: actorOf(user), action: 'equipements.device.enrolled', resourceType: 'device', resourceId: e.id, details: { userId: agent.id, policy: `${p.code}@${p.version}`, mdm: this.mdm.name } });
-    return { equipment: e, deviceKeyOnce: key, notice: 'Clé du terminal affichée une seule fois : elle est installée sur le terminal lors de l’enrôlement.' };
+    const e = this.equipments.insert({ ...this.blank(input.deviceId, agent.id, user.id), policyCode: p.code, policyVersion: p.version, model: input.model, os: input.os, ownership, mdm: { adapter: this.mdm.name, ref: this.mdm.enroll(input.deviceId, p) } });
+    this.ctx.audit.append({ actor: actorOf(user), action: 'equipements.device.enrolled', resourceType: 'device', resourceId: e.id, details: { userId: agent.id, policy: `${p.code}@${p.version}`, mdm: this.mdm.name, ownership } });
+    return { equipment: e, deviceKeyOnce: key, notice: 'Clé du terminal affichée une seule fois : elle est installée sur le terminal lors de l’enrôlement.', ...(ownership === 'PERSONNEL' ? { charte: CHARTE_TELEPHONE_PERSONNEL } : {}) };
+  }
+
+  /** Acceptation de la charte du téléphone personnel par l'agent affecté (journalisée). */
+  acceptCharte(user: User, id: string, version: string) {
+    const e = this.equipment(id);
+    if (user.id !== e.userId) throw forbidden('DEVICE_USER_MISMATCH', 'Seul l’agent affecté accepte la charte de son téléphone.');
+    if (version !== CHARTE_TELEPHONE_PERSONNEL.version) throw conflict('CHARTE_VERSION', `Version de charte en vigueur : ${CHARTE_TELEPHONE_PERSONNEL.version}.`);
+    const out = this.equipments.update({ ...e, charte: { version, acceptedAt: this.now() } });
+    this.ctx.audit.append({ actor: actorOf(user), action: 'equipements.device.charter_accepted', resourceType: 'device', resourceId: id, details: { version } });
+    return out;
   }
 
   /** Défi de liaison appareil–utilisateur (5 minutes). */
@@ -236,7 +286,7 @@ export class EquipementService {
     return {
       deviceId: id, verdict, reasons, state: this.equipments.get(id)!.state, serverTime: at,
       policy: { code: p.code, version: p.version, screenLockMinutes: p.screenLockMinutes, offlineDataTtlDays: p.offlineDataTtlDays },
-      pendingCommands: this.equipments.get(id)!.commands.filter((c) => c.status === 'EN_ATTENTE').map((c) => ({ id: c.id, kind: c.kind })),
+      pendingCommands: this.equipments.get(id)!.commands.filter((c) => c.status === 'EN_ATTENTE').map((c) => ({ id: c.id, kind: c.kind, ...(c.perimetre ? { perimetre: c.perimetre } : {}) })),
       dataExpiry: { purgeBefore, rule: `Données de référence en cache antérieures au ${purgeBefore.slice(0, 10)} à purger (délai de ${p.offlineDataTtlDays} jours de la politique).` },
     };
   }
@@ -244,14 +294,14 @@ export class EquipementService {
   wipe(user: User, id: string, motif: string) {
     authorize(user, 'equipements:wipe');
     const e = this.equipment(id);
-    const cmd = this.command(id, 'EFFACEMENT', user.id, motif);
+    const cmd = this.command(id, 'EFFACEMENT', user.id, motif, this.perimetre(e));
     const out = this.equipments.update({ ...e, commands: [...e.commands, cmd] });
-    this.ctx.audit.append({ actor: actorOf(user), action: 'equipements.device.wipe_requested', resourceType: 'device', resourceId: id, details: { motif, commandId: cmd.id } });
+    this.ctx.audit.append({ actor: actorOf(user), action: 'equipements.device.wipe_requested', resourceType: 'device', resourceId: id, details: { motif, commandId: cmd.id, perimetre: cmd.perimetre } });
     return out;
   }
 
   private markRevoked(e: Equipment, by: string, motif: string) {
-    const cmd = this.command(e.id, 'EFFACEMENT', by, motif);
+    const cmd = this.command(e.id, 'EFFACEMENT', by, motif, this.perimetre(e));
     return this.equipments.update({ ...e, state: 'REVOQUE', revokedAt: this.now(), commands: [...e.commands, cmd] });
   }
 
@@ -320,6 +370,13 @@ export class EquipementService {
       equipments: all.map((e) => ({ ...e, userName: this.ctx.users.get(e.userId)?.name ?? e.userId })),
       incidents: incidents.sort((a, b) => (a.at < b.at ? 1 : -1)),
       rule: 'Suivi des résultats, pas surveillance intrusive : aucune position ni aucun usage personnel collecté.',
+      personnel: {
+        regle: 'Téléphone personnel (défaut) : seule l’application MOSOLO est gérée ; tout effacement ne vise que ses données, jamais le téléphone.',
+        charte: CHARTE_TELEPHONE_PERSONNEL,
+        telephonesPersonnels: all.filter((e) => e.ownership !== 'PROVINCE').length,
+        terminauxProvince: all.filter((e) => e.ownership === 'PROVINCE').length,
+        chartesAcceptees: all.filter((e) => e.ownership !== 'PROVINCE' && e.charte).length,
+      },
       indicators: [
         { code: 'TERMINAUX_ACTIFS', label: 'Terminaux actifs', measured: true, value: String(active), unit: 'terminaux', detail: { quarantaine: all.filter((e) => e.state === 'QUARANTAINE').length, donneesExpirees: all.filter((e) => e.state === 'DONNEES_EXPIREES').length, attestes: all.filter((e) => e.binding.status === 'ATTESTEE').length } },
         { code: 'INCIDENTS', label: 'Incidents d’équipement (30 jours)', measured: true, value: String(incidents.filter((i) => i.at >= since).length), unit: 'incidents' },

@@ -167,4 +167,30 @@ describe('Module 58 — gestion des équipements terrain', () => {
     expect(e.state).toBe('REVOQUE');
     expect(e.commands.some((c) => c.kind === 'EFFACEMENT' && c.status === 'EN_ATTENTE')).toBe(true);
   });
+
+  it('téléphone personnel (29/09/2026) : défaut à l’enrôlement, politique au périmètre APPLICATION, effacement des seules données MOSOLO, charte acceptée par l’agent', async () => {
+    const { req, eq } = await full();
+    const en = (await req('POST', '/v1/equipements/terminaux', 'u-rssi', { deviceId: 'dev-perso-01', userId: 'u-agent-terrain-2', model: 'Téléphone de l’agent', os: 'Android 14' })).json();
+    expect(en.equipment.ownership).toBe('PERSONNEL');
+    expect(en.equipment.policyCode).toBe('TERRAIN-PERSONNEL');
+    expect(en.charte.texte.join(' ')).toMatch(/seules les données de l’application MOSOLO/);
+    // Jamais de politique « appareil entier » sur un téléphone personnel.
+    expect((await req('POST', '/v1/equipements/terminaux', 'u-rssi', { deviceId: 'dev-perso-02', userId: 'u-agent-terrain-2', model: 'Téléphone', os: 'iOS 17', policyCode: 'TERRAIN-STANDARD' })).json().code).toBe('POLICY_SCOPE_PERSONAL');
+    // Charte : acceptée par l'agent affecté seulement.
+    expect((await req('POST', '/v1/equipements/terminaux/dev-perso-01/charte', 'u-rssi', { version: '1' })).statusCode).toBe(403);
+    expect((await req('POST', '/v1/equipements/terminaux/dev-perso-01/charte', 'u-agent-terrain-2', { version: '1' })).json().charte.version).toBe('1');
+    // Effacement et perte : données MOSOLO seulement.
+    const w = (await req('POST', '/v1/equipements/terminaux/dev-perso-01/effacement', 'u-rssi', { motif: 'Départ de l’agent du programme' })).json();
+    expect(w.commands.at(-1)).toMatchObject({ kind: 'EFFACEMENT', perimetre: 'APPLICATION' });
+    await req('POST', '/v1/equipements/terminaux/dev-perso-01/perte', 'u-agent-terrain-2', { motif: 'Téléphone volé au marché' });
+    expect(eq.equipments.get('dev-perso-01')!.commands.at(-1)).toMatchObject({ kind: 'EFFACEMENT', perimetre: 'APPLICATION' });
+    // Terminal de la Province : mode antérieur conservé (appareil entier).
+    await req('POST', '/v1/equipements/terminaux', 'u-rssi', { deviceId: 'dev-prov-01', userId: 'u-agent-terrain-2', model: 'Terminal Province', os: 'Android 13', ownership: 'PROVINCE' });
+    const wp = (await req('POST', '/v1/equipements/terminaux/dev-prov-01/effacement', 'u-rssi', { motif: 'Terminal remis au magasin' })).json();
+    expect(wp.policyCode).toBe('TERRAIN-STANDARD');
+    expect(wp.commands.at(-1)).toMatchObject({ kind: 'EFFACEMENT', perimetre: 'APPAREIL' });
+    const v = (await req('GET', '/v1/equipements', 'u-rssi')).json();
+    expect(v.personnel.chartesAcceptees).toBeGreaterThanOrEqual(1);
+    expect(v.personnel.terminauxProvince).toBe(1);
+  });
 });

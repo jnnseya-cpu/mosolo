@@ -204,7 +204,7 @@ export class TransportService {
     });
     this.ctx.audit.append({ actor: actorOf(user), action: 'transport.driver_card.issued', resourceType: 'driver_card', resourceId: numero, details: { autorisation: a.id, plaque: a.plaque } });
     const tp = this.ctx.taxpayers.taxpayers.get(input.conducteurTaxpayerId);
-    if (tp) this.ctx.comms.publish('permit.issued', [taxpayerRecipient(tp)], { reference: numero }, { entity: 'DGIPK' });
+    if (tp) this.ctx.comms.publish('permit.issued', [taxpayerRecipient(tp)], { reference: numero, validUntil: c.validUntil }, { entity: 'DGIPK' });
     return { numero: c.numero, plaque: c.plaque, validUntil: c.validUntil, qr: `MOSOLO-CCD|${c.numero}|${c.signature}` };
   }
 

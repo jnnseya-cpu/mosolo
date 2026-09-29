@@ -702,7 +702,10 @@ export class VerticalesService {
     const event = saved.certificateCode
       ? proc.kind === 'QUITUS' ? 'clearance.issued' : 'permit.issued'
       : accepted ? 'approval.approved' : proc.kind === 'AUTORISATION' ? 'permit.refused' : 'approval.rejected';
-    this.ctx.comms.publish(event, this.recipientsOfTaxpayer(c.taxpayerId), { reference: saved.certificateCode ?? id }, { entity: c.entity });
+    // Validité réelle du certificat ; sans échéance, le message le dit (jamais de date inventée).
+    const cert = saved.certificateCode ? this.certificates.get(saved.certificateCode) : undefined;
+    const validite: Record<string, string> = cert ? { date: cert.validUntil ?? 'sans échéance fixée' } : {};
+    this.ctx.comms.publish(event, this.recipientsOfTaxpayer(c.taxpayerId), { reference: saved.certificateCode ?? id, ...validite }, { entity: c.entity });
     return this.caseView(saved, 'full');
   }
 

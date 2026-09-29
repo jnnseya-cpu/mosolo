@@ -55,7 +55,7 @@ export class AlertService {
     const roles = [...new Set<RoleCode>(['R24', 'R28', ...(input.notifyRoles ?? [])])];
     const seen = new Set<string>();
     const recipients = roles.flatMap((r) => this.users.withRole(r)).filter((u) => !seen.has(u.id) && seen.add(u.id)).map(userRecipient);
-    this.comms.publish('fraud.alert.raised', recipients, { reference: alert.id }, { entity: 'AUDIT' });
+    this.comms.publish('fraud.alert.raised', recipients, { reference: alert.id, score: alert.severity.toLowerCase() }, { entity: 'AUDIT' });
     return alert;
   }
 

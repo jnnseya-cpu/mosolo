@@ -589,7 +589,7 @@ export class RakaPayService {
     this.ctx.audit.append({ actor: this.actor(user), action: `rakapay.cooperative.${input.decision.toLowerCase()}`, resourceType: 'cooperative', resourceId: coop.id, details: { motif: d.motif, from: coop.status, to: updated.status } });
     if (coop.taxpayerId) {
       const tp = this.ctx.taxpayers.taxpayers.get(coop.taxpayerId);
-      if (tp) this.ctx.comms.publish(input.decision === 'SUSPENDRE' ? 'permit.suspended' : 'permit.issued', [{ id: tp.id, kind: 'taxpayer', name: tp.fullName, lang: tp.language, prefs: tp.prefs }], { reference: coop.code }, { entity: coop.entity });
+      if (tp) this.ctx.comms.publish(input.decision === 'SUSPENDRE' ? 'permit.suspended' : 'permit.issued', [{ id: tp.id, kind: 'taxpayer', name: tp.fullName, lang: tp.language, prefs: tp.prefs }], { reference: coop.code, date: 'décision contraire (accréditation sans échéance fixée)' }, { entity: coop.entity });
     }
     return updated;
   }

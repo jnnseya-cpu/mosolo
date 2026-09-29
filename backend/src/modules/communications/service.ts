@@ -95,6 +95,28 @@ const PLACEHOLDER = /\{\{(\w+)\}\}/g;
  * donc aucun retour à la ligne injectable dans l'objet d'un courriel ni dans un SMS), 300 caractères au plus, sans
  * accolades de gabarit (aucune injection de variable au second degré).
  */
+/**
+ * Variables françaises du catalogue dérivées des valeurs RÉELLEMENT transmises par le module (29/09/2026) : plusieurs
+ * modules passent `reference`, `amount`, `dueDate` ou `channel` quand le catalogue attend `objet`, `numero`, `montant`,
+ * `date` ou `canal`. Rien n'est inventé : une variable sans valeur transmise reste marquée « — » et relevée.
+ */
+const ALIAS_VARIABLES: Record<string, string[]> = {
+  objet: ['reference'], regle: ['reference'], numero: ['reference'], titre: ['reference'], ref_paiement: ['reference'], unite: ['reference'],
+  montant: ['amount'], date: ['dueDate', 'validUntil', 'effectiveFrom'], canal: ['channel'],
+};
+const DATE_ISO = /^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/;
+export function withAliasVars(vars: Record<string, string>): Record<string, string> {
+  const out = { ...vars };
+  for (const [k, sources] of Object.entries(ALIAS_VARIABLES)) {
+    if (out[k]) continue;
+    const src = sources.find((s) => vars[s]);
+    if (src) out[k] = vars[src]!;
+  }
+  if (out.date) { const m = DATE_ISO.exec(out.date); if (m) out.date = `${m[3]}/${m[2]}/${m[1]}`; }
+  if (out.canal) out.canal = out.canal.replace(/_/g, ' ').toLowerCase();
+  return out;
+}
+
 export function sanitizeVars(vars: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(vars)) {
@@ -174,7 +196,7 @@ export class CommunicationService {
     const event = this.event(eventCode);
     const entity = opts.entity ?? 'GOUVERNORAT';
     const out: Delivery[] = [];
-    vars = sanitizeVars(vars);
+    vars = sanitizeVars(withAliasVars(vars));
     // Secrets (code à usage unique…) : envoyés au destinataire, jamais conservés en clair (voir `secret`).
     const secrets = Object.entries(vars).filter(([k, v]) => v && v !== SECRET_MASK && v.length >= 3 && (SECRET_VAR_NAMES.has(k) || (k === 'code' && event.categorie === 'securite'))).map(([, v]) => v);
     const redact = (t: string) => secrets.reduce((acc, x) => acc.split(x).join(SECRET_MASK), t);

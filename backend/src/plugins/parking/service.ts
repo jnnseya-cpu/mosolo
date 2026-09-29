@@ -694,7 +694,7 @@ export class ParkingService {
       const minutes = Math.round((end.getTime() - start.getTime()) / MINUTE);
       const obligation = this.liquidate(user, z, r.taxpayerId, objectId, minutes, r.places);
       updated = this.reservations.update({ ...r, status: 'APPROUVEE', decision: { by: user.id, at: now, reason: input.reason }, obligationId: obligation.id, objectId });
-      this.ctx.comms.publish('permit.issued', [taxpayerRecipient(this.ctx.taxpayers.get(r.taxpayerId))], { reference: r.reference }, { entity: DGTK });
+      this.ctx.comms.publish('permit.issued', [taxpayerRecipient(this.ctx.taxpayers.get(r.taxpayerId))], { reference: r.reference, validUntil: end.toISOString() }, { entity: DGTK });
     } else {
       updated = this.reservations.update({ ...r, status: 'REFUSEE', decision: { by: user.id, at: now, reason: input.reason } });
       this.ctx.comms.publish('permit.refused', [taxpayerRecipient(this.ctx.taxpayers.get(r.taxpayerId))], { reference: r.reference }, { entity: DGTK });

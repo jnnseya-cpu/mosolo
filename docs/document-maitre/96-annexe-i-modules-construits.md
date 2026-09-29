@@ -1241,3 +1241,18 @@ clic, jamais par le menu). Ajout, rien de retiré :
 - **Recette — critères d'acceptation** (`/pilotage/recette`, 29/09/2026) : les fichiers et titres de test (données
   brutes destinées aux équipes techniques et aux auditeurs) sont repliés sous « N tests automatisés — voir le détail
   technique » ; synthèse, graphiques, états et suivis inchangés et visibles d'abord. Aucun contenu retiré.
+
+## I.31 Téléphones personnels des agents et messages sans valeur manquante (29/09/2026)
+
+- **Module 58 — téléphone personnel (défaut)** : les agents utilisent leur propre téléphone Android ou iOS avec les
+  applications MOSOLO. Enrôlement « téléphone personnel » par défaut, politique `TERRAIN-PERSONNEL` au périmètre
+  APPLICATION (profil professionnel Android / inscription utilisateur iOS) ; tout effacement (révocation, perte, départ)
+  ne vise que les données MOSOLO (`perimetre: APPLICATION`), jamais le téléphone ; charte d'usage acceptée par l'agent
+  et journalisée (`POST /v1/equipements/terminaux/:id/charte`) ; politique « appareil entier » refusée sur un téléphone
+  personnel. Mode « terminal de la Province » (`TERRAIN-STANDARD`, périmètre APPAREIL) conservé. Charte et valeurs
+  par défaut — à confirmer par le maître d'ouvrage.
+- **Messages (module 6)** : 1 127 des 1 623 messages de démonstration affichaient « — » à la place du montant, de la
+  date, de l'objet ou du canal (variables du catalogue en français, valeurs transmises sous d'autres noms ou absentes).
+  Correspondance des variables sur les valeurs réellement transmises (`withAliasVars`) et valeurs réelles ajoutées aux
+  émetteurs (avis, références et confirmations de paiement, règles, alertes, titres et certificats) : 0 message
+  incomplet. Une valeur absente reste marquée « — », jamais inventée.

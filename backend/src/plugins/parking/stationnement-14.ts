@@ -263,7 +263,7 @@ export class ParkingComplements {
         if (this.exemptionFor(plate, zone.id, this.now())) return log('REFUS', `${plate} : véhicule exempté dans cette zone — aucune session due.`);
         const res = this.svc.startSession(principal, { zoneId: zone.id, plate, durationMinutes: Number.parseInt(minutesRaw, 10), taxpayerId: tp.id });
         const o = order(res.obligation.id);
-        this.ctx.comms.publish('payment.reference.issued', [taxpayerRecipient(tp)], { reference: o.paymentReference }, { entity: 'DGTK' });
+        this.ctx.comms.publish('payment.reference.issued', [taxpayerRecipient(tp)], { reference: o.paymentReference, montant: `${o.amount.currency} ${o.amount.amount}` }, { entity: 'DGTK' });
         return log('OK', `Session ${res.session.ticketCode} ${zone.code} ${plate} ${minutesRaw} min : ${o.amount.amount} ${o.amount.currency}. Payez la référence ${o.paymentReference} par ${payChannel === 'USSD' ? 'USSD' : 'Mobile Money'}. Validité dès confirmation.`, res.session.id);
       }
       if (verb === 'PROL') {

@@ -445,7 +445,7 @@ export class RuleService {
     this.audit.append({ actor, action: `rule.approved.${role.toLowerCase()}`, resourceType: 'rule', resourceId: rule.id, details: { status: step.to } });
     const nextRole = REQUIRED_APPROVALS[updated.approvals.length];
     const notify = nextRole ? this.users.withRole(APPROVAL_ROLE[nextRole]) : this.users.withRole('R13');
-    this.comms.publish(step.event, notify.map(userRecipient), { reference: rule.code }, { entity: rule.administeringEntity });
+    this.comms.publish(step.event, notify.map(userRecipient), { reference: rule.code, regle: `${rule.code} v${rule.version}`, ...(rule.effectiveFrom ? { effectiveFrom: rule.effectiveFrom } : {}) }, { entity: rule.administeringEntity });
     return this.get(id);
   }
 
