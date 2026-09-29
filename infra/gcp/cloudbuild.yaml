@@ -9,6 +9,12 @@ steps:
       - --pull
       - --build-arg
       - MOSOLO_BUILD_HEAP_MB=${_HEAP_MB}
+      # Fond OpenStreetMap de Kinshasa fabriqué dans l'image (étape « fond-de-carte » du Dockerfile ; 0 = sans).
+      # Sans réseau : avertissement dans le journal, construction poursuivie (voir infra/gcp/README.md).
+      - --build-arg
+      - MOSOLO_FOND_DE_CARTE=${_FOND_DE_CARTE}
+      - --build-arg
+      - MOSOLO_TUILES_JETON=${BUILD_ID}
       - --tag
       - ${_IMAGE}
       - --file
@@ -19,6 +25,7 @@ images:
 substitutions:
   _IMAGE: africa-south1-docker.pkg.dev/PROJET/mosolo/mosolo:manuel
   _HEAP_MB: "3072"
+  _FOND_DE_CARTE: "1"
 options:
   machineType: E2_HIGHCPU_8
   # Compte de service dédié (mosolo-build) : journaux dans Cloud Logging uniquement.

@@ -1256,3 +1256,30 @@ clic, jamais par le menu). Ajout, rien de retiré :
   Correspondance des variables sur les valeurs réellement transmises (`withAliasVars`) et valeurs réelles ajoutées aux
   émetteurs (avis, références et confirmations de paiement, règles, alertes, titres et certificats) : 0 message
   incomplet. Une valeur absente reste marquée « — », jamais inventée.
+
+## I.32 Fond de carte OpenStreetMap de Kinshasa fabriqué dans l'image (29/09/2026)
+
+- **Constat** : sur la démonstration hébergée (Cloud Run), toutes les cartes affichaient « Fond OpenStreetMap de
+  Kinshasa non encore installé sur ce serveur » : le fichier `frontend/public/tiles/kinshasa.pmtiles` n'est pas versionné
+  et aucune étape de construction ne le fabriquait.
+- **Fond auto-hébergé fabriqué à la construction** (décision de la plateforme : aucun serveur de tuiles tiers à
+  l'exécution) : nouvelle étape « fond-de-carte » du Dockerfile racine (donc `gcloud run deploy --source .`,
+  `infra/gcp/deploy.sh` / `cloudbuild.yaml` et `infra/vps`), script `tools/maps/fond-de-carte-image.sh` : outil
+  `pmtiles` 1.31.2 épinglé (SHA-256 vérifiées), extraction de l'emprise de Kinshasa depuis une copie publique stable de
+  la carte mondiale Protomaps (schéma v4, celui du style de l'application), ETag de la source et SHA-256 du fichier
+  journalisés — deux extractions successives ont donné le même fichier (24 273 141 octets). **+24 Mo** dans l'image.
+- **Jamais d'échec de construction** : sans réseau ou en cas d'échec, avertissement clair dans le journal et image sans
+  fond (comportement antérieur conservé, message affiché) ; `MOSOLO_FOND_DE_CARTE=0` saute l'étape.
+- **Outil existant enrichi** (`tools/maps/construire-tuiles-kinshasa.sh`, options A et B conservées) : copie stable en
+  repli de la carte du jour, sortie et source paramétrables, contrôle de la signature et de l'attribution
+  « OpenStreetMap » (fichier refusé sinon), fiche `kinshasa.pmtiles.txt` (source, date, empreinte, licence ODbL).
+- **Service des tuiles** : lecture par plages d'octets (206, `Content-Range`, `Accept-Ranges`, 416 hors fichier), `ETag`
+  et 304, `cache-control: public, max-age=3600` ; un fichier absent sous `/tiles/` répond 404 au lieu de la page de
+  l'application (les autres routes restent servies par `index.html`).
+- **Attribution ODbL** : « © contributeurs OpenStreetMap » affichée sous chaque carte munie du fond (lien vers
+  openstreetmap.org/copyright) en plus du contrôle d'attribution de MapLibre ; le message « non encore installé » indique
+  désormais à l'exploitant que l'image fabrique le fond si le réseau le permet.
+- **Vérifications** : tests `backend/test/fond-de-carte-http.test.ts` (plages, en-têtes, 404) et
+  `frontend/test/fond-de-carte.test.tsx` (fond et attribution / message) ; `infra/valider.sh` section 6 (étape sautée,
+  échec simulé → code 0 et avertissement, copie dans le Dockerfile, attribution) ; capture à 1 366 px de « Où payer ? »
+  avec le fond. Procédure de l'exploitant : `infra/gcp/README.md`, « Fond de carte OpenStreetMap de Kinshasa ».

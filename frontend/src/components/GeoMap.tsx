@@ -15,6 +15,8 @@ import { Protocol } from 'pmtiles';
 import { layers, namedFlavor } from '@protomaps/basemaps';
 
 export const TILES_URL = '/tiles/kinshasa.pmtiles';
+/** Attribution exigée par la licence ODbL : toujours visible quand le fond OpenStreetMap est affiché. */
+export const OSM_ATTRIBUTION = '© contributeurs OpenStreetMap';
 /** Emprise de la Ville-Province (lon/lat). */
 export const KINSHASA_BOUNDS: [[number, number], [number, number]] = [[15.05, -4.75], [15.70, -4.15]];
 
@@ -56,13 +58,13 @@ function circle(lon: number, lat: number, radiusM: number, steps = 48): [number,
   return out;
 }
 
-function style(withTiles: boolean): StyleSpecification {
+export function style(withTiles: boolean): StyleSpecification {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   return {
     version: 8,
     glyphs: `${origin}/map/fonts/{fontstack}/{range}.pbf`,
     sprite: `${origin}/map/sprites/light`,
-    sources: withTiles ? { protomaps: { type: 'vector', url: `pmtiles://${origin}${TILES_URL}`, attribution: '© contributeurs OpenStreetMap' } } : {},
+    sources: withTiles ? { protomaps: { type: 'vector', url: `pmtiles://${origin}${TILES_URL}`, attribution: OSM_ATTRIBUTION } } : {},
     layers: withTiles ? layers('protomaps', namedFlavor('light'), { lang: 'fr' }) : [{ id: 'fond', type: 'background', paint: { 'background-color': '#eef1f5' } }],
   } as StyleSpecification;
 }
@@ -138,7 +140,8 @@ export default function GeoMap(props: GeoMapProps) {
   return (
     <figure className="geomap">
       <div ref={el} className="geomap-canvas" style={{ height: props.height ?? 280 }} role="application" aria-label={props.ariaLabel ?? 'Carte OpenStreetMap'} />
-      {withTiles === false && <p className="geomap-note small">Fond OpenStreetMap de Kinshasa non encore installé sur ce serveur (outil : <span className="mono">tools/maps/construire-tuiles-kinshasa.sh</span>) : seules les couches MOSOLO sont affichées.</p>}
+      {withTiles === false && <p className="geomap-note small">Fond OpenStreetMap de Kinshasa non encore installé sur ce serveur (outil : <span className="mono">tools/maps/construire-tuiles-kinshasa.sh</span>) : seules les couches MOSOLO sont affichées. Exploitant : l'image Docker le fabrique automatiquement à la construction si le réseau le permet (voir le journal « fond de carte » et infra/gcp/README.md).</p>}
+      {withTiles === true && <p className="geomap-attribution small muted">Fond de carte : <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">{OSM_ATTRIBUTION}</a> (licence ODbL), servi par MOSOLO.</p>}
       {props.caption && <figcaption className="small muted">{props.caption}</figcaption>}
     </figure>
   );

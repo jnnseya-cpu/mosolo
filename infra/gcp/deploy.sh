@@ -31,6 +31,7 @@ SKIP_BUILD="${SKIP_BUILD:-0}"
 BUILD_REGION="${BUILD_REGION:-$REGION}"         # « global » si Cloud Build régional indisponible dans la région
 BUILD_MACHINE="${BUILD_MACHINE:-e2-highcpu-8}"  # 8 vCPU / 8 Go : la construction du frontend demande ~700 Mo de tas
 BUILD_HEAP_MB="${BUILD_HEAP_MB:-3072}"
+FOND_DE_CARTE="${FOND_DE_CARTE:-1}"             # 0 : image sans fond OpenStreetMap de Kinshasa (construction hors ligne)
 NETWORK="${NETWORK:-default}"
 SUBNET="${SUBNET:-default}"
 SQL_INSTANCE="${SQL_INSTANCE:-mosolo-pg}"
@@ -429,7 +430,7 @@ else
   cd "$REPO_ROOT"
   run gcloud builds submit . "${G[@]}" "${REG[@]}" \
     --config=infra/gcp/cloudbuild.yaml --ignore-file=infra/gcp/.gcloudignore \
-    --substitutions="_IMAGE=${IMAGE},_HEAP_MB=${BUILD_HEAP_MB}" --machine-type="$BUILD_MACHINE" \
+    --substitutions="_IMAGE=${IMAGE},_HEAP_MB=${BUILD_HEAP_MB},_FOND_DE_CARTE=${FOND_DE_CARTE}" --machine-type="$BUILD_MACHINE" \
     --service-account="projects/${PROJECT_ID}/serviceAccounts/${SA_BUILD}" \
     --gcs-source-staging-dir="gs://${BUILD_BUCKET}/sources"
 fi

@@ -9,6 +9,8 @@
 #   4. YAML / JSON : chargement strict (python3 yaml.safe_load / json) de tous les fichiers, y compris les descriptions
 #      Cloud Run rendues par la simulation ;
 #   5. docker compose config (si Docker est installé).
+#   6. fond de carte OpenStreetMap de Kinshasa : l'étape de l'image ne fait jamais échouer la construction (étape
+#      sautée, échec simulé → avertissement, code 0), le Dockerfile copie le fond, l'attribution ODbL est présente.
 #   ./infra/valider.sh
 # =====================================================================================================================
 set -euo pipefail
@@ -22,7 +24,7 @@ ok() { printf '  [OK] %s\n' "$*"; }
 ko() { printf '  [ÉCHEC] %s\n' "$*"; ECHECS=$((ECHECS + 1)); }
 absent() { printf '  [NON EXÉCUTÉ] %s\n' "$*"; }
 
-mapfile -t SCRIPTS < <(find infra -name '*.sh' -not -path '*/.rendu/*' -not -path '*/.validation/*' | sort)
+mapfile -t SCRIPTS < <(find infra tools/maps -name '*.sh' -not -path '*/.rendu/*' -not -path '*/.validation/*' | sort)
 
 echo "1. Syntaxe et analyse statique des scripts (${#SCRIPTS[@]})"
 for s in "${SCRIPTS[@]}"; do
@@ -112,6 +114,23 @@ if command -v docker >/dev/null && docker compose version >/dev/null 2>&1; then
 else
   absent "docker compose (non installé)"
 fi
+
+echo "6. Fond de carte OpenStreetMap de Kinshasa (sans réseau)"
+# Étape sautée volontairement : code 0, aucun fichier.
+T6="$SORTIES/tuiles-sautees"
+if MOSOLO_FOND_DE_CARTE=0 bash tools/maps/fond-de-carte-image.sh "$T6" > "$SORTIES/fond-de-carte-saute.txt" 2>&1 && [ -z "$(ls -A "$T6")" ]; then
+  ok "étape « fond-de-carte » sautée (MOSOLO_FOND_DE_CARTE=0) : code 0, image sans fond"
+else ko "étape « fond-de-carte » sautée (voir $SORTIES/fond-de-carte-saute.txt)"; fi
+# Échec simulé (architecture inconnue, aucun téléchargement) : AVERTISSEMENT et code 0 — la construction continue.
+T6="$SORTIES/tuiles-echec"
+if TARGETARCH=inconnue bash tools/maps/fond-de-carte-image.sh "$T6" > "$SORTIES/fond-de-carte-echec.txt" 2>&1 \
+  && grep -q "AVERTISSEMENT — fond de carte" "$SORTIES/fond-de-carte-echec.txt" && [ -z "$(ls -A "$T6")" ]; then
+  ok "échec du fond de carte : avertissement clair, code 0 (la construction de l'image n'échoue pas)"
+else ko "échec du fond de carte (voir $SORTIES/fond-de-carte-echec.txt)"; fi
+grep -q '^COPY --from=fond-de-carte /tuiles/ frontend/dist/tiles/' Dockerfile && grep -q '^FROM node:22-bookworm-slim AS fond-de-carte' Dockerfile \
+  && ok "Dockerfile : étape « fond-de-carte » et copie vers frontend/dist/tiles" || ko "Dockerfile : étape « fond-de-carte » absente"
+grep -q "OSM_ATTRIBUTION = '© contributeurs OpenStreetMap'" frontend/src/components/GeoMap.tsx && grep -q 'attribution.*openstreetmap' tools/maps/construire-tuiles-kinshasa.sh \
+  && ok "attribution ODbL « © contributeurs OpenStreetMap » affichée et contrôlée à la fabrication" || ko "attribution OpenStreetMap"
 
 echo
 if ((ECHECS)); then echo "Validation : ${ECHECS} échec(s)."; exit 1; fi

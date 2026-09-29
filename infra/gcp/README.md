@@ -155,6 +155,43 @@ d'ouvrage. Le kit limite l'enfermement : image conteneur standard, PostgreSQL st
 clés générées et gardées par la Ville (à migrer vers un HSM), même image et même procédure sur un VPS ou un centre de
 données national (`infra/vps/`). Plan de sortie : sauvegarde signée → `infra/vps/deploy.sh restore` → bascule DNS.
 
+## Fond de carte OpenStreetMap de Kinshasa (29/09/2026)
+
+Décision de la plateforme : fond **OpenStreetMap AUTO-HÉBERGÉ** — aucun serveur de tuiles tiers à l'exécution. Le fichier
+`kinshasa.pmtiles` (tuiles vectorielles, emprise 15,05 / -4,75 — 15,70 / -4,15, zooms 0 à 15, **~24 Mo**) est servi
+par MOSOLO sous `/tiles/kinshasa.pmtiles`, lu par plages d'octets (206, `Accept-Ranges`, `ETag`,
+`cache-control: public, max-age=3600`) ; absent, il répond 404 et les cartes affichent « Fond OpenStreetMap de
+Kinshasa non encore installé sur ce serveur… » avec les seules couches MOSOLO.
+
+**Fabriqué automatiquement dans l'image** — même Dockerfile pour les trois chemins : `gcloud run deploy mosolo-demo
+--source .`, `infra/gcp/deploy.sh` (→ `infra/gcp/cloudbuild.yaml`) et `infra/vps`. L'étape « fond-de-carte » du
+Dockerfile exécute `tools/maps/fond-de-carte-image.sh` :
+
+| Point | Détail |
+|---|---|
+| Outil | `pmtiles` **1.31.2** (go-pmtiles), empreintes SHA-256 épinglées (amd64, arm64) vérifiées avant exécution |
+| Source | copie publique stable de la carte mondiale Protomaps (Source Cooperative, S3 `us-west-2`, objet `protomaps/openstreetmap/v4.pmtiles`) — seules les plages de Kinshasa sont lues (~25 Mo transférés) ; ETag de la source et SHA-256 du fichier produit **journalisés** (même source = même fichier) |
+| Contrôles | signature `PMTiles`, mention « OpenStreetMap » dans l'attribution des métadonnées (sinon fichier refusé), fiche `tiles/kinshasa.pmtiles.txt` (source, date, empreinte, licence ODbL) |
+| Sans réseau / échec | **la construction n'échoue pas** : bandeau `AVERTISSEMENT — fond de carte OpenStreetMap de Kinshasa NON fabriqué` dans le journal, image sans fond (comportement antérieur) |
+| Taille | **+24 Mo** dans l'image d'exécution (l'outil et les fichiers de travail restent dans l'étape de construction) |
+
+Options de construction : `--build-arg MOSOLO_FOND_DE_CARTE=0` (sauter l'étape ; `FOND_DE_CARTE=0 ./infra/gcp/deploy.sh`),
+`--build-arg MOSOLO_TUILES_SOURCE=https://…/planete.pmtiles` (autre carte mondiale PMTiles, schéma Protomaps v4),
+`--build-arg MOSOLO_TUILES_JETON=$(date +%Y%m)` (forcer le rafraîchissement d'un cache Docker local ; Cloud Build
+repart sans cache et passe `BUILD_ID`).
+
+**Vérifier après déploiement** : journal de construction (`Tuiles Kinshasa : … SHA-256 …` puis `Fond de carte installé
+dans l'image`), `curl -sI -H 'Range: bytes=0-15' https://<service>/tiles/kinshasa.pmtiles` → `206`, puis une carte (ex.
+« Où payer ? », `/points-de-paiement`) : fond de rues visible et mention « © contributeurs OpenStreetMap » affichée
+sous la carte et dans le coin (licence ODbL : cette attribution ne doit jamais être retirée).
+
+**Reconstruire le fond** (mise à jour OSM, chaque mois) : nouvelle construction de l'image ; ou, hors Docker,
+`tools/maps/construire-tuiles-kinshasa.sh` (option A : carte du jour puis copie stable ; option B : Planetiler depuis
+l'extrait Geofabrik de la RDC, entièrement souveraine) qui écrit `frontend/public/tiles/kinshasa.pmtiles` (non versionné,
+`.gitignore`), puis `npm run build -w frontend`. Un fichier présent localement lors d'une construction Docker est conservé
+si l'étape « fond-de-carte » ne produit rien. Les kits statiques (`infra/static`, Vercel / Firebase) ne fabriquent pas
+le fond : y déposer le fichier produit par l'outil.
+
 ## Points à vérifier au premier déploiement (non vérifiables sans compte)
 
 - Disponibilité dans `africa-south1` de Cloud Build régional (sinon `BUILD_REGION=global`), de Cloud Scheduler
@@ -196,7 +233,7 @@ DOMAIN=mosolo.exemple.cd IMAGE_TAG=exemple ./infra/gcp/deploy.sh`) :
     + gcloud projects add-iam-policy-binding projet-exemple --quiet --member=serviceAccount:mosolo-build@projet-exemple.iam.gserviceaccount.com --role=roles/logging.logWriter --condition=None
 
 ==> [04] Construction de l'image par Cloud Build (e2-highcpu-8, NODE_OPTIONS=--max-old-space-size=3072)
-    + gcloud builds submit . --project=projet-exemple --quiet --region=africa-south1 --config=infra/gcp/cloudbuild.yaml --ignore-file=infra/gcp/.gcloudignore --substitutions=_IMAGE=africa-south1-docker.pkg.dev/projet-exemple/mosolo/mosolo:exemple,_HEAP_MB=3072 --machine-type=e2-highcpu-8 --service-account=projects/projet-exemple/serviceAccounts/mosolo-build@projet-exemple.iam.gserviceaccount.com --gcs-source-staging-dir=gs://projet-exemple-mosolo-construction/sources
+    + gcloud builds submit . --project=projet-exemple --quiet --region=africa-south1 --config=infra/gcp/cloudbuild.yaml --ignore-file=infra/gcp/.gcloudignore --substitutions=_IMAGE=africa-south1-docker.pkg.dev/projet-exemple/mosolo/mosolo:exemple,_HEAP_MB=3072,_FOND_DE_CARTE=1 --machine-type=e2-highcpu-8 --service-account=projects/projet-exemple/serviceAccounts/mosolo-build@projet-exemple.iam.gserviceaccount.com --gcs-source-staging-dir=gs://projet-exemple-mosolo-construction/sources
 
 ==> [05] Réseau privé : accès privé aux services Google (Cloud SQL sans IP publique)
     + gcloud compute networks create default --project=projet-exemple --quiet --subnet-mode=auto
@@ -330,7 +367,7 @@ Simulation de la démonstration (`DRY_RUN=1 PROJECT_ID=projet-exemple DEMO=true 
     + gcloud projects add-iam-policy-binding projet-exemple --quiet --member=serviceAccount:mosolo-build@projet-exemple.iam.gserviceaccount.com --role=roles/logging.logWriter --condition=None
 
 ==> [04] Construction de l'image par Cloud Build (e2-highcpu-8, NODE_OPTIONS=--max-old-space-size=3072)
-    + gcloud builds submit . --project=projet-exemple --quiet --region=africa-south1 --config=infra/gcp/cloudbuild.yaml --ignore-file=infra/gcp/.gcloudignore --substitutions=_IMAGE=africa-south1-docker.pkg.dev/projet-exemple/mosolo/mosolo:exemple,_HEAP_MB=3072 --machine-type=e2-highcpu-8 --service-account=projects/projet-exemple/serviceAccounts/mosolo-build@projet-exemple.iam.gserviceaccount.com --gcs-source-staging-dir=gs://projet-exemple-mosolo-construction/sources
+    + gcloud builds submit . --project=projet-exemple --quiet --region=africa-south1 --config=infra/gcp/cloudbuild.yaml --ignore-file=infra/gcp/.gcloudignore --substitutions=_IMAGE=africa-south1-docker.pkg.dev/projet-exemple/mosolo/mosolo:exemple,_HEAP_MB=3072,_FOND_DE_CARTE=1 --machine-type=e2-highcpu-8 --service-account=projects/projet-exemple/serviceAccounts/mosolo-build@projet-exemple.iam.gserviceaccount.com --gcs-source-staging-dir=gs://projet-exemple-mosolo-construction/sources
 
 ==> [05] Service de démonstration mosolo-demo (--demo, données non contractuelles)
     description rendue : infra/gcp/.rendu/service-demo.yaml
