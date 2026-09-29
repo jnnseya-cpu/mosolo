@@ -219,6 +219,10 @@ export const MODULE_ROUTES: ModuleRoute[] = [
 
   // Paiements : prestataires connectés (BitriPay, KODA)
   { path: '/tresor/prestataires', element: lazy(() => import('./prestataires/Prestataires')), nav: { label: 'Prestataires connectés', short: 'Prestataires', icon: 'phone', group: 'operations', roles: ['R17', 'R18', 'R22', 'R26', 'R27', 'R28'] } },
+  // Page de retour après la page de paiement hébergée du prestataire (29/09/2026) : état réel lu dans MOSOLO.
+  { path: '/paiement/retour', element: lazy(() => import('./prestataires/RetourPaiement')) },
+  // « Clés et raccordements » (29/09/2026) : super-administrateur (R26) et responsable sécurité (R28) seulement.
+  { path: '/plateforme/cles', element: lazy(() => import('./plateforme/ClesRaccordements')), nav: { label: 'Clés et raccordements', short: 'Clés', icon: 'lock', group: 'operations', roles: ['R26', 'R28'] } },
 
   // Trésorerie, recouvrement, sous-traitance, détecteurs, CALCU (§ 15A.5, § 20.1, § 21, § 25, § 27A, § 37)
   { path: '/tresor/appariements', element: lazy(() => import('./tresor/Appariements')), nav: { label: 'Rapprochement proposé et crédits groupés', short: 'Appariements', icon: 'ledger', group: 'operations', roles: ['R17', 'R18', 'R22', 'R23'] } },

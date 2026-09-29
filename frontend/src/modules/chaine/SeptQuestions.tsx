@@ -57,8 +57,32 @@ function defaultStep(ms: Maillon[]): string {
   return (ms.find((m) => m.status === 'BLOQUE') ?? ms.find((m) => m.status === 'EN_ATTENTE') ?? ms.at(-1))?.code ?? '';
 }
 
+/**
+ * « Qui doit agir, où » pour un maillon en attente ou bloqué (29/09/2026). Lecture seule : le maillon s'accomplit par
+ * l'opération réelle dans son module ; le lien vers l'écran n'est actif que pour les rôles qui détiennent le droit.
+ */
+export function AAgirBloc({ m, roles }: { m: Maillon; roles: readonly string[] }) {
+  const a = m.aAgir;
+  if (!a) return null;
+  const mine = a.roles.some((r) => roles.includes(r));
+  return (
+    <div className="ch-aagir" aria-label={`Qui doit agir — ${m.label}`}>
+      <dl className="kv kv-dense">
+        <div><dt>Qui doit agir</dt><dd className="small">{a.qui}{a.automatique ? ' — automatique' : ''}{mine ? ' (votre rôle)' : ''}</dd></div>
+        <div><dt>Où</dt><dd className="small">
+          {mine
+            ? <span className="btn-row">{a.ou.map((l) => <Link key={l.path} className="btn btn-ghost btn-sm" to={l.path}><Icon name="chevronRight" size={14} /> {l.label}</Link>)}</span>
+            : a.ou.map((l) => l.label).join(' · ')}
+        </dd></div>
+        <div><dt>À savoir</dt><dd className="small">{a.note}</dd></div>
+      </dl>
+      <p className="small muted">Preuve en lecture seule : ce maillon sera accompli par l’opération réelle dans son module, jamais depuis cette chaîne.</p>
+    </div>
+  );
+}
+
 export function ChaineStepper({ maillons, idPrefix = 'ch' }: { maillons: Maillon[]; idPrefix?: string }) {
-  const { fmtDate } = useApp();
+  const { fmtDate, user } = useApp();
   const [sel, setSel] = useState(() => defaultStep(maillons));
   const current = maillons.find((m) => m.code === sel) ?? maillons[0];
   const done = maillons.filter((m) => m.status === 'FAIT').length;
@@ -103,6 +127,7 @@ export function ChaineStepper({ maillons, idPrefix = 'ch' }: { maillons: Maillon
             )}
             <div><dt>Garde-fou</dt><dd className="small">{current.garde}</dd></div>
           </dl>
+          <AAgirBloc m={current} roles={user?.roles ?? []} />
         </div>
       )}
     </div>

@@ -17,12 +17,15 @@ import { COMMUNES } from '../../verticals/catalogue';
 import '../referentiel/referentiel.css';
 import './verticales.css';
 import { SecteursVisuels } from './visuels';
+import { CheminActe, TravauxAvantActe, type CheminActeView } from './CheminActe';
 
 interface CredType { code: string; label: string; activable: boolean; reason: string | null }
 interface KindDef { kind: string; label: string; keys: Record<string, string> }
 interface SectorModule {
   module: string; name: string; function: string; vertical: string; verticalName: string; legal: string; prerequisites: string[]; revenueCodes: string[];
   credentialTypes: CredType[]; declarationKinds: KindDef[]; observationSources: string[]; routes: string[]; note?: string; counts: { references: number; declarations: number; observations: number };
+  /** Chemin vers l'acte (29/09/2026) : état du module et liste de contrôle lue dans les registres. */
+  etat?: 'ACTE_REQUIS' | 'ACTE_EN_VIGUEUR'; cheminActe?: CheminActeView; activite?: { label: string; value: number }[];
 }
 interface Declaration {
   id: string; module: string; kind: string; period: string; lines: Record<string, string>; status: string; declaredAt: string;
@@ -50,8 +53,14 @@ function useAction(reload: () => void) {
   return { err, run };
 }
 
+interface OwnObject { id: string; commune: string; quartier: string; attributes: Record<string, unknown> }
+
 function DeclareForm({ modules, onDone }: { modules: SectorModule[]; onDone: () => void }) {
+  const { user } = useApp();
   const kinds = modules.flatMap((m) => m.declarationKinds);
+  // Sites de carrière du redevable (ses propres objets) : choix dans une liste, saisie libre conservée.
+  const own = useApi(() => api<OwnObject[]>('/v1/fiscal/objects').catch(() => [] as OwnObject[]), [user?.id]);
+  const quarries = (own.data ?? []).filter((o) => o.attributes.objectType === 'CARRIERE');
   const [kind, setKind] = useState(kinds[0]?.kind ?? '');
   const [period, setPeriod] = useState('');
   const [objectId, setObjectId] = useState('');
@@ -64,12 +73,18 @@ function DeclareForm({ modules, onDone }: { modules: SectorModule[]; onDone: () 
     if (await run('/v1/verticales/secteurs/declarations', { kind, period, lines: filled, ...(objectId ? { objectId } : {}) })) setLines({});
   };
   return (
-    <form className="panel stack-sm" onSubmit={submit} aria-labelledby="sec-decl">
+    <form className="panel stack-sm" onSubmit={submit} aria-labelledby="sec-decl" id="sec-declarer">
       <h2 className="panel-title" id="sec-decl"><Icon name="file" size={18} /> Déposer une déclaration</h2>
       <label className="label" htmlFor="sec-kind">Déclaration</label>
       <select id="sec-kind" value={kind} onChange={(e) => { setKind(e.target.value); setLines({}); }}>{kinds.map((k) => <option key={k.kind} value={k.kind}>{k.label}</option>)}</select>
       <div className="row-wrap">
         <input value={period} onChange={(e) => setPeriod(e.target.value)} placeholder="Période AAAA-MM" aria-label="Période" />
+        {kind === 'SORTIES_CARRIERE' && quarries.length > 0 && (
+          <select value={objectId} onChange={(e) => setObjectId(e.target.value)} aria-label="Mes sites de carrière">
+            <option value="">Choisir un de mes sites…</option>
+            {quarries.map((o) => <option key={o.id} value={o.id}>{String(o.attributes.nom ?? o.id)} — {o.commune}</option>)}
+          </select>
+        )}
         {kind === 'SORTIES_CARRIERE' && <input value={objectId} onChange={(e) => setObjectId(e.target.value)} placeholder="Identifiant du site de carrière" aria-label="Site de carrière" />}
       </div>
       <div className="row-wrap">
@@ -93,7 +108,7 @@ function Declarations({ canReconcile, canDecide }: { canReconcile: boolean; canD
   if (q.loading) return <Loading />;
   if (q.error) return <ErrorState error={q.error} onRetry={q.reload} />;
   return (
-    <section className="panel">
+    <section className="panel" id="sec-declarations">
       <div className="panel-head"><h2 className="panel-title"><Icon name="sync" size={18} /> Déclarations et rapprochements</h2><span className="count">{q.data?.items.length ?? 0}</span></div>
       {err && <p className="notice notice-err" role="alert">{err}</p>}
       {!q.data?.items.length ? <EmptyState title="Aucune déclaration" /> : (
@@ -156,7 +171,7 @@ function FieldTools({ modules }: { modules: SectorModule[] }) {
     } catch (ex) { setErr(describeError(ex).message); }
   };
   return (
-    <section className="panel stack-sm">
+    <section className="panel stack-sm" id="sec-terrain">
       <h2 className="panel-title"><Icon name="car" size={18} /> Terrain : contrôle par plaque et relevés</h2>
       <form className="row-wrap" onSubmit={check}>
         <input value={plate} onChange={(e) => setPlate(e.target.value)} placeholder="Plaque (ex. KN-1234-AB)" aria-label="Plaque du véhicule" />
@@ -223,6 +238,16 @@ export default function Secteurs() {
     <div className="page page-wide">
       <PageHead eyebrow="Catalogue des modules (§ 11)" title="Modules sectoriels — acte requis"
         lead="Véhicules, embarquement et ports, antennes, boissons et tabac, grands redevables, spectacles, carrières, forêts, péage : sur le socle commun, sans aucun montant avant l’acte." />
+      <details className="panel sec-comment">
+        <summary><strong>Comment avancer vers l’acte ?</strong></summary>
+        <ol className="small">
+          <li>Le juriste enregistre l’acte sur le point juridique (J1, J3, J13, J30…) ; une autre personne habilitée le tranche.</li>
+          <li>Le juriste rédige la règle au registre ; trois autres personnes la visent (juridique, financier, publication) ; elle devient ACTIVE à sa date d’effet.</li>
+          <li>La direction de la régie retient la règle et la référence de l’acte dans la fiche du module (« Activer après acte »).</li>
+          <li>Le module quitte alors « acte requis » automatiquement. Avant cela : déclarations, relevés et rapprochements sont enregistrés, sans aucun montant.</li>
+        </ol>
+        <p className="hint">Chaque carte indique la prochaine étape ; le bouton n’apparaît qu’aux rôles habilités, les autres voient qui doit agir.</p>
+      </details>
       {cat.loading && <Loading />}
       {!!cat.error && <ErrorState error={cat.error} onRetry={cat.reload} />}
       {cat.data && (
@@ -234,11 +259,16 @@ export default function Secteurs() {
               <article key={m.module} className="g3-card">
                 <h3>{m.module} — {m.name}</h3>
                 <p className="small muted">{m.function} · verticale {m.verticalName}</p>
-                <StatusBadge tone="info" label="Acte requis avant tout paiement" />
+                {m.etat === 'ACTE_EN_VIGUEUR'
+                  ? <StatusBadge tone="good" label={m.cheminActe?.etatLabel ?? 'Acte en vigueur'} />
+                  : <StatusBadge tone="info" label="Acte requis avant tout paiement" />}
                 {m.credentialTypes.length > 0 && <p className="small">Titres : {m.credentialTypes.map((t) => t.label).join(', ')} (non activables)</p>}
                 <p className="small muted">Prérequis : {m.prerequisites.join(' ; ')}</p>
                 {m.note && <p className="small">{m.note}</p>}
                 <p className="small muted">{m.counts.declarations} déclaration(s) · {m.counts.observations} relevé(s) · {m.counts.references} référence(s)</p>
+                {!!m.activite?.length && <p className="small muted">{m.activite.map((a) => `${a.label} : ${a.value}`).join(' · ')}</p>}
+                {m.cheminActe && <CheminActe chemin={m.cheminActe} roles={roles} />}
+                <TravauxAvantActe module={m.module} roles={roles} />
               </article>
             ))}
           </div>

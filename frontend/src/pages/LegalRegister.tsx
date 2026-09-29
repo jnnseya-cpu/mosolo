@@ -529,6 +529,23 @@ export default function LegalRegister() {
   const [creating, setCreating] = useState(false);
   const [initial, setInitial] = useState<NewRule | null>(null);
   const rules = q.data?.rules ?? [];
+  // Liens directs depuis le chemin vers l'acte des modules sectoriels (29/09/2026) : ?code=CODE ouvre la dernière version
+  // de la règle (visas) ; ?nouvelle=CODE ouvre la rédaction avec le code prérempli (?nouvelle=1 : code à choisir).
+  const [params] = useState(() => new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search));
+  const askedCode = params.get('code');
+  const askedNew = params.get('nouvelle');
+  const [linkDone, setLinkDone] = useState(false);
+  useEffect(() => {
+    if (linkDone || !q.data) return;
+    if (askedCode) {
+      const r = q.data.rules.filter((x) => x.code === askedCode).sort((a, b) => b.version - a.version)[0];
+      if (r) setOpenId(r.id);
+    } else if (askedNew) {
+      if (askedNew !== '1') setInitial({ ...EMPTY, code: askedNew });
+      setCreating(true);
+    }
+    setLinkDone(true);
+  }, [q.data, askedCode, askedNew, linkDone]);
   const open = rules.find((r) => r.id === openId) ?? null;
   return (
     <div className="page">

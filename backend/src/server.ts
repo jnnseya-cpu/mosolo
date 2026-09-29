@@ -14,7 +14,8 @@ assertBootSecrets();
 
 const port = Number.parseInt(process.env.PORT ?? '8080', 10);
 const host = process.env.HOST ?? '0.0.0.0';
-const app = buildApp({ logger: true });
+// Exemples complémentaires de démonstration (modules sectoriels) : semés seulement si les données de démonstration le sont.
+const app = buildApp({ logger: true, demoExamples: true });
 const { assertKeyHealthAtBoot } = await import('./plugins/integrite/gouvernance/cles.js');
 // Hors démonstration : santé des clés contrôlée au démarrage — refus sur avertissement critique (clé absente, éphémère,
 // de démonstration, réutilisée pour deux usages…) ; les autres avertissements (âge) sont journalisés et alertés.

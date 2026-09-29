@@ -781,7 +781,7 @@ function LiquidationsTab({ roles }: { roles: string[] }) {
 
 // ======================================================================== Configuration (régie)
 
-function ConfigRow({ module }: { module: string }) {
+function ConfigRow({ module, focus = false }: { module: string; focus?: boolean }) {
   const q = useLoad<{ ruleCode: string | null; credentialTypeCode: string | null; extraCredentialTypeCodes?: string[]; objectCategories: string[]; actReference: string; rule: string }>(`/v1/verticales/fiches/${module}/configuration`);
   const types = useLoad<{ available: CredType[] }>(`/v1/verticales/fiches/${module}/types-titres`);
   const [rule, setRule] = useState('');
@@ -792,8 +792,8 @@ function ConfigRow({ module }: { module: string }) {
   const avail = types.data?.available ?? [];
   const catalogueModule = ['13', '22', '24', '25'].includes(module);
   return (
-    <li className="list-row list-row-stack">
-      <p className="row-title">Module {module} — règle {q.data?.ruleCode ?? 'aucune'} ({q.data?.rule ?? '…'}){q.data?.credentialTypeCode ? ` · titre ${q.data.credentialTypeCode}` : ''}{q.data?.extraCredentialTypeCodes?.length ? ` + ${q.data.extraCredentialTypeCodes.join(', ')}` : ''}</p>
+    <li className={`list-row list-row-stack${focus ? ' fiche-focus' : ''}`} id={`config-${module}`}>
+      <p className="row-title">{focus && <StatusBadge tone="info" label="Module demandé" />} Module {module} — règle {q.data?.ruleCode ?? 'aucune'} ({q.data?.rule ?? '…'}){q.data?.credentialTypeCode ? ` · titre ${q.data.credentialTypeCode}` : ''}{q.data?.extraCredentialTypeCodes?.length ? ` + ${q.data.extraCredentialTypeCodes.join(', ')}` : ''}</p>
       <form className="row-wrap" onSubmit={(e) => { e.preventDefault(); const m = motif('Motif de la configuration'); if (m) void a.run(`/v1/verticales/fiches/${module}/configuration`, { ruleCode: rule || null, ...(catalogueModule && type ? { credentialTypeCode: type } : {}), ...(module === '19' && cats ? { objectCategories: cats.split(',').map((c) => c.trim()) } : {}), actReference: act, motif: m }, () => 'Configuration enregistrée.'); }}>
         <input value={rule} onChange={(e) => setRule(e.target.value)} placeholder="Code de la règle du registre" aria-label={`Règle du module ${module}`} />
         {catalogueModule && avail.length > 0 && (
@@ -811,12 +811,12 @@ function ConfigRow({ module }: { module: string }) {
   );
 }
 
-function ConfigurationTab({ roles }: { roles: string[] }) {
+function ConfigurationTab({ roles, focus }: { roles: string[]; focus?: string | null }) {
   if (!has(roles, 'R06')) return <EmptyState title="Configuration réservée à la direction de la régie" icon="lock">Choisissez « Directeur DGTK — configuration des fiches sectorielles » dans l’en-tête.</EmptyState>;
   return (
     <Panel title="Règle du registre et type de titre de chaque fiche (avec l’acte)" icon="scale">
       <p className="small">Sans règle ACTIVE, le module reste en « acte requis » : propositions sans montant. Les types [EXEMPLE] sont réservés à la démonstration.</p>
-      <ul className="list-rows">{['13', '16', '17', '18', '19', '22', '23', '24', '25'].map((m) => <ConfigRow key={m} module={m} />)}</ul>
+      <ul className="list-rows">{['13', '16', '17', '18', '19', '21', '22', '23', '24', '25'].map((m) => <ConfigRow key={m} module={m} focus={focus === m} />)}</ul>
     </Panel>
   );
 }
@@ -826,7 +826,10 @@ function ConfigurationTab({ roles }: { roles: string[] }) {
 export default function Fiches() {
   const { user } = useApp();
   const roles = user?.roles ?? [];
-  const [tab, setTab] = useState('indicateurs');
+  // Lien direct depuis le chemin vers l'acte : /verticales/fiches?onglet=configuration&module=22 (29/09/2026).
+  const [params] = useState(() => new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search));
+  const asked = params.get('onglet');
+  const [tab, setTab] = useState(asked && FICHE_TABS.some(([k]) => k === asked) ? asked : 'indicateurs');
   return (
     <div className="page page-wide">
       <PageHead eyebrow="Spécification fonctionnelle — modules 13 à 25" title="Fiches sectorielles"
@@ -847,7 +850,7 @@ export default function Fiches() {
       {tab === '24' && <Tab24 roles={roles} />}
       {tab === '25' && <Tab25 roles={roles} />}
       {tab === 'liquidations' && <LiquidationsTab roles={roles} />}
-      {tab === 'configuration' && <ConfigurationTab roles={roles} />}
+      {tab === 'configuration' && <ConfigurationTab roles={roles} focus={params.get('module')} />}
     </div>
   );
 }

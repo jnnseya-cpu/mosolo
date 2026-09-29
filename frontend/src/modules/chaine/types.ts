@@ -17,7 +17,11 @@ export interface Maillon {
   detail: string;
   reason?: string;
   rupture?: boolean;
+  /** Maillon en attente ou bloqué : qui doit agir, où (écran du module) — jamais accompli depuis la chaîne. */
+  aAgir?: AAgir;
 }
+
+export interface AAgir { qui: string; roles: string[]; ou: { label: string; path: string }[]; automatique: boolean; note: string }
 
 export interface Answer {
   code: 'QUI' | 'QUOI' | 'OU' | 'REGLE' | 'COMBIEN' | 'PAYE' | 'COMPTE_PUBLIC';

@@ -7,7 +7,8 @@ import { currencySchema, header, parse } from '../../core/http.js';
 import { CONNECTOR_IDS } from './connectors/types.js';
 import { authorize } from '../../core/policy.js';
 import { isDemoMode } from '../../core/auth.js';
-import { conflict, notFound } from '../../core/errors.js';
+import { ApiError, conflict, notFound } from '../../core/errors.js';
+import { INBOUND_WEBHOOKS } from '../integrations/inventory.js';
 import { signBitriPayWebhook, BITRIPAY_DEMO_WEBHOOK_SECRET } from './connectors/bitripay.js';
 import { signKodaWebhook, KODA_DEMO_WEBHOOK_SECRET } from './connectors/koda.js';
 import { toMinorUnits } from './connectors/minor-units.js';
@@ -51,12 +52,21 @@ export function registerPaymentRoutes(app: FastifyInstance, ctx: AppContext): vo
   });
 
   app.post<{ Params: { provider: string } }>('/v1/providers/:provider/callbacks', async (req, reply) => {
-    const res = ctx.payments.handleCallback(
-      req.params.provider,
-      { signature: header(req, 'x-signature'), nonce: header(req, 'x-nonce'), timestamp: header(req, 'x-timestamp'), keyId: header(req, 'x-key-id') },
-      req.rawBody ?? '',
-    );
-    return reply.code(200).send(res);
+    // Dernière réception (console « Clés et raccordements ») : prestataires connus seulement, jamais le corps.
+    const inboundId = `callback:${req.params.provider}`;
+    const known = INBOUND_WEBHOOKS.some((w) => w.id === inboundId);
+    try {
+      const res = ctx.payments.handleCallback(
+        req.params.provider,
+        { signature: header(req, 'x-signature'), nonce: header(req, 'x-nonce'), timestamp: header(req, 'x-timestamp'), keyId: header(req, 'x-key-id') },
+        req.rawBody ?? '',
+      );
+      if (known) ctx.integrations.recordInbound(inboundId, 'VALIDE');
+      return reply.code(200).send(res);
+    } catch (e) {
+      if (known) ctx.integrations.recordInbound(inboundId, 'REFUSEE', e instanceof ApiError ? e.code : 'ERREUR');
+      throw e;
+    }
   });
 
   // Webhooks serveur à serveur des prestataires connectés : corps BRUT vérifié avant toute interprétation.
@@ -145,6 +155,13 @@ export function registerPaymentRoutes(app: FastifyInstance, ctx: AppContext): vo
     }
     ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'provider.sandbox.simulated', resourceType: 'payment_order', resourceId: order.id, details: { provider: connector.id, event: body.event } });
     return { simulated: true, sandbox: true, ...ctx.payments.handleConnectorWebhook(connector.id, headers, raw) };
+  });
+
+  // Page de retour « /paiement/retour » (29/09/2026) : état RÉEL du paiement lu dans MOSOLO (jamais dans l'URL de retour).
+  app.get<{ Params: { reference: string } }>('/v1/payment-orders/:reference/status', async (req, reply) => {
+    const user = requireUser(req);
+    reply.header('cache-control', 'no-store');
+    return ctx.payments.paymentStatusFor(user, req.params.reference);
   });
 
   // « Ce paiement a-t-il eu lieu ? » auprès du prestataire : pièce de dossier (legalEffect AUCUN).

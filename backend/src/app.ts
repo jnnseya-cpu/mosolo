@@ -26,6 +26,7 @@ import { registerIdentityRoutes } from './modules/identity/routes.js';
 import { registerCompteUniqueRoutes } from './modules/identity/compte-unique-routes.js';
 import { registerObjectRoutes } from './modules/objects/routes.js';
 import { registerPaymentRoutes } from './modules/payments/routes.js';
+import { registerIntegrationRoutes } from './modules/integrations/routes.js';
 import { registerReceiptRoutes } from './modules/receipts/routes.js';
 import { registerRuleRoutes } from './modules/rules/routes.js';
 import { registerSystemRoutes } from './modules/system/routes.js';
@@ -114,6 +115,8 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
   const seeded = shouldSeed(opts);
   // Connu des modules dès leur création : hors démonstration, aucun élément fictif de configuration n'est défini.
   ctx.demoData = seeded;
+  // Exemples complémentaires (modules sectoriels…) : seulement en démonstration et sur demande du point d'entrée.
+  ctx.demoExamples = seeded && opts.demoExamples === true;
   for (const p of plugins) ctx.ext[p.name] = p.create(ctx);
   // Un amorçage réel et des données fictives ne se mélangent jamais.
   const bootstrap = seeded ? undefined : opts.bootstrap ?? (process.env.MOSOLO_BOOTSTRAP_FILE?.trim() ? loadBootstrapFile(process.env.MOSOLO_BOOTSTRAP_FILE.trim()) : undefined);
@@ -212,6 +215,8 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
   registerRuleRoutes(app, ctx);
   registerAssessmentRoutes(app, ctx);
   registerPaymentRoutes(app, ctx);
+  // « Clés et raccordements » (29/09/2026) : console du super-administrateur, écriture seule, deux personnes.
+  registerIntegrationRoutes(app, ctx);
   registerTreasuryRoutes(app, ctx);
   registerReceiptRoutes(app, ctx);
   registerVaultRoutes(app, ctx);

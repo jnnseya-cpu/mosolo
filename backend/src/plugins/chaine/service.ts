@@ -26,7 +26,7 @@ import { buildGraph, buildTrail } from '../pilotage/trail.js';
 import type { RecoveryService } from '../recouvrement/service.js';
 import type { TerrainService } from '../terrain/service.js';
 import { approvalProblem, checkChainInvariants, legalTextProblem } from './invariants.js';
-import { MAILLONS, QUESTIONS, type Answer, type Maillon, type MaillonCode, type MaillonStatus, type QuestionCode } from './model.js';
+import { MAILLONS, PROCHAINE_ACTION, QUESTIONS, type Answer, type Maillon, type MaillonCode, type MaillonStatus, type QuestionCode } from './model.js';
 
 const CONFIRMED_LIKE = new Set(['CONFIRME', 'REGLE', 'RAPPROCHE', 'CONTESTE', 'CONTREPASSE', 'REMBOURSE']);
 const OPEN_EXCEPTION = new Set(['OUVERTE', 'EN_COURS']);
@@ -386,7 +386,11 @@ export class ChaineService {
       const skipped = req.filter((r) => out.find((x) => x.code === r)!.status !== 'FAIT');
       if (skipped.length) Object.assign(m, { status: 'BLOQUE', rupture: true, reason: `Maillon sauté : ${skipped.map((s) => MAILLONS.find((x) => x.code === s)!.label).join(', ')} non accompli.` });
     }
-    return out.map((m) => ({ ...m, actor: this.maskActor(m.actor, access) }));
+    // Maillon en attente ou bloqué : qui doit agir et où (écran du module). Lecture seule : aucune action depuis la chaîne.
+    return out.map((m) => ({
+      ...m, actor: this.maskActor(m.actor, access),
+      ...(m.status === 'EN_ATTENTE' || m.status === 'BLOQUE' ? { aAgir: PROCHAINE_ACTION[m.code] } : {}),
+    }));
   }
 
   // ————————————————————————— sept questions —————————————————————————

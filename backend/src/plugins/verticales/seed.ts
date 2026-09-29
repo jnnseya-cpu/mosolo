@@ -287,6 +287,9 @@ export function seedVerticales(ctx: AppContext, svc: VerticalesService): void {
   svc.calcu.receiveTransaction(bank, { bank: 'Banque partenaire A (démo)', accountNumber: 'CD00 1111 2222 3333 4444 0001', amount: { amount: '12500000', currency: 'CDF' }, at: at(30), beneficiary: supplier, reference: 'OP-DEMO-0012' });
   svc.calcu.receiveTransaction(bank, { bank: 'Banque partenaire A (démo)', accountNumber: 'CD00 1111 2222 3333 4444 0001', amount: { amount: '4000000', currency: 'CDF' }, at: at(20), beneficiary: supplier, reference: 'OP-DEMO-0013' });
   svc.calcu.receiveTransaction(bank, { bank: 'Banque partenaire A (démo)', accountNumber: 'CD00 9999 8888 7777 6666 0009', amount: { amount: '2300000', currency: 'CDF' }, at: at(6), beneficiary: 'Bénéficiaire inconnu (démo)', reference: 'SANS-REF' });
+
+  // Modules sectoriels « acte requis » : déclarations, relevés et rapprochements [EXEMPLE] (démonstration seulement).
+  seedSecteursExemples(ctx, svc);
 }
 
 /**
@@ -355,4 +358,58 @@ export function seedActifs(ctx: AppContext, svc: VerticalesService): void {
     nature: 'LOCAL_COMMERCIAL', designation: 'Local commercial provincial [EXEMPLE] — boulevard du 30 Juin', commune: 'Gombe', quartier: 'Commerce',
     surfaceM2: '120', titleReference: 'ACTE-AFFECTATION-DEMO-0001 [EXEMPLE]',
   }, true);
+}
+
+/** Redevable et partenaire FICTIFS des exemples sectoriels (distincts du contribuable démo : aucun effet sur ses dossiers). */
+export const SECTEURS_DEMO = {
+  taxpayerId: 'TP-VX-SECT-01',
+  user: 'vx-redevable-sectoriel',
+  partner: 'vx-partenaire-accises-exemple',
+} as const;
+
+/**
+ * Exemples des modules sectoriels « acte requis » (29/09/2026) — DÉMONSTRATION seulement, [EXEMPLE] non contractuels :
+ * un redevable fictif déclare (boissons 17, sorties de carrière 22, produits non ligneux 23), l'agent de terrain relève
+ * (embarquement 13, carrière 22, accostage 24, péage 25), le contrôleur relève au point forestier (23), un partenaire de
+ * données fictif verse des données d'accises (17), le contrôleur rapproche deux déclarations — les décisions restent à
+ * prendre par une AUTRE personne (cheffe de service). Aucune obligation, aucun montant (ACTE_REQUIS). Quantités
+ * d'exemple, sans valeur de référence. Le mode production (sans --demo) ne charge rien de tout cela.
+ */
+function seedSecteursExemples(ctx: AppContext, svc: VerticalesService): void {
+  const s = svc.secteurs;
+  // Exemples COMPLÉMENTAIRES : seulement si le point d'entrée de démonstration les demande (ctx.demoExamples) — les tests
+  // historiques, qui comptent les dépôts sectoriels à vide, ne les reçoivent pas.
+  if (!ctx.demoExamples || !svc.fiches || s.declarations.count() > 0 || ctx.taxpayers.taxpayers.get(SECTEURS_DEMO.taxpayerId)) return;
+  ctx.taxpayers.register({ phone: '+243810009905', fullName: 'Entreprise sectorielle fictive [EXEMPLE] (démo)', language: 'fr', situation: 'other' }, SECTEURS_DEMO.taxpayerId);
+  if (!ctx.users.get(SECTEURS_DEMO.user)) ctx.users.add({ id: SECTEURS_DEMO.user, name: 'Redevable sectoriel fictif [EXEMPLE] (démo)', roles: ['R30'], entity: 'PUBLIC', taxpayerId: SECTEURS_DEMO.taxpayerId });
+  if (!ctx.users.get(SECTEURS_DEMO.partner)) ctx.users.add({ id: SECTEURS_DEMO.partner, name: 'Partenaire de données — accises [EXEMPLE] (démo)', roles: ['R34'], entity: 'PARTENAIRE-DONNEES' });
+  const u = (id: string) => ctx.users.get(id)!;
+  const owner = u(SECTEURS_DEMO.user);
+  const instructor = u(VX_DEMO.users.instructor);
+  const field = u(VX_DEMO.users.fieldAgent);
+  const period = kinshasaDate(svc.now()).slice(0, 7);
+
+  // Carrière (module 22) du redevable fictif, enregistrée par le contrôleur (cadastre commun).
+  const quarry = svc.fiches.registerObject(instructor, {
+    module: '22', taxpayerId: SECTEURS_DEMO.taxpayerId, commune: 'Nsele', quartier: 'Kinkole', lat: -4.345, lon: 15.505,
+    attributes: { nom: 'Carrière de sable [EXEMPLE] — Nsele', superficie_ha: '4', titre: '[EXEMPLE] Titre d’exploitation fictif' },
+  }).object;
+
+  // Déclarations du redevable (quantités [EXEMPLE]).
+  const d17 = s.declare(owner, { kind: 'VOLUMES_BAT', period, lines: { biere_litres: '12000', spiritueux_litres: '800' }, documents: [] });
+  const d22 = s.declare(owner, { kind: 'SORTIES_CARRIERE', objectId: quarry.id, period, lines: { camions: '40', volume_m3: '480' }, documents: [] });
+  s.declare(owner, { kind: 'PFNL', period, lines: { quantite_kg: '800' }, documents: [] });
+
+  // Données tierces sous protocole (partenaire fictif) et relevés de terrain.
+  s.thirdPartyData(u(SECTEURS_DEMO.partner), { module: '17', source: 'ACCISES', taxpayerId: SECTEURS_DEMO.taxpayerId, period, lines: { biere_litres: '12000', spiritueux_litres: '800' } });
+  s.observe(field, '22', { source: 'COMPTAGE_SORTIES', objectId: quarry.id, period, lines: { camions: '46', volume_m3: '552' } });
+  s.observe(field, '13', { source: 'RELEVE_EMBARQUEMENT', referenceId: 'EMB-EX-01', period, lines: { passagers: '64' } });
+  s.observe(field, '24', { source: 'RELEVE_ACCOSTAGE', referenceId: 'QUAI-EX-01', period, lines: { accostages: '3', passagers: '120' } });
+  s.observe(field, '25', { source: 'PASSAGE_PEAGE', referenceId: 'AXE-EX-02', period, lines: { passages: '210' } });
+  s.observe(instructor, '23', { source: 'POINT_CONTROLE', referenceId: 'PCF-EX-01', period, lines: { quantite_kg: '750' } });
+
+  // Rapprochements par le contrôleur : boissons sans écart, carrière avec écart défavorable (contradictoire à décider par
+  // une autre personne) ; la déclaration forestière reste à rapprocher.
+  s.reconcile(instructor, d17.id);
+  s.reconcile(instructor, d22.id);
 }

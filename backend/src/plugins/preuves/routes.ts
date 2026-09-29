@@ -37,15 +37,32 @@ function sameHex(a: string, b: string): boolean {
 }
 
 /** Passerelle opérateur : HMAC-SHA256(secret, corps brut) ; démonstration seulement si aucun secret n'est configuré. */
-export function gatewayGuard(req: FastifyRequest, secret: string | undefined, headerName: string, prefix = ''): { simulated: boolean } {
+export function gatewayGuard(
+  req: FastifyRequest, secret: string | undefined, headerName: string, prefix = '',
+  /** Journal de la dernière réception (« Clés et raccordements ») : résultat de la vérification, jamais le corps. */
+  record?: (verification: 'VALIDE' | 'REFUSEE' | 'SIMULEE', code: string | null) => void,
+): { simulated: boolean } {
   if (!secret) {
-    if (!isDemoMode()) throw forbidden('GATEWAY_NOT_CONFIGURED', 'Passerelle non configurée : secret de signature absent (production).');
+    if (!isDemoMode()) {
+      record?.('REFUSEE', 'GATEWAY_NOT_CONFIGURED');
+      throw forbidden('GATEWAY_NOT_CONFIGURED', 'Passerelle non configurée : secret de signature absent (production).');
+    }
+    record?.('SIMULEE', null);
     return { simulated: true };
   }
   const got = (header(req, headerName) ?? '').replace(prefix, '');
   const want = createHmac('sha256', secret).update(req.rawBody ?? '').digest('hex');
-  if (!sameHex(got, want)) throw forbidden('BAD_SIGNATURE', 'Signature de la passerelle invalide.');
+  if (!sameHex(got, want)) {
+    record?.('REFUSEE', 'BAD_SIGNATURE');
+    throw forbidden('BAD_SIGNATURE', 'Signature de la passerelle invalide.');
+  }
+  record?.('VALIDE', null);
   return { simulated: false };
+}
+
+/** Enregistreur de réception d'un webhook entrant pour la console « Clés et raccordements ». */
+export function inboundRecorder(ctx: AppContext, id: string) {
+  return (verification: 'VALIDE' | 'REFUSEE' | 'SIMULEE', code: string | null) => ctx.integrations.recordInbound(id, verification, code);
 }
 
 /** Pages légères : aucun script, aucune ressource externe — la politique de sécurité du contenu l'impose au navigateur. */
@@ -74,7 +91,8 @@ export function registerPreuvesRoutes(app: FastifyInstance, ctx: AppContext, svc
 
   // ---------- SMS entrant (secours universel, téléphone basique) ----------
   app.post('/v1/sms/inbound', async (req) => {
-    const g = gatewayGuard(req, process.env.SMS_GATEWAY_SECRET, 'x-mosolo-signature');
+    // Secret : environnement d'abord, sinon valeur approuvée dans « Clés et raccordements » (lue à chaque requête).
+    const g = gatewayGuard(req, ctx.integrations.value('SMS_GATEWAY_SECRET'), 'x-mosolo-signature', '', inboundRecorder(ctx, 'sms'));
     const b = parse(z.object({ from: msisdn, text: z.string().trim().min(1).max(640) }).strict(), req.body);
     return { ...smsReply(ctx, svc, b.from, b.text), simulated: g.simulated };
   });
@@ -82,12 +100,16 @@ export function registerPreuvesRoutes(app: FastifyInstance, ctx: AppContext, svc
   // ---------- WhatsApp (API officielle du fournisseur contractualisé) ----------
   app.get<{ Querystring: Record<string, string> }>('/v1/whatsapp/webhook', async (req, reply) => {
     const q = req.query;
-    const token = process.env.WHATSAPP_VERIFY_TOKEN;
-    if (q['hub.mode'] === 'subscribe' && token && typeof q['hub.verify_token'] === 'string' && sameText(q['hub.verify_token'], token)) return reply.type('text/plain').send(q['hub.challenge'] ?? '');
+    const token = ctx.integrations.value('WHATSAPP_VERIFY_TOKEN');
+    if (q['hub.mode'] === 'subscribe' && token && typeof q['hub.verify_token'] === 'string' && sameText(q['hub.verify_token'], token)) {
+      ctx.integrations.recordInbound('whatsapp-verify', 'VALIDE');
+      return reply.type('text/plain').send(q['hub.challenge'] ?? '');
+    }
+    ctx.integrations.recordInbound('whatsapp-verify', 'REFUSEE', 'BAD_VERIFY_TOKEN');
     throw forbidden('BAD_VERIFY_TOKEN', 'Jeton de vérification du webhook invalide.');
   });
   app.post('/v1/whatsapp/webhook', async (req) => {
-    const g = gatewayGuard(req, process.env.WHATSAPP_APP_SECRET, 'x-hub-signature-256', 'sha256=');
+    const g = gatewayGuard(req, ctx.integrations.value('WHATSAPP_APP_SECRET'), 'x-hub-signature-256', 'sha256=', inboundRecorder(ctx, 'whatsapp'));
     const msgs = extractWhatsApp(req.body);
     if (!msgs.length) throw new ApiError(400, 'NO_MESSAGE', 'Aucun message texte dans la requête.');
     const results = msgs.map((m) => ({ to: m.from, ...wa.handle(m.from, m.text) }));
@@ -115,7 +137,7 @@ export function registerPreuvesRoutes(app: FastifyInstance, ctx: AppContext, svc
   app.get<{ Querystring: { c?: string } }>('/l/imprimer', async (req, reply) => {
     // Adresse du QR imprimé : MOSOLO_PUBLIC_URL. L'en-tête Host (choisi par le client) n'est utilisé qu'en démonstration :
     // sinon un domaine tiers pointant sur ce serveur produirait un document officiel renvoyant vers lui (hameçonnage).
-    const base = process.env.MOSOLO_PUBLIC_URL?.trim().replace(/\/+$/, '') || (isDemoMode() ? `${req.protocol}://${req.headers.host ?? 'localhost'}` : null);
+    const base = (process.env.MOSOLO_PUBLIC_URL?.trim() || ctx.integrations.value('MOSOLO_PUBLIC_URL')?.trim())?.replace(/\/+$/, '') || (isDemoMode() ? `${req.protocol}://${req.headers.host ?? 'localhost'}` : null);
     if (!base) return html(reply, lite.page('Impression indisponible', '<p>Version imprimable indisponible : adresse publique officielle non configurée (MOSOLO_PUBLIC_URL).</p><p><a href="/l">Accueil</a></p>'), 503);
     const r = svc.resolve((req.query.c ?? '').trim(), clientKey(req), 'IMPRIME');
     return html(reply, await lite.printable(r, base));

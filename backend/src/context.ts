@@ -23,6 +23,9 @@ import { registerSocleContributions } from './modules/identity/compte-unique-soc
 import { ObjectService } from './modules/objects/service.js';
 import type { ConnectorRuntime } from './modules/payments/connectors/koda.js';
 import { buildConnectorRegistry } from './modules/payments/connectors/registry.js';
+import { IntegrationConfigService } from './modules/integrations/service.js';
+import { CONNECTOR_BASE_VARS } from './modules/integrations/inventory.js';
+import { PROVIDER_ENV_KEYS, QueuedExternalProvider, SandboxProvider } from './modules/communications/providers.js';
 import { DEFAULT_KEY_ID, parseProviderKeyRing, type ProviderKey } from './modules/payments/callback-signing.js';
 import { PaymentService } from './modules/payments/service.js';
 import { loadReceiptSigningKey, loadReceiptVerificationKeys, ReceiptService } from './modules/receipts/service.js';
@@ -161,6 +164,12 @@ export interface AppOptions {
   aiProvider?: AIProvider;
   /** Charger les données de démonstration (défaut : oui). */
   seed?: boolean;
+  /**
+   * Exemples COMPLÉMENTAIRES de démonstration (29/09/2026 : déclarations, relevés et rapprochements [EXEMPLE] des modules
+   * sectoriels « acte requis ») : semés seulement avec les données de démonstration ET sur demande explicite des points
+   * d'entrée lancés avec `--demo` (défaut : non — les tests historiques gardent leurs dépôts vides).
+   */
+  demoExamples?: boolean;
   /** Variables des connecteurs BitriPay / KODA (défaut : process.env). Sans clé API : bac à sable local. */
   connectorEnv?: Record<string, string | undefined>;
   /** `fetch`, journal masqué et temporisation injectables (tests : jamais de réseau réel). */
@@ -187,6 +196,32 @@ export function createContext(opts: AppOptions = {}) {
   const assessment = new AssessmentService(clock, audit, comms, rules, taxpayers, objects, ledger);
   const receipts = new ReceiptService(clock, audit, alerts, secrets.receiptSigningKey, secrets.receiptVerificationKeys);
   const connectors = buildConnectorRegistry(opts.connectorEnv ?? process.env, opts.connectorRuntime ?? {});
+  // « Clés et raccordements » (29/09/2026) : valeurs approuvées à deux personnes, chiffrées au repos ; l'environnement
+  // prévaut. Les connecteurs relisent la configuration résolue à chaud (aucun redéploiement).
+  const integrations = new IntegrationConfigService(clock, audit, { ...(opts.connectorEnv ? { connectorEnv: opts.connectorEnv } : {}), processEnv: process.env, demo: isDemoMode() });
+  connectors.attachSource({
+    // Empreinte limitée aux variables des connecteurs : une clé SMS approuvée ne reconstruit pas les connecteurs de paiement.
+    env: () => integrations.connectorEnv(), fingerprint: () => integrations.fingerprint(CONNECTOR_BASE_VARS), runtime: opts.connectorRuntime ?? {},
+    sourceOf: (name) => integrations.sourceOf(name),
+  });
+  // Canaux de communication : une clé de fournisseur approuvée dans la console (sans variable d'environnement) raccorde
+  // le canal à sa file sortante ; retirée, le canal revient au bac à sable. Une clé d'environnement n'est jamais touchée.
+  const commsFromEnv = CommunicationService.providerKeysFromEnv(process.env);
+  const consoleWired = new Set<string>();
+  integrations.onChange(() => {
+    for (const [channel, name] of Object.entries(PROVIDER_ENV_KEYS) as [keyof typeof PROVIDER_ENV_KEYS, string][]) {
+      if (commsFromEnv[channel] || secrets.commsProviderKeys[channel]) continue;
+      const wired = !!integrations.value(name);
+      if (wired && !consoleWired.has(channel)) {
+        comms.setProvider(channel, new QueuedExternalProvider(channel, `connecteur-${channel}`));
+        consoleWired.add(channel);
+      } else if (!wired && consoleWired.has(channel)) {
+        // Seul un canal raccordé par la console revient au bac à sable (un fournisseur posé autrement n'est jamais touché).
+        comms.setProvider(channel, new SandboxProvider(channel));
+        consoleWired.delete(channel);
+      }
+    }
+  });
   const payments = new PaymentService(clock, audit, comms, alerts, assessment, taxpayers, vault, fx, receipts, ledger, secrets.providerSecrets, connectors, secrets.providerKeyRings ?? {});
   const treasury = new TreasuryService(clock, audit, comms, users, payments, assessment, receipts, vault, ledger, taxpayers);
   const drafts = new DraftService(clock, audit);
@@ -238,7 +273,7 @@ export function createContext(opts: AppOptions = {}) {
   }), () => payments.revenueByCommune());
 
   return {
-    clock, secrets, users, audit, idempotency, comms, alerts, fx, taxpayers, objects, vault, rules, ledger, connectors,
+    clock, secrets, users, audit, idempotency, comms, alerts, fx, taxpayers, objects, vault, rules, ledger, connectors, integrations,
     assessment, receipts, payments, treasury, drafts, field, appeals, ai, dashboards, compteUnique,
     /** Services des modules d'extension, par nom (voir plugins/). */
     ext: {} as Record<string, unknown>,
@@ -248,6 +283,8 @@ export function createContext(opts: AppOptions = {}) {
      * même de configuration (types de titres « DÉMONSTRATION »), n'est créé — mode production.
      */
     demoData: undefined as boolean | undefined,
+    /** Exemples complémentaires de démonstration demandés (fixé par `buildApp` : jamais sans données de démonstration). */
+    demoExamples: false as boolean,
     /**
      * État du stockage persistant (fixé par le module « socle » quand une base est attachée) : `degraded` vrai après
      * plusieurs écritures consécutives en échec. Absent : stockage en mémoire (tests, démonstration sans base).
