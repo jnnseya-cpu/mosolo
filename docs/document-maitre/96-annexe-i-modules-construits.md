@@ -1293,3 +1293,50 @@ clic, jamais par le menu). Ajout, rien de retiré :
   `frontend/test/fond-de-carte.test.tsx` (fond et attribution / message) ; `infra/valider.sh` section 6 (étape sautée,
   échec simulé → code 0 et avertissement, copie dans le Dockerfile, attribution) ; capture à 1 366 px de « Où payer ? »
   avec le fond. Procédure de l'exploitant : `infra/gcp/README.md`, « Fond de carte OpenStreetMap de Kinshasa ».
+
+## I.34 Modules sectoriels « acte requis » actionnables et chaîne opératoire expliquée (29/09/2026)
+
+Réponse aux deux constats du maître d'ouvrage (écran « Modules sectoriels — acte requis » sans moyen d'avancer ; maillons
+« En attente » de la chaîne sans action possible). Ajout, rien de retiré (écrans, routes, contrôles et données conservés).
+
+- **Chemin vers l'acte** (`backend/src/plugins/verticales/secteurs-acte.ts`, servi dans `GET /v1/verticales/secteurs`,
+  champs `etat`, `cheminActe`, `activite`) : pour chacun des modules 11, 13, 16, 17, 21, 22, 23, 24, 25 et 56, les
+  prérequis déjà affichés deviennent une liste de contrôle dont le statut est LU dans les registres existants :
+  - points juridiques cités (J1, J3, J13, J30…) : « Enregistrer l'acte » (juriste R13/R14, proposition avec référence
+    et empreinte), puis « Trancher le point » (R16, R05 ou R01, personne distincte) — `/juridique/points?point=Jx` ;
+  - règle du registre : « Rédiger la règle » (R13) puis le prochain visa du circuit REDACTEUR → VERIFICATEUR_JURIDIQUE →
+    VALIDATEUR_FINANCIER → AUTORITE_PUBLICATION, avec son rôle ; entrée en vigueur automatique à la date d'effet —
+    `/registre?nouvelle=CODE` ou `/registre?code=CODE` ;
+  - fiche du module : « Activer après acte » (directeur de la régie R06 : règle retenue et référence de l'acte) —
+    `/verticales/fiches?onglet=configuration&module=NN` (le module 21 est ajouté à la liste de configuration) ;
+  - types de titres (§ 19A.4) : activables ou non, avec la raison.
+  Un prérequis sans point juridique rattaché (protocole avec le pouvoir central, base forestière) est signalé « À
+  rattacher au registre » — rattachement à confirmer par le maître d'ouvrage, jamais inventé.
+- **Sortie automatique de « acte requis »** : l'état découle de la logique existante — règle ACTIVE retenue par la fiche
+  du module (`FichesService.ruleStatus`), clé du registre `VX-TEL-SITES` pour les antennes, type de titre activable pour
+  les véhicules (11), conventions J13 tranchées pour le suivi des grands redevables (56, sans montant propre). Aucune
+  bascule manuelle ; aucun montant avant l'acte.
+- **Écran** (`frontend/src/modules/verticales/Secteurs.tsx`, `CheminActe.tsx`) : « Comment avancer vers l'acte ? »,
+  et par carte la « Prochaine étape », la liste complète, puis « Travail possible dès maintenant (sans montant) » vers
+  les circuits existants (déclaration, relevé de terrain, rapprochement, fiches 13 à 25, démarches Mobilité et
+  Événements, cellule des grands redevables). Boutons affichés aux seuls rôles habilités (mêmes droits que le serveur,
+  aucun droit élargi) ; les autres voient « Qui doit agir ». Déclaration de sorties de carrière : choix parmi les sites
+  du redevable (saisie libre conservée). Visuel « Chemin vers l'acte par module ».
+- **Déclarations** : les trois types existants (17 volumes, 22 sorties de carrière, 23 produits non ligneux) sont
+  vérifiés de bout en bout ; aucun nouveau type n'est créé — les modules 11, 13, 16, 21, 24 et 25 déclarent déjà par
+  leurs circuits (mutation, manifestes, listes de sites, billetterie, relevés), vers lesquels l'écran renvoie (mêmes
+  circuits, jamais en parallèle).
+- **Exemples [EXEMPLE] non contractuels** (`seedSecteursExemples`) : redevable fictif `TP-VX-SECT-01`, carrière fictive,
+  trois déclarations, données d'accises d'un partenaire fictif, relevés 13/22/23/24/25, deux rapprochements (dont un
+  écart défavorable laissé à la décision d'une autre personne). Semés seulement en démonstration ET à la demande des
+  points d'entrée `--demo` (`buildApp({ demoExamples: true })`) ; le mode production n'en charge aucun ; les données de
+  démonstration existantes ne sont pas modifiées.
+- **Chaîne opératoire** (`backend/src/plugins/chaine/model.ts`, `PROCHAINE_ACTION`) : chaque maillon « En attente » ou
+  « Bloqué » porte `aAgir` — qui doit agir (rôles), où (écran du module qui accomplit réellement le maillon), à savoir.
+  L'écran affiche « Qui doit agir », « Où » (lien actif seulement pour le rôle habilité) et le garde-fou, et un encadré
+  « Comment ça marche ? ». La chaîne reste une preuve en lecture seule : aucun maillon n'est accompli depuis cet écran.
+- Tests : `backend/test/secteurs-chemin-acte.test.ts`, `frontend/test/secteurs-chemin-acte.test.tsx`.
+- **À arbitrer par le maître d'ouvrage** : rattachement des prérequis sans point J (protocole immatriculations du
+  module 11, base forestière du module 23) ; outillage d'une nouvelle version de type de titre avec référence d'acte
+  (aujourd'hui fixée dans le catalogue § 19A.4) ; visibilité de l'écran pour les juristes (R13–R16), qui n'y figurent pas
+  au menu (les liens les mènent directement à leurs écrans).

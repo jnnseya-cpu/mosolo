@@ -15,7 +15,8 @@ const host = process.env.HOST ?? '0.0.0.0';
 const runtime = await preparePersistence();
 // Le plugin « socle » (qui attache la persistance) est ajouté s'il ne figure pas déjà dans DEFAULT_PLUGINS.
 const plugins = DEFAULT_PLUGINS.some((p) => p.name === 'socle') ? DEFAULT_PLUGINS : [...DEFAULT_PLUGINS, soclePlugin];
-const app = buildApp({ logger: true, plugins });
+// Exemples complémentaires de démonstration (modules sectoriels) : semés seulement si les données de démonstration le sont.
+const app = buildApp({ logger: true, plugins, demoExamples: true });
 const { assertKeyHealthAtBoot } = await import('../plugins/integrite/gouvernance/cles.js');
 // Hors démonstration : santé des clés contrôlée au démarrage — refus sur avertissement critique (clé absente, éphémère,
 // de démonstration, réutilisée pour deux usages…) ; les autres avertissements (âge) sont journalisés et alertés.

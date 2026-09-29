@@ -49,3 +49,9 @@
 /* Visuels (trousse de visualisation, 27/09/2026) */
 .ch-visuel { margin-bottom: 0; }
 .ch-meter { padding: 16px; display: grid; align-content: center; }
+
+/* Qui doit agir, où (29/09/2026) et « Comment ça marche ». */
+.ch-aagir { display: grid; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); min-width: 0; overflow-wrap: anywhere; }
+.ch-aagir .btn-row { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.ch-comment summary { cursor: pointer; }
+.ch-comment ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; }

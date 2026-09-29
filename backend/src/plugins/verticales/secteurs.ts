@@ -31,6 +31,7 @@ import type { TitresService } from '../titres/service.js';
 import { statusAt } from '../titres/validity.js';
 import { P } from './policies.js';
 import { ruleCodeFor, type VerticalesService } from './service.js';
+import { cheminActe } from './secteurs-acte.js';
 
 export const SECTOR_ENTITY = 'DGTK';
 
@@ -243,16 +244,42 @@ export class SecteursService {
   }
 
   catalogue() {
-    return SECTOR_MODULES.map((m) => ({
-      ...m, verticalName: this.vx.vertical(m.vertical).name,
-      declarationKinds: m.declarations.map((k) => ({ kind: k, ...kindDef(k) })),
-      credentialTypes: this.credentialTypes(m),
-      counts: {
-        references: this.references.find((r) => r.module === m.module).length,
-        declarations: this.declarations.find((d) => d.module === m.module).length,
-        observations: this.observations.find((o) => o.module === m.module).length,
-      },
-    }));
+    return SECTOR_MODULES.map((m) => {
+      const credentialTypes = this.credentialTypes(m);
+      // Chemin vers l'acte (29/09/2026) : étapes lues dans les registres existants, état du module déduit de la règle.
+      const chemin = cheminActe(this.ctx, this.vx, m, credentialTypes);
+      return {
+        ...m, verticalName: this.vx.vertical(m.vertical).name,
+        declarationKinds: m.declarations.map((k) => ({ kind: k, ...kindDef(k) })),
+        credentialTypes,
+        counts: {
+          references: this.references.find((r) => r.module === m.module).length,
+          declarations: this.declarations.find((d) => d.module === m.module).length,
+          observations: this.observations.find((o) => o.module === m.module).length,
+        },
+        etat: chemin.etat,
+        cheminActe: chemin,
+        activite: this.activity(m.module),
+      };
+    });
+  }
+
+  /**
+   * Travaux déjà enregistrés sur le socle pour les modules dont l'activité avant l'acte passe par un autre circuit
+   * (véhicules, sites télécoms, billetterie, grands redevables) : comptages seulement, aucun montant.
+   */
+  private activity(module: string): { label: string; value: number }[] {
+    const typed = (t: string) => this.ctx.objects.objects.find((o) => o.attributes.objectType === t).length;
+    switch (module) {
+      case '11': return [{ label: 'Véhicules enregistrés', value: this.ctx.objects.objects.find((o) => o.category === 'VEHICULE').length }];
+      case '16': return [{ label: 'Sites télécoms au cadastre', value: typed('SITE_TELECOM') }];
+      case '21': return [{ label: 'Billetteries déclarées', value: this.vx.ticketing.count() }];
+      case '22': return [{ label: 'Sites de carrière', value: typed('CARRIERE') }];
+      case '23': return [{ label: 'Concessions forestières', value: typed('CONCESSION_FORESTIERE') }];
+      case '24': return [{ label: 'Embarcations', value: typed('EMBARCATION') }];
+      case '56': return [{ label: 'Grands redevables suivis', value: this.largeTaxpayers.find((e) => e.status === 'SUIVI').length }];
+      default: return [];
+    }
   }
 
   moduleDetail(user: User, module: string) {

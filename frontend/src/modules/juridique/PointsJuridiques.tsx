@@ -4,7 +4,7 @@
  * Trancher un point : un juriste propose l'acte (référence + empreinte SHA-256, le document reste sur l'appareil),
  * une AUTRE personne habilitée décide ; tout est journalisé.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PageHead } from '../../components/Shell';
 import { DataTable } from '../../components/DataTable';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
@@ -68,6 +68,16 @@ export default function PointsJuridiques() {
   const [form, setForm] = useState({ reference: '', titre: '', sha256: '', motif: '' });
   const [motifs, setMotifs] = useState<Record<string, string>>({});
   const a = useAction();
+  // Lien direct depuis le chemin vers l'acte des modules sectoriels (29/09/2026) : /juridique/points?point=J30.
+  const [params] = useState(() => new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search));
+  const asked = params.get('point')?.toUpperCase() ?? null;
+  const askedPoint = asked ? reg.data?.points.find((p) => p.code === asked) ?? null : null;
+  const [linkDone, setLinkDone] = useState(false);
+  useEffect(() => {
+    if (linkDone || !askedPoint) return;
+    if (canPropose && askedPoint.statut !== 'TRANCHE' && !askedPoint.proposition) setPick(askedPoint);
+    setLinkDone(true);
+  }, [askedPoint, canPropose, linkDone]);
 
   if (!allowed) {
     return <div className="page"><PageHead eyebrow="Registre juridique" title="Points juridiques à trancher" /><EmptyState title="Accès réservé" icon="lock">Réservé aux agents publics habilités et à l’observateur de la société civile.</EmptyState></div>;
@@ -100,6 +110,13 @@ export default function PointsJuridiques() {
           </div>
           <PointsVisuels points={reg.data.points} fonctions={reg.data.fonctions} />
           <p className="callout callout-info ig-note"><Icon name="info" size={18} /><span>{reg.data.note}</span></p>
+          {askedPoint && (
+            <section className="panel" aria-labelledby="pj-asked">
+              <h2 className="panel-title" id="pj-asked">Point demandé : {askedPoint.code}</h2>
+              <p className="small">{askedPoint.question} — {askedPoint.autorite}</p>
+              <p className="small"><StatutPoint statut={askedPoint.statut} /> {askedPoint.proposition ? `Proposition en attente (${askedPoint.proposition.acte.reference}) : décision par une autre personne habilitée.` : askedPoint.statut === 'TRANCHE' ? `Tranché : ${askedPoint.decision?.acte.reference ?? ''}` : canPropose ? 'Renseignez l’acte ci-dessous pour proposer de trancher ce point.' : 'Proposition réservée aux juristes (rédacteur, vérificateur) ; décision par l’autorité de publication, le ministre des Finances ou le Gouverneur.'}</p>
+            </section>
+          )}
 
           {pending.length > 0 && (
             <section className="panel" aria-labelledby="pj-pending">

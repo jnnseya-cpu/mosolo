@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1557 routes** dans 49 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1558 routes** dans 49 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -13,7 +13,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1557 routes** dans 4
 | extension communication | 13 |
 | extension decision | 30 |
 | extension documents | 17 |
-| extension equipements | 11 |
+| extension equipements | 12 |
 | extension fiscal | 110 |
 | extension ia | 40 |
 | extension integrite | 86 |
@@ -404,6 +404,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1557 routes** dans 4
 | POST | `/v1/equipements/terminaux` |
 | POST | `/v1/equipements/terminaux/:id/attestation` |
 | POST | `/v1/equipements/terminaux/:id/attestation/defi` |
+| POST | `/v1/equipements/terminaux/:id/charte` |
 | POST | `/v1/equipements/terminaux/:id/effacement` |
 | POST | `/v1/equipements/terminaux/:id/levee-quarantaine` |
 | POST | `/v1/equipements/terminaux/:id/perte` |

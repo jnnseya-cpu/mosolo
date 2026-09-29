@@ -114,6 +114,8 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
   const seeded = shouldSeed(opts);
   // Connu des modules dès leur création : hors démonstration, aucun élément fictif de configuration n'est défini.
   ctx.demoData = seeded;
+  // Exemples complémentaires (modules sectoriels…) : seulement en démonstration et sur demande du point d'entrée.
+  ctx.demoExamples = seeded && opts.demoExamples === true;
   for (const p of plugins) ctx.ext[p.name] = p.create(ctx);
   // Un amorçage réel et des données fictives ne se mélangent jamais.
   const bootstrap = seeded ? undefined : opts.bootstrap ?? (process.env.MOSOLO_BOOTSTRAP_FILE?.trim() ? loadBootstrapFile(process.env.MOSOLO_BOOTSTRAP_FILE.trim()) : undefined);
