@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
-import { PageHead } from '../../components/Shell';
+import { AUTORITES_POSTE, PageHead } from '../../components/Shell';
 import { StatusBadge } from '../../components/StatusBadge';
 import { ErrorState, Loading } from '../../components/States';
 import { api } from '../../lib/api';
@@ -34,6 +34,13 @@ export function VisuelsCatalogue({ kpis, summary }: { kpis: Kpi[]; summary: KpiR
   );
 }
 
+/**
+ * Synthèse des autorités (29/09/2026, § 27 « Le Gouverneur n'a pas besoin de tout voir ») : six indicateurs de décision
+ * affichés d'abord aux autorités (R01–R05), le catalogue complet restant à un clic (rien n'est retiré).
+ * Sélection PAR DÉFAUT — À CONFIRMER PAR LE MAÎTRE D'OUVRAGE.
+ */
+export const SYNTHESE_AUTORITES = ['RAPPROCHEMENT_J1', 'ECART_ASSIGNATION', 'PAIEMENT_EMISES', 'COMMUNES_RECETTE', 'RECOURS_DANS_DELAI', 'ALERTES_CRITIQUES'];
+
 interface KpiResponse { generatedAt: string; scope: Scope; summary: { total: number; measured: number; onTarget: number; offTarget: number }; kpis: Kpi[] }
 
 /** Catalogue des indicateurs : définition, formule, source, valeur réelle, cible, tendance. */
@@ -44,7 +51,11 @@ export default function Indicateurs() {
   const [domain, setDomain] = useState<string>('');
   const q = useApi(() => api<KpiResponse>(`/v1/pilotage/indicateurs${qs({ ...filters })}`), [user?.id, JSON.stringify(filters)]);
   const domains = useMemo(() => [...new Set((q.data?.kpis ?? []).map((k) => k.domain))], [q.data]);
-  const kpis = (q.data?.kpis ?? []).filter((k) => !domain || k.domain === domain);
+  const autorite = !!user?.roles.some((r) => AUTORITES_POSTE.includes(r));
+  const [complet, setComplet] = useState(false);
+  const synthese = autorite && !complet;
+  const kpis = (q.data?.kpis ?? []).filter((k) => (synthese ? SYNTHESE_AUTORITES.includes(k.code) : !domain || k.domain === domain))
+    .sort((a, b) => (synthese ? SYNTHESE_AUTORITES.indexOf(a.code) - SYNTHESE_AUTORITES.indexOf(b.code) : 0));
 
   return (
     <div className="page page-wide">
@@ -55,17 +66,24 @@ export default function Indicateurs() {
       {q.loading && !q.data ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : q.data && (
         <>
           <ScopeLine scope={q.data.scope} generatedAt={q.data.generatedAt} />
-          <VisuelsCatalogue kpis={q.data.kpis} summary={q.data.summary} />
-          <div className="pl-figs" style={{ marginBottom: 16 }}>
+          {autorite && (
+            <div className="pl-tabs" role="group" aria-label="Affichage" style={{ marginBottom: 12 }}>
+              <button type="button" aria-pressed={!complet} onClick={() => setComplet(false)}>Synthèse ({SYNTHESE_AUTORITES.length} indicateurs de décision)</button>
+              <button type="button" aria-pressed={complet} onClick={() => setComplet(true)}>Catalogue complet ({q.data.summary.total} indicateurs)</button>
+            </div>
+          )}
+          {synthese && <p className="small muted" style={{ marginBottom: 12 }}>Sélection par défaut — à confirmer par le maître d’ouvrage. Définition, formule et source : un clic sur « Comprendre ».</p>}
+          {!synthese && <VisuelsCatalogue kpis={q.data.kpis} summary={q.data.summary} />}
+          {!synthese && <div className="pl-figs" style={{ marginBottom: 16 }}>
             <div className="pl-fig"><span>Indicateurs</span><strong>{q.data.summary.total}</strong></div>
             <div className="pl-fig"><span>Mesurés</span><strong>{q.data.summary.measured}</strong></div>
             <div className="pl-fig"><span>Cible atteinte</span><strong>{q.data.summary.onTarget}</strong></div>
             <div className="pl-fig"><span>Sous la cible</span><strong>{q.data.summary.offTarget}</strong></div>
-          </div>
-          <div className="pl-tabs" role="group" aria-label="Domaine" style={{ marginBottom: 12 }}>
+          </div>}
+          {!synthese && <div className="pl-tabs" role="group" aria-label="Domaine" style={{ marginBottom: 12 }}>
             <button type="button" aria-pressed={domain === ''} onClick={() => setDomain('')}>Tous</button>
             {domains.map((d) => <button key={d} type="button" aria-pressed={domain === d} onClick={() => setDomain(d)}>{d}</button>)}
-          </div>
+          </div>}
           <div className="pl-cat">
             {kpis.map((k) => {
               const tone = kpiTone(k);
@@ -81,15 +99,12 @@ export default function Indicateurs() {
                   <p className="pl-card-value">{k.status === 'NON_MESURE' ? 'Non mesuré' : f.num(k.value, k.unit)}</p>
                   <TrendMark k={k} />
                   {k.question && <p className="small"><strong>Question de décision :</strong> {k.question}</p>}
-                  <dl>
-                    <dt>Définition</dt><dd>{k.definition}</dd>
-                    <dt>Formule</dt><dd>{k.formula}</dd>
-                    <dt>Source</dt><dd>{k.source}</dd>
-                    <dt>Cible</dt><dd>{k.targetLabel}</dd>
-                    {k.denominator !== undefined && <><dt>Base</dt><dd>{k.numerator ?? 0} / {k.denominator}</dd></>}
-                    <dt>Référence</dt><dd>{k.reference}{k.structural ? ' · mesure structurelle' : ''}</dd>
-                  </dl>
-                  {k.detail && <p className="small muted">{k.detail}</p>}
+                  {synthese ? (
+                    <details>
+                      <summary className="small">Comprendre</summary>
+                      <Fiche k={k} />
+                    </details>
+                  ) : <Fiche k={k} />}
                 </article>
               );
             })}
@@ -97,5 +112,22 @@ export default function Indicateurs() {
         </>
       )}
     </div>
+  );
+}
+
+/** Fiche d'un indicateur : définition, formule, source, cible, base, référence. */
+function Fiche({ k }: { k: Kpi }) {
+  return (
+    <>
+      <dl>
+        <dt>Définition</dt><dd>{k.definition}</dd>
+        <dt>Formule</dt><dd>{k.formula}</dd>
+        <dt>Source</dt><dd>{k.source}</dd>
+        <dt>Cible</dt><dd>{k.targetLabel}</dd>
+        {k.denominator !== undefined && <><dt>Base</dt><dd>{k.numerator ?? 0} / {k.denominator}</dd></>}
+        <dt>Référence</dt><dd>{k.reference}{k.structural ? ' · mesure structurelle' : ''}</dd>
+      </dl>
+      {k.detail && <p className="small muted">{k.detail}</p>}
+    </>
   );
 }

@@ -1225,3 +1225,16 @@ Ajouts de la troisième passe (`docs/production-readiness.md`, § 21) ; rien n'e
   dont les trois lectures de l'écran sont refusées par le serveur ; route, page et droits inchangés.
 - Tests : `backend/test/liaison-biens-adverse.test.ts` (D3-01 à D3-04, en échec sur la version candidate 7168652),
   `backend/test/demo-acces.test.ts` (D3-06) ; contrôle ajouté à `infra/valider.sh`.
+
+## I.30 Catalogue des indicateurs : synthèse des autorités (29/09/2026)
+
+Application du § 27 (« Le Gouverneur n'a pas besoin de tout voir » : quatre à six chiffres, le détail atteint par un
+clic, jamais par le menu). Ajout, rien de retiré :
+
+- **Écran** `/pilotage/indicateurs` (`frontend/src/modules/pilotage/Indicateurs.tsx`) : pour les autorités (R01–R05),
+  affichage par défaut d'une **synthèse** de six indicateurs de décision — rapprochement à J+1, réalisation des
+  assignations, paiement des obligations émises, communes avec recette rapprochée, recours dans le délai, alertes
+  critiques — avec définition, formule et source repliées sous « Comprendre ». Le **catalogue complet** (tous les
+  indicateurs, graphiques, filtres par domaine) reste accessible en un clic. Les autres rôles voient le catalogue
+  complet, inchangé. Sélection **par défaut — à confirmer par le maître d'ouvrage** (`SYNTHESE_AUTORITES`).
+- Droits, API et calculs inchangés. Test : `frontend/test/indicateurs-synthese.test.tsx`.
