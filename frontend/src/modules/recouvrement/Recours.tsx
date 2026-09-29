@@ -14,7 +14,7 @@ import { StatusBadge, Chip } from '../../components/StatusBadge';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
 import { AppealDeadlinesPanel, type AppealIndicators } from '../../components/AppealDeadlinesPanel';
-import { api } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
 import { APPEAL_STATE, SUSPENSIVE_LABEL, hasRole, type Appeal } from './types';
 import { Msg, useAction } from './actions';
 import { RecoursVisuel } from './visuels';
@@ -38,7 +38,10 @@ const DECISIONS = [
 
 async function load(canAssign: boolean) {
   const [appeals, indicators, owners] = await Promise.all([
-    api<AgentAppeal[]>('/v1/appeals'),
+    // Parcours par rôle (29/09/2026) : la direction (R06, R07) lit les indicateurs et affecte un propriétaire, mais la
+    // file nominative lui est refusée par le serveur — l'écran affiche alors les délais et un renvoi clair, au lieu d'un
+    // refus global (arbitrage du maître d'ouvrage demandé ; aucun droit élargi).
+    api<AgentAppeal[]>('/v1/appeals').catch((e: unknown) => { if (e instanceof ApiError && e.status === 403) return null; throw e; }),
     api<AppealIndicators>('/v1/appeals/indicateurs'),
     canAssign ? api<Owner[]>('/v1/appeals/proprietaires').catch(() => [] as Owner[]) : Promise.resolve([] as Owner[]),
   ]);
@@ -154,6 +157,7 @@ export default function Recours() {
   const [picked, setTab] = useState<Tab | null>(null);
   const tab: Tab = picked ?? (hasRole(roles, 'R21') ? 'decider' : 'ouverts');
   const all = q.data?.appeals ?? [];
+  const fileRefusee = !!q.data && q.data.appeals === null;
   const groups: Record<Tab, AgentAppeal[]> = {
     ouverts: all.filter((a) => a.status === 'DEPOSEE'),
     decider: all.filter((a) => a.status === 'PROPOSITION'),
@@ -168,8 +172,11 @@ export default function Recours() {
       {q.error !== null && <ErrorState error={q.error} onRetry={q.reload} />}
       {q.data && (
         <>
-          <RecoursVisuel appeals={q.data.appeals} ind={q.data.indicators} />
+          <RecoursVisuel appeals={q.data.appeals ?? []} ind={q.data.indicators} />
           <AppealDeadlinesPanel data={q.data.indicators} />
+          {fileRefusee ? (
+            <EmptyState title="File nominative lue par le contentieux" icon="lock">Les délais ci-dessus portent sur tous les recours. Le détail de chaque recours est instruit par l’agent de contentieux et décidé par une autorité distincte ; sa lecture par la direction attend une décision du maître d’ouvrage.</EmptyState>
+          ) : (<>
           <div className="seg seg-wrap" role="group" aria-label="Vue">
             <button type="button" aria-pressed={tab === 'ouverts'} onClick={() => setTab('ouverts')}>À instruire <span className="count">{groups.ouverts.length}</span></button>
             <button type="button" aria-pressed={tab === 'decider'} onClick={() => setTab('decider')}>À décider <span className="count">{groups.decider.length}</span></button>
@@ -179,6 +186,7 @@ export default function Recours() {
             {groups[tab].length === 0 && <EmptyState title="Aucun recours" icon="check" />}
             {groups[tab].map((a) => <AppealCard key={a.id} a={a} meId={user?.id} roles={roles} owners={q.data!.owners} onDone={q.reload} />)}
           </div>
+          </>)}
         </>
       )}
     </div>

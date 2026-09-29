@@ -16,6 +16,8 @@ import { api } from '../../lib/api';
 import { FACT_LABEL, hasRole, Status, useAction, type Arbitration } from './common';
 import { ArbitragesVisuels, circuitArbitrage } from './visuels';
 import './acces.css';
+// Parcours par rôle (29/09/2026) : un écran vide propose la prochaine action utile du travail du jour.
+import { SuiteDuTravail } from '../../components/SuiteDuTravail';
 
 interface Rule { id: string; code: string; label: string; status: string; administeringEntity: string }
 
@@ -97,7 +99,7 @@ export default function Arbitrages() {
           <header className="panel-head"><h2 className="panel-title" id="arb-title">Dossiers d’arbitrage</h2><span className="count">{list.data?.items.length ?? 0}</span></header>
           {list.loading && <Loading />}
           {list.error !== null && <ErrorState error={list.error} onRetry={list.reload} />}
-          {list.data && (list.data.items.length === 0 ? <EmptyState title="Aucun dossier dans votre périmètre" icon="scale" /> : (
+          {list.data && (list.data.items.length === 0 ? <EmptyState title="Aucun dossier dans votre périmètre" icon="scale"><SuiteDuTravail /></EmptyState> : (
             <div className="ac-card-list">
               {list.data.items.map((a) => (
                 <button key={a.id} type="button" className="ac-card" style={{ textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit' }} onClick={() => { setOpen(a.id); setOp({ text: '', recommendedEntity: '' }); setDec({ winnerEntity: '', motif: '', actReference: '' }); }}>

@@ -280,7 +280,10 @@ export default function TaxpayerSpace() {
   const { tr, user, users, setUserId, fmtDate, lang } = useApp();
   const isTaxpayer = !!user?.roles.some((r) => r === 'R30' || r === 'R31');
   const demoTaxpayer = users.find((u) => u.roles.includes('R30'));
-  const taxpayerId = (isTaxpayer ? user?.taxpayerId ?? user?.id : null) ?? safeGet('mosolo.taxpayerId') ?? demoTaxpayer?.taxpayerId ?? demoTaxpayer?.id ?? null;
+  // Mandataire sans compte contribuable propre (29/09/2026) : son espace est celui de ses mandants, ouvert depuis
+  // « Mes mandataires » — plus d'appel sur son propre identifiant (introuvable), mais un renvoi clair.
+  const mandataireSeul = !!user && !user.taxpayerId && user.roles.includes('R31') && !user.roles.includes('R30');
+  const taxpayerId = mandataireSeul ? null : (isTaxpayer ? user?.taxpayerId ?? user?.id : null) ?? safeGet('mosolo.taxpayerId') ?? demoTaxpayer?.taxpayerId ?? demoTaxpayer?.id ?? null;
   const q = useApi(taxpayerId ? async () => {
     // Le backend renvoie { taxpayer, objects, obligations, receipts, … } ; on aplatit le profil.
     const raw = await api<TaxpayerProfile & { taxpayer?: Partial<TaxpayerProfile> }>(`/v1/taxpayers/${encodeURIComponent(taxpayerId)}`);
@@ -308,7 +311,10 @@ export default function TaxpayerSpace() {
           <p>{tr('space.notTaxpayer')} <button type="button" className="btn-link" onClick={() => setUserId(demoTaxpayer.id)}>{tr('space.switchTo', { name: demoTaxpayer.name })}</button></p>
         </div>
       )}
-      {!taxpayerId && !q.loading && (
+      {mandataireSeul && (
+        <EmptyState title="Espace de vos mandants" icon="users">Vous agissez pour le compte de contribuables qui vous ont donné mandat : leurs biens, déclarations et échéances s’ouvrent depuis « Mes mandataires ».<p><Link className="btn btn-primary" to="/acces/mandats">Mes mandats</Link></p></EmptyState>
+      )}
+      {!taxpayerId && !mandataireSeul && !q.loading && (
         <EmptyState title={tr('space.noTaxpayer')} icon="user"><Link className="btn btn-primary" to="/inscription">{tr('taxpayer.register')}</Link></EmptyState>
       )}
       {q.loading && <Loading />}

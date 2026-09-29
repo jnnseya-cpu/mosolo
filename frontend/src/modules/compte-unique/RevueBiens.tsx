@@ -15,6 +15,8 @@ import { BarChartViz } from '../../components/viz';
 import { CLAIM_ROLE, CLAIM_STATUS, RECORD_STATUS, sha256OfFile, toneOf } from './common';
 import type { CaseDetail, CaseSummary, TreeNode } from './types';
 import './compte-unique.css';
+// Parcours par rôle (29/09/2026) : un écran vide propose la prochaine action utile du travail du jour.
+import { SuiteDuTravail } from '../../components/SuiteDuTravail';
 
 export default function RevueBiens() {
   const { user } = useApp();
@@ -32,7 +34,7 @@ export default function RevueBiens() {
       {q.data && (
         <>
           <BarChartViz title="Dossiers ouverts par motif" orientation="horizontal" series={[{ key: 'n', label: 'Dossiers' }]} rows={[...parMotif.entries()].map(([k, n]) => ({ key: k, label: k, values: { n } }))} emptyText="Aucun dossier ouvert" />
-          {items.length === 0 ? <EmptyState title="Aucun dossier dans votre périmètre" /> : (
+          {items.length === 0 ? <EmptyState title="Aucun dossier dans votre périmètre"><SuiteDuTravail /></EmptyState> : (
             <ul className="list-rows">
               {items.map((c) => (
                 <li key={c.id} className="list-row">

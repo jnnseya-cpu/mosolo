@@ -1,6 +1,7 @@
 /** Éléments communs aux écrans du module fiscal. */
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useEcranAccessible } from '../../components/LienEcran';
 import type { MapStatusColor } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { Icon } from '../../components/Icon';
@@ -56,6 +57,8 @@ export const PERIODICITY: Record<string, string> = { MENSUELLE: 'mensuel', TRIME
 /** Navigation entre les écrans du module (liens, pas d'état). */
 export function FiscalTabs() {
   const { isTaxpayer, has } = useViewer();
+  // Parcours par rôle (29/09/2026) : un onglet vers un écran que le rôle n'utilise pas n'est pas proposé.
+  const utilisable = useEcranAccessible();
   const links: { to: string; label: string; icon: string; show: boolean }[] = [
     { to: '/fiscal/biens', label: isTaxpayer ? 'Mes biens' : 'Biens et relations', icon: 'building', show: true },
     { to: '/fiscal/declarations', label: 'Déclarations', icon: 'file', show: isTaxpayer || has('R06', 'R07', 'R11', 'R12') },
@@ -72,7 +75,7 @@ export function FiscalTabs() {
   ];
   return (
     <nav className="fs-tabs" aria-label="Démarches fiscales">
-      {links.filter((l) => l.show).map((l) => (
+      {links.filter((l) => l.show && utilisable(l.to)).map((l) => (
         <NavLink key={l.to} to={l.to} className={({ isActive }) => `fs-tab${isActive ? ' active' : ''}`}>
           <Icon name={l.icon} size={16} /> <span>{l.label}</span>
         </NavLink>

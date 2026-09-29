@@ -6,7 +6,8 @@
  * Aucune sanction automatique ; aucun encaissement par un agent ; les types [EXEMPLE] sont non contractuels.
  */
 import { useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+// Parcours par rôle (29/09/2026) : liens adaptés au compte — un écran que le rôle n'utilise pas affiche « Réalisé par : … ».
+import { LienEcran as Link } from '../../components/LienEcran';
 import { PageHead } from '../../components/Shell';
 import { Icon } from '../../components/Icon';
 import { StatusBadge } from '../../components/StatusBadge';

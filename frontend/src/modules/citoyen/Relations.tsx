@@ -5,7 +5,8 @@
  * bloquée sans quitus lorsque la règle l'exige (moteur de dépendances). Rattachement, revendication, historique et
  * litiges : écran « Biens et relations ».
  */
-import { Link } from 'react-router-dom';
+// Parcours par rôle (29/09/2026) : liens adaptés au compte — un écran que le rôle n'utilise pas affiche « Réalisé par : … ».
+import { LienEcran as Link } from '../../components/LienEcran';
 import { useApp } from '../../context';
 import { PageHead } from '../../components/Shell';
 import { ErrorState, Loading } from '../../components/States';

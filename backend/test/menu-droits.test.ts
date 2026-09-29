@@ -59,6 +59,16 @@ const LECTURES: Record<string, string[]> = {
   '/controle/calcu': ['/v1/verticales/calcu/overview'],
   '/controle/calcu/organe': ['/v1/verticales/calcu/organe'],
   '/decision/audit': ['/v1/decision/audit/missions'],
+  // Écrans des postes de décision et de la plateforme (29/09/2026) : déclarés par `.then(...)` dans le registre, jusqu'ici
+  // non relevés par l'analyse du menu (expression régulière élargie ci-dessous).
+  '/decision/regie-fiscale': ['/v1/decision/regie-fiscale'],
+  '/decision/regie-taxes': ['/v1/decision/regie-taxes'],
+  '/decision/ministere': ['/v1/decision/ministere', '/v1/decision/ministeres'],
+  '/decision/salle-controle': ['/v1/decision/salle-controle'],
+  '/decision/previsions': ['/v1/decision/previsions'],
+  '/plateforme/partenaires': ['/v1/plateforme/partenaires'],
+  '/plateforme/administration': ['/v1/plateforme/administration'],
+  '/plateforme/supervision': ['/v1/plateforme/supervision'],
   '/decision/commandement': ['/v1/decision/commandement/rapport'],
   '/documents': ['/v1/documents', '/v1/documents/categories', '/v1/documents/indicateurs', '/v1/documents/purges/apercu'],
   '/donnees/extractions': ['/v1/socle/exports/requests'],
@@ -136,7 +146,7 @@ const LECTURES: Record<string, string[]> = {
   '/rakapay/cooperative': ['/v1/rakapay/cooperatives'],
   '/rakapay/operateurs': ['/v1/rakapay/operateurs', '/v1/rakapay/offres', '/v1/rakapay/circuits', '/v1/rakapay/periode-grace'],
   '/rakapay/pilotage': ['/v1/rakapay/signalements', '/v1/rakapay/indicateurs', '/v1/rakapay/periode-grace'],
-  '/recours': ['/v1/appeals'],
+  '/recours': ['/v1/appeals', '/v1/appeals/indicateurs'],
   '/recouvrement': ['/v1/recouvrement/arrieres'],
   '/recouvrement/campagnes': ['/v1/prorogations', '/v1/campagnes', '/v1/campagnes/calendrier', '/v1/campagnes-recouvrement'],
   '/recouvrement/non-valeurs': ['/v1/recouvrement/non-valeurs'],
@@ -187,7 +197,37 @@ const SANS_LECTURE = new Set([
   '/canaux/contestation', '/publicite/signaler', '/signaler', '/vehicules/verifier', '/mon-espace/situation', '/recuperation-compte',
   // Écrans de DÉPÔT (formulaire) et de revue : le dépôt reste possible au rôle même si la file de revue lui est refusée.
   '/acces/identite', '/citoyen/pieces', '/satisfaction',
+  // Parcours par rôle (29/09/2026) : page d'information de l'application (téléchargement, parcours) ; la liste des titres
+  // n'y apparaît que pour le contribuable — l'écran s'affiche sans elle pour les autres comptes (navigateur réel).
+  '/application',
 ]);
+
+/**
+ * Parcours par rôle (29/09/2026) : lecture qui DÉCIDE de l'écran (l'écran affiche « accès réservé » si elle est
+ * refusée, relevé dans le navigateur réel), quand ce n'est pas la première lecture listée ci-dessus. Pour les autres
+ * écrans, la lecture principale est satisfaite si l'une des lectures aboutit (écrans adaptés au rôle).
+ */
+const LECTURE_DECISIVE: Record<string, string> = {
+  '/stationnement/parksmart': '/v1/parking/occupancy',
+  '/stationnement/regie': '/v1/parking/reservations',
+  '/stationnement/tableau-de-bord': '/v1/parking/indicators',
+  '/tresor': '/v1/tresor/overview',
+  '/terrain/sous-traitants': '/v1/terrain/points-resultats',
+  '/verticales/fiches': '/v1/verticales/fiches/indicateurs',
+  '/rakapay/pilotage': '/v1/rakapay/indicateurs',
+  '/fiscal/recensement': '/v1/fiscal/census/coverage',
+  '/audit': '/v1/audit/events',
+};
+/**
+ * Écrans dont la lecture listée est refusée mais qui restent utiles au rôle (lecture partielle assumée, relevée dans
+ * le navigateur réel le 29/09/2026) : registre du coffre sur l'écran du Trésor (R19) ; « Sept questions » sans la liste
+ * des ruptures (R06, R07, R11) ; cadastre par objet de son territoire (R09) ; indicateurs d'enquêtes présentés sans le
+ * tableau réservé (R06, R21).
+ */
+const PARTIEL_ASSUME: [string, string][] = [
+  ['R19', '/tresor'], ['R06', '/chaine'], ['R07', '/chaine'], ['R11', '/chaine'], ['R09', '/citoyen/cadastre'],
+  ['R06', '/integrite/enquetes'], ['R21', '/integrite/enquetes'],
+];
 /**
  * Rôles parcourus par le premier audit (Playwright, 9 rôles) : l'alignement y est EXIGÉ. Pour les autres rôles, les
  * écarts sont relevés dans le rapport (sortie du test) : ils dépendent souvent de l'ENTITÉ (ex. directeur général de la
@@ -195,8 +235,12 @@ const SANS_LECTURE = new Set([
  */
 const ROLES_AUDITES = ['R02', 'R03', 'R04', 'R05', 'R10', 'R17', 'R22', 'R30'];
 
-/** Écarts relevés le 27/09/2026 hors des rôles audités (entités) : ne doit pas augmenter. */
-const ECARTS_AUTRES_ROLES_MAX = 78;
+/**
+ * Écarts relevés le 27/09/2026 hors des rôles audités (entités) : ne doit pas augmenter. 78 le 27/09/2026 ; ramené le
+ * 29/09/2026 (parcours par rôle : masques par rôle ET par entité) aux seuls écrans dont une lecture renvoie 400
+ * (saisie préalable attendue, ex. choix d'un contribuable au guichet) — aucun refus 403 (voir le test suivant).
+ */
+const ECARTS_AUTRES_ROLES_MAX = 2;
 
 interface Entry { path: string; roles: string[] | null }
 
@@ -205,7 +249,9 @@ function parseMenu() {
   const registry = readFileSync(new URL('modules/registry.tsx', FRONT), 'utf8');
   const consts = new Map<string, string[]>();
   for (const m of registry.matchAll(/^const (\w+) = \[([^\]]*)\];/gm)) consts.set(m[1]!, [...m[2]!.matchAll(/'(R\d{2})'/g)].map((x) => x[1]!));
-  const modules: Entry[] = [...registry.matchAll(/\{ path: '([^']+)', element: lazy\(\(\) => import\('[^']+'\)\), nav: \{[^}]*roles: (\[[^\]]*\]|[A-Z_]+)/g)].map((m) => ({
+  // 29/09/2026 : les entrées déclarées par `import(...).then((m) => ({ default: m.X }))` (postes de décision, plateforme)
+  // sont désormais relevées aussi.
+  const modules: Entry[] = [...registry.matchAll(/\{ path: '([^']+)', element: lazy\(\(\) => import\('[^']+'\)(?:\.then\(\(m\) => \(\{ default: m\.\w+ \}\)\))?\), nav: \{[^}]*roles: (\[[^\]]*\]|[A-Z_]+)/g)].map((m) => ({
     path: m[1]!, roles: m[2]!.startsWith('[') ? [...m[2]!.matchAll(/'(R\d{2})'/g)].map((x) => x[1]!) : consts.get(m[2]!) ?? [],
   }));
   const core = [...shell.slice(shell.indexOf('export const NAV'), shell.indexOf('const GROUPS')).matchAll(/to: '([^']+)'/g)].map((m) => m[1]!);
@@ -215,15 +261,15 @@ function parseMenu() {
   return { modules, core, roleRoutes, publicRoles };
 }
 
-/** Même calcul que visibleNav (components/Shell.tsx), masque de présentation compris. */
-function visible(menu: ReturnType<typeof parseMenu>, roles: string[]): string[] {
+/** Même calcul que visibleNav (components/Shell.tsx), masque de présentation compris (entité facultative, 29/09/2026). */
+function visible(menu: ReturnType<typeof parseMenu>, roles: string[], entity?: string): string[] {
   const allowed = new Set<string>(['/']);
   for (const [rs, routes] of menu.roleRoutes) if (roles.some((r) => rs.includes(r))) routes.forEach((x) => allowed.add(x));
   if (allowed.size === 1) allowed.add('/verifier');
   const core = menu.core.filter((p) => allowed.has(p));
   const isPublicUser = roles.length === 0 || roles.some((r) => menu.publicRoles.includes(r));
   const extra = menu.modules.filter((n) => (n.roles!.length === 0 ? isPublicUser : n.roles!.some((r) => roles.includes(r)))).map((n) => n.path);
-  return [...core, ...extra].filter((p) => !menuMasque(p, roles));
+  return [...core, ...extra].filter((p) => !menuMasque(p, roles, entity));
 }
 
 describe('Menu aligné sur les droits de lecture', () => {
@@ -244,8 +290,10 @@ describe('Menu aligné sur les droits de lecture', () => {
       // de rôle vient du catalogue partagé (chaîne) ; la liste des rôles d'un utilisateur est typée par ce catalogue.
       const u = users.find((x) => x.roles.length === 1 && x.roles[0] === role) ?? users.find((x) => (x.roles as string[]).includes(role));
       if (!u) continue;
-      for (const path of visible(menu, u.roles)) {
+      for (const path of visible(menu, u.roles, u.entity)) {
         if (SANS_LECTURE.has(path)) continue;
+        // Lecture partielle assumée (29/09/2026, relevée dans le navigateur réel) : voir PARTIEL_ASSUME.
+        if (PARTIEL_ASSUME.some(([r, p]) => p === path && (u.roles as string[]).includes(r))) continue;
         const reads = LECTURES[path];
         if (!reads) { missing.add(path); continue; }
         const outcomes: string[] = [];
@@ -267,6 +315,46 @@ describe('Menu aligné sur les droits de lecture', () => {
     expect(checked).toBeGreaterThan(200);
     // Écarts des autres rôles : bornés (non régression) en attendant l'arbitrage d'un menu par entité.
     expect(others.length).toBeLessThanOrEqual(ECARTS_AUTRES_ROLES_MAX);
+  }, 300_000);
+
+  it('parcours par rôle (29/09/2026) : pour CHAQUE compte de démonstration, aucune entrée de son menu n’est refusée (403) sur sa lecture principale', async () => {
+    const menu = parseMenu();
+    const app = buildApp({ clock: new ManualClock('2026-09-27T09:00:00.000Z'), secrets: { auditHmacKey: 'k', providerSecrets: { 'mm-operator-a': 's' }, commsProviderKeys: {} } });
+    await app.ready();
+    // Rattachements de modules aux entités (menu réel : /v1/acces/menu-rattachements).
+    const dep = app.ctx.ext['acces-departements'] as { menuFor(u: unknown): { hiddenPaths: string[] } };
+    const refus: string[] = [];
+    const parRole = new Map<string, { comptes: number; entrees: number }>();
+    let lectures = 0;
+    for (const u of app.ctx.users.all()) {
+      const roles = u.roles as string[];
+      // Gouverneur, directeur de cabinet, secrétaire exécutif : tous les modules, écran « lecture agrégée » en cas de
+      // refus (décision du 27/09/2026) — hors du périmètre de ce contrôle.
+      if (!roles.length || roles.some((r) => ['R01', 'R02', 'R03'].includes(r))) continue;
+      const cache = new Set(dep.menuFor(u).hiddenPaths);
+      const entrees = visible(menu, roles, u.entity).filter((p) => !cache.has(p));
+      const k = roles.join('+');
+      const st = parRole.get(k) ?? { comptes: 0, entrees: 0 };
+      parRole.set(k, { comptes: st.comptes + 1, entrees: st.entrees + entrees.length });
+      for (const path of entrees) {
+        if (SANS_LECTURE.has(path)) continue;
+        if (PARTIEL_ASSUME.some(([r, p]) => p === path && roles.includes(r))) continue;
+        const reads = LECTURE_DECISIVE[path] ? [LECTURE_DECISIVE[path]!] : LECTURES[path] ?? [];
+        expect(reads.length, `lecture principale inconnue pour ${path}`).toBeGreaterThan(0);
+        const statuts: number[] = [];
+        for (const read of reads) {
+          if (read.includes('{taxpayerId}') && !u.taxpayerId) continue;
+          const res = await app.inject({ method: 'GET', url: read.replace('{taxpayerId}', encodeURIComponent(u.taxpayerId ?? '')), headers: { 'x-demo-user': u.id } });
+          lectures++;
+          statuts.push(res.statusCode);
+          if (res.statusCode !== 403) break;
+        }
+        if (statuts.length && statuts.every((c) => c === 403)) refus.push(`${k} (${u.id}, ${u.entity}) : ${path}`);
+      }
+    }
+    console.log(JSON.stringify({ rapport: 'parcours par rôle — menu de chaque compte', comptes: [...parRole.values()].reduce((a, b) => a + b.comptes, 0), lectures, refus }, null, 1));
+    expect(refus).toEqual([]);
+    expect(lectures).toBeGreaterThan(1000);
   }, 300_000);
 
   it('Gouverneur (R01) : les cinq vues de son menu se chargent', async () => {
@@ -296,5 +384,23 @@ describe('Menu aligné sur les droits de lecture', () => {
     // Un rôle qui lit la donnée garde l'entrée (aucun masque au-delà du nécessaire).
     expect(visible(menu, ['R06'])).toContain('/terrain/sous-traitants');
     expect(visible(menu, ['R17'])).toContain('/tresor');
+  });
+
+  it('parcours par rôle (29/09/2026) : masques par entité — l’entité exploitante garde l’entrée, les autres non', () => {
+    const menu = parseMenu();
+    // Publicité et stationnement : DGTK ; contrôle technique : RFCK ; régie fiscale : DGIPK.
+    expect(visible(menu, ['R06'], 'DGTK')).toEqual(expect.arrayContaining(['/publicite/regie', '/stationnement/regie', '/decision/regie-taxes']));
+    expect(visible(menu, ['R06'], 'DGIPK')).not.toContain('/publicite/regie');
+    expect(visible(menu, ['R06'], 'DGIPK')).toContain('/decision/regie-fiscale');
+    expect(visible(menu, ['R06'], 'DGTK')).not.toContain('/decision/regie-fiscale');
+    expect(visible(menu, ['R07'], 'RFCK')).toContain('/vehicules/controle-technique');
+    expect(visible(menu, ['R07'], 'DGIPK')).not.toContain('/vehicules/controle-technique');
+    // Sans entité connue : seules les règles par rôle s'appliquent (comportement antérieur conservé).
+    expect(visible(menu, ['R06'])).toContain('/publicite/regie');
+    // Autorités R01–R03 : jamais concernées par ces masques.
+    expect(visible(menu, ['R02'], 'GOUVERNORAT')).toEqual(expect.arrayContaining(['/publicite/tableau-de-bord', '/vehicules/rfck']));
+    // Les pages restent déclarées (routes conservées).
+    const registry = readFileSync(new URL('modules/registry.tsx', FRONT), 'utf8');
+    for (const p of ['/publicite/regie', '/stationnement/regie', '/vehicules/controle-technique', '/decision/regie-fiscale', '/decision/regie-taxes']) expect(registry).toContain(`path: '${p}'`);
   });
 });

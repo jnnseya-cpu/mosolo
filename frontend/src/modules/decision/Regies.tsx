@@ -5,6 +5,8 @@
  */
 import type { MoneyJSON } from '@mosolo/shared';
 import { DataTable } from '../../components/DataTable';
+// Parcours par rôle (29/09/2026) : liens adaptés au compte (« Réalisé par : … » si l'écran n'est pas le sien).
+import { LienEcran } from '../../components/LienEcran';
 import { StatusBadge } from '../../components/StatusBadge';
 import { Section } from '../pilotage/shared';
 import { Ecran, Indicateurs, montants, pct, useVue, type Indicator } from './commun';
@@ -89,7 +91,7 @@ export function RegieFiscale() {
             { key: 'v', label: 'Validation', render: (c) => <StatusBadge tone={c.validation === 'VALIDEE' ? 'good' : c.validation === 'A_VALIDER' ? 'warning' : 'neutral'} label={c.validation === 'VALIDEE' ? 'Validée' : c.validation === 'A_VALIDER' ? 'À valider' : 'Non proposée'} /> },
             { key: 'e', label: 'Échéance', render: (c) => c.dueDate },
           ]} />
-          <p className="small"><a href={d.recovery.link}>Ouvrir les campagnes</a></p>
+          <p className="small"><LienEcran to={d.recovery.link}>Ouvrir les campagnes</LienEcran></p>
         </Section>
         <Section title="Contentieux" sub={`Délai de décision : ${d.litigation.decisionDelayDays} jours.`}>
           <p>Recours ouverts : <strong>{d.litigation.open}</strong> · décidés : <strong>{d.litigation.decided}</strong> · au-delà du délai : <strong>{d.litigation.beyondDelay}</strong></p>
@@ -113,7 +115,7 @@ export function RegieFiscale() {
             { key: 'a', label: 'Agents', num: true, render: (t) => t.agents },
             { key: 'v', label: 'Constats validés / total', num: true, render: (t) => `${t.validated} / ${t.findings}` },
           ]} />
-          <p className="small"><a href={d.performance.link}>Affecter les zones et suivre les agents (supervision terrain)</a></p>
+          <p className="small"><LienEcran to={d.performance.link}>Affecter les zones et suivre les agents (supervision terrain)</LienEcran></p>
         </Section>
       </>)}
     </Ecran>

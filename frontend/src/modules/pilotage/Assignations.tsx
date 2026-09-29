@@ -20,6 +20,8 @@ import './pilotage.css';
 import { fmtNombre, GaugeMeter, HeatGrid, KpiTile, StatusDistribution } from '../../components/viz';
 import { CERT_STATUS } from './planif';
 import { BarresParDevise, etatsDe, nombre, Tuiles, Visuels } from './visuels';
+// Parcours par rôle (29/09/2026) : un écran vide propose la prochaine action utile du travail du jour.
+import { SuiteDuTravail } from '../../components/SuiteDuTravail';
 
 /** Visuels des assignations : réalisation de l'exercice, carte de chaleur, assigné / rapproché, registre par statut. */
 export function VisuelsAssignations({ g, sets }: { g: GapMap | null; sets: TargetSet[] | null }) {
@@ -149,7 +151,7 @@ export default function Assignations() {
         </Section>
         <Section title="Registre des assignations" sub="Acte de référence (budget voté, contrat de performance) ; certification par le Gouverneur, le cabinet ou le ministre des Finances">
           <Notice msg={r.msg} />
-          <DataTable caption="Assignations" rows={sets.data?.items ?? []} rowKey={(s) => s.id} empty={<EmptyState title="Aucune assignation importée" icon="chart" />} columns={[
+          <DataTable caption="Assignations" rows={sets.data?.items ?? []} rowKey={(s) => s.id} empty={<EmptyState title="Aucune assignation importée" icon="chart"><SuiteDuTravail /></EmptyState>} columns={[
             { key: 'l', label: 'Assignations', primary: true, render: (s) => <><strong>{s.label}</strong><span className="small muted" style={{ display: 'block' }}>{s.fiscalYear} · {s.act.reference} · {s.entries.length} ligne(s)</span></> },
             { key: 's', label: 'Statut', render: (s) => <CertBadge status={s.status} /> },
             { key: 'a', label: 'Certification', render: (s) => {

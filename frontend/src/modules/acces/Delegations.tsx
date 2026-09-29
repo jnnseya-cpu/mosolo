@@ -5,6 +5,8 @@
  */
 import { useState } from 'react';
 import { useApp } from '../../context';
+// Parcours par rôle (29/09/2026) : liens adaptés au compte (« Réalisé par : … » si l'écran n'est pas le sien).
+import { LienEcran } from '../../components/LienEcran';
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/StatusBadge';
 import { api, describeError } from '../../lib/api';
@@ -76,7 +78,7 @@ export default function Delegations() {
             { key: 'u', label: 'Compte', primary: true, render: (x) => x.userId },
             { key: 'd', label: 'Détail', render: (x) => x.detail },
           ]} />
-          <p className="small"><a href={d.links.justeATemps}>Accès juste-à-temps</a> · <a href={d.links.revues}>Revues des accès</a> · <a href={d.links.invitations}>Invitations et comptes</a></p>
+          <p className="small"><LienEcran to={d.links.justeATemps ?? '/acces/elevations'}>Accès juste-à-temps</LienEcran> · <LienEcran to={d.links.revues ?? '/integrite/revue-acces'}>Revues des accès</LienEcran> · <LienEcran to={d.links.invitations ?? '/acces/invitations'}>Invitations et comptes</LienEcran></p>
         </Section>
         {hasRole(user?.roles, 'R08', 'R28', 'R22', 'R23', 'R26') && (
           <Section title="Décision RBAC + ABAC expliquée" sub="Territoire, module, dossier, période, appareil, sensibilité.">

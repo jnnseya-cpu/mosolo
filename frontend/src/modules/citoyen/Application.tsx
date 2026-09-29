@@ -5,7 +5,8 @@
  * prolongation, avis sur l'application. Aucune validité calculée sur l'horloge du téléphone.
  */
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+// Parcours par rôle (29/09/2026) : liens adaptés au compte — un écran que le rôle n'utilise pas affiche « Réalisé par : … ».
+import { LienEcran as Link } from '../../components/LienEcran';
 import { useApp } from '../../context';
 import { PageHead } from '../../components/Shell';
 import { StatusBadge } from '../../components/StatusBadge';

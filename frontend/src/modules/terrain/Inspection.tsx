@@ -16,6 +16,8 @@ import { sha256Hex, uid } from '../../lib/crypto';
 import { ReasonAction } from '../fiscal/common';
 import './terrain.css';
 import { InspectionVisuel, type InspectionIndicateurs } from './visuels';
+// Parcours par rôle (29/09/2026) : un écran vide propose la prochaine action utile du travail du jour.
+import { SuiteDuTravail } from '../../components/SuiteDuTravail';
 
 interface Dossier {
   id: string; objectId: string; version: number; contentHash: string;
@@ -144,7 +146,7 @@ function Supervision() {
   return (
     <section className="stack-sm" aria-label="Procès-verbaux">
       <h2 className="h-sub">Procès-verbaux</h2>
-      {(q.data ?? []).length === 0 && <EmptyState title="Aucun procès-verbal." />}
+      {(q.data ?? []).length === 0 && <EmptyState title="Aucun procès-verbal."><SuiteDuTravail /></EmptyState>}
       <ul className="stack-sm">{(q.data ?? []).map((p) => {
         const st = PV_STATUS[p.status] ?? { label: p.status, tone: 'neutral' as Tone };
         return (

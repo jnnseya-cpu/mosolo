@@ -6,7 +6,9 @@
  * Les tableaux de bord existants restent disponibles (/gouverneur, /pilotage/tableaux, /decision/*).
  */
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+// Parcours par rôle (29/09/2026) : liens adaptés au compte — un écran que le rôle n'utilise pas affiche « Réalisé par : … ».
+import { LienEcran as Link } from '../../components/LienEcran';
 import { useApp } from '../../context';
 import { api, apiBlob, describeError } from '../../lib/api';
 import { EmptyState, ErrorState, Loading } from '../../components/States';

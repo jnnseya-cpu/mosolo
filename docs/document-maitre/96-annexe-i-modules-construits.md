@@ -1267,3 +1267,112 @@ clic, jamais par le menu). Ajout, rien de retiré :
   agent habilité » au lieu du lien.
 - **Démonstration guidée** (`DemoRoleSwitch`) : sur un écran refusé ou vide pour le rôle fictif choisi, liste des
   utilisateurs de démonstration qui utilisent cet écran, avec passage en un clic. Absent hors démonstration.
+
+## I.33 Parcours par rôle : chaque utilisateur n'accède qu'à ce qu'il a à faire (29/09/2026)
+
+Demande du maître d'ouvrage : dans une plateforme « tout-en-un », éviter la fatigue — chaque utilisateur accède à ce
+qu'il a à faire, pas à tout. Règles décrites au § 12.9 ; tout est **présentation** (aucune route, page, donnée de
+démonstration ni droit retiré ; aucun droit élargi ; le serveur décide toujours).
+
+**Mesure réelle.** Serveur de démonstration + application construite, navigateur Chromium (Playwright) : un compte de
+démonstration par rôle (R01 à R37), menu complet (« Tous mes écrans » déplié), ouverture de chaque entrée et de chaque
+lien interne distinct (jusqu'à 40 par rôle) ; relevé des refus (« Accès réservé », « Écran réservé »), des écrans vides,
+des erreurs JavaScript et des appels API en 4xx/5xx. Côté serveur, `backend/test/menu-droits.test.ts` contrôle chaque
+entrée de menu des **113 comptes de démonstration** (lecture principale de l'écran, entité comprise).
+
+**Ce qui a changé.**
+
+- **Menu** : « Mon travail du jour » en tête (3 à 6 écrans par rôle), puis « Tous mes écrans (N) » replié au-delà de 12
+  entrées, recherche « Rechercher un écran… » ; barre du bas du téléphone ouverte sur le travail du jour.
+- **Écran d'accueil** : chaque compte s'ouvre sur son propre travail (tableau ci-dessous) ; autorités R01–R05 : poste
+  de décision (inchangé) ; présentation publique : `/?presentation`.
+- **Menu aligné sur la lecture** : `MENU_MASQUE_SANS_LECTURE` complété (par rôle) et `MENU_LECTURE_PAR_ENTITE` ajouté
+  (entité exploitante : DGTK, RFCK, DGIPK, ministère des Finances — correspondance par défaut, à confirmer).
+- **R01–R03** : tous les modules restent au menu ; un refus serveur affiche « **Lecture agrégée** » (renvoi au poste de
+  décision et aux indicateurs) — aussi sur la revue des accès et la console d'enquête.
+- **Liens** : `components/LienEcran.tsx` (« Réalisé par : <rôle> » ou lien non proposé) appliqué aux parcours des
+  verticales, délégations, audit et investigation, régies, fiches sectorielles, espace citoyen (application, situation,
+  locatif, pièces, véhicules, relations), apprentissage, compte unique, onglets fiscaux, poste de décision (chiffres et
+  tuiles « source »), poste de travail, mention « en attente de base légale ».
+- **Écrans vides** : « prochaine action utile » (écrans du travail du jour) sur 10 écrans à file (115 écrans vides du
+  parcours la proposent désormais).
+- **Corrections** : postes de décision — plus de plantage en passant d'une vue à l'autre (données de la vue précédente
+  rendues avec la nouvelle : `usePosteApi`) ; tableaux par profil — le profil « Commune » demande le choix d'une commune
+  au lieu d'une erreur 400 ; espace du mandataire sans compte propre — renvoi à « Mes mandats » au lieu d'une erreur
+  404 ; recours — la direction (R06, R07) voit les délais et un renvoi clair au lieu d'un refus global ; « Carte de mes
+  biens » de l'espace contribuable rouverte au contribuable et au mandataire (`ECRANS_USAGERS_HORS_MENU` : la garde des
+  écrans d'agents du 29/09/2026 la bloquait alors que le serveur l'autorise).
+
+**Matrice rôle × écran (résumé ; matrice complète : `matrice-role-ecran.csv` du parcours).** « Menu » : entrées du menu
+(entre parenthèses : visibles d'emblée) ; « Refus » : écrans du menu affichant un refus ; « Liens en échec » : liens
+internes menant à un refus ou une erreur. La galerie de visualisation montre volontairement un état d'erreur
+« (exemple) » : il n'est plus compté comme erreur (12 des 15 erreurs « avant »).
+
+| Rôle | Menu avant → après (d’emblée) | Refus avant → après | Vides avant → après | Erreurs avant → après | Liens en échec avant → après | Accueil après |
+|---|---|---|---|---|---|---|
+| R01 | 5 → 5 (5) | 0 → 0 | 0 → 0 | 1 → 0 | 0 → 0 | /poste-de-decision |
+| R02 | 60 → 60 (6) | 1 → 0 (+1 lecture agrégée) | 8 → 8 | 1 → 0 | 1 → 0 | /poste-de-decision |
+| R03 | 38 → 38 (5) | 1 → 0 (+1 lecture agrégée) | 5 → 5 | 1 → 0 | 1 → 0 | /poste-de-decision |
+| R04 | 21 → 21 (4) | 0 → 0 | 4 → 4 | 1 → 0 | 0 → 0 | /poste-de-decision |
+| R05 | 52 → 52 (5) | 0 → 0 | 6 → 6 | 1 → 0 | 2 → 0 | /poste-de-decision |
+| R06 | 101 → 84 (6) | 19 → 0 | 20 → 21 | 1 → 0 | 2 → 0 | /poste-de-travail |
+| R07 | 94 → 77 (6) | 17 → 0 | 22 → 22 | 1 → 0 | 3 → 0 | /poste-de-travail |
+| R08 | 39 → 36 (6) | 3 → 0 | 5 → 7 | 2 → 0 | 0 → 0 | /acces/invitations |
+| R09 | 47 → 35 (6) | 11 → 0 | 10 → 10 | 0 → 0 | 3 → 0 | /terrain/supervision |
+| R10 | 21 → 20 (6) | 1 → 0 | 7 → 7 | 0 → 0 | 3 → 0 | /terrain |
+| R11 | 59 → 52 (6) | 7 → 0 | 18 → 18 | 0 → 0 | 2 → 0 | /poste-de-travail |
+| R12 | 24 → 24 (6) | 0 → 0 | 10 → 10 | 0 → 0 | 3 → 0 | /poste-de-travail |
+| R13 | 21 → 21 (4) | 0 → 0 | 2 → 2 | 0 → 0 | 2 → 0 | /registre |
+| R14 | 20 → 20 (3) | 0 → 0 | 2 → 2 | 0 → 0 | 2 → 0 | /registre |
+| R15 | 27 → 27 (5) | 0 → 0 | 5 → 5 | 0 → 0 | 1 → 0 | /registre |
+| R16 | 18 → 18 (4) | 0 → 0 | 4 → 4 | 0 → 0 | 1 → 0 | /registre |
+| R17 | 44 → 43 (6) | 1 → 0 | 9 → 9 | 1 → 0 | 0 → 0 | /tresor |
+| R18 | 34 → 33 (4) | 1 → 0 | 8 → 8 | 1 → 0 | 1 → 0 | /tresor/appariements |
+| R19 | 3 → 3 (3) | 0 → 0 | 1 → 1 | 0 → 0 | 1 → 0 | /poste-de-travail |
+| R20 | 16 → 15 (4) | 1 → 0 | 7 → 7 | 0 → 0 | 1 → 0 | /recours |
+| R21 | 19 → 18 (5) | 1 → 0 | 8 → 8 | 0 → 0 | 1 → 0 | /recours |
+| R22 | 120 → 120 (6) | 0 → 0 | 22 → 22 | 1 → 0 | 1 → 0 | /audit |
+| R23 | 91 → 90 (4) | 1 → 0 | 20 → 20 | 1 → 0 | 3 → 0 | /audit |
+| R24 | 70 → 66 (5) | 3 → 0 | 13 → 13 | 1 → 0 | 7 → 0 | /integrite/enquetes |
+| R25 | 24 → 24 (4) | 0 → 0 | 2 → 3 | 0 → 0 | 0 → 0 | /integrite/donnees |
+| R26 | 31 → 31 (5) | 0 → 0 | 4 → 4 | 0 → 0 | 2 → 0 | /plateforme/administration |
+| R27 | 21 → 21 (4) | 0 → 0 | 3 → 3 | 0 → 0 | 0 → 0 | /plateforme/supervision |
+| R28 | 37 → 35 (5) | 1 → 0 | 5 → 5 | 0 → 0 | 0 → 0 | /integrite/incidents |
+| R29 | 5 → 5 (5) | 0 → 0 | 1 → 1 | 0 → 0 | 0 → 0 | /ia/modeles |
+| R30 | 46 → 46 (6) | 0 → 0 | 5 → 5 | 0 → 0 | 6 → 0 | /espace |
+| R31 | 45 → 41 (5) | 2 → 0 | 6 → 5 | 1 → 0 | 5 → 0 | /acces/mandats |
+| R32 | 21 → 19 (3) | 2 → 0 | 0 → 0 | 0 → 0 | 3 → 0 | /canaux/point-agree |
+| R33 | 20 → 18 (3) | 2 → 0 | 0 → 0 | 0 → 0 | 3 → 0 | /verifier |
+| R34 | 24 → 21 (4) | 3 → 0 | 2 → 2 | 0 → 0 | 3 → 0 | /vehicules/controle-technique |
+| R35 | 15 → 13 (5) | 1 → 0 | 6 → 6 | 0 → 0 | 1 → 0 | /vehicules/fourrieres |
+| R36 | 25 → 23 (4) | 2 → 0 | 0 → 0 | 0 → 0 | 5 → 0 | /poste-de-decision |
+| R37 | 22 → 20 (3) | 2 → 0 | 0 → 0 | 0 → 0 | 3 → 0 | /fiscal/quitus |
+
+Totaux (37 rôles) : écrans du menu refusés **83 → 0** ; erreurs **15 → 0** ; liens internes en échec **72 → 0** ;
+écrans vides 250 → 253 (écrans désormais chargés ; 115 proposent la prochaine action). Menus les plus longs (R22 : 120,
+R23 : 90, R06 : 84, R07 : 77) : 4 à 6 entrées visibles d'emblée, le reste replié et accessible par la recherche.
+Contrôle serveur (113 comptes) : aucune entrée de menu refusée (403) sur sa lecture principale ; écarts de l'ancien test
+78 → 2 (deux écrans de guichet qui attendent la saisie d'un contribuable, réponse 400).
+
+**Tests ajoutés.** `frontend/test/parcours-par-role.test.tsx` (instantané du menu de chaque rôle : taille, entrées
+d'emblée, travail du jour, accueil ; entrées clés ; aucune route retirée ; garde des comptes publics ; liens « Réalisé
+par » ; règle d'accessibilité ; lecture agrégée ; prochaine action) ; `backend/test/menu-droits.test.ts` étendu (entrées
+`.then(...)` du registre désormais relevées, lecture décisive par écran, contrôle des 113 comptes, masques par entité).
+
+**Décisions demandées au maître d'ouvrage (aucun droit accordé d'office).**
+
+1. **Recours — direction (R06, R07)** : l'écran leur permet d'affecter un propriétaire (droit `appeals:assign`) et de
+   lire les délais, mais la file nominative (`GET /v1/appeals`) leur est refusée. Accorder la lecture de la file à la
+   direction de la régie ?
+2. **Correspondance écran → entité exploitante** (`MENU_LECTURE_PAR_ENTITE`) : DGTK (stationnement, publicité,
+   environnement, fiches sectorielles, grands redevables, coopératives), RFCK (contrôle technique, fourrières, centres,
+   raccordement), DGIPK (régie fiscale), ministère des Finances (patrimoine) — à confirmer, puis à reprendre par les
+   rattachements de modules (§ 12A) en production.
+3. **« Mon travail du jour » par rôle** (§ 12.9) : listes par défaut à confirmer.
+4. **Écrans utilisés partiellement** (lecture assumée, `PARTIEL_ASSUME`) : « Sept questions » sans les ruptures pour
+   R06/R07/R11, cadastre par objet pour R09, indicateurs d'enquête pour R06/R21, registre du coffre pour R19 — ouvrir la
+   lecture complète ou retirer ces écrans du menu de ces rôles ?
+5. **Tableau ministériel** : refusé au Trésor et au rapprochement (R17, R18), qui l'avaient au menu (entrée masquée) —
+   confirmer.
+6. **Écrans vides en démonstration** (instructions, accords de service, bases de référence, assignations, documents,
+   consultations motivées) : ajouter des données [EXEMPLE] ? Non fait ici pour ne modifier aucun compteur existant.

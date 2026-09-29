@@ -6,7 +6,7 @@
  */
 import { useApp } from '../context';
 import { MODULE_ROUTES } from '../modules/registry';
-import { NAV } from './Shell';
+import { NAV, rolesDuMenuPrincipal } from './Shell';
 
 /** Rôles déclarés d'un écran (registre des modules, puis menu principal) ; [] = écran public. */
 export function rolesDeLEcran(path: string): string[] {
@@ -14,7 +14,8 @@ export function rolesDeLEcran(path: string): string[] {
   const m = MODULE_ROUTES.find((r) => match(r.path));
   if (m?.nav?.roles?.length) return m.nav.roles;
   const n = NAV.find((x) => match(x.to));
-  return (n as { roles?: string[] } | undefined)?.roles ?? [];
+  // Écrans du socle (29/09/2026) : rôles des sections du menu principal qui les proposent.
+  return (n as { roles?: string[] } | undefined)?.roles ?? (n ? rolesDuMenuPrincipal(n.to) : []);
 }
 
 export function DemoRoleSwitch({ hint }: { hint?: string }) {

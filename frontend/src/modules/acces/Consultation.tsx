@@ -17,6 +17,8 @@ import { api } from '../../lib/api';
 import { hasRole, PURPOSE_LABEL, useAction, type Consultation as C } from './common';
 import { ConsultationsVisuels } from './visuels';
 import './acces.css';
+// Parcours par rôle (29/09/2026) : un écran vide propose la prochaine action utile du travail du jour.
+import { SuiteDuTravail } from '../../components/SuiteDuTravail';
 
 interface Dossier {
   consultation: { id: string; mode: string; purpose: string; expiresAt: string };
@@ -98,7 +100,7 @@ export default function Consultation() {
             <header className="panel-head"><h2 className="panel-title" id="hist-title">{reviewer ? 'Consultations à revoir' : 'Mes consultations'}</h2><span className="count">{list.data?.items.length ?? 0}</span></header>
             {list.loading && <Loading />}
             {list.error !== null && <ErrorState error={list.error} onRetry={list.reload} />}
-            {list.data && (list.data.items.length === 0 ? <EmptyState title="Aucune consultation motivée" /> : (
+            {list.data && (list.data.items.length === 0 ? <EmptyState title="Aucune consultation motivée"><SuiteDuTravail /></EmptyState> : (
               <DataTable rows={list.data.items} rowKey={(c) => c.id} caption="Consultations"
                 columns={[
                   { key: 'who', label: 'Agent', render: (c) => <span className="mono small">{c.userId}</span> },

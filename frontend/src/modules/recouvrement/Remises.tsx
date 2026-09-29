@@ -19,6 +19,8 @@ import { hasRole, REMISSION_STATUS, type Arrear, type Remission, type RemissionC
 import { Msg, useAction } from './actions';
 import { RemisesVisuel } from './visuels';
 import './recouvrement.css';
+// Parcours par rôle (29/09/2026) : un écran vide propose la prochaine action utile du travail du jour.
+import { SuiteDuTravail } from '../../components/SuiteDuTravail';
 
 type Tab = 'instruire' | 'decider' | 'decidees';
 
@@ -206,7 +208,7 @@ export default function Remises() {
             <button type="button" aria-pressed={tab === 'decidees'} onClick={() => setTab('decidees')}>Décidées <span className="count">{groups.decidees.length}</span></button>
           </div>
           <div className="rc-grid">
-            {groups[tab].length === 0 && <EmptyState title="Aucune remise" icon="check" />}
+            {groups[tab].length === 0 && <EmptyState title="Aucune remise" icon="check"><SuiteDuTravail /></EmptyState>}
             {groups[tab].map((r) => <RemissionCard key={r.id} r={r} meId={user?.id} roles={roles} onDone={q.reload} />)}
           </div>
           <p className="small muted rc-foot">L’effacement total d’une créance ne passe jamais par une remise : voir l’<Link to="/recouvrement/non-valeurs">admission en non-valeur</Link>.</p>

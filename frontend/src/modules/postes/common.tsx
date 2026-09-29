@@ -7,6 +7,7 @@
  */
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { useEcranAccessible } from '../../components/LienEcran';
 import { useApp } from '../../context';
 import { api, describeError, NetworkError, safeGet, safeSet } from '../../lib/api';
 import { StatusBadge, type Tone } from '../../components/StatusBadge';
@@ -59,25 +60,28 @@ export function ecrireHorsLigne(userId: string | undefined, cle: string, data: u
 /** Chargement avec repli hors connexion : la dernière réponse est conservée sur l'appareil (par utilisateur). */
 export function usePosteApi<T>(path: string | null, cle: string) {
   const { user } = useApp();
-  const [state, setState] = useState<{ data: T | null; error: unknown; loading: boolean; horsLigne: string | null }>({ data: null, error: null, loading: !!path, horsLigne: null });
+  // `pour` : chemin auquel appartiennent les données (29/09/2026) — en passant d'une vue à l'autre, les données de la
+  // vue précédente ne sont jamais rendues avec la nouvelle vue (plantage « undefined.map » relevé par le parcours réel).
+  const [state, setState] = useState<{ pour: string | null; data: T | null; error: unknown; loading: boolean; horsLigne: string | null }>({ pour: path, data: null, error: null, loading: !!path, horsLigne: null });
   const [tick, setTick] = useState(0);
   const uid = user?.id;
   useEffect(() => {
-    if (!path) { setState((s) => ({ ...s, loading: false })); return; }
+    if (!path) { setState((s) => ({ ...s, pour: null, loading: false })); return; }
     let alive = true;
     setState((s) => ({ ...s, loading: true, error: null }));
     api<T>(path).then(
-      (d) => { if (!alive) return; ecrireHorsLigne(uid, cle, d); setState({ data: d, error: null, loading: false, horsLigne: null }); },
+      (d) => { if (!alive) return; ecrireHorsLigne(uid, cle, d); setState({ pour: path, data: d, error: null, loading: false, horsLigne: null }); },
       (e: unknown) => {
         if (!alive) return;
         const c = e instanceof NetworkError ? lireHorsLigne<T>(uid, cle) : null;
-        setState(c ? { data: c.data, error: null, loading: false, horsLigne: c.at } : { data: null, error: e, loading: false, horsLigne: null });
+        setState(c ? { pour: path, data: c.data, error: null, loading: false, horsLigne: c.at } : { pour: path, data: null, error: e, loading: false, horsLigne: null });
       },
     );
     return () => { alive = false; };
   }, [path, cle, uid, tick]);
   const reload = useCallback(() => setTick((n) => n + 1), []);
-  return { ...state, reload };
+  const aJour = state.pour === path;
+  return { data: aJour ? state.data : null, error: aJour ? state.error : null, loading: aJour ? state.loading : !!path, horsLigne: aJour ? state.horsLigne : null, reload };
 }
 
 export function BandeauHorsLigne({ depuis }: { depuis: string | null }) {
@@ -124,12 +128,16 @@ const tone = (etat: string): Tone => (['RAPPROCHE', 'REGLE'].includes(etat) ? 'g
 /** Chiffre jamais nu : état, comparaison, date de production, taux, source cliquable en trois niveaux au plus. */
 export function ChiffreView({ c, grand = false }: { c: Chiffre; grand?: boolean }) {
   const lien = c.source.chemin[Math.min(1, c.source.chemin.length - 1)] ?? '/poste-de-decision';
+  // Parcours par rôle (29/09/2026) : la source n'est cliquable que si l'écran est utilisable par la personne.
+  const utilisable = useEcranAccessible();
+  const titre = `Source : ${c.source.libelle} (${c.source.chemin.join(' › ')})`;
+  const contenu = (<>
+    <span className={grand ? 'ps-valeur ps-valeur-grand' : 'ps-valeur'}>{nf(c.valeur, c.unite)}{c.valeur !== null && <small> {c.unite}</small>}</span>
+    <span className="ps-libelle">{c.libelle}</span>
+  </>);
   return (
     <div className={`ps-chiffre${c.estimation ? ' ps-estimation' : ''}${c.exemple ? ' ps-exemple' : ''}`} data-etat={c.etat}>
-      <Link to={lien} className="ps-chiffre-lien" title={`Source : ${c.source.libelle} (${c.source.chemin.join(' › ')})`}>
-        <span className={grand ? 'ps-valeur ps-valeur-grand' : 'ps-valeur'}>{nf(c.valeur, c.unite)}{c.valeur !== null && <small> {c.unite}</small>}</span>
-        <span className="ps-libelle">{c.libelle}</span>
-      </Link>
+      {utilisable(lien) ? <Link to={lien} className="ps-chiffre-lien" title={titre}>{contenu}</Link> : <span className="ps-chiffre-lien" title={titre}>{contenu}</span>}
       <span className="ps-meta">
         <StatusBadge tone={tone(c.etat)} label={`État · ${c.etatLabel}`} />
         {c.estimation && <StatusBadge tone="warning" label="Estimation" />}

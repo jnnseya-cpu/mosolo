@@ -1,6 +1,6 @@
 /** Console de l'enquêteur anti-fraude : file des signalements, alertes à examiner, dossiers d'enquête. */
 import { useMemo, useState } from 'react';
-import { PageHead } from '../../components/Shell';
+import { lectureAgregee, PageHead } from '../../components/Shell';
 import { DataTable } from '../../components/DataTable';
 import { Drawer } from '../../components/Drawer';
 import { EmptyState, ErrorState, ExampleNotice, Loading } from '../../components/States';
@@ -73,6 +73,15 @@ export default function ConsoleEnquete() {
     reloadAll();
   };
 
+  // Gouverneur, directeur de cabinet, secrétaire exécutif (29/09/2026) : lecture agrégée plutôt qu'un refus.
+  if (!canReports && !canAlerts && !canCases && lectureAgregee(user?.roles)) {
+    return (
+      <div className="page">
+        <PageHead eyebrow="Intégrité" title="Console d’enquête" />
+        <EmptyState title="Lecture agrégée" icon="chart">Les dossiers d’enquête sont instruits par les enquêteurs anti-fraude et l’audit interne ; leurs indicateurs agrégés remontent au poste de décision et au centre de commandement.</EmptyState>
+      </div>
+    );
+  }
   if (!canReports && !canAlerts && !canCases) {
     return (
       <div className="page">

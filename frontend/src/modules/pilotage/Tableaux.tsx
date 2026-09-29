@@ -7,7 +7,7 @@ import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/StatusBadge';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { Icon } from '../../components/Icon';
-import { api } from '../../lib/api';
+import { api, describeError } from '../../lib/api';
 import { SIX_ETATS } from '@mosolo/shared';
 import {
   CATEGORY_LABELS, CHANNEL_LABELS, DrillChart, ExportButton, FiltersBar, KpiTiles, LadderChart, qs, ScopeLine, Section, SeriesChart, useFmt,
@@ -211,7 +211,11 @@ export default function Tableaux() {
         <ExportButton kind="echelle" params={exportParams} label="Exporter l’échelle (signé)" />
       </div>
       <FiltersBar value={filters} onChange={setFilters} lock={d?.scope ?? null} />
-      {data.loading && !d ? <Loading /> : data.error ? <ErrorState error={data.error} onRetry={data.reload} /> : d && (
+      {data.loading && !d ? <Loading /> : data.error && describeError(data.error).code === 'COMMUNE_REQUIRED' ? (
+        // Parcours par rôle (29/09/2026) : sans commune de rattachement, le tableau « Commune » demande d'abord le choix
+        // d'une commune (filtre ci-dessus) au lieu d'afficher une erreur.
+        <EmptyState title="Choisissez une commune" icon="pin">Ce tableau présente une commune à la fois : choisissez-la dans le filtre « Commune » ci-dessus.</EmptyState>
+      ) : data.error ? <ErrorState error={data.error} onRetry={data.reload} /> : d && (
         <>
           <ScopeLine scope={d.scope} generatedAt={d.generatedAt} />
           <p className="small muted">{d.description}</p>
