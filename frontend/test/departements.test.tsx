@@ -72,12 +72,12 @@ const EFF = {
 };
 
 describe('Types de comptes', () => {
-  it('affiche les 37 rôles, le parcours de création, la seconde validation et les comptes [EXEMPLE]', async () => {
+  it('affiche les 38 rôles (R38 Groupe Nseya ajouté le 29/09/2026), le parcours de création, la seconde validation et les comptes [EXEMPLE]', async () => {
     mockApi({ '/v1/acces/types-de-comptes': TYPES });
     renderAt('/acces/types-de-comptes', <TypesDeComptes />);
     expect(await screen.findByRole('heading', { name: 'Types de comptes' })).toBeTruthy();
     const list = await screen.findByRole('list', { name: 'Types de comptes' });
-    expect(within(list).getAllByRole('listitem').filter((li) => li.className.includes('dp-type'))).toHaveLength(37);
+    expect(within(list).getAllByRole('listitem').filter((li) => li.className.includes('dp-type'))).toHaveLength(38);
     expect(screen.getAllByText('Seconde validation sécurité').length).toBeGreaterThan(0);
     expect(screen.getByText(/\[EXEMPLE\] Comptable public/)).toBeTruthy();
     expect(screen.getByText('Personne (inscription publique)')).toBeTruthy();

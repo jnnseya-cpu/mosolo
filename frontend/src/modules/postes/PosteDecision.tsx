@@ -269,6 +269,13 @@ function VueGenerique({ vue, d, onDone }: { vue: string; d: Record<string, unkno
       )}
       {vue === 'realisations' && <Bloc titre="Réalisations"><p className="ps-small">{String(d.note)}</p><ul className="ps-liste">{(d.items as { titre: string; statut: string; commune: string }[]).map((r) => <li key={r.titre + r.commune}>{r.titre} — {r.statut} · {r.commune}</li>)}</ul><Link to="/transparence">Tableau public de transparence</Link></Bloc>}
       {vue === 'recettes' && (d.sixEtats as Chiffre[] | undefined)?.length ? <SixEtatsRecettes six={d.sixEtats as Chiffre[]} /> : null}
+      {/* Moteur de répartition (29/09/2026) : centre de commandement financier, chaque chiffre expliqué jusqu'à la transaction. */}
+      {vue === 'recettes' && (
+        <Bloc titre="Répartition des recettes et droits" sous="70 % Gouvernorat · 10 % Groupe Nseya · 10 % ministères et départements · 10 % opérations de terrain">
+          <p className="ps-small">Total collecté, parts de chaque bénéficiaire, réglé et restant, espèces et électronique — « Expliquer ce chiffre » sur chaque montant.</p>
+          <Link to="/executive/finance" className="btn btn-primary btn-sm">Centre de commandement financier (Executive Finance)</Link>
+        </Bloc>
+      )}
       {chiffres.length > 0 && <Bloc titre="Chiffres" sous="état, date, taux et source sur chacun"><div className="ps-grille">{chiffres.map((c) => <ChiffreView key={c.code} c={c} />)}</div></Bloc>}
       {d.historique !== undefined && vue !== 'mes-decisions' && (
         <Bloc titre="Historique de mes décisions">

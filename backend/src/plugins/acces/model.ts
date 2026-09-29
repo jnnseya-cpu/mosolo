@@ -182,6 +182,8 @@ export const ROLE_LEVEL: Record<RoleCode, AccessLevel | null> = {
   R20: 'OPERATEUR', R21: 'DIRECTION', R22: 'AUDIT', R23: 'AUDIT', R24: 'AUDIT', R25: 'AUDIT',
   R26: 'ADMIN_TECHNIQUE', R27: 'ADMIN_TECHNIQUE', R28: 'ADMIN_TECHNIQUE', R29: 'ADMIN_TECHNIQUE',
   R30: null, R31: null, R32: 'OPERATEUR', R33: 'OPERATEUR', R34: 'OPERATEUR', R35: 'AGENT_TERRAIN', R36: 'CONSULTATION', R37: 'CONSULTATION',
+  // Groupe Nseya (29/09/2026) : lecture complète, sans aucun pouvoir d'écriture sur l'historique.
+  R38: 'CONSULTATION',
 };
 
 /**
@@ -191,6 +193,8 @@ export const ROLE_LEVEL: Record<RoleCode, AccessLevel | null> = {
 export const SENSITIVE_ROLES: RoleCode[] = [
   'R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R08', 'R13', 'R14', 'R15', 'R16', 'R17', 'R18', 'R19', 'R21',
   'R22', 'R23', 'R24', 'R25', 'R26', 'R27', 'R28', 'R29',
+  // Groupe Nseya (29/09/2026) : visibilité complète de la plateforme → MFA forte et seconde validation.
+  'R38',
 ];
 /**
  * Rôles de la chaîne constat → vérification → décision (chef de service, superviseur, contrôleur, contentieux) :

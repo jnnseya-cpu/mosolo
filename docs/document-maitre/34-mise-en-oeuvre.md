@@ -121,6 +121,35 @@ Le Cahier des exigences v2.9 retient une proposition du promoteur : financement 
 
 **Position du promoteur, réintégrée (décision du maître d'ouvrage du 27/09/2026 : rien de l'existant n'est omis, tout est harmonisé).** La décision demandée au Gouverneur dans la note exécutive est conservée telle quelle : *Groupe Nseya finance intégralement le système d'exploitation numérique (hors moyens physiques) ; en contrepartie, 10 % des recettes générées par le système pendant 30 ans, selon la clé de répartition du § 37A (10 % Groupe Nseya, 10 % ministères de tutelle, 10 % agents et sous-traitants, 70 % Gouvernement provincial), sous réserve de l'acte juridique qui l'autorise.* Les deux lectures coexistent : la clé du promoteur est la **position retenue par le promoteur** ; l'analyse ci-dessus et le modèle du § 37.3 sont les **garde-fous proposés** à l'autorité. Dans la plateforme, la clé 10/10/10/70 est un **paramètre gouverné au statut « acte requis »** : elle produit une simulation à partir des recettes rapprochées, mais aucun décaissement n'a lieu sans acte juridique enregistré et double validation, et tout décaissement passe alors par une opération du Trésor à quatre yeux, jamais par un prélèvement automatique. La commission des agents (10 %, § I.15) est rattachée à la tranche « agents et sous-traitants » de cette clé (§ H.31).
 
+### 37.2 bis Moteur de paiement, de règlement et de répartition (spécifications du 29/09/2026) — ajout
+
+Le maître d'ouvrage a transmis le 29/09/2026 la spécification « Payment, Settlement & Revenue Allocation Engine » puis sa
+version 1.0 (« … Commission & Settlement Engine », `docs/sources/`). Elles sont construites **par-dessus** la clé du
+§ 37A décrite ci-dessus, sans rien en retirer : la clé reste au statut « acte requis », ses deux flux (Flux 1 Groupe
+Nseya, Flux 2 Gouvernement provincial au Trésor), son exécution automatique après acte et convention (décision du
+27/09/2026) et ses simulations en comptes d'ordre demeurent le **seul chemin des fonds**. Le moteur ajoute :
+
+- une **matrice versionnée** KIN-DEFAULT (alias KIN-REV-001) dont la V1 reprend telles quelles les constantes du § 37A
+  (70 / 10 / 10 / 10, effet au 01/10/2026, pool de terrain par recette générée : agent direct 10 %, agent de
+  sous-traitant 7 % + sous-traitant 3 %) au statut **proposé, acte requis** ; activation par quatre personnes
+  distinctes (rédaction, vérification, approbation, activation) et seulement si la somme vaut 100,000 %, que la clé du
+  § 37A est active (acte et conditions du § 37A.8) et qu'une règle CLE-REPARTITION-37A certifiée porte les mêmes taux ;
+- un **sous-grand-livre des droits** en partie double (constats sur recettes rapprochées, contre-écritures négatives,
+  règlements constatés par les deux flux ou par demande de règlement, recouvrements) ;
+- le **compte de règlement principal** désigné par le Gouverneur (alias verrouillé du coffre, circuit du coffre pour
+  tout changement de numéro) ;
+- les tableaux « Recettes et droits » par autorité, entité, Groupe Nseya, sous-traitant et agent, avec « Expliquer ce
+  chiffre » sur chaque montant.
+
+Le détail figure à l'annexe I, § I.37. **Contradictions à arbitrer** (harmonisées, rien n'est retiré) : (a) pool des
+agents par recette générée (spécification) ou par points × qualité (décision du 27/09/2026) — tranché le 29/09/2026
+pour la recette générée dans la V1, les deux modes restant disponibles ; (b) fractionnement en temps réel chez le
+prestataire = troisième flux contraire au § 37A.4 — tranché : admis pour les deux flux du § 37A seulement, sur
+infrastructure approuvée ; (c) encaissement d'espèces par l'agent (§ 13) contre « aucune espèce pour les agents » —
+tranché : aucune espèce pour les agents, points agréés et guichets bancaires seulement ; (d) visibilité complète de
+Groupe Nseya — rôle dédié R38 en lecture, données personnelles par consultation motivée ; (e) lecture des 7 % —
+tranché : 7 points de la transaction ; (f) visibilité complète du ministre des Finances limitée à ce moteur financier.
+
 ## 37.3 Structure commerciale recommandée
 
 | Composante | Nature | Mode de paiement |

@@ -83,6 +83,9 @@ export const ROLES = {
   R29: 'Gestionnaire des modèles IA', R30: 'Contribuable', R31: 'Mandataire', R32: 'Point de paiement agréé',
   R33: 'Partenaire bancaire / monnaie mobile', R34: 'Partenaire de données', R35: 'Sous-traitant terrain',
   R36: 'Observateur société civile', R37: 'Service vérificateur du quitus',
+  // Décision du maître d'ouvrage du 29/09/2026 (spécification v1.0 du moteur de répartition, § 4) : rôle dédié de Groupe
+  // Nseya (GROUPE_NSEYA_SUPER_ADMIN) — lecture complète, export et descente à la transaction ; aucune mutation de l'historique.
+  R38: 'Groupe Nseya — super-administrateur (lecture complète) (GROUPE_NSEYA_SUPER_ADMIN)',
 } as const;
 export type RoleCode = keyof typeof ROLES;
 
@@ -101,6 +104,8 @@ export const INCOMPATIBLE_ROLES: [RoleCode, RoleCode][] = [
   // point de paiement agréé (R32, encaissement) lui est incompatible.
   ...Array.from({ length: 29 }, (_, i) => [`R${String(i + 1).padStart(2, '0')}` as RoleCode, 'R32'] as [RoleCode, RoleCode]),
   ['R35', 'R32'],
+  // Groupe Nseya (R38) : lecture seule, jamais d'encaissement ni d'administration technique de la plateforme.
+  ['R38', 'R32'], ['R38', 'R26'],
 ];
 
 export function hasIncompatibility(roles: RoleCode[]): [RoleCode, RoleCode] | null {

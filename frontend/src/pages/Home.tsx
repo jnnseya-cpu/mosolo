@@ -85,6 +85,8 @@ export default function Home() {
   const vitrine = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('presentation');
   // Autorités (Gouverneur, cabinet, secrétariat exécutif, ministres) : l'écran d'accueil est le poste de décision (§ 27.2).
   if (user?.roles.some((r) => AUTORITES_POSTE.includes(r))) return <Navigate to="/poste-de-decision" replace />;
+  // Groupe Nseya (R38, 29/09/2026) : l'écran d'accueil est son centre de commandement.
+  if (user?.roles.includes('R38')) return <Navigate to="/groupe-nseya/command-centre" replace />;
   // Parcours par rôle (29/09/2026) : chaque compte s'ouvre sur son propre travail (premier écran de « Mon travail du
   // jour ») ; la présentation publique reste la page d'accueil des visiteurs et s'ouvre avec « ?presentation ».
   const accueil = accueilDuRole(user?.roles, user?.entity);

@@ -102,6 +102,8 @@ export function registerAccesPolicies(): void {
   definePolicy(ACCES.consultationRequest, {
     R06: always, R07: always, R09: always, R10: always, R11: always, R12: always, R20: always, R21: always,
     R22: always, R23: always, R24: always,
+    // Groupe Nseya (R38, 29/09/2026) : tout dossier individuel passe par la consultation motivée (C42-05).
+    R38: always,
   });
   definePolicy(ACCES.consultationReview, { R22: always, R28: always });
   definePolicy(ACCES.mandateManage, { R30: ownTaxpayer });

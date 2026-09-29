@@ -1,6 +1,6 @@
 /**
  * Types de comptes (27/09/2026, demande du maître d'ouvrage : « tous les types de comptes sont créés ») — référentiel
- * partagé des 37 rôles : famille, parcours de création, natures d'entité indicatives.
+ * partagé des 38 rôles (R38 ajouté le 29/09/2026 : Groupe Nseya) : famille, parcours de création, natures d'entité indicatives.
  *
  * Présentation et documentation seulement : les contrôles (pas d'élévation, seconde validation, MFA, contrat de
  * partenariat, accréditation) restent dans le serveur (backend/src/plugins/acces). Les natures d'entité sont
@@ -34,7 +34,7 @@ export const FAMILLE_DU_ROLE: Record<RoleCode, FamilleCompte> = {
   R22: 'AUDIT', R23: 'AUDIT', R25: 'AUDIT',
   R26: 'TECHNIQUE', R27: 'TECHNIQUE', R28: 'TECHNIQUE', R29: 'TECHNIQUE',
   R30: 'PUBLIC', R31: 'PUBLIC', R36: 'PUBLIC',
-  R32: 'PARTENAIRE', R33: 'PARTENAIRE', R34: 'PARTENAIRE',
+  R32: 'PARTENAIRE', R33: 'PARTENAIRE', R34: 'PARTENAIRE', R38: 'PARTENAIRE',
 };
 
 /** Parcours de création d'un compte (voie réelle, jamais un amorçage). */
@@ -57,6 +57,7 @@ export const PARCOURS_DU_ROLE: Record<RoleCode, ParcoursCreation> = {
   R35: 'ACCREDITATION_SOUS_TRAITANT',
   R36: 'DESIGNATION_OBSERVATEUR',
   R37: 'SERVICE_VERIFICATEUR',
+  R38: 'CONTRAT_PARTENAIRE',
 };
 
 /**
@@ -75,7 +76,9 @@ export const NATURES_ENTITE_DU_ROLE: Record<RoleCode, string[]> = {
   R30: ['PUBLIC'], R31: ['PUBLIC'],
   R32: ['BANQUE_PSP', 'OPERATEUR_DELEGUE', 'PARTENAIRE'], R33: ['BANQUE_PSP'], R34: ['PARTENAIRE', 'OPERATEUR_DELEGUE'],
   R35: ['SOUS_TRAITANT'], R36: ['PARTENAIRE', 'AUDIT', 'EXECUTIF'], R37: ['SERVICE_TECHNIQUE', 'MINISTERE', 'EXECUTIF'],
+  R38: ['OPERATEUR_DELEGUE'],
 };
 
 /** Rôles couverts par un contrat de partenariat (création par contrat enregistré à deux personnes). */
-export const ROLES_CONTRAT_PARTENAIRE: readonly RoleCode[] = ['R32', 'R33', 'R34'];
+/** R38 (Groupe Nseya, 29/09/2026) : compte partenaire créé sous contrat, lecture seule. */
+export const ROLES_CONTRAT_PARTENAIRE: readonly RoleCode[] = ['R32', 'R33', 'R34', 'R38'];

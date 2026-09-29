@@ -186,6 +186,30 @@ export function assertAiMay(actor: Principal, action: AnyAction | (typeof AI_FOR
   }
 }
 
+/**
+ * Groupe Nseya — super-administrateur en LECTURE COMPLÈTE (R38, décision du maître d'ouvrage du 29/09/2026,
+ * spécification v1.0 du moteur de répartition, § 4 et § 5) : lecture des tableaux, agrégats, finances, trésor,
+ * répartitions, règles et journaux d'audit de TOUTE la plateforme, export et descente à la transaction. Aucune action
+ * d'écriture n'est accordée ici (liste fermée d'actions de LECTURE). Les dossiers individuels de contribuables
+ * (lecture de la personne, de ses obligations, objets, titres, déclarations…) n'y figurent PAS : ils passent par la
+ * consultation motivée existante (motif déclaré et journalisé, critère C42-05).
+ */
+export const LECTURE_GROUPE_NSEYA_EXACTE: ReadonlySet<string> = new Set([
+  'audit.read', 'ledger.read', 'reconciliation.read', 'rule.read', 'dashboard.governor', 'alerts.read', 'provider.read', 'beneficiary.read',
+  'tresor:overview', 'tresor:closure.read', 'tresor:operation.read', 'tresor:exception.read', 'tresor:suspense.read', 'tresor:matching.read',
+  'tresor:nomenclature.read', 'tresor:points.read', 'tresor:receivables.read', 'tresor:export', 'pilotage:export',
+  'recouvrement:yield.read', 'campagnes:read', 'chaine:ruptures.read', 'plateforme:supervision.read', 'appeals:indicators.read',
+  'programme:read', 'repartition:read', 'reserve:read', 'legalshares:read', 'referentiel:read', 'referentiel:conformite.read',
+]);
+const LECTURE_GROUPE_NSEYA_MOTIFS: RegExp[] = [
+  /^(pilotage|decision|planification|postes):[\w.-]*read$/,
+  /^moteur:[\w.-]*(read|export)$/,
+  /:(indicators|indicateurs|indicators\.read|indicateurs\.read|application\.indicateurs)$/,
+];
+export function isLectureGroupeNseya(action: string): boolean {
+  return LECTURE_GROUPE_NSEYA_EXACTE.has(action) || LECTURE_GROUPE_NSEYA_MOTIFS.some((re) => re.test(action));
+}
+
 /** Évalue une décision d'accès sans lever d'erreur. */
 export function evaluate(principal: Principal, action: AnyAction, resource: Resource = {}): Access | false {
   if (principal.kind === 'ai') {
@@ -196,6 +220,8 @@ export function evaluate(principal: Principal, action: AnyAction, resource: Reso
       return false;
     }
   }
+  // Groupe Nseya (R38) : lecture complète de la plateforme (liste fermée d'actions de lecture), jamais d'écriture.
+  if (principal.roles.includes('R38') && isLectureGroupeNseya(action)) return 'full';
   const grants = grantsFor(action);
   let best: Access | false = false;
   for (const role of principal.roles) {
@@ -211,6 +237,7 @@ export function evaluate(principal: Principal, action: AnyAction, resource: Reso
 /** Le rôle peut-il, en principe, effectuer l'action (quel que soit le périmètre) ? */
 export function hasAnyGrant(user: User, action: AnyAction): boolean {
   const g = grantsFor(action);
+  if (user.roles.includes('R38') && isLectureGroupeNseya(action)) return true;
   return user.roles.some((r) => g[r] !== undefined);
 }
 

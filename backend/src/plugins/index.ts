@@ -23,6 +23,7 @@ import { integriteGouvernancePlugin } from './integrite/gouvernance/plugin.js';
 import { integriteSecuritePlugin } from './integrite/securite/plugin.js';
 import { pilotagePlugin } from './pilotage/plugin.js';
 import { repartitionPlugin } from './pilotage/repartition/plugin.js';
+import { moteurRepartitionPlugin } from './pilotage/repartition/moteur/plugin.js';
 import { planificationPlugin } from './pilotage/planification/plugin.js';
 import { partageLegalPlugin } from './pilotage/partage-legal/plugin.js';
 import { programmePlugin } from './pilotage/programme/plugin.js';
@@ -84,6 +85,8 @@ export const DEFAULT_PLUGINS: MosoloPlugin<unknown>[] = [
   integriteSecuritePlugin,
   pilotagePlugin,
   repartitionPlugin,
+  // Moteur de paiement, de règlement et de répartition (spécifications du 29/09/2026) : par-dessus la clé du § 37A.
+  moteurRepartitionPlugin,
   planificationPlugin,
   programmePlugin,
   partageLegalPlugin,
