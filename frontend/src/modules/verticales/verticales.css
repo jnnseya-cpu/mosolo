@@ -62,3 +62,20 @@
 .vx-parcours .list-row { flex-wrap: wrap; }
 .vx-parcours .min0 { flex: 1 1 220px; }
 .vx-parcours .row-title, .vx-parcours .mono, .vx-parcours .small { white-space: normal; overflow-wrap: anywhere; }
+
+/* Modules sectoriels : chemin vers l'acte (29/09/2026) — prochaine étape, liste de contrôle, travaux avant l'acte. */
+.sec-chemin { display: grid; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft); min-width: 0; }
+.sec-next { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); min-width: 0; overflow-wrap: anywhere; }
+.sec-next .badge { margin-left: 4px; vertical-align: middle; }
+.sec-etapes summary { cursor: pointer; }
+.sec-checklist { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 8px; }
+.sec-etape { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.sec-etape .row-between { gap: 8px; flex-wrap: wrap; }
+.sec-travaux { display: grid; gap: 6px; margin-top: 8px; }
+.sec-travaux .row-wrap { gap: 6px; }
+.sec-comment summary { cursor: pointer; }
+.sec-comment ol { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.fiche-focus { outline: 2px solid var(--navy); outline-offset: 2px; border-radius: var(--r); }
+.sec-travaux { min-width: 0; }
+.sec-travaux .row-wrap { min-width: 0; max-width: 100%; }
+.sec-travaux .btn, .sec-chemin .btn { white-space: normal; max-width: 100%; min-width: 0; height: auto; text-align: left; overflow-wrap: anywhere; }

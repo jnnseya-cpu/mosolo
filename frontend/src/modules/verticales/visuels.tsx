@@ -308,12 +308,14 @@ const DECL_ETAT: Record<string, EtatVue> = {
   SANS_DONNEE_TIERCE: { label: 'Sans donnée observée', tone: 'neutral' }, VALIDEE: { label: 'Validée', tone: 'good' }, EN_CONTRADICTOIRE: { label: 'Procédure contradictoire', tone: 'warning' },
 };
 
-export function SecteursVisuels({ modules, withDeclarations }: { modules: { module: string; name: string; counts: { references: number; declarations: number; observations: number } }[]; withDeclarations: boolean }) {
+export function SecteursVisuels({ modules, withDeclarations }: { modules: { module: string; name: string; counts: { references: number; declarations: number; observations: number }; etat?: string; cheminActe?: { faites: number; total: number } }[]; withDeclarations: boolean }) {
+  const enVigueur = modules.filter((m) => m.etat === 'ACTE_EN_VIGUEUR').length;
+  const chemins = modules.filter((m) => m.cheminActe);
   const q = useApi(withDeclarations ? () => api<{ items: { status: string; declaredAt: string }[] }>('/v1/verticales/secteurs/declarations') : null, [withDeclarations]);
   return (
     <VisualSummary label="Modules sectoriels en un coup d’œil">
       <KpiGrid max={4} label="Modules sectoriels — chiffres clés">
-        <KpiTile hero label="Modules sur le socle" value={modules.length} state={{ label: 'Acte requis', tone: 'neutral' }} />
+        <KpiTile hero label="Modules sur le socle" value={modules.length} state={enVigueur ? { label: `${enVigueur} acte(s) en vigueur`, tone: 'good' } : { label: 'Acte requis', tone: 'neutral' }} />
         <KpiTile label="Déclarations" value={modules.reduce((s, m) => s + m.counts.declarations, 0)} />
         <KpiTile label="Relevés de terrain" value={modules.reduce((s, m) => s + m.counts.observations, 0)} />
         <KpiTile label="Références" value={modules.reduce((s, m) => s + m.counts.references, 0)} />
@@ -322,6 +324,11 @@ export function SecteursVisuels({ modules, withDeclarations }: { modules: { modu
         <BarChartViz className="viz-span-2" title="Activité par module" orientation="horizontal" format={(v) => fmtNombre(v, 0)}
           series={[{ key: 'd', label: 'Déclarations' }, { key: 'o', label: 'Relevés' }, { key: 'r', label: 'Références' }]}
           rows={modules.map((m) => ({ key: m.module, label: `${m.module} — ${m.name}`, values: { d: m.counts.declarations, o: m.counts.observations, r: m.counts.references } }))} />
+        {chemins.length > 0 && (
+          <StackedBarViz title="Chemin vers l’acte par module" subtitle="Étapes faites et restantes (points juridiques, règle, fiche, titres)" mode="absolute"
+            series={[{ key: 'f', label: 'Faites' }, { key: 'r', label: 'Restantes' }]}
+            rows={chemins.map((m) => ({ key: m.module, label: `Module ${m.module}`, values: { f: m.cheminActe!.faites, r: m.cheminActe!.total - m.cheminActe!.faites } }))} />
+        )}
         {withDeclarations && !q.error && (
           <StatusDistribution title="Déclarations par état" unitLabel="déclarations" items={statusItems(q.data?.items ?? [], (d) => d.status, DECL_ETAT)} loading={q.loading && !q.data} />
         )}

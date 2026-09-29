@@ -161,6 +161,12 @@ export interface AppOptions {
   aiProvider?: AIProvider;
   /** Charger les données de démonstration (défaut : oui). */
   seed?: boolean;
+  /**
+   * Exemples COMPLÉMENTAIRES de démonstration (29/09/2026 : déclarations, relevés et rapprochements [EXEMPLE] des modules
+   * sectoriels « acte requis ») : semés seulement avec les données de démonstration ET sur demande explicite des points
+   * d'entrée lancés avec `--demo` (défaut : non — les tests historiques gardent leurs dépôts vides).
+   */
+  demoExamples?: boolean;
   /** Variables des connecteurs BitriPay / KODA (défaut : process.env). Sans clé API : bac à sable local. */
   connectorEnv?: Record<string, string | undefined>;
   /** `fetch`, journal masqué et temporisation injectables (tests : jamais de réseau réel). */
@@ -248,6 +254,8 @@ export function createContext(opts: AppOptions = {}) {
      * même de configuration (types de titres « DÉMONSTRATION »), n'est créé — mode production.
      */
     demoData: undefined as boolean | undefined,
+    /** Exemples complémentaires de démonstration demandés (fixé par `buildApp` : jamais sans données de démonstration). */
+    demoExamples: false as boolean,
     /**
      * État du stockage persistant (fixé par le module « socle » quand une base est attachée) : `degraded` vrai après
      * plusieurs écritures consécutives en échec. Absent : stockage en mémoire (tests, démonstration sans base).

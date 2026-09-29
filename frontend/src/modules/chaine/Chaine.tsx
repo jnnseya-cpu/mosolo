@@ -117,6 +117,15 @@ export default function Chaine() {
     <div className="page page-wide">
       <PageHead eyebrow="Vision · chaîne opératoire" title="Sept questions et chaîne opératoire"
         lead="Pour chaque objet et chaque obligation : qui ? quoi ? où ? quelle règle ? combien ? payé ? l’argent est-il arrivé sur le compte public et comptabilisé ? — et les treize maillons, de RECENSER à PLANIFIER, chacun horodaté et signé. Aucun maillon ne peut être sauté." />
+      <details className="panel section ch-comment" open={!objectId && !obligationId}>
+        <summary><strong>Comment ça marche ?</strong></summary>
+        <ul className="small">
+          <li>Chaque objet (bien, activité, véhicule…) et chaque obligation passe par treize maillons, de « Recenser » à « Planifier ». Un maillon est « Fait » quand l’opération réelle a eu lieu dans son module : il renvoie alors à son événement horodaté et signé (journal d’audit chaîné, grand livre, quittance).</li>
+          <li>Cette page est une preuve, en lecture seule : on ne « coche » rien ici. Pour faire avancer un maillon « En attente », la personne indiquée agit dans l’écran indiqué (« Qui doit agir », « Où ») ; la chaîne se met à jour d’elle-même à la prochaine consultation.</li>
+          <li>Aucun maillon ne peut être sauté : un maillon accompli alors qu’un maillon obligatoire qui le précède ne l’est pas est signalé « Bloqué — maillon sauté » et remonte en alerte pour examen humain, sans effet automatique.</li>
+          <li>Pour mettre à jour la chaîne d’un dossier : ouvrez l’obligation ou l’objet (liste ci-dessous ou identifiant OBJ-… / OBL-…), sélectionnez le maillon en attente, puis suivez le lien « Où » si votre rôle est habilité.</li>
+        </ul>
+      </details>
       <form className="ch-search section" onSubmit={go} role="search">
         <label className="sr-only" htmlFor="ch-ref">Identifiant d’objet ou d’obligation</label>
         <input id="ch-ref" className="mono" value={ref} onChange={(e) => setRef(e.target.value)} placeholder="OBJ-… ou OBL-…" />
