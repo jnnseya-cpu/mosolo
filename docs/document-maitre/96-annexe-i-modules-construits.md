@@ -1256,3 +1256,14 @@ clic, jamais par le menu). Ajout, rien de retiré :
   Correspondance des variables sur les valeurs réellement transmises (`withAliasVars`) et valeurs réelles ajoutées aux
   émetteurs (avis, références et confirmations de paiement, règles, alertes, titres et certificats) : 0 message
   incomplet. Une valeur absente reste marquée « — », jamais inventée.
+
+## I.32 Écrans adaptés au compte : garde des écrans de travail et démonstration guidée (29/09/2026)
+
+- **Garde d'écran** (`frontend/src/components/RouteGuard.tsx`) : un compte PUBLIC (contribuable, mandataire —
+  R30/R31/R36) qui atteint un écran de travail d'agent (ex. contrôle des titres, reprise e-DGRK, console des
+  verticales) voit « Écran réservé » avec les rôles qui l'utilisent, jamais les outils. Présentation seulement : le
+  serveur refuse toujours de son côté ; aucun droit élargi ; comptes de travail inchangés.
+- **Parcours des services** : pour un compte public, une étape servie par un écran d'agent affiche « Réalisé par un
+  agent habilité » au lieu du lien.
+- **Démonstration guidée** (`DemoRoleSwitch`) : sur un écran refusé ou vide pour le rôle fictif choisi, liste des
+  utilisateurs de démonstration qui utilisent cet écran, avec passage en un clic. Absent hors démonstration.

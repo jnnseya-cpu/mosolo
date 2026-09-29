@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { DemoRoleSwitch } from '../../components/DemoRoleSwitch';
 import { Link } from 'react-router-dom';
 import { AssistedPay } from '../../components/AssistedPay';
 import type { MoneyJSON } from '@mosolo/shared';
@@ -183,7 +184,7 @@ function CasesTab() {
       {q.data && q.data.length > 0 && <CasesVisuels cases={q.data} verticalName={(s) => cat.data?.items.find((v) => v.slug === s)?.short ?? s} />}
       {q.data && (
         <DataTable rows={q.data} rowKey={(c) => c.id} caption="Démarches de l’entité"
-          empty={<EmptyState title="Aucune démarche dans votre périmètre" />}
+          empty={<EmptyState title="Aucune démarche dans votre périmètre"><DemoRoleSwitch hint="Démonstration : les démarches fictives sont rattachées aux agents de leur entité. Voir la console en tant que :" /></EmptyState>}
           columns={[
             { key: 'type', label: 'Démarche', primary: true, render: (c) => <span><strong>{c.typeLabel}</strong><br /><span className="mono small muted">{c.id}</span></span> },
             { key: 'v', label: 'Service', render: (c) => c.vertical },

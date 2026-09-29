@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useApp } from '../context';
 import { ApiError, describeError } from '../lib/api';
 import { Icon } from './Icon';
+import { DemoRoleSwitch } from './DemoRoleSwitch';
 
 export function EmptyState({ title, children, icon = 'file' }: { title: string; children?: ReactNode; icon?: string }) {
   return (
@@ -25,6 +26,7 @@ export function ErrorState({ error, onRetry, children }: { error: unknown; onRet
         <p className="state-title">Accès réservé</p>
         <p className="state-body">Cet espace est réservé aux personnes habilitées de l’entité compétente (principe du moindre privilège). Chaque refus est journalisé.</p>
         {d.code && d.code !== 'FORBIDDEN' && <p className="state-body small muted">Motif : {d.code}</p>}
+        <DemoRoleSwitch />
         {children}
       </div>
     );
