@@ -1575,3 +1575,24 @@ route, règle, écran ni donnée de démonstration existants n'est retiré. Modu
   (droit « à payer » réglé par le Gouvernorat) ; cadence de règlement hebdomadaire pour le Gouvernorat et Groupe Nseya,
   mensuelle pour les ministères et les opérations de terrain ; délai de grâce de 10 jours avant « en retard » ; table
   module → ministère propriétaire confirmée.
+
+## I.38 Gains d'autrui : visibles des seules autorités financières et de Groupe Nseya (29/09/2026)
+
+Décision du maître d'ouvrage : **seuls le Gouverneur (R01), le directeur de cabinet (R02), le secrétaire exécutif (R03),
+le ministre des Finances (R05) et Groupe Nseya (R38) voient ce que gagnent les autres** ; tous les autres ne voient que
+leurs propres gains. Appliqué côté serveur (jamais par le seul masquage du menu), par une règle unique
+`voitTousLesGains` (`backend/src/core/policy.ts`).
+
+| Écran / API | R01, R02, R03, R05, R38 | Autres rôles |
+|---|---|---|
+| Moteur de répartition — vue exécutive, Groupe Nseya, export (`/executive/finance`, `/groupe-nseya/command-centre`) | tout | refusé ; Trésor (R17), validation financière (R15) et rapprochement (R18) gardent la seule file des demandes de règlement qu'ils traitent |
+| Moteur — « Mon entité », sous-traitant, agent | — | ministère / régie : son périmètre ; sous-traitant : son ombrelle ; agent : sa propre activité |
+| Répartition § 37A (`/pilotage/repartition`) | montants par bénéficiaire | clé, activation, automatisation et contrôles à 100 % **sans montant** |
+| Gains des agents (`/v1/agents/earnings`) | tous les agents | régie (R06, R07) et DGTK : agents de leur entité ; Trésor et audit : refusé |
+| Réserve des agents (`/agents/reserve`) | tout | régie et superviseurs (R06, R07, R09) : leur entité ; qualité, Trésor, audit, anti-fraude (R11, R17, R22–R24) : points et notes **sans montant** (le contrôle anti-fraude reste possible) |
+| File de validation des commissions | toute la file | superviseurs et régies : les agents de leur entité |
+
+Harmonisation (règle n° 1) : aucun écran ni contrôle n'est retiré. Le Trésor, l'audit et l'anti-fraude gardent leurs
+circuits (paiement des demandes, grand livre, journal d'audit, reprises de points), sans voir les gains individuels.
+Points soumis à arbitrage : accès des auditeurs (R22, R23) aux montants pour une mission d'audit (consultation motivée ?)
+et montants dont le Trésor a besoin pour la paie de la réserve une fois l'acte pris.

@@ -33,7 +33,7 @@ import { actorOf } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import { kinshasaDate } from '../../core/clock.js';
 import { badRequest, conflict, notFound, unprocessable } from '../../core/errors.js';
-import { assertDistinctPerson, authorize, definePolicy, GRANTS } from '../../core/policy.js';
+import { assertDistinctPerson, authorize, definePolicy, GRANTS, voitTousLesGains } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import type { ParkingService } from '../parking/service.js';
 import type { TerrainService } from '../terrain/service.js';
@@ -50,11 +50,21 @@ export const POINTS_REGULARISATION_CONFIRMEE = 1;
 export const NOTE_QUALITE_SANS_JUGEMENT = 1;
 
 const { always } = GRANTS;
-/** Lecture de la réserve : pilotage, régies, superviseurs, Trésor (paie), audit, anti-fraude. */
-definePolicy('reserve:read', { R01: always, R02: always, R05: always, R06: always, R07: always, R09: always, R11: always, R17: always, R22: always, R23: always, R24: always });
+/** Lecture de la réserve : pilotage (tous les gains) ; régies et superviseurs (leur entité) ; Trésor, qualité, audit, anti-fraude (points sans montant). */
+definePolicy('reserve:read', { R01: always, R02: always, R03: always, R05: always, R06: always, R07: always, R09: always, R11: always, R17: always, R22: always, R23: always, R24: always });
 /** Reprise de points : proposée par le contrôle qualité ou l'anti-fraude, décidée par une autre personne de la régie. */
 definePolicy('reserve:clawback.propose', { R09: always, R11: always, R22: always, R24: always });
 definePolicy('reserve:clawback.decide', { R06: always, R07: always });
+
+/** Régie et superviseurs : réserve des agents de leur propre entité seulement. */
+const ROLES_REGIE_RESERVE = ['R06', 'R07', 'R09'];
+const CLES_MONTANTS = new Set(['share', 'payable', 'toRecover', 'netPayable', 'reserve', 'base', 'distributed', 'undistributed']);
+/** Retire tout montant (quotes-parts, réserves) en gardant points, notes et structure — contrôle sans voir les gains. */
+function masquerMontants<T>(v: T): T {
+  if (Array.isArray(v)) return v.map((x) => masquerMontants(x)) as T;
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, CLES_MONTANTS.has(k) ? null : masquerMontants(x)])) as T;
+  return v;
+}
 
 export type PointKind = 'OBJET_CONFIRME' | 'ENROLEMENT_VALIDE' | 'REGULARISATION_CONFIRMEE';
 export const POINT_LABEL: Record<PointKind, string> = {
@@ -237,7 +247,7 @@ export class AgentReserveService {
    * Répartition de la réserve d'un mois : par module, par agent, par équipe et par sous-traitant ; reprises et montants
    * à récupérer. Aucune écriture, aucun versement : un calcul.
    */
-  compute(monthKey: string, scope?: { agentId?: string; subcontractorId?: string }) {
+  compute(monthKey: string, scope?: { agentId?: string; subcontractorId?: string; agentIds?: ReadonlySet<string> }) {
     if (!MONTH_RE.test(monthKey)) throw badRequest('INVALID_PERIOD', 'Mois attendu : AAAA-MM.');
     const all = this.points();
     const pts = all.filter((p) => p.month === monthKey);
@@ -329,7 +339,7 @@ export class AgentReserveService {
         quality: q ? { score: Number(q.q) / 10_000, confirmed: q.confirmed, judged: q.judged, byDefault: q.byDefault } : { score: NOTE_QUALITE_SANS_JUGEMENT, confirmed: 0, judged: 0, byDefault: true },
         modules: [...x.modules].sort(), share: toList(x.share), payable: toList(x.payable), toRecover: toList(toRecover), netPayable: toList(net),
       };
-    }).filter((r) => (!scope?.agentId || r.agentId === scope.agentId) && (!scope?.subcontractorId || r.subcontractorId === scope.subcontractorId))
+    }).filter((r) => (!scope?.agentId || r.agentId === scope.agentId) && (!scope?.subcontractorId || r.subcontractorId === scope.subcontractorId) && (!scope?.agentIds || scope.agentIds.has(r.agentId)))
       .sort((x, y) => y.weightedPoints - x.weightedPoints || x.name.localeCompare(y.name, 'fr'));
     const group = (keyOf: (r: (typeof agentRows)[number]) => string | null, labelOf: (k: string) => string) => {
       const g = new Map<string, { key: string; label: string; agents: number; points: number; share: Map<CurrencyCode, Money>; payable: Map<CurrencyCode, Money> }>();
@@ -344,7 +354,7 @@ export class AgentReserveService {
       }
       return [...g.values()].map((e) => ({ key: e.key, label: e.label, agents: e.agents, points: Math.round(e.points * 1000) / 1000, share: toList(e.share), payable: toList(e.payable) })).sort((a, b) => b.points - a.points);
     };
-    const visiblePoints = pts.filter((p) => (!scope?.agentId || p.agentId === scope.agentId) && (!scope?.subcontractorId || p.subcontractorId === scope.subcontractorId));
+    const visiblePoints = pts.filter((p) => (!scope?.agentId || p.agentId === scope.agentId) && (!scope?.subcontractorId || p.subcontractorId === scope.subcontractorId) && (!scope?.agentIds || scope.agentIds.has(p.agentId)));
     return {
       period: monthKey, generatedAt: this.ctx.clock.now().toISOString(),
       mode: reserve?.mode ?? null,
@@ -384,8 +394,15 @@ export class AgentReserveService {
   view(user: User, monthKey?: string) {
     authorize(user, 'reserve:read');
     const m = monthKey ?? kinshasaDate(this.ctx.clock.now()).slice(0, 7);
-    const out = this.compute(m);
-    this.ctx.audit.append({ actor: actorOf(user), action: 'agents.reserve.viewed', resourceType: 'agents_reserve', resourceId: m, details: { agents: out.agents.length } });
+    // Décision du 29/09/2026 : seuls R01, R02, R03, R05 et R38 voient les gains de tous les agents. Régie et
+    // superviseurs (R06, R07, R09) : les agents de leur entité seulement. Contrôle qualité, Trésor, audit et
+    // anti-fraude (R11, R17, R22, R23, R24) : points et notes pour le contrôle, SANS aucun montant.
+    const full = voitTousLesGains(user);
+    const regie = !full && user.roles.some((r) => ROLES_REGIE_RESERVE.includes(r));
+    const agentIds = regie ? new Set(this.ctx.users.all().filter((u) => u.entity === user.entity).map((u) => u.id)) : undefined;
+    const raw = this.compute(m, agentIds ? { agentIds } : undefined);
+    const out = full || regie ? { ...raw, perimetre: full ? 'COMPLET' : 'ENTITE' } : { ...masquerMontants(raw), perimetre: 'POINTS_SANS_MONTANT' };
+    this.ctx.audit.append({ actor: actorOf(user), action: 'agents.reserve.viewed', resourceType: 'agents_reserve', resourceId: m, details: { agents: out.agents.length, perimetre: out.perimetre } });
     return out;
   }
 

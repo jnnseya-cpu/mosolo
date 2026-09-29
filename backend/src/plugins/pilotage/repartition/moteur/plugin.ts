@@ -19,9 +19,10 @@ import { ENTITE_GROUPE_NSEYA, MoteurRepartitionService, ROLE_GROUPE_NSEYA, type 
 import { TableauxMoteur } from './tableaux.js';
 
 const { always } = GRANTS;
-const EXEC = { R01: always, R02: always, R03: always, R05: always, R17: always, R18: always, R22: always, R23: always } as const;
+// Décision du 29/09/2026 : seuls R01, R02, R03, R05 (et R38 par sa liste de lecture) voient les gains des autres.
+const EXEC = { R01: always, R02: always, R03: always, R05: always } as const;
 /** Configuration (lecture) : direction, Finances, juridique, Trésor, coffre, audit, exploitation technique. */
-definePolicy('moteur:config.read', { ...EXEC, R14: always, R15: always, R16: always, R19: always, R26: always, R27: always });
+definePolicy('moteur:config.read', { ...EXEC, R17: always, R18: always, R22: always, R23: always, R14: always, R15: always, R16: always, R19: always, R26: always, R27: always });
 // Matrice versionnée : rédaction → vérification → approbation → activation, quatre personnes distinctes (§ 18).
 definePolicy('moteur:regle.proposer', { R26: always, R05: always, R15: always });
 definePolicy('moteur:regle.verifier', { R14: always, R15: always });
@@ -34,7 +35,7 @@ definePolicy('moteur:compte.autoriser', { R01: always });
 // Tableaux (§ 12) ; Groupe Nseya (R38) lit par la liste fermée de lecture du point de décision (core/policy.ts).
 definePolicy('moteur:executif.read', EXEC);
 definePolicy('moteur:entite.read', { ...EXEC, R04: always, R06: always, R07: always, R08: always });
-definePolicy('moteur:nseya.read', { R01: always, R02: always, R03: always, R05: always, R22: always, R23: always });
+definePolicy('moteur:nseya.read', { ...EXEC });
 definePolicy('moteur:sous-traitant.read', { R35: always });
 definePolicy('moteur:agent.read', { R10: always });
 definePolicy('moteur:export', { ...EXEC });

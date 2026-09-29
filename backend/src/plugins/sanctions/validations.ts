@@ -13,7 +13,7 @@ import type { MoneyJSON } from '@mosolo/shared';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
 import { badRequest, conflict, forbidden, notFound } from '../../core/errors.js';
-import { assertDistinctPerson, authorize, evaluate } from '../../core/policy.js';
+import { assertDistinctPerson, authorize, evaluate, voitTousLesGains } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import { sumByCurrency } from '../parking/support.js';
 import type { CommissionLine, CommissionService } from './commissions.js';
@@ -104,10 +104,13 @@ export class CommissionValidations {
 
   /** File des demandes (superviseurs) ; chaque demande indique si la personne qui consulte peut décider. */
   queue(user: User, status?: string) {
-    if (!evaluate(user, 'sanctions:commission.validate', {}) && !evaluate(user, 'sanctions:commission.validations.read', {})) {
-      throw forbidden('FORBIDDEN', 'File de validation réservée aux superviseurs, aux régies, au Trésor et à l’audit.');
+    const full = voitTousLesGains(user) || evaluate(user, 'sanctions:commission.validations.read', {}) !== false;
+    if (!full && !evaluate(user, 'sanctions:commission.validate', {})) {
+      throw forbidden('FORBIDDEN', 'File de validation réservée aux superviseurs et aux régies (leurs agents) et au pilotage.');
     }
-    const items = this.requests.find((r) => !status || r.status === status)
+    // Décision du 29/09/2026 : un superviseur ou une régie ne voit que les demandes des agents de sa propre entité.
+    const sameEntity = (agentId: string) => this.ctx.users.get(agentId)?.entity === user.entity;
+    const items = this.requests.find((r) => (!status || r.status === status) && (full || sameEntity(r.agentId)))
       .sort((a, b) => (a.status === 'DEMANDEE' ? 0 : 1) - (b.status === 'DEMANDEE' ? 0 : 1) || b.requestedAt.localeCompare(a.requestedAt))
       .map((r) => ({ ...r, agentName: this.ctx.users.get(r.agentId)?.name ?? r.agentId, blockReason: r.status === 'DEMANDEE' ? this.blockReason(user, r) : null }));
     return {

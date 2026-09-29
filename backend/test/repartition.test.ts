@@ -108,8 +108,15 @@ describe('Clé de répartition § 37A : ACTE_REQUIS, simulation seulement', () =
     expect(r.totals[0].flows.map((f: { flow: string; amount: { amount: string } }) => [f.flow, f.amount.amount])).toEqual([['FLUX_1', '15.00'], ['FLUX_2', '135.00']]);
     expect(r.byPeriod.map((p: { period: string }) => p.period)).toEqual(['2026-09']);
     expect(r.byTutelle[0]).toMatchObject({ tutelle: 'Finances' });
-    expect((await env.req('GET', '/v1/pilotage/repartition?period=2026-08', 'u-auditeur')).json().totals).toEqual([]);
-    expect((await env.req('GET', '/v1/pilotage/repartition?period=2026', 'u-auditeur')).json().totals).toHaveLength(1);
+    expect((await env.req('GET', '/v1/pilotage/repartition?period=2026-08', 'u-ministre-finances')).json().totals).toEqual([]);
+    expect((await env.req('GET', '/v1/pilotage/repartition?period=2026', 'u-ministre-finances')).json().totals).toHaveLength(1);
+    // Décision du 29/09/2026 : les montants par bénéficiaire ne sont visibles que de R01, R02, R03, R05 et R38.
+    for (const reader of ['u-auditeur', 'u-tresor']) {
+      const masked = (await env.req('GET', '/v1/pilotage/repartition', reader)).json();
+      expect(masked).toMatchObject({ montantsMasques: true, totals: [], byPeriod: [], byTutelle: [], distributions: [] });
+      expect(masked.key.slices.length).toBeGreaterThan(0);
+    }
+    expect((await env.req('GET', '/v1/pilotage/repartition', 'u-ministre-finances')).json().montantsMasques).toBe(false);
     // Contribuable, agent : refusés.
     expect((await env.req('GET', '/v1/pilotage/repartition', 'u-contribuable')).statusCode).toBe(403);
     expect((await env.req('GET', '/v1/pilotage/repartition', 'u-agent-terrain')).statusCode).toBe(403);
@@ -236,7 +243,7 @@ describe('Réserve « agents et sous-traitants » et commissions validées des a
     const lines = [line('10.00', 'O-1'), line('3.00', 'O-2')];
     const states: Record<string, string> = { 'PENALITE:O-1': 'VALIDEE', 'PENALITE:O-2': 'DEMANDEE' };
     env.app.ctx.ext.sanctions = { commissions: { lines: () => lines }, validations: { stateOf: (k: string) => states[k] ?? 'A_DEMANDER' } };
-    let a = (await env.req('GET', '/v1/pilotage/repartition', 'u-auditeur')).json().agents;
+    let a = (await env.req('GET', '/v1/pilotage/repartition', 'u-ministre-finances')).json().agents;
     expect(a.commissionModuleLoaded).toBe(true);
     expect(a.totals).toEqual([expect.objectContaining({
       currency: 'USD', reserve: { amount: '15.00', currency: 'USD' }, commissionsValidated: { amount: '10.00', currency: 'USD' },
@@ -247,7 +254,7 @@ describe('Réserve « agents et sous-traitants » et commissions validées des a
     states['PENALITE:O-2'] = 'VALIDEE';
     lines.push(line('4.00', 'O-3'));
     states['PENALITE:O-3'] = 'VALIDEE';
-    a = (await env.req('GET', '/v1/pilotage/repartition', 'u-auditeur')).json().agents;
+    a = (await env.req('GET', '/v1/pilotage/repartition', 'u-ministre-finances')).json().agents;
     expect(a.totals[0]).toMatchObject({ commissionsValidated: { amount: '17.00' }, remaining: { amount: '-2.00' }, status: 'DEPASSEMENT' });
     expect(a.rows[0]).toMatchObject({ period: '2026-09', status: 'DEPASSEMENT' });
   });

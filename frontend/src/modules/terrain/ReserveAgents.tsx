@@ -42,7 +42,7 @@ export interface PointClawback {
   status: 'PROPOSEE' | 'DECIDEE' | 'REJETEE'; decision?: { by: string; at: string; approve: boolean; motif: string }; toRecover?: MoneyJSON[];
 }
 export interface ReserveView {
-  period: string; generatedAt: string; mode: 'CALCUL' | 'SIMULATION' | null; notice: string; reservePct: string | null;
+  period: string; generatedAt: string; perimetre?: 'COMPLET' | 'ENTITE' | 'POINTS_SANS_MONTANT'; mode: 'CALCUL' | 'SIMULATION' | null; notice: string; reservePct: string | null;
   weights: { objetConfirme: number; enrolementValide: number; regularisationConfirmee: number; noteSansJugement: number; status: string };
   modules: ReserveModuleRow[]; agents: ReserveAgentRow[]; teams: ReserveGroupRow[]; subcontractors: ReserveGroupRow[];
   points: { verified: number; pending: number; reclaimed: number; suspected: number; unattached: number };
@@ -64,6 +64,8 @@ const has = (roles: string[] | undefined, ...want: string[]) => !!roles?.some((r
 const currentMonth = () => new Date().toISOString().slice(0, 7);
 
 export function MoneyList({ items, empty = '—' }: { items: MoneyJSON[] | null | undefined; empty?: string }) {
+  // null : montant masqué par le serveur (gains des autres réservés à R01, R02, R03, R05 et R38 — décision du 29/09/2026).
+  if (items === null) return <span className="muted">masqué</span>;
   if (!items?.length) return <span className="muted">{empty}</span>;
   return <>{items.map((m) => <span key={m.currency} style={{ display: 'block' }}><MoneyText money={m} showIndicative={false} /></span>)}</>;
 }
@@ -227,7 +229,12 @@ export default function ReserveAgents() {
         <button type="button" className="btn btn-secondary btn-sm" onClick={q.reload}><Icon name="refresh" size={16} /> Actualiser</button>
       </PageHead>
       {/* Visuels (27/09/2026) : points, notes de qualité et répartition par module, depuis la même vue. */}
-      {q.data && !q.error && <ReserveVisuel d={q.data} />}
+      {q.data && !q.error && q.data.perimetre === 'POINTS_SANS_MONTANT' && (
+        <div className="callout callout-info" role="note" data-testid="reserve-montants-masques"><Icon name="lock" size={18} />
+          <span>Points et notes de qualité pour le contrôle, <strong>sans aucun montant</strong> : les gains des agents ne sont visibles que du Gouverneur, du directeur de cabinet, du secrétaire exécutif, du ministre des Finances et de Groupe Nseya (décision du 29/09/2026).</span></div>
+      )}
+      {q.data && !q.error && q.data.perimetre === 'ENTITE' && <p className="small muted" data-testid="reserve-perimetre-entite">Périmètre : les agents de votre entité seulement.</p>}
+      {q.data && !q.error && q.data.perimetre !== 'POINTS_SANS_MONTANT' && <ReserveVisuel d={q.data} />}
       {q.loading && !q.data ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : q.data && <ReserveBody d={q.data} onDone={q.reload} />}
     </div>
   );

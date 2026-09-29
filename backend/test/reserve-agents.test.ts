@@ -118,10 +118,15 @@ describe('Module 67 : réserve des agents par module, points de résultats véri
     const mine = (await env.req('GET', '/v1/agents/me/reserve?period=2026-11', A)).json();
     expect(mine.agents.map((x: { agentId: string }) => x.agentId)).toEqual([A]);
     expect((await env.req('GET', '/v1/agents/me/reserve', 'u-contribuable')).statusCode).toBe(403);
-    expect((await env.req('GET', '/v1/agents/reserve?period=2026-11', 'u-auditeur')).statusCode).toBe(200);
+    // Audit : points et notes pour le contrôle, sans aucun montant (décision du 29/09/2026).
+    const audit = (await env.req('GET', '/v1/agents/reserve?period=2026-11', 'u-auditeur')).json();
+    expect(audit.perimetre).toBe('POINTS_SANS_MONTANT');
+    expect(audit.agents.length).toBeGreaterThan(0);
+    expect(audit.agents.every((x: { share: unknown; payable: unknown; points: number }) => x.share === null && x.payable === null && typeof x.points === 'number')).toBe(true);
+    expect((await env.req('GET', '/v1/agents/reserve?period=2026-11', 'u-gouverneur')).json().perimetre).toBe('COMPLET');
     expect((await env.req('GET', '/v1/agents/reserve?period=2026-11', 'u-contribuable')).statusCode).toBe(403);
     // Répartition (module 73) : les quotes-parts restent dans la réserve du mois.
-    const rep = (await env.req('GET', '/v1/pilotage/repartition?period=2026-11', 'u-auditeur')).json();
+    const rep = (await env.req('GET', '/v1/pilotage/repartition?period=2026-11', 'u-ministre-finances')).json();
     const shares = rep.agents.pointsShares.find((p: { currency: string }) => p.currency === ob.amount.currency);
     expect(shares).toMatchObject({ computed: true, withinReserve: true });
     expect(rep.agents.rules.join(' ')).toMatch(/Arbitré par le maître d’ouvrage/);
@@ -129,8 +134,9 @@ describe('Module 67 : réserve des agents par module, points de résultats véri
     const earnings = (await env.req('GET', '/v1/agents/me/earnings', A)).json();
     expect(earnings.reserve).toBeTruthy();
     expect(earnings.rules[0]).toMatch(/vue de la réserve/);
-    const all = (await env.req('GET', '/v1/agents/earnings', 'u-auditeur')).json();
+    const all = (await env.req('GET', '/v1/agents/earnings', 'u-ministre-finances')).json();
     expect(all.reserveNotice).toMatch(/points de résultats vérifiés/);
+    expect((await env.req('GET', '/v1/agents/earnings', 'u-auditeur')).statusCode).toBe(403);
   });
 
   it('régularisation : un point par paiement provoqué rapproché et confirmé par quittance définitive, quel que soit son montant', async () => {

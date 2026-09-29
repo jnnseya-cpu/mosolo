@@ -91,3 +91,8 @@ données de démonstration.
   **10 jours** ; table « module → ministère propriétaire » confirmée telle quelle.
 - **Rôle de Groupe Nseya (29/09/2026)** : le code **R38** « Groupe Nseya — super-administrateur (lecture complète) » est
   confirmé comme rôle dédié.
+- **Gains d'autrui (29/09/2026)** : seuls le Gouverneur, le directeur de cabinet, le secrétaire exécutif, le ministre des
+  Finances (R01, R02, R03, R05) et Groupe Nseya (R38) voient ce que gagnent les autres (agents, sous-traitants,
+  ministères, départements, Groupe Nseya, Gouvernorat) ; tous les autres ne voient que leurs propres gains (régie :
+  ses agents ; sous-traitant : son ombrelle ; agent : lui-même), côté serveur. Trésor, audit et anti-fraude gardent
+  leurs circuits sans montant individuel (annexe I, § I.38).

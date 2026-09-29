@@ -180,7 +180,7 @@ describe('§ 16 — remboursements et contrepassations : lignes négatives, sold
     const p = (await env.req('POST', '/v1/pilotage/repartition/propositions', 'u-analyste-rappro', { period: '2026-10', currency: 'USD', reason: 'Répartition d’octobre (test)' })).json();
     expect((await env.req('POST', `/v1/tresor/operations/${p.operations[0].id}/approve`, 'u-tresor', {})).json().status).toBe('EXECUTEE');
     await env.req('POST', `${B}/synchroniser`, 'u-tresor', {});
-    let droits = (await env.req('GET', `${B}/droits`, 'u-auditeur')).json().reel;
+    let droits = (await env.req('GET', `${B}/droits`, 'u-ministre-finances')).json().reel;
     expect(droits.find((d: { beneficiary: string }) => d.beneficiary === 'GROUPE_NSEYA')).toMatchObject({ constate: money('15.00'), regle: money('15.00'), solde: money('0.00') });
     refund(env, o.id);
     const s = (await env.req('POST', `${B}/synchroniser`, 'u-tresor', {})).json();
@@ -188,7 +188,7 @@ describe('§ 16 — remboursements et contrepassations : lignes négatives, sold
     const cp = env.svc.contrepassations.get(`CP-${o.id}`)!;
     expect(cp.lines.map((l) => l.amount.amount).sort()).toEqual(['-105.00', '-15.00', '-15.00', '-15.00']);
     expect(cp.recoverable).toEqual(['GROUPE_NSEYA']);
-    droits = (await env.req('GET', `${B}/droits`, 'u-auditeur')).json().reel;
+    droits = (await env.req('GET', `${B}/droits`, 'u-ministre-finances')).json().reel;
     expect(droits.find((d: { beneficiary: string }) => d.beneficiary === 'GROUPE_NSEYA')).toMatchObject({ constate: money('0.00'), regle: money('15.00'), recouvrable: money('15.00') });
     // Les écritures d'origine restent visibles ; la chaîne du sous-grand-livre est intacte.
     expect(env.svc.ecritures.find((e) => e.orderId === o.id).map((e) => e.type)).toEqual(['CONSTAT', 'REGLEMENT', 'CONTREPASSATION']);
@@ -238,7 +238,7 @@ describe('§ 6 et § 13 — espèces : points agréés seulement ; droit de Grou
     ns = (await env.req('GET', `${B}/tableau/groupe-nseya`, 'u-groupe-nseya')).json();
     expect(ns.positionCommerciale[0]).toMatchObject({ droit: money('15.00'), regle: money('15.00'), resteDu: money('0.00') });
     // Circuit des espèces tracé sur la transaction (jamais un agent de terrain).
-    const t = (await env.req('GET', `${B}/transactions/${a.id}`, 'u-auditeur')).json();
+    const t = (await env.req('GET', `${B}/transactions/${a.id}`, 'u-ministre-finances')).json();
     expect(t.circuitEspeces.map((s: { code: string; fait: boolean }) => [s.code, s.fait]).filter(([c]: [string]) => ['RAPPROCHEMENT', 'REPARTITION', 'PAYABLE_NSEYA', 'DEMANDE', 'APPROBATION', 'PAIEMENT', 'RAPPROCHEMENT_REGLEMENT'].includes(c))).toEqual([
       ['RAPPROCHEMENT', true], ['REPARTITION', true], ['PAYABLE_NSEYA', true], ['DEMANDE', true], ['APPROBATION', true], ['PAIEMENT', true], ['RAPPROCHEMENT_REGLEMENT', true],
     ]);

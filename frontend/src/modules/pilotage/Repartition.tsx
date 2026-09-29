@@ -40,6 +40,8 @@ export interface DistributionRow {
 }
 export interface RepartitionReport {
   generatedAt: string; mode: 'SIMULATION' | 'CALCUL'; disbursement: 'AUCUN'; notice: string; baseDefinition: string; tutelleNote: string;
+  /** Décision du 29/09/2026 : montants par bénéficiaire réservés à R01, R02, R03, R05 et R38 (vides pour les autres). */
+  montantsMasques?: boolean;
   key: { id: string; status: KeyStatus; version: number; slices: Slice[]; durationYears: number; source: string };
   totals: (Aggregate & { regularisations: { count: number; amount: MoneyJSON } })[];
   byPeriod: (Aggregate & { period: string })[];
@@ -181,7 +183,11 @@ export function RepartitionView({ report, keyView, onDone }: { report: Repartiti
         </div>
         <p className="small muted">{report.baseDefinition}</p>
       </div>
-      <VisuelsRepartition report={report} keyView={keyView} />
+      {report.montantsMasques && (
+        <div className="span-12 callout callout-info" role="note" data-testid="repartition-montants-masques"><Icon name="lock" size={18} />
+          <span>Montants par bénéficiaire masqués : ils ne sont visibles que du Gouverneur, du directeur de cabinet, du secrétaire exécutif, du ministre des Finances et de Groupe Nseya (décision du 29/09/2026). La clé, l’activation et l’automatisation restent affichées.</span></div>
+      )}
+      {!report.montantsMasques && <VisuelsRepartition report={report} keyView={keyView} />}
 
       <Section title="Clé de répartition" sub={`${k.source} · durée ${k.durationYears} ans · deux flux de décaissement seulement`}>
         <DataTable caption="Parts de la clé" rows={k.slices} rowKey={(s) => s.code} columns={[

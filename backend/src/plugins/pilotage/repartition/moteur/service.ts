@@ -42,8 +42,15 @@ import {
   type PosteCout, type TypeAgent,
 } from './model.js';
 
-/** Rôles de la visibilité financière d'ensemble (§ 12) : Gouverneur, cabinet, secrétariat exécutif, ministre des Finances ; Trésor et audit pour l'exploitation. */
-export const ROLES_EXECUTIF = ['R01', 'R02', 'R03', 'R05', 'R17', 'R18', 'R22', 'R23'] as const;
+/**
+ * Rôles de la visibilité financière d'ensemble (§ 12) : Gouverneur, cabinet, secrétariat exécutif, ministre des Finances
+ * (Groupe Nseya R38 : visibilité propre). Décision du 29/09/2026 : eux seuls (et R38) voient les gains des autres ; le
+ * Trésor (R17), le rapprochement (R18) et l'audit (R22, R23) n'ont plus les tableaux d'ensemble — le Trésor, la
+ * validation financière et le rapprochement gardent la seule file des demandes de règlement qu'ils traitent.
+ */
+export const ROLES_EXECUTIF = ['R01', 'R02', 'R03', 'R05'] as const;
+/** Rôles qui traitent une demande de règlement (examen, paiement, rapprochement) : file de traitement seulement. */
+const ROLES_TRAITEMENT_REGLEMENT = ['R15', 'R17', 'R18'];
 /** Rôles qui voient l'identifiant du contribuable dans le détail d'une transaction (lecture fiscale déjà habilitée). */
 const ROLES_DONNEES_PERSONNELLES = ['R12', 'R17', 'R22', 'R23', 'R24'];
 /** Entité des comptes Groupe Nseya (rôle dédié R38 « Groupe Nseya — super-administrateur (lecture complète) »). */
@@ -1045,9 +1052,11 @@ export class MoteurRepartitionService {
 
   listDemandes(user: User) {
     const vis = this.visibility(user);
-    if (vis.kind === 'AUCUNE') authorize(user, 'moteur:executif.read');
+    // File de traitement (examen, paiement, rapprochement) : demandes soumises seulement, aucun tableau des gains.
+    const traitement = user.roles.some((r) => ROLES_TRAITEMENT_REGLEMENT.includes(r));
+    if (vis.kind === 'AUCUNE' && !traitement) authorize(user, 'moteur:executif.read');
     return {
-      items: this.demandes.all().filter((d) => this.canSeeBeneficiary(vis, d.beneficiary)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+      items: this.demandes.all().filter((d) => this.canSeeBeneficiary(vis, d.beneficiary) || (traitement && d.status !== 'BROUILLON')).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
       etats: STATUTS_DEMANDE,
       circuit: 'Brouillon (DRAFT) → Soumise (SUBMITTED) → En examen (UNDER_REVIEW) → Approuvée (APPROVED) → Paiement instruit (PAYMENT_INSTRUCTED) → Payée (PAID) → Rapprochée (RECONCILED) → Clôturée (CLOSED). Jamais au-dessus du reste dû ; paiement par l’un des deux flux du § 37A.',
     };

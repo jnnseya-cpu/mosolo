@@ -133,7 +133,7 @@ describe('Module 59 / 73 : clé ACTE_REQUIS — simulation quotidienne inscrite 
     expect(c2.statusCode, JSON.stringify(c2.json())).toBe(201);
     expect(c2.json()).toMatchObject({ balanced: true });
     // Le rapport montre la simulation, l'automatisation et l'indicateur grand livre / répartitions (écart nul).
-    const rep = (await env.req('GET', '/v1/pilotage/repartition', 'u-auditeur')).json();
+    const rep = (await env.req('GET', '/v1/pilotage/repartition', 'u-ministre-finances')).json();
     expect(rep.automation).toMatchObject({ mode: 'SIMULATION_QUOTIDIENNE', periodicite: null });
     expect(rep.tableau.rows[0]).toMatchObject({ period: '2026-09', simule: { amount: '150.00' }, etat: 'SIMULATION' });
     expect(rep.indicateurs.grandLivre.simulees).toEqual([expect.objectContaining({ currency: 'USD', zero: true, grandLivre: { amount: '150.00', currency: 'USD' } })]);
@@ -169,7 +169,7 @@ describe('Module 59 / 73 : clé ACTE_REQUIS — simulation quotidienne inscrite 
     await payAndReconcile(env);
     const k = env.svc.key();
     env.svc.keys.update({ ...k, slices: k.slices.map((s) => (s.code === 'GOUVERNEMENT_PROVINCIAL' ? { ...s, pct: '69' } : s)) });
-    const rep = (await env.req('GET', '/v1/pilotage/repartition', 'u-auditeur')).json();
+    const rep = (await env.req('GET', '/v1/pilotage/repartition', 'u-ministre-finances')).json();
     expect(rep.check100.keySlicesSumTo100).toBe(false);
     expect(env.app.ctx.alerts.list().some((a) => a.type === 'REPARTITION_ECART_100' && a.severity === 'CRITICAL')).toBe(true);
     env.clock.set('2026-09-27T08:00:00.000Z');
@@ -237,7 +237,7 @@ describe('Module 73 : acte + convention tripartite, clé active — exécution A
     const manual = await env.req('POST', '/v1/pilotage/repartition/propositions', 'u-analyste-rappro', { period: '2026-09', currency: 'USD', reason: 'Répartition mensuelle de septembre (test)' });
     expect(manual.json().code).toBe('ASSIETTE_NULLE');
     // Tableau : calculé = versé, reste à verser nul ; indicateurs mesurés.
-    const rep = (await env.req('GET', '/v1/pilotage/repartition?period=2026-09', 'u-auditeur')).json();
+    const rep = (await env.req('GET', '/v1/pilotage/repartition?period=2026-09', 'u-ministre-finances')).json();
     expect(rep.tableau.rows[0]).toMatchObject({ calcule: { amount: '150.00' }, verse: { amount: '150.00' }, resteAVerser: { amount: '0.00' }, etat: 'VERSE' });
     expect(rep.indicateurs.ecartRepartition.instructedVsLedger[0]).toMatchObject({ currency: 'USD', zero: true });
     expect(rep.indicateurs.grandLivre.arretees[0]).toMatchObject({ zero: true });

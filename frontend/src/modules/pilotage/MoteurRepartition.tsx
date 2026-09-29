@@ -57,7 +57,8 @@ interface Regles { items: Version[]; circuit: string[]; contradictions: Contradi
 interface Demande { id: string; beneficiary: string; currency: string; amount: MoneyJSON; status: string; flow: string; createdAt: string; requestedBy: string; periodStart: string | null; periodEnd: string | null }
 
 const has = (roles: string[] | undefined, ...want: string[]) => !!roles?.some((r) => want.includes(r));
-const EXEC = ['R01', 'R02', 'R03', 'R05', 'R17', 'R18', 'R22', 'R23', 'R38'];
+// Décision du 29/09/2026 : seuls R01, R02, R03, R05 et Groupe Nseya (R38) voient les gains des autres.
+const EXEC = ['R01', 'R02', 'R03', 'R05', 'R38'];
 const CONFIG = ['R01', 'R02', 'R03', 'R05', 'R14', 'R15', 'R16', 'R17', 'R18', 'R19', 'R22', 'R23', 'R26', 'R27', 'R38'];
 const ENTITE = ['R04', 'R05', 'R06', 'R07', 'R08'];
 const STATUT_TONE: Record<string, Tone> = {
@@ -70,11 +71,11 @@ type Tab = 'executif' | 'entite' | 'nseya' | 'sous-traitant' | 'agent' | 'regles
 const TABS: { key: Tab; label: string; roles: string[] }[] = [
   { key: 'executif', label: 'Vue exécutive', roles: EXEC },
   { key: 'entite', label: 'Mon entité', roles: ENTITE },
-  { key: 'nseya', label: 'Groupe Nseya', roles: ['R38', 'R01', 'R02', 'R03', 'R05', 'R22', 'R23'] },
+  { key: 'nseya', label: 'Groupe Nseya', roles: ['R38', 'R01', 'R02', 'R03', 'R05'] },
   { key: 'sous-traitant', label: 'Sous-traitant', roles: ['R35'] },
   { key: 'agent', label: 'Mon activité', roles: ['R10'] },
   { key: 'regles', label: 'Règles versionnées', roles: CONFIG },
-  { key: 'demandes', label: 'Demandes de règlement', roles: [...EXEC, 'R06', 'R08', 'R15'] },
+  { key: 'demandes', label: 'Demandes de règlement', roles: [...EXEC, 'R06', 'R08', 'R15', 'R17', 'R18'] },
   { key: 'compte', label: 'Compte de règlement', roles: CONFIG },
   { key: 'couts', label: 'Coûts technologiques', roles: CONFIG },
 ];

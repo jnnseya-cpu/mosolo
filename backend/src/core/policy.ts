@@ -234,6 +234,17 @@ export function evaluate(principal: Principal, action: AnyAction, resource: Reso
   return best;
 }
 
+/**
+ * Rémunérations et droits d'autrui (décision du maître d'ouvrage du 29/09/2026) : SEULS le Gouverneur, le directeur de
+ * cabinet, le secrétaire exécutif, le ministre des Finances (R01, R02, R03, R05) et Groupe Nseya (R38) voient ce que
+ * gagnent les autres (agents, sous-traitants, ministères, départements, Groupe Nseya, Gouvernorat). Tous les autres ne
+ * voient que leurs propres gains (ou ceux de leur périmètre : régie, ombrelle de sous-traitant), côté serveur.
+ */
+export const ROLES_VISION_GAINS_COMPLETE: readonly RoleCode[] = ['R01', 'R02', 'R03', 'R05', 'R38'];
+export function voitTousLesGains(user: Pick<User, 'roles'>): boolean {
+  return user.roles.some((r) => ROLES_VISION_GAINS_COMPLETE.includes(r));
+}
+
 /** Le rôle peut-il, en principe, effectuer l'action (quel que soit le périmètre) ? */
 export function hasAnyGrant(user: User, action: AnyAction): boolean {
   const g = grantsFor(action);

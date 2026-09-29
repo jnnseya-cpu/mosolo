@@ -27,7 +27,7 @@ import { DAY_MS, kinshasaDate } from '../../../core/clock.js';
 import type { LedgerAccount } from '../../../modules/treasury/ledger.js';
 import { canonicalJson } from '../../../core/crypto.js';
 import { badRequest, conflict, notFound, unprocessable } from '../../../core/errors.js';
-import { assertDistinctPerson, authorize } from '../../../core/policy.js';
+import { assertDistinctPerson, authorize, voitTousLesGains } from '../../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../../core/repository.js';
 import type { SanctionsService } from '../../sanctions/service.js';
 import type { FinancialOperation, OperationInput, RepartitionGate, TresorService } from '../../tresor/service.js';
@@ -387,6 +387,21 @@ export class RepartitionService implements RepartitionGate {
   /** Rapport de répartition : simulation (clé non active) ou calcul (clé active), jamais un décaissement. */
   report(user: User, filter: { period?: string; currency?: string } = {}) {
     authorize(user, 'repartition:read');
+    const out = this.fullReport(user, filter);
+    if (voitTousLesGains(user)) return { ...out, montantsMasques: false };
+    // Décision du 29/09/2026 : seuls R01, R02, R03, R05 et R38 voient ce que gagnent les autres. Les autres lecteurs
+    // (validation financière, publication, Trésor, rapprochement, audit, anti-fraude) gardent la clé, l'automatisation
+    // et les contrôles à 100 %, sans aucun montant par bénéficiaire.
+    return {
+      ...out, montantsMasques: true,
+      notice: `${out.notice} Montants par bénéficiaire réservés au Gouverneur, au directeur de cabinet, au secrétaire exécutif, au ministre des Finances et à Groupe Nseya (décision du 29/09/2026).`,
+      totals: [], byPeriod: [], byTutelle: [], distributions: [],
+      agents: { commissionModuleLoaded: out.agents.commissionModuleLoaded, rows: [], totals: [], rules: out.agents.rules },
+      regularisationsPending: undefined, tableau: undefined, indicateurs: undefined,
+    };
+  }
+
+  private fullReport(user: User, filter: { period?: string; currency?: string }) {
     if (filter.period && !PERIOD_RE.test(filter.period)) throw badRequest('INVALID_PERIOD', 'Période attendue : AAAA ou AAAA-MM.');
     const k = this.key();
     const { cells, regularisations } = this.cells(filter);
