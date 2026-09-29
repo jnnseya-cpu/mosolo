@@ -89,3 +89,5 @@ données de démonstration.
   de Groupe Nseya (droit « à payer » que le Gouvernorat règle) ; règlements du Gouvernorat et de Groupe Nseya **tous les
   7 jours**, des ministères et des opérations de terrain **mensuellement** ; un montant passe « en retard » après
   **10 jours** ; table « module → ministère propriétaire » confirmée telle quelle.
+- **Rôle de Groupe Nseya (29/09/2026)** : le code **R38** « Groupe Nseya — super-administrateur (lecture complète) » est
+  confirmé comme rôle dédié.
