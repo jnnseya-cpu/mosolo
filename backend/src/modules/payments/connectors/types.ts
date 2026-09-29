@@ -24,6 +24,10 @@ export interface IntentRequest {
   obligationId: string;
   amount: MoneyJSON;
   channel: string;
+  /** Échéance de la référence MOSOLO (BitriPay : expires_in_minutes en découle). */
+  expiresAt?: string;
+  /** Catégorie de recette de l'obligation (BitriPay : purpose_code TAX / GOVERNMENT_FEE en découle, à confirmer). */
+  revenueCategory?: string;
 }
 
 export interface CreatedIntent {
@@ -76,8 +80,12 @@ export interface SettlementEvent extends EventBase {
 
 export interface IgnoredEvent extends EventBase {
   kind: 'IGNORED';
-  /** UNKNOWN_TYPE : type non traité ; NON_TERMINAL_ATTEMPT_FAILURE : tentative échouée, l'intention reste payable. */
-  reason: 'UNKNOWN_TYPE' | 'NON_TERMINAL_ATTEMPT_FAILURE';
+  /**
+   * UNKNOWN_TYPE : type non traité ; NON_TERMINAL_ATTEMPT_FAILURE : tentative échouée, l'intention reste payable ;
+   * INFORMATIF : étape intermédiaire documentée (created, processing…), sans effet ; PING : essai du prestataire (200) ;
+   * LITIGE : paiement contesté chez le prestataire (alerte au Trésor, aucune écriture automatique).
+   */
+  reason: 'UNKNOWN_TYPE' | 'NON_TERMINAL_ATTEMPT_FAILURE' | 'INFORMATIF' | 'PING' | 'LITIGE';
 }
 
 /**
@@ -159,9 +167,14 @@ export interface PaymentConnector {
   /** Relais vers l'API de vérification capture/SMS du prestataire : PIÈCE DE DOSSIER uniquement. */
   requestVerificationEvidence(input: VerificationEvidenceInput): Promise<VerificationEvidenceResult>;
   /** Interrogation « ce paiement a-t-il eu lieu ? » (si le prestataire la propose) : pièce de dossier uniquement. */
-  resolvePayment?(providerIntentId: string, paymentReference: string): Promise<ProviderResolution>;
+  resolvePayment?(providerIntentId: string, paymentReference: string, amount?: MoneyJSON): Promise<ProviderResolution>;
   /** Interrogation serveur à serveur de l'état d'une intention (absente en bac à sable local). */
   fetchIntentStatus?(providerIntentId: string): Promise<ProviderIntentStatus>;
+  /**
+   * Vrai si le prestataire offre une interrogation « ce paiement a-t-il eu lieu ? » utilisée comme confirmation serveur à
+   * serveur SUPPLÉMENTAIRE avant quittance (BitriPay GET /payment_resolution, 29/09/2026).
+   */
+  readonly confirmsWithResolution?: boolean;
   /** « Tester la connexion » : point d'appel inoffensif documenté, sinon validation de configuration à blanc. */
   testConnection?(): Promise<ConnectionTestResult>;
   /** Schéma de signature attendu des webhooks (texte affichable). */
@@ -221,11 +234,15 @@ export function maskSecret(secret: string | undefined): string {
   return `${prefix}…${secret.length > prefix.length + 8 ? secret.slice(-4) : ''}`;
 }
 
-/** Mode déduit de la clé ; refuse toute clé publiable. */
-export function modeFromKey(provider: string, apiKey: string | undefined): ConnectorMode {
+/**
+ * Mode déduit de la clé ; refuse toute clé publiable. `allowRestricted` : clé restreinte rk_live_ / rk_test_ admise
+ * (BitriPay, OpenAPI 2026-09-01 : clés restreintes à portées — payment_intents:write/read, verifications:write…).
+ */
+export function modeFromKey(provider: string, apiKey: string | undefined, opts: { allowRestricted?: boolean } = {}): ConnectorMode {
   if (!apiKey) return 'SANDBOX_LOCAL';
   if (/^pk_/.test(apiKey)) throw new ConnectorConfigError(`${provider} : clé publiable refusée — seule une clé secrète sk_… côté serveur est admise.`);
-  if (!/^sk_/.test(apiKey)) throw new ConnectorConfigError(`${provider} : clé secrète attendue au format sk_… (reçu ${maskSecret(apiKey)}).`);
+  if (opts.allowRestricted && /^rk_(live|test)_/.test(apiKey)) return /^rk_live_/.test(apiKey) ? 'LIVE' : 'TEST';
+  if (!/^sk_/.test(apiKey)) throw new ConnectorConfigError(`${provider} : clé secrète attendue au format sk_…${opts.allowRestricted ? ' ou rk_…' : ''} (reçu ${maskSecret(apiKey)}).`);
   return /^sk_live_/.test(apiKey) ? 'LIVE' : 'TEST';
 }
 

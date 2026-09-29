@@ -24,6 +24,7 @@ import { DEFAULT_KEY_ID, NonceStore, isValidNonce, signCallback, verifyCallbackS
 import { ProviderHttpError } from './connectors/http-client.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
 import { CONNECTOR_IDS } from './connectors/types.js';
+import { classifyResolution } from './connectors/bitripay.js';
 import {
   WebhookPayloadError, WebhookVerificationError, type ConfirmationMethod, type ConnectorId, type HeaderBag,
   type ConnectionTestResult, type HoldEvent, type NormalizedProviderEvent, type PaymentConnector, type PaymentEvent, type SettlementEvent, type VerifiedWebhook, type WebhookChecks,
@@ -577,6 +578,7 @@ export class PaymentService {
       try {
         intent = await connector.createIntent({
           paymentOrderId: id, paymentReference: draft.paymentReference, obligationId, amount: draft.amount, channel: draft.channel,
+          expiresAt: draft.expiresAt, revenueCategory: obligation.revenueCategory,
         });
       } catch (e) {
         const code = e instanceof ApiError ? e.code : 'PROVIDER_UNAVAILABLE';
@@ -1031,9 +1033,11 @@ export class PaymentService {
       const code = e instanceof ApiError ? e.code : 'PROVIDER_UNAVAILABLE';
       query('ECHEC_APPEL', null, `Interrogation impossible (${code}).`);
       this.audit.append({ actor: { kind: 'system', id: 'paiements' }, action: 'payment.s2s_status.unavailable', resourceType: 'provider_event', resourceId: ev.eventId, outcome: 'FAILURE', details: { provider: connector.id, code } });
+      // Délai demandé par le prestataire (HTTP 429 Retry-After) s'il est connu ; sinon 60 s.
+      const retryAfterSeconds = e instanceof ProviderHttpError && e.retryAfterSeconds !== undefined ? Math.max(1, e.retryAfterSeconds) : 60;
       throw new ApiError(503, 'PROVIDER_STATUS_UNAVAILABLE',
         `Confirmation serveur à serveur impossible auprès de ${connector.label} (${code}) : événement non mémorisé, aucune quittance ; le prestataire doit le renvoyer.`,
-        { provider: connector.id, retryAfterSeconds: 60 });
+        { provider: connector.id, retryAfterSeconds });
     }
     const readAmount = st.amount;
     const sentAmount = ev.amount;
@@ -1046,6 +1050,8 @@ export class PaymentService {
       }
     }
     if (st.status === 'SUCCEEDED' && amountOk) {
+      // Confirmation supplémentaire « ce paiement a-t-il eu lieu ? » (BitriPay GET /payment_resolution, 29/09/2026).
+      if (connector.confirmsWithResolution && connector.resolvePayment) await this.confirmByResolution(connector, ev, intentId, paymentReference, order);
       const q = query('CONFIRME', st.rawStatus, readAmount ? 'Payé chez le prestataire ; montant concordant.' : 'Payé chez le prestataire (montant non renvoyé : contrôlé sur l’ordre).');
       return { method: 'INTERROGATION_STATUT', at: q.at, rawStatus: st.rawStatus, queryId: q.id };
     }
@@ -1062,6 +1068,55 @@ export class PaymentService {
     return this.reject(connector.id, 422, 'PROVIDER_STATUS_CONTRADICTION', `${detail} Signature valide mais contenu démenti : secret de webhook possiblement compromis.`, {
       eventId: ev.eventId, providerIntentId: intentId, paymentReference,
     });
+  }
+
+  /**
+   * Seconde interrogation serveur à serveur (BitriPay GET /payment_resolution) : CONFIRMED ⇒ la quittance peut suivre ;
+   * PENDING ou verdict illisible ⇒ 409 (événement non mémorisé, à renvoyer) ; AMBIGUOUS ⇒ attente prestataire (revue
+   * manuelle, exception de rapprochement), JAMAIS de quittance, 409 ; NOT_FOUND ⇒ contredit (422, suspens, alerte) ;
+   * appel impossible ⇒ 503. Chaque interrogation est journalisée dans `statusQueries` (sans aucune donnée secrète).
+   */
+  private async confirmByResolution(connector: PaymentConnector, ev: PaymentEvent, intentId: string, paymentReference: string | undefined, order?: PaymentOrder): Promise<void> {
+    const query = (outcome: StatusQueryRecord['outcome'], rawStatus: string | null, detail: string) => this.statusQueries.append({
+      id: this.ids.next('S2S'), provider: connector.id, providerIntentId: intentId, eventId: ev.eventId, ...(paymentReference ? { paymentReference } : {}),
+      at: this.clock.now().toISOString(), outcome, rawStatus, detail,
+    });
+    let verdict;
+    try {
+      const res = await connector.resolvePayment!(intentId, paymentReference ?? '', order?.amount ?? ev.amount);
+      verdict = classifyResolution(res.providerResult);
+    } catch (e) {
+      const code = e instanceof ApiError ? e.code : 'PROVIDER_UNAVAILABLE';
+      query('ECHEC_APPEL', null, `Résolution (GET /payment_resolution) impossible (${code}).`);
+      const retryAfterSeconds = e instanceof ProviderHttpError && e.retryAfterSeconds !== undefined ? Math.max(1, e.retryAfterSeconds) : 60;
+      throw new ApiError(503, 'PROVIDER_STATUS_UNAVAILABLE',
+        `Confirmation « ce paiement a-t-il eu lieu ? » impossible auprès de ${connector.label} (${code}) : événement non mémorisé, aucune quittance ; le prestataire doit le renvoyer.`,
+        { provider: connector.id, retryAfterSeconds });
+    }
+    if (verdict === 'CONFIRMED') return;
+    if (verdict === 'AMBIGUOUS') {
+      query('EN_ATTENTE', 'AMBIGUOUS', 'Résolution AMBIGUË chez le prestataire : attente et revue manuelle, aucune quittance.');
+      if (!this.providerHolds.all().some((h) => h.provider === connector.id && h.eventId === ev.eventId)) {
+        this.recordHold(connector.id, {
+          kind: 'HOLD', reason: 'PROVIDER_AMBIGUOUS', eventId: ev.eventId, eventType: `${ev.eventType}+payment_resolution:AMBIGUOUS`,
+          ...(ev.providerIntentId ? { providerIntentId: ev.providerIntentId } : {}), ...(paymentReference ? { paymentReference } : {}),
+          ...(order ? { paymentOrderId: order.id } : {}), ...(ev.amount ? { amount: ev.amount } : {}),
+        });
+      }
+      throw new ApiError(409, 'PROVIDER_STATUS_AMBIGUOUS',
+        `${connector.label} signale un résultat opérateur AMBIGU pour ce paiement : aucune quittance, revue manuelle en cours ; l'événement devra être renvoyé après résolution.`, { provider: connector.id });
+    }
+    if (verdict === 'NOT_FOUND') {
+      const detail = 'Webhook « payé » contredit par GET /payment_resolution (NOT_FOUND).';
+      query('CONTREDIT', 'NOT_FOUND', detail);
+      this.recordSuspense(connector.id, ev, 'ETAT_CONTREDIT', detail, order);
+      this.reject(connector.id, 422, 'PROVIDER_STATUS_CONTRADICTION', `${detail} Signature valide mais contenu démenti : secret de webhook possiblement compromis.`, {
+        eventId: ev.eventId, providerIntentId: intentId, paymentReference,
+      });
+    }
+    query('EN_ATTENTE', verdict, `Résolution non finale chez le prestataire (${verdict}) : aucune quittance.`);
+    throw new ApiError(409, 'PROVIDER_STATUS_NOT_FINAL',
+      `${connector.label} ne confirme pas encore le paiement (résolution « ${verdict} ») : événement non mémorisé, à renvoyer.`, { provider: connector.id });
   }
 
   /**
@@ -1127,9 +1182,17 @@ export class PaymentService {
       else if (ev.kind === 'SETTLEMENT') result = this.announceSettlement(providerId, ev);
       else if (ev.kind === 'HOLD') result = this.recordHold(providerId, ev);
       else {
+        if (ev.reason === 'LITIGE') {
+          // Paiement contesté chez le prestataire : le Trésor est alerté ; aucune écriture ni contre-passation automatique.
+          this.alerts.raise({
+            type: 'PROVIDER_PAYMENT_DISPUTED', severity: 'HIGH', source: `prestataire:${providerId}`, actor: { kind: 'provider', id: providerId },
+            detail: `Paiement ${ev.paymentReference ?? ev.providerIntentId ?? ev.eventId} contesté chez ${providerId} : instruction par le Trésor, aucune mesure automatique.`,
+            context: { eventId: ev.eventId, paymentReference: ev.paymentReference, providerIntentId: ev.providerIntentId },
+          });
+        }
         this.audit.append({
           actor: { kind: 'provider', id: providerId },
-          action: ev.reason === 'NON_TERMINAL_ATTEMPT_FAILURE' ? 'payment.attempt_failed' : 'payment.webhook.ignored',
+          action: ev.reason === 'NON_TERMINAL_ATTEMPT_FAILURE' ? 'payment.attempt_failed' : ev.reason === 'LITIGE' ? 'payment.provider_dispute' : 'payment.webhook.ignored',
           resourceType: 'provider_event', resourceId: ev.eventId,
           details: { eventType: ev.eventType, reason: ev.reason, ...(ev.paymentReference ? { paymentReference: ev.paymentReference } : {}) },
         });
@@ -1255,7 +1318,7 @@ export class PaymentService {
     const connector = this.connectors.get(order.provider);
     if (!connector) throw unprocessable('UNKNOWN_PROVIDER', `Prestataire non connecté : ${order.provider}`);
     if (!connector.resolvePayment) throw unprocessable('PROVIDER_RESOLUTION_UNSUPPORTED', `${connector.label} ne propose pas d'interrogation de résolution.`);
-    const res = await connector.resolvePayment(order.providerIntentId, order.paymentReference);
+    const res = await connector.resolvePayment(order.providerIntentId, order.paymentReference, order.amount);
     const record = this.providerResolutions.append({
       id: this.ids.next('RESOL'), kind: 'PROVIDER_PAYMENT_RESOLUTION', legalEffect: 'AUCUN',
       notice: 'Réponse du prestataire versée au dossier : ni confirmation, ni quittance. Seuls une confirmation signée et le relevé du compte public font foi.',
@@ -1267,6 +1330,40 @@ export class PaymentService {
       details: { resolutionId: record.id, provider: connector.id, legalEffect: 'AUCUN' },
     });
     return record;
+  }
+
+  /**
+   * État RÉEL d'un paiement pour la page de retour « /paiement/retour » (29/09/2026) : lu dans MOSOLO, jamais dans les
+   * paramètres de l'URL de retour du prestataire (le retour navigateur est une commodité, jamais une preuve).
+   * Réservé à qui peut lire l'obligation (contribuable lui-même, mandataire, guichet, Trésor…) ; aucune donnée du
+   * prestataire au-delà du nom, aucun secret, aucune intention n'est exposée à un tiers.
+   */
+  paymentStatusFor(user: User, paymentReference: string) {
+    const order = this.byReference(paymentReference);
+    if (!order) throw notFound('PAYMENT_REFERENCE_NOT_FOUND', 'Référence de paiement inconnue.');
+    const ob = this.assessment.get(order.obligationId);
+    authorize(user, 'obligation.read', { taxpayerId: order.taxpayerId, entity: ob.entity });
+    const receipt = this.receipts.byPaymentOrder(order.id);
+    const hold = this.unresolvedHolds().find((h) => h.paymentOrderId === order.id || h.paymentReference === order.paymentReference);
+    const state: 'EN_ATTENTE' | 'VERIFICATION_MANUELLE' | 'CONFIRME' | 'ECHEC' =
+      ['CONFIRME', 'REGLE', 'RAPPROCHE'].includes(order.status) ? 'CONFIRME'
+        : order.status === 'INITIE' ? (hold ? 'VERIFICATION_MANUELLE' : 'EN_ATTENTE') : 'ECHEC';
+    const LABEL = {
+      EN_ATTENTE: 'En attente de confirmation',
+      VERIFICATION_MANUELLE: 'En attente de confirmation — résultat de l’opérateur incertain, vérification manuelle en cours (aucun nouveau paiement à faire)',
+      CONFIRME: receipt?.status === 'DEFINITIVE' ? 'Confirmé — quittance définitive' : 'Confirmé — quittance provisoire',
+      ECHEC: order.status === 'DOUBLON' ? 'Paiement en double — remboursement à instruire' : 'Échec / annulé',
+    } as const;
+    return {
+      paymentReference: order.paymentReference, obligationId: order.obligationId, status: order.status, state, stateLabel: LABEL[state],
+      amount: order.amount, channel: order.channel, provider: order.provider ?? null, expiresAt: order.expiresAt,
+      confirmedAt: order.confirmedAt ?? null, closedReason: order.closedReason ?? null,
+      receipt: receipt ? { number: receipt.number, code: receipt.code, status: receipt.status } : null,
+      final: state === 'CONFIRME' || state === 'ECHEC',
+      source: 'MOSOLO' as const,
+      notice: 'État lu dans MOSOLO après confirmation signée du prestataire et vérification serveur à serveur ; le retour depuis la page du prestataire ne vaut pas preuve de paiement.',
+      checkedAt: this.clock.now().toISOString(),
+    };
   }
 
   /** Annonce de règlement : journalisée et conservée comme indice ; ne fait JAMAIS passer à REGLE / RAPPROCHE. */

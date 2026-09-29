@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1558 routes** dans 49 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1566 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -46,8 +46,9 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1558 routes** dans 4
 | module field | 1 |
 | module fx | 1 |
 | module identity | 5 |
+| module integrations | 7 |
 | module objects | 2 |
-| module payments | 10 |
+| module payments | 11 |
 | module receipts | 2 |
 | module rules | 26 |
 | module system | 3 |
@@ -1767,6 +1768,18 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1558 routes** dans 4
 | POST | `/v1/registrations` |
 | GET | `/v1/taxpayers/:id` |
 
+## Module integrations
+
+| Méthode | Chemin |
+|---|---|
+| POST | `/v1/integrations/:group/test` |
+| GET | `/v1/integrations/keys` |
+| POST | `/v1/integrations/keys/:name/proposals` |
+| GET | `/v1/integrations/proposals` |
+| POST | `/v1/integrations/proposals/:id/approve` |
+| POST | `/v1/integrations/proposals/:id/reject` |
+| GET | `/v1/integrations/webhooks` |
+
 ## Module objects
 
 | Méthode | Chemin |
@@ -1781,6 +1794,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1558 routes** dans 4
 | POST | `/v1/obligations/:id/payment-orders` |
 | POST | `/v1/payment-orders/:reference/provider-resolution` |
 | POST | `/v1/payment-orders/:reference/provider-verification-evidence` |
+| GET | `/v1/payment-orders/:reference/status` |
 | POST | `/v1/providers/:provider/callbacks` |
 | POST | `/v1/providers/:provider/sandbox-simulate` |
 | POST | `/v1/providers/:provider/test-connection` |

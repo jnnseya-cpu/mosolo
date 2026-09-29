@@ -61,6 +61,9 @@ export function createSoclePlugin(opts: SocleOptions = {}): MosoloPlugin<SocleSe
       // Persistance : après les données de démonstration de TOUS les modules (les `routes` suivent tous les `seed`).
       if (svc.persistence && !svc.persistence.attached) {
         svc.persistence.attach(ctx);
+        // « Clés et raccordements » : valeurs approuvées restaurées ⇒ effets vivants réappliqués (canaux de communication) ;
+        // les connecteurs de paiement, eux, se reconstruisent d'eux-mêmes à la prochaine lecture (empreinte).
+        ctx.integrations.applyLiveEffects();
         const rt = svc.persistence;
         ctx.storageHealth = () => ({ degraded: rt.degraded, consecutiveFailures: rt.status().consecutiveFailures });
         // Stockage en échec (deuxième passe adverse, 27/09/2026) : toute écriture est refusée (503, RFC 9457) au lieu

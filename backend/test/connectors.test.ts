@@ -306,7 +306,8 @@ describe('BitriPay : comptes connectés, attente prestataire, résolution', () =
     expect(res.statusCode).toBe(201);
     expect(res.json()).toMatchObject({ kind: 'PROVIDER_PAYMENT_RESOLUTION', legalEffect: 'AUCUN', orderStatusAtRequest: 'INITIE', providerResult: { status: 'CONFIRMED' } });
     expect(calls[1]).toMatchObject({ method: 'GET' });
-    expect(calls[1]!.url).toContain('/payment_resolution?payment_intent=pi_9');
+    // OpenAPI BitriPay 2026-09-01 : recherche par référence MOSOLO, montant et devise (et non plus par intention).
+    expect(calls[1]!.url).toMatch(/\/payment_resolution\?reference=PR-[A-Z0-9-]+&amount_minor=\d+&currency=[A-Z]{3}$/);
     expect(calls[1]!.headers['bitripay-account']).toBe(ACCT);
     // « CONFIRMED » chez le prestataire ne vaut ni confirmation signée, ni quittance.
     expect(env.app.ctx.payments.byReference(order.paymentReference)!.status).toBe('INITIE');

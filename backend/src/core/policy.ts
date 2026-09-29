@@ -22,7 +22,8 @@ export type Action =
   | 'field.sync'
   | 'appeal.submit' | 'appeal.instruct' | 'appeal.decide'
   | 'alerts.read'
-  | 'draft.write';
+  | 'draft.write'
+  | 'integration.read' | 'integration.propose' | 'integration.approve';
 
 /**
  * Action d'un module d'extension (verticale) : `<module>:<action>`, ex. `parking:session.create`.
@@ -133,6 +134,12 @@ const MATRIX: Record<Action, Partial<Record<RoleCode, Grant>>> = {
   'appeal.decide': { R21: always },
   'alerts.read': { R22: always, R24: always, R28: always },
   'draft.write': { ...allAgents(always), R30: always, R31: always },
+  // « Clés et raccordements » (29/09/2026) : inventaire (noms, présence, source — jamais une valeur) lu par le
+  // super-administrateur (R26) et le responsable sécurité (R28) ; proposition par R26 ; approbation par une personne
+  // DISTINCTE, R26 ou R28 (règle des deux personnes, contrôlée par le service). Aucun autre droit n'est élargi.
+  'integration.read': { R26: always, R28: always },
+  'integration.propose': { R26: always },
+  'integration.approve': { R26: always, R28: always },
 };
 
 const EXTENSIONS: Record<string, Partial<Record<RoleCode, Grant>>> = {};
