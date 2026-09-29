@@ -1374,3 +1374,89 @@ les lit encore). Menu : R26 et R28 seulement (masqué pour R01–R05). Routes : 
 
 Tests : `backend/test/paiement-aller-retour.test.ts` (16 tests), `backend/test/cles-raccordements.test.ts` (11 tests),
 `backend/test/prestataires-raccordement.test.ts` (28 tests, simulateur mis aux formes réelles).
+
+## I.36 Moteur de paiement, de règlement et de répartition des recettes (29/09/2026)
+
+Spécifications du maître d'ouvrage du 29/09/2026 (`docs/sources/Specification_Moteur_Paiement_Reglement_Repartition_v1.md`
+et `…_Repartition_Commission_Reglement_v1.0.md`), construites **par-dessus** la clé du § 37A (§ 37.2 bis) : aucune
+route, règle, écran ni donnée de démonstration existants n'est retiré. Module serveur
+`backend/src/plugins/pilotage/repartition/moteur/` (`model.ts`, `service.ts`, `tableaux.ts`, `plugin.ts`), écran
+« Répartition et droits (moteur) » (`/pilotage/moteur-repartition`, `frontend/src/modules/pilotage/MoteurRepartition.tsx`).
+
+- **Matrice versionnée KIN-DEFAULT** (alias KIN-REV-001) : bénéficiaires, pourcentages en chaînes décimales (trois
+  décimales), périmètres recette / module / moyen de paiement, dates d'effet, base juridique, document d'approbation,
+  mode du pool, traitement des coûts. La V1 reprend les constantes du § 37A (`repartition/model.ts`, inchangées) :
+  70 % Gouvernorat, 10 % Groupe Nseya, 10 % ministère ou département propriétaire du module, 10 % opérations de
+  terrain ; effet au 01/10/2026 ; **statut proposé, acte requis, valeurs par défaut à confirmer**. Circuit : rédaction
+  (super-administrateur, ministre des Finances, validateur financier) → vérification (juriste vérificateur, validateur
+  financier) → approbation (ministre des Finances, directeur de cabinet) → activation (Gouverneur, ministre des
+  Finances, autorité de publication ; authentification forte), **quatre personnes distinctes**. Activation refusée sauf
+  somme = 100,000 %, clé du § 37A ACTIVE (acte et conditions du § 37A.8) et règle CLE-REPARTITION-37A certifiée aux
+  mêmes taux. Historique jamais réécrit : une V2 clôt la V1 la veille de sa date d'effet (jamais rétroactive) et chaque
+  transaction garde la version qui l'a répartie. Circuits ajoutés au catalogue des quatre yeux (MOTEUR_REGLE_*).
+- **Sous-grand-livre des droits** (en ajout seul, en partie double, chaîné par empreintes) : sur chaque paiement
+  RAPPROCHÉ (jamais confirmé ni initié), lignes par bénéficiaire (Gouvernorat, Groupe Nseya, ministère ou département
+  par la **propriété officielle du module** — fiche de module active, sinon tutelle par défaut —, jamais le collecteur,
+  agent, sous-traitant ou réserve du pool) ; la somme des lignes égale toujours la recette (troncature, solde au
+  Gouvernorat). Remboursement ou contrepassation : lignes NÉGATIVES ; droit déjà réglé → **solde recouvrable**, recouvré
+  par la régularisation suivante du § 37A ou par compensation. Soldes calculés à partir des écritures. États : constaté,
+  approuvé, payable, partiellement réglé, réglé, contesté, contrepassé, recouvrable, en retard, non exigible, simulation.
+  Avant l'activation de la version : SIMULATION (aucun droit exigible).
+- **Règlement** : Gouvernorat et Groupe Nseya (électronique) réglés quand le flux du § 37A qui contient le paiement est
+  exécuté ; autres droits et droits de Groupe Nseya issus d'espèces (**PAYABLE**, jamais présentés comme réglés) par
+  demande de règlement : brouillon (DRAFT) → soumise → en examen → approuvée → paiement instruit → payée → rapprochée
+  → clôturée ; **jamais au-dessus du reste dû** ; le paiement cite une opération d'un des deux flux (Flux 1 pour Groupe
+  Nseya, Flux 2 sinon) couvrant les paiements — aucun troisième flux. Modes de règlement par bénéficiaire (T+1,
+  hebdomadaire, mensuel, sur facture, constaté non exigible) ; fractionnement en temps réel admis pour les deux flux du
+  § 37A seulement, sur infrastructure approuvée.
+- **Pool des opérations de terrain** : mode PAR_RECETTE_GENEREE (V1 ; agent direct 10 / 0, agent de sous-traitant
+  7 / 3 en points de la transaction) et mode PAR_POINTS_QUALITE (décision du 27/09/2026, réserve par module,
+  `sanctions/reserve-agents.ts`, inchangé et toujours affiché) ; seul le circuit d'approbation change de mode.
+  Affectation de l'agent (direct gouvernement / ministère / département ou agent de sous-traitant) déterminée à la date
+  de la transaction, proposée par la régie et confirmée par une autre personne.
+- **Espèces** : décision du 29/09/2026 — aucune espèce pour les agents de terrain (refus serveur
+  `ESPECES_INTERDITES_AGENT`, en plus du refus existant de l'enrôlement assisté) ; espèces aux seuls points agréés
+  (module 66) et guichets bancaires : encaissement → déclaration → dépôt → vérification → rapprochement → répartition,
+  circuit affiché sur chaque transaction ; encaissement d'espèces par un compte d'agent public : droits BLOQUÉS et alerte.
+- **Compte de règlement principal du Gouvernement** : alias verrouillé du coffre, proposé par le Trésor, vérifié par un
+  gestionnaire du coffre, autorisé par le Gouverneur ; numéro modifiable seulement par le circuit du coffre ; le
+  super-administrateur ne peut rien y changer. Donnée [EXEMPLE] : proposition sur l'alias fictif GVT-PROV-FLUX2-USD.
+- **Coûts technologiques** (TechnologyCost) : hors répartition initiale ; financés par le Gouvernorat → position nette
+  (présentation) ; financés par Groupe Nseya → coût réel + frais de gestion approuvés = dette distincte des 10 % ;
+  désactivé par défaut, pourcentages à confirmer.
+- **Groupe Nseya** : rôle dédié **R38 « Groupe Nseya — super-administrateur (lecture complète) (GROUPE_NSEYA_SUPER_ADMIN) »**
+  (contrat de partenariat approuvé par le directeur de cabinet, seconde validation sécurité) : lecture et export des
+  agrégats de toute la plateforme (liste fermée d'actions de lecture du point de décision), descente ville → ministère
+  → module → agent → transaction (pseudonymisée), données personnelles seulement avec motif déclaré et journalisé ou par
+  la consultation motivée (C42-05) ; aucune écriture. Compte [EXEMPLE] `u-groupe-nseya`.
+- **Accès par les menus** : Gouverneur — poste de décision, vue « Recettes » → « Centre de commandement financier »
+  (`/executive/finance`) ; directeur de cabinet, secrétaire exécutif, ministre des Finances, Trésor, audit — entrée de
+  menu « Centre de commandement financier » ; Groupe Nseya — écran d'accueil `/groupe-nseya/command-centre` ;
+  super-administrateur — « Règles de répartition — proposition » (`/platform-admin/finance/allocation-rules`) ; ministres,
+  régies, agents — « Répartition des recettes et droits » ; sous-traitant — « Mes finances de sous-traitant ».
+  Démonstration : huit transactions FICTIVES [EXEMPLE] réparties en SIMULATION (non contractuelles, jamais réglées).
+- **Tableaux** : exécutif (Gouverneur, cabinet, secrétariat exécutif, ministre des Finances ; Trésor et audit), entité
+  (son périmètre seulement), Groupe Nseya (« Ma position commerciale », « Contrôle financier de la ville »),
+  sous-traitant (son ombrelle), agent (sa seule activité), configuration du super-administrateur (aucun montant, aucune
+  mutation financière). Chaque montant porte son état et sa date ; « Expliquer ce chiffre » : recette éligible × taux =
+  droit, arrondis, électronique / espèces, états, ventilations, puis « Voir les transactions » et le détail paiement →
+  quittance → répartition → écritures → règlement. Écrans de la spécification v1.0 servis par le même écran :
+  `/platform-admin/finance/allocation-rules`, `/executive/finance`, `/groupe-nseya/command-centre`,
+  `/subcontractor/finance`. Routes anglaises `/api/…` (§ 28) : alias des routes `/v1/pilotage/moteur-repartition/…`
+  ou relais vers les routes `/v1` existantes, contrôles d'accès côté serveur.
+- **Tests** : `backend/test/moteur-repartition.test.ts` (sections de la spécification) et
+  `backend/test/moteur-repartition-criteres.test.ts` (un test par critère d'acceptation du § 29, titres citant le
+  critère).
+
+**Contradictions à arbitrer par le maître d'ouvrage** (harmonisées, l'ancien comportement reste disponible) :
+
+| | Contradiction | Harmonisation | État |
+|---|---|---|---|
+| a | Pool des agents par recette générée (spécification) ou par points × qualité, jamais par montant (décision du 27/09/2026) | Deux modes sur la version de règle ; V1 par recette générée (décision du 29/09/2026) ; écrans de la réserve conservés | Tranché le 29/09/2026 |
+| b | Fractionnement en temps réel chez le prestataire = troisième flux, contraire au § 37A.4 (deux flux) | Admis pour Flux 1 et Flux 2 seulement, sur infrastructure approuvée ; jamais vers ministère, agent ou sous-traitant | Tranché le 29/09/2026 |
+| c | « L'agent enregistre l'encaissement d'espèces » (§ 13) contre « aucune espèce pour les agents » | Refus serveur pour tout agent ; points agréés et guichets bancaires seulement | Tranché le 29/09/2026 |
+| d | Visibilité « complète » de Groupe Nseya et données personnelles | Rôle R38 en lecture ; agrégats libres ; dossiers individuels par motif journalisé | Tranché le 29/09/2026 |
+| e | « 7 % » : 7 points de la transaction ou 7 % des 10 % | 7 points (70 / 10 / 10 / 7 / 3) ; lecture « pourcentage du pool » configurable | Tranché le 29/09/2026 |
+| f | Ministre des Finances en visibilité complète contre ministres limités à leur ministère (28/09/2026) | Visibilité complète limitée à ce moteur financier ; menu inchangé | Tranché le 29/09/2026 |
+| g | Guichet bancaire : espèces ou électronique pour le droit de Groupe Nseya | Par défaut seul le point agréé est classé espèces | À arbitrer |
+| h | Pourcentage des frais de gestion technologiques de Groupe Nseya | Aucun pourcentage par défaut ; fixé par une version approuvée | À arbitrer |

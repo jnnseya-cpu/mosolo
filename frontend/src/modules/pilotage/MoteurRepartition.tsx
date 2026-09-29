@@ -472,7 +472,9 @@ export default function MoteurRepartition() {
   const location = useLocation();
   const visible = TABS.filter((t) => has(roles, ...t.roles));
   const initial = PATH_TAB[location.pathname] && visible.some((t) => t.key === PATH_TAB[location.pathname]) ? PATH_TAB[location.pathname]! : visible[0]?.key ?? 'regles';
-  const [tab, setTab] = useState<Tab>(initial);
+  const [chosen, setTab] = useState<Tab | null>(null);
+  // Onglet choisi s'il est visible pour le compte, sinon l'onglet de l'adresse (chargement asynchrone du compte).
+  const tab: Tab = chosen && visible.some((t) => t.key === chosen) ? chosen : initial;
   const [explain, setExplain] = useState<string | null>(null);
   const onExplain = (q: string) => setExplain(q);
   return (

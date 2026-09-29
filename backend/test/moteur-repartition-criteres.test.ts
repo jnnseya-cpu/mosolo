@@ -87,8 +87,8 @@ describe('§ 29 — critères d’acceptation non négociables (spécification v
     const order = (await env.req('POST', `/v1/obligations/${ob}/payment-orders`, 'u-contribuable', { channel: 'MOBILE_MONEY' }, { 'idempotency-key': randomUUID() })).json();
     await signedCallback(env, callbackBody(env, order.paymentReference));
     await env.req('POST', `${B}/synchroniser`, 'u-tresor', {});
-    expect(env.svc.allocations.all()).toHaveLength(3);
-    for (const a of env.svc.allocations.all()) expect(sumLines(a.lines, 'USD').equals(Money.fromJSON(a.base)), a.id).toBe(true);
+    expect(env.svc.allocations.all().filter((a) => !a.demo)).toHaveLength(3);
+    for (const a of env.svc.allocations.all().filter((a) => !a.demo)) expect(sumLines(a.lines, 'USD').equals(Money.fromJSON(a.base)), a.id).toBe(true);
   });
 
   it('« 100 $ agent direct = 70 / 10 / 10 / 10 »', () => {
@@ -285,8 +285,8 @@ describe('§ 29 — critères d’acceptation non négociables (spécification v
     await postStatement(env, 'u-tresor', { statementId: 'REL-DOUBLE-1', lines: [{ accountAlias: DEMO.dgipkAlias, amount: money('150.00'), valueDate: '2026-10-02', paymentReference: order.paymentReference }] });
     await env.req('POST', `${B}/synchroniser`, 'u-tresor', {});
     await env.req('POST', `${B}/synchroniser`, 'u-tresor', {});
-    expect(env.svc.allocations.all()).toHaveLength(1);
-    expect(env.svc.allocations.all()[0]!.base).toEqual(money('150.00'));
+    expect(env.svc.allocations.all().filter((a) => !a.demo)).toHaveLength(1);
+    expect(env.svc.allocations.all().filter((a) => !a.demo)[0]!.base).toEqual(money('150.00'));
   });
 
   it('« références d’espèces en double sans encaissement en double »', async () => {

@@ -118,6 +118,8 @@ export interface Allocation {
   blocked?: string;
   /** Paiement antérieur à la date d'effet de toute version : simulation sur la V1 (présentation seulement). */
   avantEffet?: true;
+  /** Donnée de démonstration [EXEMPLE] (transaction fictive, simulation, non contractuelle). */
+  demo?: true;
   entryId: string;
   createdAt: string;
 }
@@ -688,6 +690,51 @@ export class MoteurRepartitionService {
   private cashCollector(orderId: string): string | null {
     const canaux = this.ctx.ext.canaux as { points?: { collections: { findOne(p: (c: { paymentOrderId: string }) => boolean): { operatorUserId: string } | undefined } } } | undefined;
     return canaux?.points?.collections.findOne((c) => c.paymentOrderId === orderId)?.operatorUserId ?? null;
+  }
+
+  /**
+   * Données de démonstration [EXEMPLE] (mode démonstration seulement, non contractuelles) : répartitions SIMULÉES de
+   * transactions fictives (aucun paiement réel, aucun virement), pour que les écrans montrent des chiffres expliqués.
+   * Marquées `demo` ; jamais réglées, jamais exigibles (V1 non active). Le traitement réel ne les touche pas.
+   */
+  seedDemo(): number {
+    if (this.allocations.find((a) => !!a.demo).length) return 0;
+    const v = this.ensureV1();
+    const terrain = this.ctx.ext.terrain as { agents?: { find(p: (a: { subcontractorId?: string; status?: string }) => boolean): { id: string; subcontractorId?: string }[] } } | undefined;
+    const stAgent = terrain?.agents?.find((a) => !!a.subcontractorId)[0];
+    const cases: { rule: string; revenue: string; amount: string; cur: CurrencyCode; methode: MethodePaiement; channel: string; commune: string; day: string; agent?: string; st?: { agent: string; sub: string } }[] = [
+      { rule: 'DEMO-IF-BATI', revenue: 'IMPOT_PROVINCIAL', amount: '450.00', cur: 'USD', methode: 'ELECTRONIQUE', channel: 'MOBILE_MONEY', commune: 'Limete', day: '2026-09-02', agent: 'u-agent-terrain' },
+      { rule: 'DEMO-IF-BATI', revenue: 'IMPOT_PROVINCIAL', amount: '150.00', cur: 'USD', methode: 'ESPECES', channel: 'AGENT_POINT', commune: 'Limete', day: '2026-09-05' },
+      { rule: 'IRL-KIN-R1', revenue: 'IMPOT_PROVINCIAL', amount: '1320.00', cur: 'USD', methode: 'ELECTRONIQUE', channel: 'BANK', commune: 'Gombe', day: '2026-09-08', agent: 'u-agent-gombe' },
+      { rule: 'STAT-GOMBE-DEMO', revenue: 'REDEVANCE_SERVICE', amount: '85000.00', cur: 'CDF', methode: 'ELECTRONIQUE', channel: 'MOBILE_MONEY', commune: 'Gombe', day: '2026-09-10', agent: 'u-agent-gombe' },
+      { rule: 'PUB-KIN-DEMO', revenue: 'PROVINCIAL_SPECIFIQUE', amount: '2400.00', cur: 'USD', methode: 'ELECTRONIQUE', channel: 'BANK', commune: 'Gombe', day: '2026-09-12' },
+      { rule: 'PATENTE-DEMO', revenue: 'PROVINCIAL_SPECIFIQUE', amount: '120000.00', cur: 'CDF', methode: 'ESPECES', channel: 'AGENT_POINT', commune: 'Kalamu', day: '2026-09-15' },
+      { rule: 'DEMO-IF-BATI', revenue: 'IMPOT_PROVINCIAL', amount: '580.00', cur: 'USD', methode: 'ELECTRONIQUE', channel: 'USSD', commune: 'Lemba', day: '2026-09-18', ...(stAgent ? { st: { agent: stAgent.id, sub: stAgent.subcontractorId! } } : { agent: 'u-agent-terrain-2' }) },
+      { rule: 'IRL-KIN-R1', revenue: 'IMPOT_PROVINCIAL', amount: '960.00', cur: 'USD', methode: 'ELECTRONIQUE', channel: 'MOBILE_MONEY', commune: 'Ngaba', day: '2026-09-22', ...(stAgent ? { st: { agent: stAgent.id, sub: stAgent.subcontractorId! } } : {}) },
+    ];
+    let n = 0;
+    for (const c of cases) {
+      n += 1;
+      const own = this.owner(c.rule);
+      const base = Money.of(c.amount, c.cur);
+      const agentId = c.st?.agent ?? c.agent ?? null;
+      const agentType: TypeAgent | null = c.st ? 'SUBCONTRACTOR_AGENT' : agentId ? this.agentProfile(agentId, c.day).type : null;
+      const lines = allocateTransaction(base, v, { entity: own.entity, entityLabel: own.entityLabel, entityType: own.entityType, pool: { agentId, agentType, subcontractorId: c.st?.sub ?? null, module: own.module ?? c.rule } });
+      const orderId = `DEMO-EXEMPLE-${String(n).padStart(3, '0')}`;
+      const id = `AL-${orderId}`;
+      const at = `${c.day}T10:00:00.000Z`;
+      const entry = this.post({
+        type: 'CONSTAT', mode: 'SIMULATION', allocationId: id, orderId, description: `[EXEMPLE] Droits simulés — transaction fictive ${orderId} (${v.id}, démonstration non contractuelle)`,
+        lines: [{ account: 'RECETTE_ELIGIBLE', side: 'DEBIT', amount: base.toJSON() }, ...lines.filter((l) => !Money.fromJSON(l.amount).isZero()).map((l) => ({ account: `A_REGLER:${l.beneficiary}`, side: 'CREDIT' as const, amount: l.amount }))],
+      });
+      this.allocations.append({
+        id, orderId, paymentReference: `[EXEMPLE] ${orderId}`, obligationId: `[EXEMPLE] ${orderId}`, taxpayerId: '[EXEMPLE] contribuable fictif', ruleCode: c.rule, revenueCategory: c.revenue,
+        module: own.module, moduleLabel: own.moduleLabel, entity: own.entity, entityLabel: own.entityLabel, entityBasis: own.basis, methode: c.methode, channel: c.channel, provider: null, commune: c.commune,
+        agentId, agentType, subcontractorId: c.st?.sub ?? null, base: base.toJSON(), paidAt: at, reconciledAt: at, versionId: v.id, versionNumber: v.version, poolMode: v.pool.mode,
+        mode: 'SIMULATION', lines, avantEffet: true, demo: true, entryId: entry.id, createdAt: this.now(),
+      });
+    }
+    return n;
   }
 
   private allocateOrder(o: PaymentOrder, attribution: () => Map<string, string>): Allocation | null {

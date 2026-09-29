@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1566 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1595 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -20,7 +20,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1566 routes** dans 5
 | extension juridique | 11 |
 | extension opportunites | 32 |
 | extension parking | 74 |
-| extension pilotage | 103 |
+| extension pilotage | 132 |
 | extension plateforme | 23 |
 | extension postes | 29 |
 | extension preuves | 14 |
@@ -799,6 +799,35 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1566 routes** dans 5
 
 | Méthode | Chemin |
 |---|---|
+| GET | `/api/allocations` |
+| GET | `/api/allocations/rules` |
+| POST | `/api/allocations/rules` |
+| POST | `/api/allocations/rules/:id/activate` |
+| POST | `/api/allocations/rules/:id/version` |
+| GET | `/api/audit` |
+| POST | `/api/cash/collections` |
+| POST | `/api/cash/declarations` |
+| POST | `/api/cash/deposits` |
+| POST | `/api/cash/reconcile` |
+| GET | `/api/entitlements` |
+| GET | `/api/entitlements/:id` |
+| GET | `/api/finance/agent/:id` |
+| GET | `/api/finance/executive` |
+| GET | `/api/finance/explain/:metricId` |
+| GET | `/api/finance/groupe-nseya` |
+| GET | `/api/finance/ministry/:id` |
+| GET | `/api/finance/subcontractor/:id` |
+| GET | `/api/payments` |
+| POST | `/api/payments` |
+| GET | `/api/payments/:id` |
+| POST | `/api/payments/:id/reconcile` |
+| POST | `/api/refunds` |
+| POST | `/api/reversals` |
+| GET | `/api/settlements` |
+| POST | `/api/settlements/:id/approve` |
+| POST | `/api/settlements/:id/confirm-payment` |
+| POST | `/api/settlements/:id/reconcile` |
+| POST | `/api/settlements/request` |
 | GET | `/v1/legal-shares` |
 | POST | `/v1/legal-shares/calculate` |
 | GET | `/v1/legal-shares/calculations/:id` |

@@ -84,6 +84,8 @@ export default function Home() {
   const areas = visibleNav(user?.roles).filter((n) => n.to !== '/');
   // Autorités (Gouverneur, cabinet, secrétariat exécutif, ministres) : l'écran d'accueil est le poste de décision (§ 27.2).
   if (user?.roles.some((r) => AUTORITES_POSTE.includes(r))) return <Navigate to="/poste-de-decision" replace />;
+  // Groupe Nseya (R38, 29/09/2026) : l'écran d'accueil est son centre de commandement.
+  if (user?.roles.includes('R38')) return <Navigate to="/groupe-nseya/command-centre" replace />;
   return (
     <div className="landing">
       {/* 1. Ouverture institutionnelle : visuel officiel, non modifié, logo jamais recadré */}

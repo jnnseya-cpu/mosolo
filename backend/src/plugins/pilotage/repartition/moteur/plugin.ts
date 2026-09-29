@@ -112,6 +112,8 @@ export const moteurRepartitionPlugin = definePlugin<MoteurRepartitionService>({
   create: (ctx) => new MoteurRepartitionService(ctx),
   seed: (ctx, svc) => {
     svc.ensureV1();
+    // Transactions FICTIVES [EXEMPLE] répartis en SIMULATION (démonstration seulement) : écrans chiffrés et expliqués.
+    svc.seedDemo();
     // Compte Groupe Nseya [EXEMPLE] (rôle dédié R38, lecture complète) et son entité de rattachement.
     const acces = ctx.ext.acces as { entities: { get(id: string): unknown; insert(e: Record<string, unknown>): unknown } } | undefined;
     if (acces && !acces.entities.get(ENTITE_GROUPE_NSEYA)) {
