@@ -8,7 +8,7 @@ import { isoDateString, parse } from '../../core/http.js';
 import { IdempotencyStore } from '../../core/idempotency.js';
 import { hasAnyGrant, type ExtensionAction } from '../../core/policy.js';
 import type { FastifyRequest } from 'fastify';
-import { gatewayGuard } from '../preuves/routes.js';
+import { gatewayGuard, inboundRecorder } from '../preuves/routes.js';
 import type { IntegriteService } from './service.js';
 import {
   CASE_DECISIONS, INCIDENT_CATEGORIES, MYSTERY_TARGETS, NOTIFICATION_TARGETS, RECTIFIABLE_FIELDS, REPORT_CATEGORIES, SEVERITIES, TARGET_KINDS,
@@ -64,13 +64,13 @@ export function registerIntegriteRoutes(app: FastifyInstance, ctx: AppContext, s
   // Passerelles opérateur (SMS entrant, SVI) : signature HMAC du corps brut, comme /v1/sms/inbound. Sans secret configuré,
   // simulateur de démonstration seulement — sinon n'importe qui déposerait un signalement au nom d'un numéro tiers.
   app.post('/v1/public/integrite/reports/sms', async (req, reply) => {
-    gatewayGuard(req, process.env.SMS_GATEWAY_SECRET, 'x-mosolo-signature');
+    gatewayGuard(req, ctx.integrations.value('SMS_GATEWAY_SECRET'), 'x-mosolo-signature', '', inboundRecorder(ctx, 'integrite-sms'));
     const b = parse(z.object({ from: z.string().trim().regex(/^\+?[0-9]{8,15}$/), text: text(3, 640) }).strict(), req.body);
     return reply.code(201).send(svc.fromSms(b));
   });
 
   app.post('/v1/public/integrite/reports/svi', async (req, reply) => {
-    gatewayGuard(req, process.env.SVI_GATEWAY_SECRET, 'x-mosolo-signature');
+    gatewayGuard(req, ctx.integrations.value('SVI_GATEWAY_SECRET'), 'x-mosolo-signature', '', inboundRecorder(ctx, 'integrite-svi'));
     const b = parse(z.object({
       callerNumber: z.string().trim().regex(/^\+?[0-9]{8,15}$/).optional(),
       digits: z.array(z.string().regex(/^[0-9]$/)).min(1).max(4),

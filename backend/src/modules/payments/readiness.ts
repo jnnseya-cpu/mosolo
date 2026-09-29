@@ -6,7 +6,9 @@
  * serveur, opérateurs, alias de règlement (coffre), disjoncteur, hypothèses à confirmer avec le prestataire.
  */
 import type { AppContext } from '../../context.js';
-import { PROVIDER_ASSUMPTIONS } from './connectors/a-confirmer.js';
+import { CONFIRMED_SOURCE, PROVIDER_ASSUMPTIONS, PROVIDER_CONFIRMED } from './connectors/a-confirmer.js';
+import type { BitriPayPlatformStatus } from './connectors/bitripay.js';
+import { RETURN_PATH } from './connectors/registry.js';
 import type { CircuitSnapshot } from './connectors/http-client.js';
 import { CONNECTOR_IDS, type ConnectorId } from './connectors/types.js';
 
@@ -47,7 +49,7 @@ function count<T>(items: T[], key: (x: T) => string): { key: string; count: numb
   return [...m.entries()].map(([k, c]) => ({ key: k, count: c })).sort((a, b) => b.count - a.count);
 }
 
-export function buildReadiness(ctx: AppContext, env: Record<string, string | undefined> = process.env) {
+export function buildReadiness(ctx: AppContext, env: Record<string, string | undefined> = ctx.integrations.connectorEnv()) {
   const base = publicBaseUrl(env);
   const p = ctx.payments;
   const providers = CONNECTOR_IDS.map((id) => {
@@ -71,7 +73,7 @@ export function buildReadiness(ctx: AppContext, env: Record<string, string | und
       mode: connector?.mode ?? null,
       modeLabel: connector ? MODE_LABEL[connector.mode] : 'Non enregistré',
       // Noms et présence SEULEMENT (jamais une valeur, même masquée, pour les secrets).
-      variables: variables.map((v) => ({ name: v.name, present: v.present, secret: v.secret, requiredForReal: v.requiredForReal, role: v.role })),
+      variables: variables.map((v) => ({ name: v.name, present: v.present, secret: v.secret, requiredForReal: v.requiredForReal, role: v.role, source: v.source ?? (v.present ? 'ENVIRONNEMENT' : 'ABSENTE') })),
       missingForReal: variables.filter((v) => v.requiredForReal && !v.present).map((v) => v.name),
       webhookUrl: webhookUrlFor(base.value, id),
       webhookUrlReady: base.valid,
@@ -98,6 +100,16 @@ export function buildReadiness(ctx: AppContext, env: Record<string, string | und
       ordersByStatus: count(orders, (o) => o.status),
       suspense: p.providerSuspense.find((x) => x.provider === id).length,
       assumptions: PROVIDER_ASSUMPTIONS[id],
+      // Points tranchés par la documentation publique (29/09/2026) : conservés et affichés avec leur source.
+      confirmed: PROVIDER_CONFIRMED[id],
+      confirmedSource: CONFIRMED_SOURCE,
+      // Page de retour MOSOLO après la page de paiement du prestataire (commodité ; l'état réel est lu dans MOSOLO).
+      returnUrl: `${base.value ?? 'https://<domaine>'}${RETURN_PATH}`,
+      // BitriPay : dernier état de fonctionnement lu à GET /status (normal, gardien, dégradé).
+      platformStatus: (connector as unknown as { lastPlatformStatus?: BitriPayPlatformStatus | null } | undefined)?.lastPlatformStatus ?? null,
+      resolutionCheck: connector?.confirmsWithResolution ?? false,
+      // Erreur de configuration signalée par le prestataire (ex. scope_denied : clé sans la portée requise).
+      configurationIssue: (connector as unknown as { configurationIssue?: () => unknown } | undefined)?.configurationIssue?.() ?? null,
     };
   });
   return {
@@ -105,6 +117,9 @@ export function buildReadiness(ctx: AppContext, env: Record<string, string | und
     demoMode: ctx.connectors.demoMode,
     publicUrl: base,
     providers,
+    // Reconstruction à chaud refusée (console « Clés et raccordements ») : message sans valeur ; connecteurs précédents en service.
+    configError: ctx.connectors.configError,
+    reloads: ctx.connectors.reloads,
     doctrine: [
       'Aucune valeur secrète n’est jamais affichée : seuls les noms des variables et leur présence.',
       'Quittance provisoire seulement après webhook signé ET confirmation serveur à serveur de l’état de l’intention ; quittance définitive au rapprochement avec le relevé du compte public.',

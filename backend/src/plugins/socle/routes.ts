@@ -51,6 +51,9 @@ const SECRET_FIELDS_BY_REPO: Record<string, string[]> = {
   // Paquets d'extraction massive (chiffrés) et défis WebAuthn : jamais recopiés dans un export.
   'ext.socle.bulk.requests': ['sealed'],
   'ext.socle.passkeys.webauthnChallenges': ['challenge'],
+  // « Clés et raccordements » (29/09/2026) : valeurs chiffrées de la console, jamais recopiées dans un export.
+  'integrations.values': ['blob'],
+  'integrations.proposals': ['blob'],
 };
 export function redactExportRows(rows: SnapshotRow[]): { rows: SnapshotRow[]; redacted: string[] } {
   const redacted = new Set<string>();

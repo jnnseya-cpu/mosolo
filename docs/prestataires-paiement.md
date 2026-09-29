@@ -262,3 +262,123 @@ disjoncteur, configuration partielle).
 - Revenir à l'adresse du webhook de test dans la console du prestataire.
 - Les références déjà émises restent tracées ; un paiement arrivé après la bascule sur une intention de production est
   refusé ou mis en suspens, jamais perdu (rapprochement avec le relevé).
+
+---
+
+## 9. Alignement sur la documentation réelle des prestataires et aller-retour de paiement (29/09/2026)
+
+Le maître d'ouvrage a fourni la documentation publique de KODA et de BitriPay. Les connecteurs ont été alignés **par
+ajout** : les points tranchés sont passés dans `PROVIDER_CONFIRMED` (`connectors/a-confirmer.ts`), avec la source et
+l'hypothèse antérieure ; les points encore ouverts restent « À CONFIRMER AVEC LE PRESTATAIRE ». Les deux listes sont
+affichées dans l'écran « état de raccordement ».
+
+### 9.1 KODA
+
+| Point | Désormais |
+|---|---|
+| URL, clés | `https://kodajnn.com/v1` pour le bac à sable et le réel ; `sk_test_…` / `sk_live_…` ; `Authorization: Bearer` (ou `X-API-Key`, non utilisé). Clé `pk_…` (write:intents) refusée côté serveur et jamais envoyée au navigateur ; clé `rk_…` (lecture seule) refusée. |
+| « Tester la connexion » | `GET /ping` — prouve la joignabilité **et la validité de la clé** (l'ancien essai `GET /openapi.json` ne prouvait que la joignabilité). |
+| Intention | `POST /intents {amount (unités mineures : CDF sans décimale, USD en cents), currency, operators[], metadata{order_id, payment_reference…}, success_url}` → `{intent_id, client_secret, checkout_url}`. Le `client_secret` n'est ni conservé ni exposé ; `GET /checkout/{id}?cs=` n'est pas utilisé. |
+| Retour navigateur | `success_url = MOSOLO_PUBLIC_URL + /paiement/retour?ref=<référence>` ; `KODA_SUCCESS_URL`, si elle est fournie, reste prioritaire (comportement antérieur conservé). `KODA_SUCCESS_URL` n'est plus obligatoire quand `MOSOLO_PUBLIC_URL` est définie. |
+| Limitation de débit | HTTP 429 + `Retry-After` : une interrogation d'état est rejouée après le délai demandé (attente au plus 5 s — **par défaut, à confirmer par le maître d'ouvrage**) ; une création d'intention n'est jamais rejouée : 503 `PROVIDER_RATE_LIMITED` + `Retry-After` au payeur, aucun ordre enregistré. |
+| Bac à sable | `TEST-OK-25000` (vérifié aussitôt), `TEST-LATE-90` (vérifié après 90 s, `payment.verified.late` : accepté comme tout webhook signé et vérifié serveur à serveur), `TEST-REPLAY` (`code_already_used` : versé comme pièce de dossier, aucune quittance), `TEST-SUFFIX` (`msisdn_suffix_mismatch` ⇒ défi : pièce de dossier). |
+| Autres points d'appel | `POST /intents/{id}/cancel`, `POST /intents/{id}/verify` (pièce de dossier ; la référence est transmise dans `reference`), `GET /receipts`, `GET /usage`, `GET /billing/balance` (disponibles, non utilisés). |
+
+### 9.2 BitriPay
+
+| Point | Désormais |
+|---|---|
+| URL, clés | `https://api.bitripay.com/v1` (page développeur BitriPay, confirmée le 29/09/2026) pour `sk_test_…` (bac à sable) et `sk_live_…` (rails réels) ; variantes documentées par l'OpenAPI : `https://www.bitripay.com/api/v1`, `https://www.bitripay.com/v1` (`BITRIPAY_BASE_URL`). |
+| « Tester la connexion » | `GET /status` (état : normal, gardien, dégradé). Mode dégradé ⇒ essai en échec **explicite** (« mode dégradé »), état affiché à côté du disjoncteur. Si une clé Ed25519 est épinglée, elle est en plus comparée à `GET /keys`. |
+| Intention | Voir § 9.4 (OpenAPI) : `amount_minor`, `currency`, `rails[]`, `reference`, `purpose_code`, `success_url` / `cancel_url` (page de retour MOSOLO), `Idempotency-Key` = référence MOSOLO → `checkout_url`, `qr_payload`, `client_secret` (non conservé). `BITRIPAY_RETURN_URL_FIELD` (ancien paramétrage) ajoute seulement un champ supplémentaire. |
+| Confirmation | Après `GET /payment_intents/{id}` = payé, **`GET /payment_resolution` est exigé** : `CONFIRMED` ⇒ quittance provisoire ; `PENDING` ⇒ 409 (à renvoyer) ; `AMBIGUOUS` ⇒ attente prestataire (exception de rapprochement, revue manuelle), 409, **jamais de quittance** ; `NOT_FOUND` ⇒ 422, suspens, alerte critique. `BITRIPAY_RESOLUTION_CHECK=false` désactive ce contrôle supplémentaire. |
+| Événements | `payment_intent.succeeded`, `payment_intent.ambiguous_hold` (attente, jamais de quittance), échecs ; livraison « au moins une fois » : dédoublonnage par identifiant d'événement (en place). |
+| Bac à sable | `+243000000501` réussit, `+243000000404` échoue, `+243000000408` ambigu, `+243000000500` délai puis succès, `+243000000503` prestataire indisponible (503 + `Retry-After`, rien de mémorisé), numéros finissant par `0000` refusés. |
+
+### 9.3 Aller-retour MOSOLO → page du prestataire → MOSOLO
+
+1. Le contribuable choisit « Payer » avec BitriPay ou KODA : MOSOLO crée l'intention (clé `sk_` côté serveur) et le
+   navigateur est conduit vers `checkout_url` (https seulement ; un lien « nouvel onglet » reste proposé).
+2. Le payeur paie sur la page du prestataire, qui le renvoie vers `/paiement/retour?ref=<référence>`.
+3. La page de retour **n'interprète aucun paramètre** hormis la référence : elle lit `GET /v1/payment-orders/{ref}/status`
+   (réservé à qui peut lire l'obligation) et s'actualise d'elle-même jusqu'à un état final : « En attente de
+   confirmation », « En attente — vérification manuelle », « Confirmé — quittance provisoire » (puis définitive au
+   rapprochement), « Échec / annulé ». Liens vers l'obligation (`/espace?obligation=<id>`) et Mon espace.
+4. La quittance provisoire n'est émise qu'après le webhook signé **et** la vérification serveur à serveur (inchangé).
+
+### 9.4 BitriPay — OpenAPI 3.1 version 2026-09-01 (prime sur les hypothèses antérieures)
+
+Résumé des faits : [`docs/sources/BitriPay_OpenAPI_2026-09-01_resume.md`](sources/BitriPay_OpenAPI_2026-09-01_resume.md).
+
+- **URL** : défaut `https://api.bitripay.com/v1` (page développeur BitriPay, clés de test et réelles sur la même URL) ;
+  les serveurs de l'OpenAPI (`https://www.bitripay.com/api/v1`, `https://www.bitripay.com/v1`) restent des variantes
+  documentées, configurables par `BITRIPAY_BASE_URL`.
+- **Parcours confirmé** : intention → redirection vers `checkout_url` (ou affichage de `qr_payload`) → traitement de
+  `payment_intent.succeeded` et `payment_intent.settled` après vérification des **deux** signatures (HMAC `whsec_` et
+  Ed25519 de la plateforme, `GET /v1/keys`). En production déclarée avec une clé réelle, `BITRIPAY_ED25519_REQUIRED`
+  vaut `true` par défaut : le démarrage est refusé sans `BITRIPAY_ED25519_PUBLIC_KEY` épinglée.
+- **Corps de `POST /payment_intents`** : `amount_minor`, `currency`, `rails[]` (valeurs de `BITRIPAY_ALLOWED_OPERATORS`,
+  identifiants à confirmer), `capture_method: automatic`, `reference` (= référence MOSOLO), `description`, `purpose_code`
+  (`TAX` par défaut, `GOVERNMENT_FEE` pour les droits administratifs et redevances de service — **par défaut, à
+  confirmer**), `expires_in_minutes` (échéance de la référence), `metadata` (ordre, obligation), `success_url` et
+  `cancel_url` (page de retour MOSOLO), `qr` (canal QR). **Jamais** `splits` ni `application_fee_minor` : la recette
+  publique va au compte du coffre ; toute répartition se fait dans le grand livre de MOSOLO par règle approuvée.
+- **Idempotence** : `Idempotency-Key` obligatoire sur tout POST qui engage de l'argent ; rejeu ⇒ même objet ;
+  réutilisation avec un autre corps ⇒ 409 `idempotency_key_reused` (BP-2005) ; clés valables 24 h.
+- **Confirmation** : `GET /payment_resolution?reference=&amount_minor=&currency=` (portée `verifications:write`).
+- **Signatures** : `BitriPay-Signature: t=…,v1=…` (HMAC de `<t>.<corps brut>`) et `BitriPay-Signature-Ed25519: keyId,t,sig`
+  (clé de la plateforme à `GET /keys`, épinglée ; contenu signé supposé `<t>.<corps brut>` — à confirmer).
+  Renvois : 10 s, 30 s, 2 min, 10 min, 30 min, puis toutes les 2 h pendant 24 h.
+- **Événements** : `failed` / `cancelled` / `expired` ferment l'ordre ; `disputed` alerte le Trésor (aucune mesure
+  automatique) ; `created` / `requires_action` / `processing` / `authorised` et objets annexes journalisés ; `ping` ⇒ 200.
+- **Erreurs** `{error:{code, bp, message, details}}` : `guardian_halt` (BP-3006), `degraded_mode` (BP-4005),
+  `connector_unavailable` / `rail_unavailable` (BP-4002), `rate_limited` (BP-6005) ⇒ disjoncteur et 503 + `Retry-After` ;
+  `scope_denied` ⇒ erreur de configuration affichée dans l'écran de raccordement.
+- **Clés** : `sk_live_` / `sk_test_`, ou clé restreinte `rk_` avec au minimum `payment_intents:write`,
+  `payment_intents:read`, `verifications:write` (facultatives : `webhooks:manage`, `events:read`) ; `pk_` jamais côté serveur.
+
+Tests : `backend/test/paiement-aller-retour.test.ts` ; simulateur local aux formes réelles :
+`backend/test/simulateur-prestataires.ts`.
+
+---
+
+## 10. Console « Clés et raccordements » (super-administrateur, deux personnes) (29/09/2026)
+
+En plus des variables d'environnement (§ 4, toujours valables et **prioritaires**), le super-administrateur peut
+définir ou faire tourner les clés et secrets depuis l'écran **Clés et raccordements** (`/plateforme/cles`).
+
+- **Qui** : R26 propose ; une personne **distincte**, R26 ou responsable sécurité R28, approuve ou rejette. Aucun autre
+  rôle n'y a accès (403), et l'entrée de menu est absente pour le Gouverneur, le directeur de cabinet, le secrétaire
+  exécutif et les ministres.
+- **Écriture seule** : la valeur saisie n'est jamais réaffichée, pas même masquée ; l'écran montre le nom, le rôle, la
+  présence, la **source active** (environnement / console / absente), la version, qui a proposé et approuvé.
+- **Chiffrement** : AES-256-GCM, vecteur aléatoire par valeur, nom de la variable lié en données authentifiées, clé
+  maîtresse `MOSOLO_CONFIG_MASTER_KEY` (32 octets, hexadécimal ou base64 ; **environnement seulement**, par exemple
+  Secret Manager). Sans clé maîtresse, la console **refuse toute écriture** (message clair). En démonstration sans clé :
+  clé éphémère, valeurs illisibles après redémarrage (signalé). Une clé maîtresse changée rend les valeurs « illisibles »
+  (à ressaisir) : elles ne sont jamais appliquées.
+- **Contrôles de format** (sans jamais citer la valeur) : `sk_test_…` / `sk_live_…` (au moins 16 caractères après le
+  préfixe), `pk_…` et `rk_…` refusées, `whsec_…` pour BitriPay, secrets d'au moins 16 caractères, URL https, valeurs
+  de démonstration refusées ; en production déclarée (`NODE_ENV=production`), une clé `sk_test_…` est refusée
+  (**par défaut, à confirmer**). Les clés internes du socle (base de données, audit, quittances, jetons…) et les
+  trousseaux de rappels lus au démarrage ne sont que **affichés** (présence) : « environnement seulement ».
+- **Prise en compte sans redéploiement** : connecteurs BitriPay / KODA reconstruits à la lecture suivante (une
+  configuration incomplète est signalée sans valeur et ne remplace pas les connecteurs en service) ; secrets des
+  passerelles SMS, SVI et WhatsApp relus à chaque requête ; clé d'un fournisseur de canal de communication ⇒ canal
+  raccordé à sa file sortante.
+- **Webhooks** : pour chaque webhook entrant (BitriPay, KODA, rappels signés, SMS, SVI, WhatsApp), URL exacte
+  construite depuis `MOSOLO_PUBLIC_URL` (bouton « Copier »), signature attendue, variable du secret et sa source,
+  dernière réception et résultat de la vérification. Le secret de signature se définit comme toute autre valeur.
+- **Tester** : appel réel inoffensif pour BitriPay (`GET /status`) et KODA (`GET /ping`) ; ailleurs, validation de
+  configuration seule (présence et format), **dite comme telle** dans le résultat.
+- **Audit** : `integration.config.proposed | approved | rejected | refused | tested` — qui, quand, quelle variable,
+  jamais la valeur. Persistance par la couche existante (`integrations.values`, `integrations.proposals`) ; les blocs
+  chiffrés sont exclus des exports massifs.
+- **Règle de résolution** : la variable d'environnement prévaut ; la valeur de la console ne s'applique qu'en son
+  absence — **par défaut, à confirmer par le maître d'ouvrage** (autre choix possible : la console prévaut, pour
+  permettre une rotation d'urgence sans toucher à l'hébergement).
+- **Noms proposés (à confirmer)** : `MOSOLO_AI_PROVIDER_URL`, `MOSOLO_AI_PROVIDER_KEY`, `MOSOLO_MAPS_API_KEY`,
+  `MOSOLO_MDM_API_URL`, `MOSOLO_MDM_API_KEY`, `MOSOLO_NIF_API_URL`, `MOSOLO_NIF_API_KEY` — conservés pour le raccordement,
+  aucun module ne les lit encore.
+
+Tests : `backend/test/cles-raccordements.test.ts`.

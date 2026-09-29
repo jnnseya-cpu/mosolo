@@ -8,13 +8,26 @@
  *
  * Hypothèses [À VÉRIFIER sur /v1/openapi.json] : forme exacte du corps des webhooks (parseur tolérant ci-dessous),
  * absence d'horodatage signé (anti-rejeu par identifiant d'événement), prise en charge de l'en-tête Idempotency-Key,
- * préfixe des clés de test, corps de POST /intents/{id}/verify.
+ * corps de POST /intents/{id}/verify.
+ *
+ * Documentation publique fournie par le maître d'ouvrage (29/09/2026) — désormais CONFIRMÉ : même URL
+ * https://kodajnn.com/v1 pour le bac à sable et le réel, clés de test `sk_test_…` ; authentification
+ * `Authorization: Bearer sk_…` (ou `X-API-Key`) ; GET /ping vérifie une clé (« Tester la connexion ») ; POST /intents
+ * {amount (entier, unités mineures : CDF sans décimale, USD en cents), currency, operators[], metadata{order_id},
+ * success_url, expiry} → {intent_id, client_secret, checkout_url} ; GET /intents/{id} (état) ; POST /intents/{id}/cancel ;
+ * POST /intents/{id}/verify ; GET /checkout/{id}?cs= (lecture côté payeur par client_secret — jamais utilisé par
+ * MOSOLO : le client_secret n'est ni conservé ni exposé) ; GET /receipts, /usage, /billing/balance ; limitation de
+ * débit HTTP 429 + Retry-After ; portées des clés (pk_ : write:intents seulement — jamais dans le navigateur de MOSOLO ;
+ * rk_ : lecture seule) ; références magiques du bac à sable TEST-OK-25000 (vérifié aussitôt), TEST-LATE-90 (vérifié
+ * après 90 s, `payment.verified.late`), TEST-REPLAY (`code_already_used`), TEST-SUFFIX (`msisdn_suffix_mismatch` ⇒
+ * défi). « Le retour navigateur est une commodité, jamais la source de vérité » : quittance seulement après webhook
+ * signé ET interrogation serveur à serveur (inchangé).
  */
 import { hmacSha256Hex, randomSecret, safeEqualHex, sha256Hex } from '../../../core/crypto.js';
-import { ProviderHttpClient, type CircuitOptions, type CircuitSnapshot, type FetchLike, type HttpLogger } from './http-client.js';
+import { ProviderHttpClient, ProviderHttpError, type CircuitOptions, type CircuitSnapshot, type FetchLike, type HttpLogger } from './http-client.js';
 import { fromMinorUnits, parseMinorInput, toMinorUnits, toSafeJsonInteger, type ExponentTable } from './minor-units.js';
 import {
-  classifyIntentStatus, headerValue, maskSecret, modeFromKey, pick, pickString, pickTimestamp, WebhookPayloadError, WebhookVerificationError,
+  classifyIntentStatus, ConnectorConfigError, headerValue, maskSecret, modeFromKey, pick, pickString, pickTimestamp, WebhookPayloadError, WebhookVerificationError,
   type ConnectorMode, type CreatedIntent, type HeaderBag, type IntentRequest, type NormalizedProviderEvent, type PaymentConnector,
   type ConnectionTestResult, type ProviderIntentStatus, type VerificationEvidenceInput, type VerificationEvidenceResult, type VerifiedWebhook,
 } from './types.js';
@@ -29,8 +42,23 @@ export const KODA_SUCCESS_EVENTS = ['payment.verified', 'payment.verified.late']
 export const KODA_STATUS_SUCCEEDED = ['verified', 'paid', 'succeeded', 'completed'] as const;
 export const KODA_STATUS_FAILED = ['failed', 'canceled', 'cancelled', 'expired'] as const;
 export const KODA_STATUS_PENDING = ['pending', 'created', 'processing', 'requires_payment'] as const;
-/** Point d'appel de « Tester la connexion » : spécification publiée /v1/openapi.json (lecture seule, sans effet). */
-export const KODA_PING_PATH = '/openapi.json';
+/** Ancien point d'appel de « Tester la connexion » (joignabilité seulement, jusqu'au 28/09/2026) — conservé pour mémoire. */
+export const KODA_OPENAPI_PATH = '/openapi.json';
+/** « Tester la connexion » : GET /ping, documenté par KODA pour vérifier une clé (lecture seule, sans effet). */
+export const KODA_PING_PATH = '/ping';
+/** Références magiques du bac à sable KODA (clé sk_test_…), saisies par le payeur sur la page de paiement. */
+export const KODA_SANDBOX_REFERENCES = {
+  'TEST-OK-25000': 'Vérifié immédiatement (payment.verified)',
+  'TEST-LATE-90': 'Vérifié après 90 s (payment.verified.late)',
+  'TEST-REPLAY': 'Code déjà utilisé (code_already_used) : aucun paiement',
+  'TEST-SUFFIX': 'Suffixe du numéro différent (msisdn_suffix_mismatch) : défi au payeur',
+} as const;
+
+/** Codes d'erreur métier documentés (bac à sable) et leur sens pour l'agent qui instruit un dossier. */
+export const KODA_ERROR_MEANINGS: Record<string, string> = {
+  code_already_used: 'Référence de l’opérateur déjà utilisée pour un autre paiement (rejeu) : aucun paiement reconnu, aucune quittance.',
+  msisdn_suffix_mismatch: 'Les derniers chiffres du numéro du payeur ne correspondent pas : KODA pose un défi au payeur ; aucune quittance tant que le paiement n’est pas vérifié.',
+};
 
 export interface KodaConfig {
   apiKey?: string;
@@ -50,6 +78,8 @@ export interface ConnectorRuntime {
   maxRetries?: number;
   /** Disjoncteur (défauts : DEFAULT_CIRCUIT, à confirmer). */
   circuit?: Partial<CircuitOptions>;
+  /** Attente maximale sur Retry-After (HTTP 429 ; défaut : DEFAULT_MAX_RETRY_AFTER_WAIT_MS, à confirmer). */
+  maxRetryAfterWaitMs?: number;
   /** Horloge du disjoncteur et des mesures (tests). */
   now?: () => number;
 }
@@ -61,6 +91,7 @@ export function runtimeHttpOptions(runtime: ConnectorRuntime) {
     ...(runtime.sleep ? { sleep: runtime.sleep } : {}), ...(runtime.timeoutMs ? { timeoutMs: runtime.timeoutMs } : {}),
     ...(runtime.maxRetries !== undefined ? { maxRetries: runtime.maxRetries } : {}),
     ...(runtime.circuit ? { circuit: runtime.circuit } : {}), ...(runtime.now ? { now: runtime.now } : {}),
+    ...(runtime.maxRetryAfterWaitMs !== undefined ? { maxRetryAfterWaitMs: runtime.maxRetryAfterWaitMs } : {}),
   };
 }
 
@@ -79,6 +110,8 @@ export class KodaConnector implements PaymentConnector {
   private readonly http?: ProviderHttpClient;
 
   constructor(private readonly config: KodaConfig, runtime: ConnectorRuntime = {}) {
+    // Clé en lecture seule (rk_…) : ne peut pas créer d'intention (portées documentées) — refusée au démarrage.
+    if (config.apiKey && /^rk_/.test(config.apiKey)) throw new ConnectorConfigError('KODA : clé en lecture seule rk_… refusée — une clé secrète sk_… est requise côté serveur.');
     this.mode = modeFromKey('KODA', config.apiKey);
     this.settlementAccountAlias = config.settlementAccountAlias;
     this.exponents = config.exponents ?? KODA_EXPONENTS;
@@ -128,9 +161,9 @@ export class KodaConnector implements PaymentConnector {
   }
 
   /**
-   * « Tester la connexion » : KODA ne documente (à notre connaissance) aucun point d'appel « ping » ou « solde ». En mode
-   * réel : GET /v1/openapi.json (spécification publiée, lecture seule) — prouve la joignabilité, PAS la validité de la
-   * clé. En bac à sable local : validation à blanc de la configuration, sans aucun appel.
+   * « Tester la connexion » : en mode réel, GET /ping — documenté par KODA pour VÉRIFIER UNE CLÉ (lecture seule, sans
+   * effet) : prouve la joignabilité ET la validité de la clé. En bac à sable local : validation à blanc, sans appel.
+   * (Jusqu'au 28/09/2026, faute de documentation, l'essai lisait GET /v1/openapi.json : joignabilité seulement.)
    */
   async testConnection(): Promise<ConnectionTestResult> {
     const checks = [
@@ -149,17 +182,20 @@ export class KodaConnector implements PaymentConnector {
     }
     const started = Date.now();
     try {
-      await this.http.request('GET', KODA_PING_PATH);
+      await this.http.request<unknown>('GET', KODA_PING_PATH);
       return {
         kind: 'APPEL_REEL', ok: checks.every((c) => c.ok), endpoint: `GET ${KODA_PING_PATH}`, httpStatus: 200, durationMs: Date.now() - started, checks,
-        proves: 'Appel réel inoffensif (lecture de la spécification publiée) : prouve la joignabilité de l’API KODA. Ne prouve PAS la validité de la clé API (point d’appel authentifié sans effet non documenté — À CONFIRMER AVEC LE PRESTATAIRE).',
-        detail: 'API KODA joignable.',
+        proves: 'Appel réel inoffensif (GET /ping, documenté pour vérifier une clé) : prouve la joignabilité de l’API KODA et la validité de la clé API. Ne prouve pas la réception des webhooks (à vérifier par un paiement de test).',
+        detail: 'API KODA joignable, clé acceptée.',
       };
     } catch (e) {
       const status = e instanceof Error && 'providerStatus' in e ? (e as { providerStatus?: number }).providerStatus : undefined;
       return {
         kind: 'APPEL_REEL', ok: false, endpoint: `GET ${KODA_PING_PATH}`, ...(status !== undefined ? { httpStatus: status } : {}), durationMs: Date.now() - started, checks,
-        proves: 'Appel réel inoffensif en échec : l’API KODA n’a pas répondu correctement.', detail: e instanceof Error ? e.message : 'erreur',
+        proves: status === 401 || status === 403
+          ? 'Appel réel inoffensif en échec : clé refusée par KODA (révoquée, mauvaise portée ou mauvais environnement).'
+          : 'Appel réel inoffensif en échec : l’API KODA n’a pas répondu correctement.',
+        detail: e instanceof Error ? e.message : 'erreur',
       };
     }
   }
@@ -183,7 +219,8 @@ export class KodaConnector implements PaymentConnector {
           payment_reference: req.paymentReference, order_id: req.paymentOrderId, obligation_id: req.obligationId,
           description: `KINSHASA MOSOLO ${req.paymentReference}`,
         },
-        success_url: `${this.config.successUrl}${sep}reference=${encodeURIComponent(req.paymentReference)}`,
+        // Retour navigateur vers MOSOLO (page « /paiement/retour ») : commodité seulement, jamais une preuve de paiement.
+        success_url: `${this.config.successUrl}${sep}ref=${encodeURIComponent(req.paymentReference)}`,
       },
     });
     const providerIntentId = pickString(res, 'intent_id', 'id', 'intent.id');
@@ -260,11 +297,26 @@ export class KodaConnector implements PaymentConnector {
     if (!this.http) {
       return { sandbox: true, providerResult: { status: 'SANDBOX_NON_VERIFIE', note: 'Bac à sable local : aucun appel au prestataire.' } };
     }
-    // Corps [À VÉRIFIER sur /v1/openapi.json] ; la capture elle-même n'est jamais transmise, seule son empreinte.
-    const providerResult = await this.http.request('POST', `/intents/${encodeURIComponent(input.providerIntentId)}/verify`, {
-      body: { ...(input.smsCode ? { sms_code: input.smsCode } : {}), ...(input.screenshotSha256 ? { screenshot_sha256: input.screenshotSha256 } : {}) },
-    });
-    return { sandbox: this.sandbox, providerResult };
+    // Corps [À VÉRIFIER sur /v1/openapi.json] : la référence de l'opérateur (bac à sable : TEST-OK-25000…) est transmise
+    // dans `reference` (et `sms_code`, forme antérieure conservée) ; la capture n'est jamais transmise, seule son empreinte.
+    try {
+      const providerResult = await this.http.request('POST', `/intents/${encodeURIComponent(input.providerIntentId)}/verify`, {
+        body: {
+          ...(input.smsCode ? { reference: input.smsCode, sms_code: input.smsCode } : {}),
+          ...(input.screenshotSha256 ? { screenshot_sha256: input.screenshotSha256 } : {}),
+        },
+      });
+      return { sandbox: this.sandbox, providerResult };
+    } catch (e) {
+      // Refus MÉTIER documenté (code_already_used, msisdn_suffix_mismatch…) : pièce de dossier, sans aucun effet.
+      if (e instanceof ProviderHttpError && e.providerStatus !== undefined && e.providerStatus >= 400 && e.providerStatus < 500 && e.providerStatus !== 429 && e.providerErrorCode) {
+        return {
+          sandbox: this.sandbox,
+          providerResult: { refused: true, httpStatus: e.providerStatus, code: e.providerErrorCode, meaning: KODA_ERROR_MEANINGS[e.providerErrorCode] ?? 'Refus du prestataire (code non documenté ici).' },
+        };
+      }
+      throw e;
+    }
   }
 
   describe(): Record<string, unknown> {

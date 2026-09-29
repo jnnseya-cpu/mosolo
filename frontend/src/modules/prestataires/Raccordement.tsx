@@ -6,6 +6,7 @@
  * « Tester la connexion » : appel réel inoffensif documenté, sinon validation à blanc — le résultat dit lequel.
  */
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
 import { api, describeError } from '../../lib/api';
@@ -15,7 +16,8 @@ import { ErrorState, Loading } from '../../components/States';
 import { ChartGrid, StackedBarViz, fmtNombre } from '../../components/viz';
 import type { UIKey } from '../../lib/i18n';
 
-interface Variable { name: string; present: boolean; secret: boolean; requiredForReal: boolean; role: string }
+interface Variable { name: string; present: boolean; secret: boolean; requiredForReal: boolean; role: string; source?: 'ENVIRONNEMENT' | 'CONSOLE' | 'ABSENTE' }
+interface PlatformStatus { at: string; state: string | null; level: 'NORMAL' | 'DEGRADE' | 'INCONNU'; guardian: boolean; detail: string | null }
 interface Reception { receivedAt: string; verification: string; httpStatus: number; outcome: string; eventTypes: string[] }
 interface StatusQuery { at: string; outcome: string; rawStatus: string | null; detail: string; providerIntentId: string; paymentReference?: string }
 interface Check { label: string; ok: boolean; detail?: string }
@@ -28,8 +30,13 @@ interface ProviderReadiness {
   lastWebhook: Reception | null; lastStatusQuery: StatusQuery | null; lastConnectionTest: ConnTest | null; circuit: Circuit | null;
   webhooksByResult: { key: string; count: number }[]; ordersByStatus: { key: string; count: number }[]; suspense: number;
   assumptions: { sujet: string; hypothese: string }[];
+  /** Points tranchés par la documentation publique du prestataire (29/09/2026). */
+  confirmed?: { sujet: string; fait: string; hypotheseAnterieure?: string }[]; confirmedSource?: string;
+  returnUrl?: string; platformStatus?: PlatformStatus | null; resolutionCheck?: boolean;
+  /** Erreur de configuration signalée par le prestataire (ex. scope_denied : clé sans la portée requise). */
+  configurationIssue?: { at: string; method: string; path: string; code: string; bp: string | null } | null;
 }
-interface Readiness { generatedAt: string; demoMode: boolean; publicUrl: { value: string | null; valid: boolean; note: string }; providers: ProviderReadiness[]; doctrine: string[] }
+interface Readiness { generatedAt: string; demoMode: boolean; publicUrl: { value: string | null; valid: boolean; note: string }; providers: ProviderReadiness[]; doctrine: string[]; configError?: string | null }
 
 const CONFIG_TONE: Record<string, 'good' | 'info' | 'warning' | 'critical' | 'neutral'> = { COMPLETE: 'good', BAC_A_SABLE_DEMO: 'info', PARTIELLE: 'warning', NON_CONFIGURE: 'neutral' };
 const MODE_TONE: Record<string, 'good' | 'info' | 'warning'> = { LIVE: 'good', TEST: 'info', SANDBOX_LOCAL: 'warning' };
@@ -87,6 +94,8 @@ export function Raccordement() {
         Adresse publique (MOSOLO_PUBLIC_URL) : <span className="mono">{d.publicUrl.value ?? '— absente —'}</span> · {d.publicUrl.note}
       </p>
       {msg && <p className={`notice ${msg.ok ? 'notice-ok' : 'notice-err'}`} role="status">{msg.text}</p>}
+      {d.configError && <p className="notice notice-err" role="alert">Dernière configuration non appliquée (console « Clés et raccordements ») : {d.configError} Les connecteurs précédents restent en service.</p>}
+      {user?.roles.some((r) => r === 'R26' || r === 'R28') && <p className="small"><Link to="/plateforme/cles">Définir ou faire tourner les clés et secrets (console « Clés et raccordements », deux personnes)</Link></p>}
 
       <ChartGrid min={300} label="Raccordement en graphiques">
         <StackedBarViz title="Webhooks reçus par résultat" subtitle="acceptés, refusés à la vérification ou après contrôle" emptyText="Aucun webhook reçu" mode="absolute" orientation="horizontal" format={(v) => fmtNombre(v, 0)} example={d.demoMode}
@@ -118,6 +127,10 @@ export function Raccordement() {
                 </dd>
               </div>
               <div><dt>Signature attendue</dt><dd className="small">{p.signatureScheme}</dd></div>
+              {p.returnUrl && <div><dt>Page de retour du payeur</dt><dd><span className="mono pr-url">{p.returnUrl}?ref=…</span> <span className="small muted">— commodité ; l’état réel est lu dans MOSOLO</span></dd></div>}
+              {p.id === 'bitripay' && <div><dt>Confirmation supplémentaire</dt><dd className="small">{p.resolutionCheck ? 'GET /payment_resolution exigé avant quittance (CONFIRMED)' : 'Désactivée (BITRIPAY_RESOLUTION_CHECK=false)'}</dd></div>}
+              {p.configurationIssue && <div><dt>Configuration refusée par le prestataire</dt><dd><StatusBadge tone="critical" label={`${p.configurationIssue.code}${p.configurationIssue.bp ? ` (${p.configurationIssue.bp})` : ''}`} /> <span className="small muted">{p.configurationIssue.method} {p.configurationIssue.path} · {fmtDate(p.configurationIssue.at, true)} — {p.configurationIssue.code === 'scope_denied' ? 'clé sans la portée requise : à corriger chez le prestataire' : 'clé refusée'}</span></dd></div>}
+              {p.platformStatus && <div><dt>État de la plateforme (GET /status)</dt><dd><StatusBadge tone={p.platformStatus.level === 'NORMAL' ? 'good' : p.platformStatus.level === 'DEGRADE' ? 'warning' : 'neutral'} label={p.platformStatus.level === 'NORMAL' ? 'Fonctionnement normal' : p.platformStatus.level === 'DEGRADE' ? `Mode dégradé${p.platformStatus.guardian ? ' (gardien)' : ''}` : 'État illisible'} /> <span className="small muted">{p.platformStatus.state ?? ''} · {fmtDate(p.platformStatus.at, true)}</span></dd></div>}
               <div><dt>URL de l’API</dt><dd className="mono small">{p.baseUrl ?? '—'}</dd></div>
               <div><dt>Opérateurs</dt><dd>{p.operators.length ? p.operators.join(', ') : '—'}</dd></div>
               <div>
@@ -146,7 +159,7 @@ export function Raccordement() {
                 {p.variables.map((v) => (
                   <li key={v.name} className="list-row">
                     <div className="min0"><p className="row-title mono small">{v.name}{v.secret ? ' (secret)' : ''}</p><p className="small muted">{v.role}</p></div>
-                    <StatusBadge tone={v.present ? 'good' : v.requiredForReal ? 'warning' : 'neutral'} label={v.present ? 'Présente' : v.requiredForReal ? 'Manquante (requise en réel)' : 'Absente (défaut)'} />
+                    <StatusBadge tone={v.present ? 'good' : v.requiredForReal ? 'warning' : 'neutral'} label={v.present ? (v.source === 'CONSOLE' ? 'Présente (console)' : 'Présente') : v.requiredForReal ? 'Manquante (requise en réel)' : 'Absente (défaut)'} />
                   </li>
                 ))}
               </ul>
@@ -167,6 +180,13 @@ export function Raccordement() {
               )}
             </div>
 
+            {p.confirmed && p.confirmed.length > 0 && (
+              <details className="pr-vars">
+                <summary>Points confirmés par la documentation du prestataire ({p.confirmed.length})</summary>
+                <ul className="small">{p.confirmed.map((c) => <li key={c.sujet}><strong>{c.sujet}</strong> — {c.fait}{c.hypotheseAnterieure ? <span className="muted"> (hypothèse antérieure : {c.hypotheseAnterieure})</span> : null}</li>)}</ul>
+                {p.confirmedSource && <p className="small muted">Source : {p.confirmedSource}.</p>}
+              </details>
+            )}
             <details className="pr-vars">
               <summary>Points à confirmer avec le prestataire ({p.assumptions.length})</summary>
               <ul className="small">{p.assumptions.map((a) => <li key={a.sujet}><strong>{a.sujet}</strong> — {a.hypothese} <em>À CONFIRMER AVEC LE PRESTATAIRE.</em></li>)}</ul>

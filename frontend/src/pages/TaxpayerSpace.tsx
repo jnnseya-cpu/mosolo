@@ -1,5 +1,5 @@
-import { useMemo, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { isCurrencyCode, CURRENCIES, formatMoney, type CurrencyCode, type MapStatusColor } from '@mosolo/shared';
 import { useApp } from '../context';
 import { useApi } from '../hooks/useApi';
@@ -115,6 +115,15 @@ function Explanation({ id }: { id: string }) {
   );
 }
 
+/** Conduit le navigateur vers la page de paiement hébergée du prestataire (même onglet). */
+function versPageDePaiement(url: string) {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:') return; // jamais vers une adresse non chiffrée
+    window.location.assign(u.toString());
+  } catch { /* adresse invalide : le lien reste affiché */ }
+}
+
 function PayFlow({ ob }: { ob: Obligation }) {
   const { tr, currency, fmtDate } = useApp();
   const [channel, setChannel] = useState('MOBILE_MONEY');
@@ -135,6 +144,9 @@ function PayFlow({ ob }: { ob: Obligation }) {
         method: 'POST', idempotencyKey: idem, body: { channel, ...(display ? { displayCurrency: display } : {}), ...(providerAllowed && provider ? { provider } : {}) },
       });
       setOrder({ createdAt: new Date(serverNow()).toISOString(), ...r });
+      // Page de paiement hébergée du prestataire (29/09/2026) : « Payer » y conduit directement le navigateur ; la clé
+      // secrète du prestataire reste côté serveur. Le retour se fait sur /paiement/retour, qui lit l'état RÉEL dans MOSOLO.
+      if (r.provider && r.checkoutUrl) versPageDePaiement(r.checkoutUrl);
     } catch (x) {
       // Une référence active existe déjà : on la réaffiche au lieu d'une erreur
       if (x instanceof ApiError && x.code === 'ACTIVE_PAYMENT_REFERENCE_EXISTS' && x.body) {
@@ -207,8 +219,12 @@ function PayFlow({ ob }: { ob: Obligation }) {
                 <div className="min0 stack-sm">
                   <p className="small">Intention <span className="mono">{order.providerIntentId}</span></p>
                   {order.checkoutUrl
-                    ? <a className="btn btn-primary btn-sm" href={order.checkoutUrl} target="_blank" rel="noreferrer">Ouvrir la page de paiement <Icon name="external" size={14} /></a>
+                    ? <>
+                        <button type="button" className="btn btn-primary btn-sm" onClick={() => versPageDePaiement(order.checkoutUrl!)}>Payer sur la page {order.provider === 'bitripay' ? 'BitriPay' : 'KODA'} <Icon name="external" size={14} /></button>
+                        <a className="btn btn-ghost btn-sm" href={order.checkoutUrl} target="_blank" rel="noreferrer">Ouvrir la page de paiement dans un nouvel onglet <Icon name="external" size={14} /></a>
+                      </>
                     : <p className="small muted">Bac à sable local : aucune page réelle n’est ouverte ; la confirmation signée est simulée par le Trésor.</p>}
+                  <Link className="btn-link small" to={`/paiement/retour?ref=${encodeURIComponent(order.paymentReference)}`}>Suivre l’état réel de ce paiement</Link>
                   <p className="small muted">La quittance n’est émise qu’à réception de la confirmation signée du prestataire — jamais sur capture d’écran ou SMS.</p>
                 </div>
               </div>
@@ -289,6 +305,14 @@ export default function TaxpayerSpace() {
   const [panel, setPanel] = useState<Panel>(null);
   const p = q.data;
   const obligations = useMemo(() => p?.obligations ?? [], [p]);
+  // Lien direct vers une obligation (ex. depuis la page de retour de paiement) : « /espace?obligation=<id> ».
+  const [params] = useSearchParams();
+  const wanted = params.get('obligation');
+  useEffect(() => {
+    if (!wanted) return;
+    const ob = obligations.find((o) => o.id === wanted);
+    if (ob) setPanel({ kind: 'explain', ob });
+  }, [wanted, obligations]);
 
   return (
     <div className="page">

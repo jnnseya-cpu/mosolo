@@ -26,8 +26,11 @@ import { postStatement } from './helpers.js';
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Simulateur HTTP local des deux prestataires (formes documentées ; hypothèses « à confirmer » isolées ici).
+// Mis à jour le 29/09/2026 sur la documentation publique fournie par le maître d'ouvrage : BitriPay GET /status et
+// GET /payment_resolution, KODA GET /ping et POST /intents/{id}/verify (références magiques du bac à sable), HTTP 429
+// avec Retry-After.
 // ---------------------------------------------------------------------------------------------------------------------
-interface Intent { id: string; amount: number; currency: string; status: string; metadata: Record<string, string> }
+interface Intent { id: string; amount: number; currency: string; status: string; metadata: Record<string, string>; resolution?: string; body?: Record<string, unknown> }
 interface Call { method: string; path: string; headers: Record<string, string | string[] | undefined>; body: string }
 
 const mock = {
@@ -40,16 +43,30 @@ const mock = {
   /** Statut d'intention renvoyé par GET (sinon celui de l'intention). */
   statusOverride: '' as string,
   amountOverride: 0,
+  /** État de fonctionnement BitriPay renvoyé par GET /status. */
+  bitriState: 'operational' as string,
+  /** Limitation de débit : les `count` prochains appels dont le chemin contient `match` reçoivent 429 + Retry-After. */
+  rateLimit: null as null | { match: string; count: number; retryAfter: string },
   reset() {
     this.calls = []; this.intents.clear(); this.delayMs = 0; this.forceStatus = 0; this.statusOverride = ''; this.amountOverride = 0;
+    this.bitriState = 'operational'; this.rateLimit = null;
   },
 };
 let server: Server;
 let base = '';
 
-function send(res: ServerResponse, status: number, body: unknown) {
-  res.writeHead(status, { 'content-type': 'application/json' });
+function send(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) {
+  res.writeHead(status, { 'content-type': 'application/json', ...headers });
   res.end(JSON.stringify(body));
+}
+
+/** Résolution BitriPay (GET /payment_resolution) déduite de l'état de l'intention simulée. */
+function resolutionOf(i: Intent | undefined): string {
+  if (!i) return 'NOT_FOUND';
+  if (i.resolution) return i.resolution;
+  if (i.status === 'succeeded' || i.status === 'settled') return 'CONFIRMED';
+  if (i.status === 'ambiguous_hold') return 'AMBIGUOUS';
+  return 'PENDING';
 }
 
 async function handle(req: IncomingMessage, res: ServerResponse) {
@@ -59,6 +76,10 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
   mock.calls.push({ method: req.method ?? 'GET', path, headers: req.headers, body });
   if (mock.delayMs) await new Promise((r) => setTimeout(r, mock.delayMs));
   if (mock.forceStatus) return send(res, mock.forceStatus, { error: { code: 'unavailable' } });
+  if (mock.rateLimit && mock.rateLimit.count > 0 && path.includes(mock.rateLimit.match)) {
+    mock.rateLimit.count -= 1;
+    return send(res, 429, { error: { code: 'rate_limited' } }, { 'retry-after': mock.rateLimit.retryAfter });
+  }
   const view = (i: Intent, provider: 'bitripay' | 'koda') => {
     const status = mock.statusOverride || i.status;
     const amount = mock.amountOverride || i.amount;
@@ -70,7 +91,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
   if (req.method === 'POST' && path === '/bitripay/v1/payment_intents') {
     const b = JSON.parse(body) as { amount_minor: number; currency: string; metadata: Record<string, string> };
     const id = `pi_${randomUUID().slice(0, 12)}`;
-    mock.intents.set(id, { id, amount: b.amount_minor, currency: b.currency, status: 'requires_payment_method', metadata: b.metadata });
+    mock.intents.set(id, { id, amount: b.amount_minor, currency: b.currency, status: 'requires_payment_method', metadata: b.metadata, body: b as unknown as Record<string, unknown> });
     return send(res, 200, { id, checkout_url: `https://pay.bitripay.test/${id}`, qr_payload: `BTRP|${id}`, client_secret: 'cs_ne_doit_pas_fuiter' });
   }
   let m = /^\/bitripay\/v1\/payment_intents\/([^/]+)$/.exec(path);
@@ -79,11 +100,22 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     return i ? send(res, 200, view(i, 'bitripay')) : send(res, 404, { error: { code: 'resource_missing' } });
   }
   if (req.method === 'GET' && path === '/bitripay/v1/keys') return send(res, 200, { keys: [{ kid: 'k1', alg: 'Ed25519', public_key: 'AAAA' }] });
+  // GET /status : état de fonctionnement (operational, guardian, degraded).
+  if (req.method === 'GET' && path === '/bitripay/v1/status') {
+    return send(res, 200, { operating_state: mock.bitriState, guardian: mock.bitriState === 'guardian', degraded: mock.bitriState === 'degraded', message: mock.bitriState === 'operational' ? null : 'Opérateur orange_cd lent' });
+  }
+  // GET /payment_resolution : CONFIRMED / PENDING / AMBIGUOUS / NOT_FOUND.
+  if (req.method === 'GET' && path.startsWith('/bitripay/v1/payment_resolution')) {
+    // OpenAPI 2026-09-01 : recherche par référence MOSOLO (paramètre reference).
+    const q = new URL(path, 'http://x').searchParams;
+    const found = [...mock.intents.values()].find((i) => i.metadata?.payment_reference === q.get('reference'));
+    return send(res, 200, { object: 'payment_resolution', reference: q.get('reference'), resolution: resolutionOf(found) });
+  }
   // --- KODA ---
   if (req.method === 'POST' && path === '/koda/v1/intents') {
     const b = JSON.parse(body) as { amount: number; currency: string; metadata: Record<string, string> };
     const id = `int_${randomUUID().slice(0, 12)}`;
-    mock.intents.set(id, { id, amount: b.amount, currency: b.currency, status: 'pending', metadata: b.metadata });
+    mock.intents.set(id, { id, amount: b.amount, currency: b.currency, status: 'pending', metadata: b.metadata, body: b as unknown as Record<string, unknown> });
     return send(res, 200, { intent_id: id, client_secret: 'cs_ne_doit_pas_fuiter', checkout_url: `https://kodajnn.test/c/${id}` });
   }
   m = /^\/koda\/v1\/intents\/([^/]+)$/.exec(path);
@@ -92,6 +124,22 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     return i ? send(res, 200, view(i, 'koda')) : send(res, 404, { error: 'not_found' });
   }
   if (req.method === 'GET' && path === '/koda/v1/openapi.json') return send(res, 200, { openapi: '3.1.0', info: { title: 'KODA (simulateur)' } });
+  // GET /ping : vérifie la clé (401 si elle est inconnue du simulateur).
+  if (req.method === 'GET' && path === '/koda/v1/ping') {
+    return req.headers.authorization === `Bearer ${KODA_KEY}` ? send(res, 200, { ok: true, livemode: false }) : send(res, 401, { error: { code: 'invalid_api_key' } });
+  }
+  // POST /intents/{id}/verify : références magiques du bac à sable.
+  m = /^\/koda\/v1\/intents\/([^/]+)\/verify$/.exec(path);
+  if (req.method === 'POST' && m) {
+    const i = mock.intents.get(decodeURIComponent(m[1]!));
+    if (!i) return send(res, 404, { error: { code: 'not_found' } });
+    const ref = (JSON.parse(body || '{}') as { reference?: string }).reference;
+    if (ref === 'TEST-OK-25000') { i.status = 'verified'; return send(res, 200, { status: 'verified' }); }
+    if (ref === 'TEST-LATE-90') return send(res, 200, { status: 'pending', verify_after_seconds: 90 });
+    if (ref === 'TEST-REPLAY') return send(res, 409, { error: { code: 'code_already_used' } });
+    if (ref === 'TEST-SUFFIX') return send(res, 200, { status: 'challenge', reason: 'msisdn_suffix_mismatch' });
+    return send(res, 422, { error: { code: 'reference_unknown' } });
+  }
   return send(res, 404, { error: 'route inconnue du simulateur' });
 }
 
@@ -280,8 +328,10 @@ for (const provider of ['bitripay', 'koda'] as const) {
       const ok = await post(env, early); // le prestataire renvoie le même événement
       expect(ok.statusCode).toBe(200);
       expect(ok.json().results[0]).toMatchObject({ outcome: 'PROCESSED', status: 'CONFIRME', receiptStatus: 'PROVISOIRE' });
-      const gets = mock.calls.filter((c) => c.method === 'GET' && c.path.includes(order.providerIntentId));
-      expect(gets.length).toBe(2); // une interrogation serveur à serveur par présentation
+      const gets = mock.calls.filter((c) => c.method === 'GET' && (c.path.includes(order.providerIntentId) || c.path.includes(encodeURIComponent(order.paymentReference))));
+      // Une interrogation d'état par présentation ; BitriPay : + GET /payment_resolution quand l'état est « payé » (29/09/2026).
+      expect(gets.length).toBe(provider === 'bitripay' ? 3 : 2);
+      if (provider === 'bitripay') expect(gets.at(-1)!.path).toMatch(/^\/bitripay\/v1\/payment_resolution\?reference=/);
       const stored = env.app.ctx.payments.byReference(order.paymentReference)!;
       expect(stored).toMatchObject({ status: 'CONFIRME', serverToServerCheck: { method: 'INTERROGATION_STATUT' }, beneficiaryAlias: DEMO.dgipkAlias });
       expect(env.app.ctx.payments.statusQueries.all().map((q) => q.outcome)).toEqual(['EN_ATTENTE', 'CONFIRME']);
@@ -362,7 +412,7 @@ for (const provider of ['bitripay', 'koda'] as const) {
       // Événement signé d'une intention payée chez le prestataire mais dont la référence MOSOLO n'existe pas.
       const ghost = { providerIntentId: order.providerIntentId, paymentReference: 'PR-INCO-NNUEX' };
       const intentId = `${provider === 'bitripay' ? 'pi' : 'int'}_fantome`;
-      mock.intents.set(intentId, { id: intentId, amount: 15000, currency: 'USD', status: provider === 'bitripay' ? 'succeeded' : 'verified', metadata: {} });
+      mock.intents.set(intentId, { id: intentId, amount: 15000, currency: 'USD', status: provider === 'bitripay' ? 'succeeded' : 'verified', metadata: { payment_reference: 'PR-INCO-NNUEX' } });
       const ev = payload({ ...ghost, providerIntentId: intentId });
       const r1 = await post(env, ev);
       expect(r1.statusCode).toBe(422);
@@ -563,14 +613,16 @@ describe('Vue « Prestataires de paiement — état de raccordement » et « Tes
     await env.app.close();
   });
 
-  it('Tester la connexion : appel réel inoffensif (BitriPay GET /v1/keys, KODA GET /v1/openapi.json), explicite ; validation à blanc sinon', async () => {
+  // 29/09/2026 : essais alignés sur la documentation publique — BitriPay GET /v1/status (au lieu de GET /v1/keys),
+  // KODA GET /v1/ping (au lieu de GET /v1/openapi.json, qui ne prouvait pas la validité de la clé).
+  it('Tester la connexion : appel réel inoffensif (BitriPay GET /v1/status, KODA GET /v1/ping), explicite ; validation à blanc sinon', async () => {
     const env = await boot();
     expect((await env.req('POST', '/v1/providers/bitripay/test-connection', 'u-contribuable', {})).statusCode).toBe(403);
     const b = (await env.req('POST', '/v1/providers/bitripay/test-connection', 'u-superadmin', {})).json();
-    expect(b).toMatchObject({ kind: 'APPEL_REEL', ok: true, endpoint: 'GET /keys', provider: 'bitripay' });
+    expect(b).toMatchObject({ kind: 'APPEL_REEL', ok: true, endpoint: 'GET /status', provider: 'bitripay' });
     const k = (await env.req('POST', '/v1/providers/koda/test-connection', 'u-rssi', {})).json();
-    expect(k).toMatchObject({ kind: 'APPEL_REEL', ok: true, endpoint: 'GET /openapi.json' });
-    expect(k.proves).toMatch(/Ne prouve PAS la validité de la clé/);
+    expect(k).toMatchObject({ kind: 'APPEL_REEL', ok: true, endpoint: 'GET /ping' });
+    expect(k.proves).toMatch(/validité de la clé API/);
     expect(mock.calls.filter((c) => c.method === 'POST')).toHaveLength(0); // aucun appel engageant de l'argent
     mock.forceStatus = 503;
     const down = (await env.req('POST', '/v1/providers/koda/test-connection', 'u-tresor', {})).json();
