@@ -1613,3 +1613,23 @@ R26 dédié.
 
 Taux affichés sans zéros inutiles (`fmtTaux`) : « 100 % », « 70 % », « 5,21 % » — jamais « 100,000 % » ; jusqu'à trois
 décimales conservées pour qu'un total de 99,999 % ne s'affiche jamais comme 100 %.
+
+## I.40 Accès aux montants sur autorisation préalable de la direction (29/09/2026)
+
+Décision du maître d'ouvrage (suite du § I.38) : le Trésor, le rapprochement, la validation financière, le contrôle
+qualité, l'audit et l'anti-fraude (R11, R15, R17, R18, R22, R23, R24) reçoivent **l'accès complet aux montants dont
+leur travail a besoin**, mais **seulement après l'approbation préalable d'un membre de la direction** (Gouverneur,
+directeur de cabinet, secrétaire exécutif, ministre des Finances — R01, R02, R03, R05 ; jamais Groupe Nseya, bénéficiaire
+d'une part).
+
+- Écran « Accès aux montants (autorisation préalable) » (`/pilotage/acces-montants`) ; API `/v1/acces-montants`
+  (demande, décision, révocation). Module `backend/src/plugins/acces-montants`.
+- Demande : portées (moteur de répartition ; rapport § 37A ; gains, réserve et validations des agents), **motif
+  obligatoire**, mission facultative, durée **7 jours par défaut, 30 au plus — à confirmer par le maître d'ouvrage**.
+- Décision : membre de la direction distinct du demandeur, motif, authentification renforcée ; refus possible ;
+  révocation à tout moment par la direction, renonciation par le demandeur ; expiration automatique.
+- Effet : pendant la durée accordée, les écrans concernés affichent les montants (le moteur ouvre la vue exécutive,
+  l'export et la descente à la transaction) ; **chaque utilisation est journalisée** (`montants.autorisation.utilisee`,
+  avec le motif et l'approbateur). Lecture seulement : aucune écriture financière.
+- Auditeurs : accès aux montants pour une mission, motif journalisé (réponse du maître d'ouvrage). Trésor : accès aux
+  montants de la réserve pour la paie des agents, sur la même autorisation.

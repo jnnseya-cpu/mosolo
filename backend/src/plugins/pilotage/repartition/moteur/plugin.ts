@@ -199,7 +199,7 @@ export const moteurRepartitionPlugin = definePlugin<MoteurRepartitionService>({
     app.get(`${B}/export`, async (req, reply) => {
       const user = requireUser(req);
       const vis = svc.visibility(user);
-      if (vis.kind !== 'GROUPE_NSEYA') authorize(user, 'moteur:export');
+      if (vis.kind !== 'GROUPE_NSEYA' && !(vis.kind === 'EXECUTIF' && vis.autorisation)) authorize(user, 'moteur:export');
       const x = q(req);
       const data = tb.transactions(user, x.beneficiaire ?? 'TOTAL', filtreOf(x), { limit: 500, offset: x.offset ?? 0 });
       svc.ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'moteur.export.financier', resourceType: 'moteur_repartition', resourceId: user.id, details: { beneficiaire: x.beneficiaire ?? 'TOTAL', lignes: data.items.length } });

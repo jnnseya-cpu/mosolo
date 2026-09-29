@@ -48,7 +48,7 @@ export const sanctionsPlugin = definePlugin<SanctionsService>({
     });
     app.get('/v1/agents/earnings', async (req) => {
       const user = requireUser(req);
-      const full = voitTousLesGains(user);
+      const full = voitTousLesGains(user, 'AGENTS');
       const entite = user.roles.some((r) => OVERVIEW_ENTITE.has(r)) ? user.entity : user.entity === 'DGTK' && evaluate(user, 'parking:indicators', { entity: 'DGTK' }) ? 'DGTK' : null;
       if (!full && !entite) throw forbidden('FORBIDDEN', 'Gains des autres agents : réservés au Gouverneur, au cabinet, au secrétariat exécutif, au ministre des Finances et à Groupe Nseya ; une régie voit ses propres agents.');
       ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'agents.earnings.viewed', resourceType: 'commission', resourceId: full ? 'tous' : `entite:${entite}` });

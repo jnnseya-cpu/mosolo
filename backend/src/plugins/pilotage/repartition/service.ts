@@ -388,7 +388,7 @@ export class RepartitionService implements RepartitionGate {
   report(user: User, filter: { period?: string; currency?: string } = {}) {
     authorize(user, 'repartition:read');
     const out = this.fullReport(user, filter);
-    if (voitTousLesGains(user)) return { ...out, montantsMasques: false };
+    if (voitTousLesGains(user, 'REPARTITION')) return { ...out, montantsMasques: false };
     // Décision du 29/09/2026 : seuls R01, R02, R03, R05 et R38 voient ce que gagnent les autres. Les autres lecteurs
     // (validation financière, publication, Trésor, rapprochement, audit, anti-fraude) gardent la clé, l'automatisation
     // et les contrôles à 100 %, sans aucun montant par bénéficiaire.

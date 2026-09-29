@@ -133,6 +133,7 @@ const LECTURES: Record<string, string[]> = {
   '/pilotage/reductions': ['/v1/pilotage/reductions'],
   '/pilotage/repartition': ['/v1/pilotage/repartition', '/v1/pilotage/repartition/cle'],
   '/pilotage/moteur-repartition': ['/v1/pilotage/moteur-repartition/tableau/executif', '/v1/pilotage/moteur-repartition/tableau/entite', '/v1/pilotage/moteur-repartition/tableau/groupe-nseya', '/v1/pilotage/moteur-repartition/tableau/sous-traitant', '/v1/pilotage/moteur-repartition/tableau/agent', '/v1/pilotage/moteur-repartition/regles'],
+  '/pilotage/acces-montants': ['/v1/acces-montants'],
   '/executive/finance': ['/v1/pilotage/moteur-repartition/tableau/executif'],
   '/groupe-nseya/command-centre': ['/v1/pilotage/moteur-repartition/tableau/groupe-nseya', '/v1/pilotage/moteur-repartition/tableau/executif'],
   '/platform-admin/finance/allocation-rules': ['/v1/pilotage/moteur-repartition/regles', '/v1/pilotage/moteur-repartition/configuration'],

@@ -35,6 +35,7 @@ import { registerVaultRoutes } from './modules/vault/routes.js';
 import { seed } from './seed.js';
 import { applyBootstrap, loadBootstrapFile, type BootstrapDocument, type BootstrapReport } from './persistence/bootstrap.js';
 import { DEFAULT_PLUGINS } from './plugins/index.js';
+import { registerAutorisationMontantsResolver } from './core/policy.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -117,6 +118,8 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
   ctx.demoData = seeded;
   // Exemples complémentaires (modules sectoriels…) : seulement en démonstration et sur demande du point d'entrée.
   ctx.demoExamples = seeded && opts.demoExamples === true;
+  // Autorisations d'accès aux montants : réinitialisées à chaque application (le module « acces-montants » les rebranche).
+  registerAutorisationMontantsResolver(null);
   for (const p of plugins) ctx.ext[p.name] = p.create(ctx);
   // Un amorçage réel et des données fictives ne se mélangent jamais.
   const bootstrap = seeded ? undefined : opts.bootstrap ?? (process.env.MOSOLO_BOOTSTRAP_FILE?.trim() ? loadBootstrapFile(process.env.MOSOLO_BOOTSTRAP_FILE.trim()) : undefined);

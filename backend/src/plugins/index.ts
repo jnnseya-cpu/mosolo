@@ -33,6 +33,7 @@ import { opportunitesPlugin } from './opportunites/plugin.js';
 import { iaModelesPlugin } from './ia/modeles.js';
 import { preuvesPlugin } from './preuves/plugin.js';
 import { sanctionsPlugin } from './sanctions/plugin.js';
+import { accesMontantsPlugin } from './acces-montants/plugin.js';
 import { soclePlugin } from './socle/plugin.js';
 import { chainePlugin } from './chaine/plugin.js';
 import { juridiquePlugin } from './juridique/plugin.js';
@@ -97,6 +98,8 @@ export const DEFAULT_PLUGINS: MosoloPlugin<unknown>[] = [
   iaModelesPlugin,
   preuvesPlugin,
   sanctionsPlugin,
+  // Accès aux montants sur autorisation préalable de la direction (décision du 29/09/2026).
+  accesMontantsPlugin,
   chainePlugin,
   juridiquePlugin,
   integriteDetecteursPlugin,

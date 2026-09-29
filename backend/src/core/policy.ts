@@ -241,8 +241,26 @@ export function evaluate(principal: Principal, action: AnyAction, resource: Reso
  * voient que leurs propres gains (ou ceux de leur périmètre : régie, ombrelle de sous-traitant), côté serveur.
  */
 export const ROLES_VISION_GAINS_COMPLETE: readonly RoleCode[] = ['R01', 'R02', 'R03', 'R05', 'R38'];
-export function voitTousLesGains(user: Pick<User, 'roles'>): boolean {
-  return user.roles.some((r) => ROLES_VISION_GAINS_COMPLETE.includes(r));
+
+/**
+ * Accès aux montants SUR AUTORISATION PRÉALABLE (décision du 29/09/2026) : Trésor, rapprochement, validation
+ * financière, contrôle qualité, audit et anti-fraude voient les montants nécessaires à leur travail seulement après
+ * l'approbation d'un membre de la direction (R01, R02, R03, R05), sur motif déclaré, pour une durée limitée, chaque
+ * utilisation étant journalisée. Portées : moteur de répartition, rapport § 37A, gains et réserve des agents.
+ */
+export type PorteeMontants = 'MOTEUR' | 'REPARTITION' | 'AGENTS';
+type ResolveurAutorisation = (userId: string, portee: PorteeMontants) => string | null;
+let resolveurAutorisation: ResolveurAutorisation | null = null;
+export function registerAutorisationMontantsResolver(fn: ResolveurAutorisation | null): void {
+  resolveurAutorisation = fn;
+}
+/** Identifiant de l'autorisation active couvrant la portée (et journalise son utilisation), sinon null. */
+export function autorisationMontants(user: Pick<User, 'id'>, portee: PorteeMontants): string | null {
+  return resolveurAutorisation ? resolveurAutorisation(user.id, portee) : null;
+}
+export function voitTousLesGains(user: Pick<User, 'roles'> & Partial<Pick<User, 'id'>>, portee?: PorteeMontants): boolean {
+  if (user.roles.some((r) => ROLES_VISION_GAINS_COMPLETE.includes(r))) return true;
+  return !!(portee && user.id && autorisationMontants({ id: user.id }, portee));
 }
 
 /** Le rôle peut-il, en principe, effectuer l'action (quel que soit le périmètre) ? */

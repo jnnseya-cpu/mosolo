@@ -25,7 +25,7 @@ import type { User } from '../../../../core/auth.js';
 import { DAY_MS, kinshasaDate } from '../../../../core/clock.js';
 import { canonicalJson } from '../../../../core/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../../../core/errors.js';
-import { assertDistinctPerson, authorize, evaluate } from '../../../../core/policy.js';
+import { assertDistinctPerson, authorize, autorisationMontants, evaluate } from '../../../../core/policy.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../../../core/repository.js';
 import type { PaymentOrder } from '../../../../modules/payments/service.js';
 import { maskAccount } from '../../../../modules/vault/service.js';
@@ -254,7 +254,7 @@ export interface FicheAgent {
 }
 
 export type Visibility =
-  | { kind: 'EXECUTIF'; personal: boolean }
+  | { kind: 'EXECUTIF'; personal: boolean; autorisation?: string }
   | { kind: 'GROUPE_NSEYA' }
   | { kind: 'ENTITE'; entities: Set<string> }
   | { kind: 'SOUS_TRAITANT'; subcontractorIds: string[]; agentIds: Set<string> }
@@ -901,6 +901,9 @@ export class MoteurRepartitionService {
 
   visibility(user: User): Visibility {
     if (user.roles.some((r) => (ROLES_EXECUTIF as readonly string[]).includes(r))) return { kind: 'EXECUTIF', personal: user.roles.some((r) => ROLES_DONNEES_PERSONNELLES.includes(r)) };
+    // Trésor, audit, anti-fraude… : vue d'ensemble seulement sur autorisation préalable de la direction (journalisée).
+    const autorisation = user.roles.includes(ROLE_GROUPE_NSEYA) ? null : autorisationMontants(user, 'MOTEUR');
+    if (autorisation) return { kind: 'EXECUTIF', personal: user.roles.some((r) => ROLES_DONNEES_PERSONNELLES.includes(r)), autorisation };
     if (user.roles.includes(ROLE_GROUPE_NSEYA)) return { kind: 'GROUPE_NSEYA' };
     if (user.roles.some((r) => ['R04', 'R06', 'R07', 'R08'].includes(r))) {
       const acces = this.acces();

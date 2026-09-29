@@ -100,3 +100,7 @@ données de démonstration.
   compte « Groupe Nseya — super-administrateur » (R26 + R38) ; incompatibilité R38/R26 levée. Ce compte ne vérifie,
   n'approuve, n'active ni ne paie jamais (circuits à personnes distinctes maintenus). Taux affichés « 100 % », jamais
   « 100,000 % » (annexe I, § I.39).
+- **Accès aux montants sur autorisation (29/09/2026)** : Trésor, rapprochement, validation financière, contrôle qualité,
+  audit et anti-fraude voient les montants nécessaires à leur travail après **approbation préalable d'un membre de la
+  direction** (R01, R02, R03, R05), distinct du demandeur, sur motif journalisé, pour une durée limitée (7 jours par
+  défaut, 30 au plus — à confirmer) ; chaque utilisation est journalisée (annexe I, § I.40).

@@ -104,7 +104,7 @@ export class CommissionValidations {
 
   /** File des demandes (superviseurs) ; chaque demande indique si la personne qui consulte peut décider. */
   queue(user: User, status?: string) {
-    const full = voitTousLesGains(user) || evaluate(user, 'sanctions:commission.validations.read', {}) !== false;
+    const full = voitTousLesGains(user, 'AGENTS') || evaluate(user, 'sanctions:commission.validations.read', {}) !== false;
     if (!full && !evaluate(user, 'sanctions:commission.validate', {})) {
       throw forbidden('FORBIDDEN', 'File de validation réservée aux superviseurs et aux régies (leurs agents) et au pilotage.');
     }

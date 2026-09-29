@@ -18,6 +18,7 @@ import { api, describeError } from '../../lib/api';
 import { plotValue } from '../../lib/money';
 import { BarChartViz, DonutViz, fmtCompact, fmtTaux, KpiGrid, KpiTile } from '../../components/viz';
 import { monthLabel, Section, useFmt } from './shared';
+import { usePorteesAutorisees } from './AccesMontants';
 import './pilotage.css';
 
 // ————————————————————————— contrat (extraits utilisés par l'écran)
@@ -471,7 +472,9 @@ export default function MoteurRepartition() {
   const { user } = useApp();
   const roles = user?.roles ?? [];
   const location = useLocation();
-  const visible = TABS.filter((t) => has(roles, ...t.roles));
+  // Autorisation préalable de la direction (portée « MOTEUR ») : ouvre les vues d'ensemble pour la durée accordée.
+  const autorisees = usePorteesAutorisees();
+  const visible = TABS.filter((t) => has(roles, ...t.roles) || (autorisees.includes('MOTEUR') && (t.key === 'executif' || t.key === 'nseya' || t.key === 'demandes')));
   const initial = PATH_TAB[location.pathname] && visible.some((t) => t.key === PATH_TAB[location.pathname]) ? PATH_TAB[location.pathname]! : visible[0]?.key ?? 'regles';
   const [chosen, setTab] = useState<Tab | null>(null);
   // Onglet choisi s'il est visible pour le compte, sinon l'onglet de l'adresse (chargement asynchrone du compte).

@@ -397,7 +397,7 @@ export class AgentReserveService {
     // Décision du 29/09/2026 : seuls R01, R02, R03, R05 et R38 voient les gains de tous les agents. Régie et
     // superviseurs (R06, R07, R09) : les agents de leur entité seulement. Contrôle qualité, Trésor, audit et
     // anti-fraude (R11, R17, R22, R23, R24) : points et notes pour le contrôle, SANS aucun montant.
-    const full = voitTousLesGains(user);
+    const full = voitTousLesGains(user, 'AGENTS');
     const regie = !full && user.roles.some((r) => ROLES_REGIE_RESERVE.includes(r));
     const agentIds = regie ? new Set(this.ctx.users.all().filter((u) => u.entity === user.entity).map((u) => u.id)) : undefined;
     const raw = this.compute(m, agentIds ? { agentIds } : undefined);
