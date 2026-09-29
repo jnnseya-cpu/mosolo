@@ -1571,3 +1571,7 @@ route, règle, écran ni donnée de démonstration existants n'est retiré. Modu
 - **Décision du 29/09/2026** : frais de gestion de Groupe Nseya fixés à **5 %** des coûts technologiques qu'il finance
   (règle KIN-DEFAULT V1, mode `FRAIS_GESTION_NSEYA`), distincts de ses 10 % ; sans effet sur les coûts financés par le
   Gouvernorat.
+- **Décisions du 29/09/2026 (suite)** : guichet bancaire (canal BANK) compté comme espèces pour la part de Groupe Nseya
+  (droit « à payer » réglé par le Gouvernorat) ; cadence de règlement hebdomadaire pour le Gouvernorat et Groupe Nseya,
+  mensuelle pour les ministères et les opérations de terrain ; délai de grâce de 10 jours avant « en retard » ; table
+  module → ministère propriétaire confirmée.

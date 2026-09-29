@@ -85,3 +85,7 @@ données de démonstration.
   cinq entrées de son poste de décision.
 - **Frais de gestion de Groupe Nseya (29/09/2026)** : 5 % sur les coûts technologiques qu'il finance (IA, hébergement,
   SMS, API…), distincts de ses 10 % ; aucun frais sur les coûts financés par le Gouvernorat.
+- **Moteur de répartition — suite (29/09/2026)** : un paiement au **guichet bancaire** compte comme espèces pour la part
+  de Groupe Nseya (droit « à payer » que le Gouvernorat règle) ; règlements du Gouvernorat et de Groupe Nseya **tous les
+  7 jours**, des ministères et des opérations de terrain **mensuellement** ; un montant passe « en retard » après
+  **10 jours** ; table « module → ministère propriétaire » confirmée telle quelle.

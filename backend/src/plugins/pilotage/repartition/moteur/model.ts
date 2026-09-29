@@ -35,9 +35,12 @@ export const POOL_AGENT_SOUS_TRAITANCE_PCT = '7';
 /** Pool — agent sous l'ombrelle d'un sous-traitant agréé : part du sous-traitant (3 points). PAR DÉFAUT. */
 export const POOL_SOUS_TRAITANT_SOUS_TRAITANCE_PCT = '3';
 /** Canaux considérés comme ESPÈCES (points de paiement agréés, module 66). PAR DÉFAUT — le guichet bancaire est à arbitrer. */
-export const CANAUX_ESPECES: readonly string[] = ['AGENT_POINT'];
+// Décision du maître d'ouvrage (29/09/2026) : un paiement au guichet bancaire (canal BANK) compte comme espèces pour la
+// part de Groupe Nseya — droit « à payer » que le Gouvernorat règle (jamais montré comme réglé d'avance).
+export const CANAUX_ESPECES: readonly string[] = ['AGENT_POINT', 'BANK'];
 /** Délai de grâce (jours) au-delà de la cadence de règlement avant qu'un droit soit « en retard ». PAR DÉFAUT. */
-export const DELAI_GRACE_REGLEMENT_JOURS = 5;
+/** Délai de grâce avant « en retard » : 10 jours (décision du maître d'ouvrage du 29/09/2026 ; 5 jours auparavant). */
+export const DELAI_GRACE_REGLEMENT_JOURS = 10;
 
 export const PARAMETRES_MOTEUR_NOTE = 'Par défaut — à confirmer par le maître d’ouvrage (spécification du 29/09/2026).';
 
@@ -266,7 +269,9 @@ export function slicesOf(v: Pick<AllocationRuleVersion, 'beneficiaries'>): Slice
 
 /** Version seed V1 : constantes du § 37A reprises TELLES QUELLES (proposées, par défaut, acte requis). */
 export function defaultBeneficiaries(): BeneficiaireRegle[] {
-  const mode: Record<SliceCode, ModeReglement> = { GROUPE_NSEYA: 'T_PLUS_1', TUTELLE: 'MENSUEL', AGENTS_SOUS_TRAITANTS: 'MENSUEL', GOUVERNEMENT_PROVINCIAL: 'T_PLUS_1' };
+  // Décision du maître d'ouvrage (29/09/2026) : Gouvernorat et Groupe Nseya tous les 7 jours ; ministères et opérations de
+  // terrain mensuellement (T+1 reste disponible comme mode).
+  const mode: Record<SliceCode, ModeReglement> = { GROUPE_NSEYA: 'HEBDOMADAIRE', TUTELLE: 'MENSUEL', AGENTS_SOUS_TRAITANTS: 'MENSUEL', GOUVERNEMENT_PROVINCIAL: 'HEBDOMADAIRE' };
   const label: Record<SliceCode, string> = {
     GROUPE_NSEYA: 'Groupe Nseya (investisseur et opérateur)', TUTELLE: 'Ministère / département responsable du module',
     AGENTS_SOUS_TRAITANTS: 'Pool des opérations de terrain (agents et sous-traitants)', GOUVERNEMENT_PROVINCIAL: 'Gouvernorat de Kinshasa (Gouvernement provincial)',
