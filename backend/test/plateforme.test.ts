@@ -173,8 +173,10 @@ describe('Module 53 — administration de la plateforme', () => {
   });
 
   it('aucune lecture métier libre ni modification financière pour les administrateurs techniques', async () => {
-    const { req } = await full();
-    for (const u of ['integrite-u-ingenieur', 'u-superadmin']) {
+    const { req, ctx } = await full();
+    // Administrateur technique R26 seul (u-superadmin porte aussi R38 — Groupe Nseya — depuis le 29/09/2026).
+    ctx.users.add({ id: 'test-admin-technique', name: 'Administrateur technique (test, R26 seul)', roles: ['R26'], entity: 'PLATEFORME' });
+    for (const u of ['integrite-u-ingenieur', 'test-admin-technique']) {
       expect((await req('GET', '/v1/decision/commandement', u)).statusCode, u).toBe(403);
       expect((await req('GET', `/v1/taxpayers/${DEMO.taxpayerId}`, u)).statusCode, u).toBe(403);
       expect((await req('POST', '/v1/ledger/entries/ENT-1/reversals', u, { reason: 'Correction par l’exploitation' })).statusCode, u).toBe(403);

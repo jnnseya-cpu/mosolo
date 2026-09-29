@@ -16,7 +16,7 @@ import { DataTable } from '../../components/DataTable';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
 import { api, describeError } from '../../lib/api';
 import { plotValue } from '../../lib/money';
-import { BarChartViz, DonutViz, fmtCompact, KpiGrid, KpiTile } from '../../components/viz';
+import { BarChartViz, DonutViz, fmtCompact, fmtTaux, KpiGrid, KpiTile } from '../../components/viz';
 import { monthLabel, Section, useFmt } from './shared';
 import './pilotage.css';
 
@@ -121,7 +121,7 @@ function Expliquer({ query, onClose }: { query: string; onClose: () => void }) {
             <div key={d.currency}>
               <dl className="kv">
                 <div><dt>Recette éligible</dt><dd>{f.money(d.recetteEligible)}</dd></div>
-                <div><dt>Taux</dt><dd>{d.taux.map((t) => `${t.pct.join(' / ')} % (${t.versionId})`).join(' ; ')}</dd></div>
+                <div><dt>Taux</dt><dd>{d.taux.map((t) => `${t.pct.map((x) => fmtTaux(x)).join(' / ')} (${t.versionId})`).join(' ; ')}</dd></div>
                 <div><dt>Droit calculé</dt><dd><strong>{f.money(d.droitCalcule)}</strong> — {d.formule}</dd></div>
                 <div><dt>Arrondis</dt><dd>{f.money(d.arrondis)}</dd></div>
                 <div><dt>Électronique / espèces</dt><dd>{f.money(d.electronique)} / {f.money(d.especes)}</dd></div>
@@ -154,7 +154,7 @@ function Transactions({ query }: { query: string }) {
         { key: 'd', label: 'Date', render: (r) => r.date.slice(0, 10) },
         { key: 'm', label: 'Module · entité', render: (r) => `${r.module ?? '—'} · ${r.entity}` },
         { key: 'x', label: 'Moyen', render: (r) => (r.methode === 'ESPECES' ? 'Espèces' : 'Électronique') },
-        { key: 'b', label: 'Bénéficiaire', render: (r) => `${r.typeLabel} — ${r.pct} %` },
+        { key: 'b', label: 'Bénéficiaire', render: (r) => `${r.typeLabel} — ${fmtTaux(r.pct)}` },
         { key: 'a', label: 'Droit', num: true, render: (r) => f.money(r.montant) },
         { key: 'e', label: 'État', render: (r) => <StatusBadge tone={STATUT_TONE[r.etat] ?? 'neutral'} label={r.etatLabel} /> },
         { key: 'v', label: 'Version', render: (r) => r.versionId },
@@ -339,8 +339,8 @@ function ReglesView({ roles }: { roles: string[] }) {
         <DataTable caption="Versions de la règle" rows={q.data.items} rowKey={(v) => v.id} columns={[
           { key: 'i', label: 'Version', primary: true, render: (v) => <><strong>{v.id}</strong>{v.parDefaut && <span className="small muted"> (par défaut — à confirmer)</span>}</> },
           { key: 's', label: 'État', render: (v) => <StatusBadge tone={STATUT_TONE[v.status] ?? 'neutral'} label={v.statusLabel} /> },
-          { key: 'b', label: 'Parts', render: (v) => v.beneficiaries.map((b) => `${b.label} ${b.pct} %`).join(' · ') },
-          { key: 't', label: 'Total', num: true, render: (v) => `${v.sum ?? '—'} %` },
+          { key: 'b', label: 'Parts', render: (v) => v.beneficiaries.map((b) => `${b.label} ${fmtTaux(b.pct)}`).join(' · ') },
+          { key: 't', label: 'Total', num: true, render: (v) => fmtTaux(v.sum) },
           { key: 'e', label: 'Effet', render: (v) => `${v.effectiveFrom} → ${v.effectiveUntil ?? '…'}` },
           { key: 'p', label: 'Pool', render: (v) => v.poolModeLabel },
           { key: 'c', label: 'Contrôles', render: (v) => (v.checks.length ? v.checks.map((c) => c.message).join(' ') : 'Conforme') },
@@ -356,7 +356,7 @@ function ReglesView({ roles }: { roles: string[] }) {
         {notice}
       </Section>
       {has(roles, 'R26', 'R05', 'R15') && (
-        <Section title="Proposer une nouvelle version (pourcentages PROPOSÉS, sans effet)" sub="Refus si le total n’est pas exactement 100,000 % ; activation par le circuit seulement">
+        <Section title="Proposer une nouvelle version (pourcentages PROPOSÉS, sans effet)" sub="Refus si le total n’est pas exactement 100 % ; activation par le circuit seulement">
           <form className="form" aria-label="Proposer une version" onSubmit={(e) => {
             e.preventDefault();
             const beneficiaries = v1.beneficiaries.map((b) => ({ code: b.code, label: b.label, pct: p[b.code as keyof typeof p], flow: b.flow, remainder: b.remainder, modeReglement: b.modeReglement }));
@@ -367,7 +367,7 @@ function ReglesView({ roles }: { roles: string[] }) {
                 <div className="field" key={k}><label className="label" htmlFor={`mr-${k}`}>{v1.beneficiaries.find((b) => b.code === k)?.label} (%)</label><input id={`mr-${k}`} inputMode="decimal" value={p[k]} onChange={(e) => setP({ ...p, [k]: e.target.value })} /></div>
               ))}
             </div>
-            <p className="small">Total : <strong>{sum.toFixed(3)} %</strong> {sum === 100 ? <StatusBadge tone="good" label="100,000 %" /> : <StatusBadge tone="critical" label="Refusé à la vérification" />}</p>
+            <p className="small">Total : <strong>{fmtTaux(sum)}</strong> {sum === 100 ? <StatusBadge tone="good" label="100 %" /> : <StatusBadge tone="critical" label="Refusé à la vérification" />}</p>
             <div className="field-row">
               <div className="field"><label className="label" htmlFor="mr-eff">Date d’effet</label><input id="mr-eff" type="date" required value={p.effectiveFrom} onChange={(e) => setP({ ...p, effectiveFrom: e.target.value })} /></div>
               <div className="field"><label className="label" htmlFor="mr-pool">Pool de terrain</label><select id="mr-pool" value={p.poolMode} onChange={(e) => setP({ ...p, poolMode: e.target.value })}>{Object.entries(q.data.modesPool).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>

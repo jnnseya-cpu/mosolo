@@ -96,3 +96,7 @@ données de démonstration.
   ministères, départements, Groupe Nseya, Gouvernorat) ; tous les autres ne voient que leurs propres gains (régie :
   ses agents ; sous-traitant : son ombrelle ; agent : lui-même), côté serveur. Trésor, audit et anti-fraude gardent
   leurs circuits sans montant individuel (annexe I, § I.38).
+- **Compte unique Groupe Nseya (29/09/2026)** : Groupe Nseya est aussi le super-administrateur de la plateforme — un seul
+  compte « Groupe Nseya — super-administrateur » (R26 + R38) ; incompatibilité R38/R26 levée. Ce compte ne vérifie,
+  n'approuve, n'active ni ne paie jamais (circuits à personnes distinctes maintenus). Taux affichés « 100 % », jamais
+  « 100,000 % » (annexe I, § I.39).

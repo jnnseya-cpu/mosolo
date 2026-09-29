@@ -106,15 +106,15 @@ describe('§ 29 — critères d’acceptation non négociables (spécification v
 
   it('« visibilité plateforme pour Groupe Nseya, Gouverneur, directeur de cabinet, secrétaire exécutif, ministre des Finances »', async () => {
     const { env } = await scenario();
-    for (const u of ['u-groupe-nseya', 'u-gouverneur', 'u-dircab', 'acces-u-sg', 'u-ministre-finances']) {
+    for (const u of ['u-superadmin', 'u-gouverneur', 'u-dircab', 'acces-u-sg', 'u-ministre-finances']) {
       const r = await env.req('GET', `${B}/tableau/executif`, u);
       expect(r.statusCode, u).toBe(200);
       expect(r.json().parDevise[0].cartes[0].montant, u).toEqual(money('450.00'));
     }
     // Groupe Nseya (R38) : lecture de toute la plateforme (journaux d'audit, Trésor, répartition), jamais d'écriture.
-    for (const url of ['/v1/audit/events?limit=5', '/v1/pilotage/repartition', '/v1/tresor/operations']) expect((await env.req('GET', url, 'u-groupe-nseya')).statusCode, url).toBe(200);
-    expect((await env.req('POST', '/v1/pilotage/repartition/automatisation/executer', 'u-groupe-nseya', {})).statusCode).toBe(403);
-    expect((await env.req('POST', `${B}/regles/KIN-DEFAULT-V1/activation`, 'u-groupe-nseya', { approve: true, motif: 'Tentative d’activation (test).' })).statusCode).toBe(403);
+    for (const url of ['/v1/audit/events?limit=5', '/v1/pilotage/repartition', '/v1/tresor/operations']) expect((await env.req('GET', url, 'u-superadmin')).statusCode, url).toBe(200);
+    expect((await env.req('POST', '/v1/pilotage/repartition/automatisation/executer', 'u-superadmin', {})).statusCode).toBe(403);
+    expect((await env.req('POST', `${B}/regles/KIN-DEFAULT-V1/activation`, 'u-superadmin', { approve: true, motif: 'Tentative d’activation (test).' })).statusCode).toBe(403);
     // Un ministre ordinaire n'a pas la vue d'ensemble.
     expect((await env.req('GET', `${B}/tableau/executif`, 'u-ministre-transports')).statusCode).toBe(403);
   });
@@ -157,29 +157,29 @@ describe('§ 29 — critères d’acceptation non négociables (spécification v
 
   it('« Groupe Nseya descend ville → ministère → module → agent → transaction »', async () => {
     const { env, o1 } = await scenario();
-    const ns = (await env.req('GET', `${B}/tableau/groupe-nseya`, 'u-groupe-nseya')).json();
+    const ns = (await env.req('GET', `${B}/tableau/groupe-nseya`, 'u-superadmin')).json();
     const ville = ns.controleVille[0];
     expect(ville.groupes[0]).toMatchObject({ code: 'TOTAL', montant: money('450.00') });
     expect(ville.parEntite.map((e: { key: string }) => e.key)).toEqual(['DGIPK']);
     expect(ville.parModule.map((e: { key: string }) => e.key)).toEqual(['V-propriete']);
     expect(ville.parAgent.map((e: { key: string }) => e.key)).toEqual(['u-agent-st', 'u-agent-terrain']);
-    const txs = (await env.req('GET', `${B}/transactions?agent=u-agent-terrain&entity=DGIPK&module=V-propriete`, 'u-groupe-nseya')).json();
+    const txs = (await env.req('GET', `${B}/transactions?agent=u-agent-terrain&entity=DGIPK&module=V-propriete`, 'u-superadmin')).json();
     expect(txs.donneesPersonnelles).toBe('PSEUDONYMISEES');
-    const detail = (await env.req('GET', `${B}/transactions/${txs.items[0].allocationId}`, 'u-groupe-nseya')).json();
+    const detail = (await env.req('GET', `${B}/transactions/${txs.items[0].allocationId}`, 'u-superadmin')).json();
     expect(detail.repartition).toMatchObject({ complete: true, egalRecette: true });
     // Aucune donnée personnelle sans motif déclaré ; avec motif : visible et journalisée (C42-05).
     const raw = JSON.stringify([ns, txs, detail]);
     for (const s of [DEMO.taxpayerId, o1.paymentReference, 'Mbuyi', 'Kalala', 'taxpayerId']) expect(raw).not.toContain(s);
-    const withMotif = (await env.req('GET', `${B}/transactions/${txs.items[0].allocationId}`, 'u-groupe-nseya', undefined, { 'x-motif-consultation': encodeURIComponent('Contrôle d’un écart de règlement (test)') })).json();
+    const withMotif = (await env.req('GET', `${B}/transactions/${txs.items[0].allocationId}`, 'u-superadmin', undefined, { 'x-motif-consultation': encodeURIComponent('Contrôle d’un écart de règlement (test)') })).json();
     expect(withMotif.transaction.taxpayerId).toBe(DEMO.taxpayerId);
-    expect(env.app.ctx.audit.list({ action: 'moteur.donnees_personnelles.consultees' }).items.at(-1)).toMatchObject({ actor: { id: 'u-groupe-nseya' }, details: { motif: 'Contrôle d’un écart de règlement (test)', motifDeclare: true } });
+    expect(env.app.ctx.audit.list({ action: 'moteur.donnees_personnelles.consultees' }).items.at(-1)).toMatchObject({ actor: { id: 'u-superadmin' }, details: { motif: 'Contrôle d’un écart de règlement (test)', motifDeclare: true } });
     // Le dossier individuel passe par la consultation motivée existante.
     // (hors périmètre : bris de glace à authentification forte, motif et journal — jamais un accès silencieux).
-    const c = await env.req('POST', '/v1/acces/consultations', 'u-groupe-nseya', { taxpayerId: DEMO.taxpayerId, purpose: 'CONTROLE', motif: 'Contrôle financier de la ville (test)' });
+    const c = await env.req('POST', '/v1/acces/consultations', 'u-superadmin', { taxpayerId: DEMO.taxpayerId, purpose: 'CONTROLE', motif: 'Contrôle financier de la ville (test)' });
     expect(c.statusCode, c.body).not.toBe(403);
     expect(c.json().code).toBe('MFA_REQUIRED');
     // Lecture directe d'un dossier de contribuable sans consultation : refusée.
-    expect((await env.req('GET', `/v1/taxpayers/${DEMO.taxpayerId}`, 'u-groupe-nseya')).statusCode).toBe(403);
+    expect((await env.req('GET', `/v1/taxpayers/${DEMO.taxpayerId}`, 'u-superadmin')).statusCode).toBe(403);
   });
 
   it('« espèces et électronique par le même moteur »', async () => {
@@ -237,7 +237,7 @@ describe('§ 29 — critères d’acceptation non négociables (spécification v
     const { env } = await scenario();
     const n = env.svc.ecritures.count();
     for (const m of ['DELETE', 'PUT', 'PATCH']) {
-      for (const url of [`${B}/transactions/AL-x`, `${B}/droits`, `${B}/demandes/DRG-000001`, '/api/entitlements/AL-x']) expect((await env.req(m, url, 'u-groupe-nseya', {})).statusCode).toBe(404);
+      for (const url of [`${B}/transactions/AL-x`, `${B}/droits`, `${B}/demandes/DRG-000001`, '/api/entitlements/AL-x']) expect((await env.req(m, url, 'u-superadmin', {})).statusCode).toBe(404);
     }
     expect(env.svc.ecritures.count()).toBe(n);
     expect(env.svc.verifyChain()).toMatchObject({ valid: true });
@@ -263,14 +263,14 @@ describe('§ 29 — critères d’acceptation non négociables (spécification v
 
   it('« règlement jamais supérieur au restant »', async () => {
     const { env } = await scenario();
-    const over = await env.req('POST', `${B}/demandes`, 'u-groupe-nseya', { beneficiary: 'GROUPE_NSEYA', currency: 'USD', amount: '15.01', motif: 'Demande supérieure au restant (test).' });
+    const over = await env.req('POST', `${B}/demandes`, 'u-superadmin', { beneficiary: 'GROUPE_NSEYA', currency: 'USD', amount: '15.01', motif: 'Demande supérieure au restant (test).' });
     expect(over.json().code).toBe('REGLEMENT_SUPERIEUR_AU_RESTANT');
-    const d = (await env.req('POST', `${B}/demandes`, 'u-groupe-nseya', { beneficiary: 'GROUPE_NSEYA', currency: 'USD', amount: '10.00', motif: 'Demande partielle (test).' })).json();
+    const d = (await env.req('POST', `${B}/demandes`, 'u-superadmin', { beneficiary: 'GROUPE_NSEYA', currency: 'USD', amount: '10.00', motif: 'Demande partielle (test).' })).json();
     expect(d.amount).toEqual(money('10.00'));
-    await env.req('POST', `${B}/demandes/${d.id}/soumission`, 'u-groupe-nseya', { motif: 'Soumission de la demande (test).' });
+    await env.req('POST', `${B}/demandes/${d.id}/soumission`, 'u-superadmin', { motif: 'Soumission de la demande (test).' });
     // Une seconde demande ne peut pas dépasser le reste (15 − 10 déjà engagés).
-    expect((await env.req('POST', `${B}/demandes`, 'u-groupe-nseya', { beneficiary: 'GROUPE_NSEYA', currency: 'USD', amount: '5.01', motif: 'Seconde demande excessive (test).' })).json().code).toBe('REGLEMENT_SUPERIEUR_AU_RESTANT');
-    expect((await env.req('POST', `${B}/demandes`, 'u-groupe-nseya', { beneficiary: 'GROUPE_NSEYA', currency: 'USD', amount: '5.00', motif: 'Seconde demande au restant exact (test).' })).statusCode).toBe(201);
+    expect((await env.req('POST', `${B}/demandes`, 'u-superadmin', { beneficiary: 'GROUPE_NSEYA', currency: 'USD', amount: '5.01', motif: 'Seconde demande excessive (test).' })).json().code).toBe('REGLEMENT_SUPERIEUR_AU_RESTANT');
+    expect((await env.req('POST', `${B}/demandes`, 'u-superadmin', { beneficiary: 'GROUPE_NSEYA', currency: 'USD', amount: '5.00', motif: 'Seconde demande au restant exact (test).' })).statusCode).toBe(201);
   });
 
   it('« rappels prestataire en double sans recette en double »', async () => {
@@ -320,10 +320,10 @@ describe('§ 29 — critères d’acceptation non négociables (spécification v
 
   it('« chaque action financière privilégiée auditée »', async () => {
     const { env } = await scenario();
-    const d = (await env.req('POST', `${B}/demandes`, 'u-groupe-nseya', { beneficiary: 'GROUPE_NSEYA', currency: 'USD', motif: 'Demande de règlement des espèces (test).' })).json();
-    await env.req('POST', `${B}/demandes/${d.id}/soumission`, 'u-groupe-nseya', { motif: 'Soumission de la demande (test).' });
-    await env.req('POST', `${B}/couts`, 'u-groupe-nseya', { provider: 'Hébergeur (test)', category: 'HEBERGEMENT', period: '2026-10', quantity: '1', unitCost: '1000.00', currency: 'USD', fundedBy: 'GROUPE_NSEYA', motif: 'Facture d’hébergement d’octobre (test).' });
-    await env.req('GET', `${B}/export?beneficiaire=GROUPE_NSEYA`, 'u-groupe-nseya');
+    const d = (await env.req('POST', `${B}/demandes`, 'u-superadmin', { beneficiary: 'GROUPE_NSEYA', currency: 'USD', motif: 'Demande de règlement des espèces (test).' })).json();
+    await env.req('POST', `${B}/demandes/${d.id}/soumission`, 'u-superadmin', { motif: 'Soumission de la demande (test).' });
+    await env.req('POST', `${B}/couts`, 'u-superadmin', { provider: 'Hébergeur (test)', category: 'HEBERGEMENT', period: '2026-10', quantity: '1', unitCost: '1000.00', currency: 'USD', fundedBy: 'GROUPE_NSEYA', motif: 'Facture d’hébergement d’octobre (test).' });
+    await env.req('GET', `${B}/export?beneficiaire=GROUPE_NSEYA`, 'u-superadmin');
     const actions = new Set(env.app.ctx.audit.list({ limit: 1e6 }).items.map((e) => e.action));
     for (const a of ['moteur.regle.verifiee', 'moteur.regle.approuvee', 'moteur.regle.activee', 'moteur.droits.synchronises', 'moteur.reglement.brouillon', 'moteur.reglement.demande', 'moteur.couts.propose', 'moteur.export.financier', 'moteur.compte_reglement.propose', 'repartition.key.activated']) {
       expect(actions.has(a), a).toBe(true);

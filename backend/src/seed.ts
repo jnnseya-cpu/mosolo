@@ -42,7 +42,8 @@ export const DEMO_USERS: Omit<User, 'kind'>[] = [
   { id: 'u-decideur', name: 'Autorité de décision contentieuse (démo)', roles: ['R21'], entity: 'DGIPK' },
   { id: 'u-auditeur', name: 'Auditeur interne (démo)', roles: ['R22'], entity: 'AUDIT' },
   { id: 'u-enqueteur', name: 'Enquêteur anti-fraude (démo)', roles: ['R24'], entity: 'AUDIT' },
-  { id: 'u-superadmin', name: 'Super-administrateur plateforme (démo)', roles: ['R26'], entity: 'PLATEFORME' },
+  // Décision du 29/09/2026 : un seul compte « Groupe Nseya — super-administrateur » (administration R26 + lecture complète R38).
+  { id: 'u-superadmin', name: 'Groupe Nseya — super-administrateur (démo)', roles: ['R26', 'R38'], entity: 'PLATEFORME' },
   { id: 'u-rssi', name: 'Responsable sécurité (démo)', roles: ['R28'], entity: 'PLATEFORME' },
   { id: 'u-contribuable', name: 'Mbuyi Kalala (contribuable fictif)', roles: ['R30'], entity: 'PUBLIC', taxpayerId: DEMO.taxpayerId, lang: 'fr' },
   { id: 'u-locataire', name: 'Nzuzi Makiese (locataire fictive)', roles: ['R30'], entity: 'PUBLIC', taxpayerId: DEMO.tenantTaxpayerId, lang: 'ln' },

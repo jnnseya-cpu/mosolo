@@ -226,7 +226,7 @@ export function checkVersionShape(v: Pick<AllocationRuleVersion, 'beneficiaries'
   const out: { code: string; message: string }[] = [];
   const sum = sumPct(v.beneficiaries);
   if (sum === null) out.push({ code: 'POURCENTAGE_INVALIDE', message: 'Pourcentages attendus en chaînes décimales (trois décimales au plus).' });
-  else if (sum !== '100.000') out.push({ code: 'SOMME_DIFFERENTE_DE_100', message: `La somme des parts vaut ${sum} % : l’activation exige exactement 100,000 %.` });
+  else if (sum !== '100.000') out.push({ code: 'SOMME_DIFFERENTE_DE_100', message: `La somme des parts vaut ${Number(sum).toLocaleString('fr-FR', { maximumFractionDigits: 3 })} % : l’activation exige exactement 100 %.` });
   if (v.beneficiaries.filter((b) => b.remainder).length !== 1) out.push({ code: 'SOLDE_UNIQUE', message: 'Une et une seule part reçoit le solde et les arrondis.' });
   const codes = v.beneficiaries.map((b) => b.code);
   if (new Set(codes).size !== codes.length) out.push({ code: 'BENEFICIAIRE_EN_DOUBLE', message: 'Un bénéficiaire figure deux fois.' });

@@ -1536,7 +1536,7 @@ route, règle, écran ni donnée de démonstration existants n'est retiré. Modu
   (contrat de partenariat approuvé par le directeur de cabinet, seconde validation sécurité) : lecture et export des
   agrégats de toute la plateforme (liste fermée d'actions de lecture du point de décision), descente ville → ministère
   → module → agent → transaction (pseudonymisée), données personnelles seulement avec motif déclaré et journalisé ou par
-  la consultation motivée (C42-05) ; aucune écriture. Compte [EXEMPLE] `u-groupe-nseya`.
+  la consultation motivée (C42-05) ; aucune écriture. Compte [EXEMPLE] `u-groupe-nseya` (fusionné le 29/09/2026 dans `u-superadmin`, voir § I.39).
 - **Accès par les menus** : Gouverneur — poste de décision, vue « Recettes » → « Centre de commandement financier »
   (`/executive/finance`) ; directeur de cabinet, secrétaire exécutif, ministre des Finances, Trésor, audit — entrée de
   menu « Centre de commandement financier » ; Groupe Nseya — écran d'accueil `/groupe-nseya/command-centre` ;
@@ -1596,3 +1596,20 @@ Harmonisation (règle n° 1) : aucun écran ni contrôle n'est retiré. Le Trés
 circuits (paiement des demandes, grand livre, journal d'audit, reprises de points), sans voir les gains individuels.
 Points soumis à arbitrage : accès des auditeurs (R22, R23) aux montants pour une mission d'audit (consultation motivée ?)
 et montants dont le Trésor a besoin pour la paie de la réserve une fois l'acte pris.
+
+## I.39 Compte unique « Groupe Nseya — super-administrateur » et affichage des taux (29/09/2026)
+
+Décision du maître d'ouvrage : Groupe Nseya est à la fois l'administrateur de la plateforme et le bénéficiaire de sa
+part ; le compte de démonstration `u-superadmin` devient **« Groupe Nseya — super-administrateur »** et porte les rôles
+**R26 (administration) et R38 (lecture complète)**, comme sur la plateforme réelle. L'ancien compte séparé
+`u-groupe-nseya` n'est plus créé (fusionné). L'incompatibilité R38/R26 (`shared/src/domain.ts`) est levée par cette
+décision ; l'incompatibilité R38/R32 (encaissement) demeure.
+
+Contrôles conservés : le compte unique ne vérifie, n'approuve, n'active ni ne paie rien (circuits à deux ou quatre
+personnes distinctes, § 18) ; il peut proposer des pourcentages (sans effet avant le circuit) et effectuer les
+démarches de Groupe Nseya pour son propre droit (demande de règlement, contestation, coût technologique). Les tests
+qui vérifient qu'un administrateur technique **seul** (R26) ne lit aucun montant restent en place, sur un compte de test
+R26 dédié.
+
+Taux affichés sans zéros inutiles (`fmtTaux`) : « 100 % », « 70 % », « 5,21 % » — jamais « 100,000 % » ; jusqu'à trois
+décimales conservées pour qu'un total de 99,999 % ne s'affiche jamais comme 100 %.

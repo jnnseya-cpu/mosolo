@@ -525,7 +525,8 @@ describe('Doublons, fusion, consultation motivée, mandats', () => {
     env.clock.advance(31 * 60_000);
     expect((await env.req('GET', `/v1/acces/consultations/${c.json().id}/dossier`, 'acces-u-controleur-limete')).json().code).toBe('CONSULTATION_EXPIRED');
     expect((await env.req('POST', '/v1/acces/consultations', 'u-controleur', { ...body, taxpayerId: DEMO.tenantTaxpayerId })).json().code).toBe('SELF_OR_RELATIVE_CASE');
-    expect((await env.req('POST', '/v1/acces/consultations', 'u-superadmin', body)).statusCode).toBe(403);
+    env.app.ctx.users.add({ id: 'test-admin-technique', name: 'Administrateur technique (test, R26 seul)', roles: ['R26'], entity: 'PLATEFORME' });
+    expect((await env.req('POST', '/v1/acces/consultations', 'test-admin-technique', body)).statusCode).toBe(403);
     const review = await env.req('POST', `/v1/acces/consultations/${c.json().id}/review`, 'u-auditeur', { conclusion: 'JUSTIFIEE', note: 'Motif cohérent avec le dossier d’arbitrage' });
     expect(review.json().review.conclusion).toBe('JUSTIFIEE');
   });

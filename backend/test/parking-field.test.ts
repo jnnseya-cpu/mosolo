@@ -240,7 +240,7 @@ describe('Commission de 10 % : tous les agents, quel que soit leur module', () =
     // Décision du 29/09/2026 : seuls R01, R02, R03, R05 et Groupe Nseya voient les gains des autres agents.
     expect((await e.req('GET', '/v1/agents/earnings', 'u-tresor')).statusCode).toBe(403);
     expect((await e.req('GET', '/v1/agents/earnings', 'u-auditeur')).statusCode).toBe(403);
-    expect((await e.req('GET', '/v1/agents/earnings', 'u-groupe-nseya')).statusCode).toBe(200);
+    expect((await e.req('GET', '/v1/agents/earnings', 'u-superadmin')).statusCode).toBe(200);
   });
 
   it('verticales : dette d’un objet payée dans les 72 h qui suivent le scan de l’agent ; la pénalité reste à l’auteur du constat', async () => {

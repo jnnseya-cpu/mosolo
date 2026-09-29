@@ -104,8 +104,10 @@ export const INCOMPATIBLE_ROLES: [RoleCode, RoleCode][] = [
   // point de paiement agréé (R32, encaissement) lui est incompatible.
   ...Array.from({ length: 29 }, (_, i) => [`R${String(i + 1).padStart(2, '0')}` as RoleCode, 'R32'] as [RoleCode, RoleCode]),
   ['R35', 'R32'],
-  // Groupe Nseya (R38) : lecture seule, jamais d'encaissement ni d'administration technique de la plateforme.
-  ['R38', 'R32'], ['R38', 'R26'],
+  // Groupe Nseya (R38) : jamais d'encaissement. Décision du maître d'ouvrage du 29/09/2026 : Groupe Nseya est AUSSI le
+  // super-administrateur de la plateforme (R26 + R38 sur un même compte) — l'ancienne incompatibilité R38/R26 est levée ;
+  // les circuits à deux ou quatre personnes distinctes restent exigés (vérifier, approuver, activer, régler).
+  ['R38', 'R32'],
 ];
 
 export function hasIncompatibility(roles: RoleCode[]): [RoleCode, RoleCode] | null {

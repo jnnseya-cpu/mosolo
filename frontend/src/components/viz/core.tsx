@@ -51,6 +51,8 @@ export const fmtNombre = (v: number, digits = 1): string => v.toLocaleString('fr
 export const fmtCompact: Formatter = (v) => compact(v, 'fr');
 /** Pourcentage (« 64,2 % »). */
 export const fmtPct = (v: number, digits = 1): string => `${fmtNombre(v, digits)} %`;
+/** Taux d'une règle (« 100.000 » côté serveur) affiché sans zéros inutiles : « 100 % », « 70 % », « 7,5 % ». */
+export const fmtTaux = (v: string | number | null | undefined): string => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? '—' : fmtPct(Number(v), 3));
 /** Montant compact avec sa devise (une seule devise par série). */
 export const fmtDevise = (currency: string): Formatter => (v) => `${compact(v, 'fr')} ${currency}`;
 

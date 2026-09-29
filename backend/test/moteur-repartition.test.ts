@@ -205,17 +205,17 @@ describe('§ 6 et § 13 — espèces : points agréés seulement ; droit de Grou
     await env.req('POST', `${B}/synchroniser`, 'u-tresor', {});
     const a = env.svc.allocations.get(`AL-${o.id}`)!;
     expect(a).toMatchObject({ methode: 'ESPECES', mode: 'REEL' });
-    let ns = (await env.req('GET', `${B}/tableau/groupe-nseya`, 'u-groupe-nseya')).json();
+    let ns = (await env.req('GET', `${B}/tableau/groupe-nseya`, 'u-superadmin')).json();
     expect(ns.positionCommerciale[0]).toMatchObject({ droit: money('15.00'), especes: money('15.00'), regle: money('0.00'), payable: money('15.00'), especesPayables: money('15.00') });
     // Jamais au-dessus du reste dû.
-    const over = await env.req('POST', `${B}/demandes`, 'u-groupe-nseya', { beneficiary: 'GROUPE_NSEYA', currency: 'USD', amount: '15.01', periodStart: '2026-10-01', periodEnd: '2026-10-31', motif: 'Demande de règlement des espèces d’octobre (test).' });
+    const over = await env.req('POST', `${B}/demandes`, 'u-superadmin', { beneficiary: 'GROUPE_NSEYA', currency: 'USD', amount: '15.01', periodStart: '2026-10-01', periodEnd: '2026-10-31', motif: 'Demande de règlement des espèces d’octobre (test).' });
     expect(over.json().code).toBe('REGLEMENT_SUPERIEUR_AU_RESTANT');
-    const d = (await env.req('POST', `${B}/demandes`, 'u-groupe-nseya', { beneficiary: 'GROUPE_NSEYA', currency: 'USD', periodStart: '2026-10-01', periodEnd: '2026-10-31', motif: 'Demande de règlement des espèces d’octobre (test).' })).json();
+    const d = (await env.req('POST', `${B}/demandes`, 'u-superadmin', { beneficiary: 'GROUPE_NSEYA', currency: 'USD', periodStart: '2026-10-01', periodEnd: '2026-10-31', motif: 'Demande de règlement des espèces d’octobre (test).' })).json();
     expect(d).toMatchObject({ status: 'BROUILLON', amount: money('15.00'), flow: 'FLUX_1' });
     // Groupe Nseya ne demande jamais pour un autre bénéficiaire.
-    expect((await env.req('POST', `${B}/demandes`, 'u-groupe-nseya', { beneficiary: 'GOUVERNORAT', currency: 'USD', motif: 'Demande hors périmètre (test).' })).json().code).toBe('HORS_PERIMETRE');
+    expect((await env.req('POST', `${B}/demandes`, 'u-superadmin', { beneficiary: 'GOUVERNORAT', currency: 'USD', motif: 'Demande hors périmètre (test).' })).json().code).toBe('HORS_PERIMETRE');
     const go = (path: string, user: string, body: Record<string, unknown>) => env.req('POST', `${B}/demandes/${d.id}/${path}`, user, body);
-    expect((await go('soumission', 'u-groupe-nseya', { motif: 'Soumission de la demande (test).' })).json().status).toBe('SOUMISE');
+    expect((await go('soumission', 'u-superadmin', { motif: 'Soumission de la demande (test).' })).json().status).toBe('SOUMISE');
     expect((await go('examen', 'u-validateur-financier', { motif: 'Examen des droits espèces (test).' })).json().status).toBe('EN_EXAMEN');
     expect((await go('approbation', 'u-validateur-financier', { approve: true, motif: 'Auto-approbation interdite (test).' })).statusCode).toBe(403);
     expect((await go('approbation', 'u-ministre-finances', { approve: true, motif: 'Approbation du Gouvernement (test).' })).json().status).toBe('APPROUVEE');
@@ -230,12 +230,12 @@ describe('§ 6 et § 13 — espèces : points agréés seulement ; droit de Grou
     expect((await env.req('POST', `/v1/tresor/operations/${flux1.id}/approve`, 'u-tresor', {})).json().status).toBe('EXECUTEE');
     expect((await go('paiement', 'u-tresor', { reference: 'VIR-001 (test)' })).json().status).toBe('PAYEE');
     // Tant que le règlement n'est pas rapproché, le droit n'est pas présenté comme réglé.
-    ns = (await env.req('GET', `${B}/tableau/groupe-nseya`, 'u-groupe-nseya')).json();
+    ns = (await env.req('GET', `${B}/tableau/groupe-nseya`, 'u-superadmin')).json();
     expect(ns.positionCommerciale[0]).toMatchObject({ regle: money('0.00') });
     expect((await go('rapprochement', 'u-tresor', { reference: 'REL-BANQUE-001' })).statusCode).toBe(403);
     expect((await go('rapprochement', 'u-analyste-rappro', { reference: 'REL-BANQUE-001' })).json().status).toBe('RAPPROCHEE');
     expect((await go('cloture', 'u-tresor', { motif: 'Clôture de la demande (test).' })).json().status).toBe('CLOTUREE');
-    ns = (await env.req('GET', `${B}/tableau/groupe-nseya`, 'u-groupe-nseya')).json();
+    ns = (await env.req('GET', `${B}/tableau/groupe-nseya`, 'u-superadmin')).json();
     expect(ns.positionCommerciale[0]).toMatchObject({ droit: money('15.00'), regle: money('15.00'), resteDu: money('0.00') });
     // Circuit des espèces tracé sur la transaction (jamais un agent de terrain).
     const t = (await env.req('GET', `${B}/transactions/${a.id}`, 'u-ministre-finances')).json();
@@ -273,7 +273,9 @@ describe('§ 4 et § 12 de la spécification v1.0 — deux flux seulement ; frac
 describe('§ 18 — le super-administrateur ne modifie rien de financier', () => {
   it('saisie de pourcentages PROPOSÉS seulement ; ni vérification, approbation, activation, compte, demande, synchronisation ni tableau financier', async () => {
     const env = await setupMoteur();
-    const p = await env.req('POST', `${B}/regles`, 'u-superadmin', { label: 'Groupe Nseya à 25 % (test)', beneficiaries: defaultBeneficiaries().map((b) => (b.code === 'GROUPE_NSEYA' ? { ...b, pct: '25' } : b.code === 'GOUVERNEMENT_PROVINCIAL' ? { ...b, pct: '55' } : b)), effectiveFrom: '2026-11-01', legalBasis: 'Aucune (test)', motif: 'Tentative de passer 10 % à 25 % (test).' });
+    // Administrateur technique R26 seul (le compte de démonstration u-superadmin porte aussi R38 depuis le 29/09/2026).
+    env.app.ctx.users.add({ id: 'test-admin-technique', name: 'Administrateur technique (test, R26 seul)', roles: ['R26'], entity: 'PLATEFORME' });
+    const p = await env.req('POST', `${B}/regles`, 'test-admin-technique', { label: 'Groupe Nseya à 25 % (test)', beneficiaries: defaultBeneficiaries().map((b) => (b.code === 'GROUPE_NSEYA' ? { ...b, pct: '25' } : b.code === 'GOUVERNEMENT_PROVINCIAL' ? { ...b, pct: '55' } : b)), effectiveFrom: '2026-11-01', legalBasis: 'Aucune (test)', motif: 'Tentative de passer 10 % à 25 % (test).' });
     expect(p.statusCode).toBe(201);
     expect(p.json().status).toBe('PROPOSEE');
     const id = p.json().id;
@@ -288,11 +290,16 @@ describe('§ 18 — le super-administrateur ne modifie rien de financier', () =>
       ['GET', `${B}/tableau/executif`, undefined],
       ['GET', `${B}/transactions`, undefined],
     ] as const;
-    for (const [m, url, body] of denied) expect((await env.req(m, url, 'u-superadmin', body)).statusCode, `${m} ${url}`).toBe(403);
-    const cfg = (await env.req('GET', `${B}/configuration`, 'u-superadmin')).json();
+    for (const [m, url, body] of denied) expect((await env.req(m, url, 'test-admin-technique', body)).statusCode, `${m} ${url}`).toBe(403);
+    const cfg = (await env.req('GET', `${B}/configuration`, 'test-admin-technique')).json();
     expect(cfg.mutationFinanciere).toBe('AUCUNE');
     expect(JSON.stringify(cfg)).not.toMatch(/"amount"/);
     expect(env.svc.versions.get(id)!.status).toBe('PROPOSEE');
+    // Compte unique « Groupe Nseya — super-administrateur » (R26 + R38) : lecture complète et démarches pour son propre
+    // droit, mais jamais vérifier, approuver ni activer une règle (circuit à quatre personnes distinctes).
+    expect((await env.req('GET', `${B}/tableau/executif`, 'u-superadmin')).statusCode).toBe(200);
+    expect((await env.req('POST', `${B}/regles/${id}/verification`, 'u-superadmin', { approve: true, motif: 'Tentative du compte Groupe Nseya.' })).statusCode).toBe(403);
+    expect((await env.req('POST', `${B}/regles/${id}/activation`, 'u-superadmin', { approve: true, motif: 'Tentative du compte Groupe Nseya.' })).statusCode).toBe(403);
   });
 });
 

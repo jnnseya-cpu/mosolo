@@ -18,7 +18,7 @@ import { api, describeError } from '../../lib/api';
 import { monthLabel, qs, Section, useFmt } from './shared';
 import { ActForm, AutomationPanel, ControlsPanel, ConventionForm, ReserveModulesPanel, TableauPanel, type AutomationView, type ReportComplements } from './RepartitionComplements';
 import './pilotage.css';
-import { DonutViz, fmtCompact, fmtNombre, KpiTile, LineAreaViz, ProgressMeter, VizFrame } from '../../components/viz';
+import { DonutViz, fmtCompact, fmtNombre, fmtTaux, KpiTile, LineAreaViz, ProgressMeter, VizFrame } from '../../components/viz';
 import { BarresParDevise, nombre, Tuiles, Visuels } from './visuels';
 
 // ————————————————————————— contrat —————————————————————————
@@ -112,7 +112,7 @@ export function VisuelsRepartition({ report, keyView }: { report: RepartitionRep
   return (
     <>
       <Tuiles label="Répartition des recettes — synthèse" max={4}>
-        <KpiTile hero label="Clé de répartition" value={`${k.slices.map((s) => s.pct).join(' / ')} %`} state={{ label: KEY_STATUS[k.status].label, tone: KEY_STATUS[k.status].tone }} sub={`${k.source} · ${k.durationYears} ans`} />
+        <KpiTile hero label="Clé de répartition" value={k.slices.map((s) => fmtTaux(s.pct)).join(' / ')} state={{ label: KEY_STATUS[k.status].label, tone: KEY_STATUS[k.status].tone }} sub={`${k.source} · ${k.durationYears} ans`} />
         {report.totals.map((t) => (
           <KpiTile key={t.currency} label={`Assiette rapprochée — ${t.currency}`} value={nombre(t.base.amount)} unit={t.currency} format={fmtCompact}
             state={t.check.equalsBase && t.check.flowsEqualBase ? { label: '100 % réparti', tone: 'good' } : { label: 'Écart — alerte', tone: 'critical' }} sub={`${t.payments} paiement(s) rapproché(s)`} />
@@ -154,7 +154,7 @@ export function VisuelsRepartition({ report, keyView }: { report: RepartitionRep
 
 function SliceAmounts({ agg }: { agg: Aggregate }) {
   const f = useFmt();
-  return <>{agg.slices.map((s) => <span key={s.slice} className="small" style={{ display: 'block' }}>{s.label} ({s.pct} %) : <strong>{f.money(s.amount)}</strong></span>)}</>;
+  return <>{agg.slices.map((s) => <span key={s.slice} className="small" style={{ display: 'block' }}>{s.label} ({fmtTaux(s.pct)}) : <strong>{f.money(s.amount)}</strong></span>)}</>;
 }
 
 export function RepartitionView({ report, keyView, onDone }: { report: RepartitionReport; keyView: KeyView; onDone: () => void }) {
@@ -192,7 +192,7 @@ export function RepartitionView({ report, keyView, onDone }: { report: Repartiti
       <Section title="Clé de répartition" sub={`${k.source} · durée ${k.durationYears} ans · deux flux de décaissement seulement`}>
         <DataTable caption="Parts de la clé" rows={k.slices} rowKey={(s) => s.code} columns={[
           { key: 'b', label: 'Bénéficiaire', primary: true, render: (s) => s.label },
-          { key: 'p', label: 'Part', num: true, render: (s) => `${s.pct} %` },
+          { key: 'p', label: 'Part', num: true, render: (s) => fmtTaux(s.pct) },
           { key: 'c', label: 'Calcul', render: (s) => <span className="small">{s.calcul}</span> },
           { key: 'f', label: 'Flux', render: (s) => <span className="small">{keyView.flows[s.flow]?.label ?? s.flow}</span> },
         ]} />
@@ -259,7 +259,7 @@ export function RepartitionView({ report, keyView, onDone }: { report: Repartiti
           { key: 'p', label: 'Mois', primary: true, render: (p) => monthLabel(p.period) },
           { key: 'c', label: 'Devise', render: (p) => p.currency },
           { key: 'b', label: 'Assiette', num: true, render: (p) => f.money(p.base) },
-          ...report.key.slices.map((s) => ({ key: s.code, label: `${s.label} (${s.pct} %)`, num: true, render: (p: Aggregate) => f.money(p.slices.find((x) => x.slice === s.code)!.amount) })),
+          ...report.key.slices.map((s) => ({ key: s.code, label: `${s.label} (${fmtTaux(s.pct)})`, num: true, render: (p: Aggregate) => f.money(p.slices.find((x) => x.slice === s.code)!.amount) })),
         ]} />
       </Section>
 

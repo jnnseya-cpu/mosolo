@@ -5,7 +5,7 @@
  */
 export {
   useVizTheme, vizTheme, VizFrame, VizTable, VizLoading, VizEmpty, VizUnmeasured, vizPlaceholder, TipBody, useVizTip, RechartsTip, HatchDef,
-  useElementWidth, foldSeries, categoryAxisWidth, clip, fmtNombre, fmtCompact, fmtPct, fmtDevise, fmtValeur, TEXTE_VIDE,
+  useElementWidth, foldSeries, categoryAxisWidth, clip, fmtNombre, fmtCompact, fmtPct, fmtTaux, fmtDevise, fmtValeur, TEXTE_VIDE,
   type VizTheme, type VizStateProps, type VizFrameProps, type LegendItem, type TipRow, type Formatter, type SeriesDef,
 } from './core';
 export { KpiTile, KpiGrid, type KpiTileProps } from './KpiTile';

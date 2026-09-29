@@ -123,7 +123,8 @@ describe('Recette — critères d’acceptation du ch. 42', () => {
     expect(attempts.total).toBe(9);
     expect(attempts.items.some((x) => x.actor.id === 'u-superadmin' && x.outcome === 'DENIED')).toBe(true);
     // Le super-administrateur ne lit même pas le journal ; le service n'expose aucune méthode d'effacement.
-    expect((await env.req('GET', '/v1/audit/events', 'u-superadmin')).statusCode).toBe(403);
+    env.app.ctx.users.add({ id: 'test-admin-technique', name: 'Administrateur technique (test, R26 seul)', roles: ['R26'], entity: 'PLATEFORME' });
+    expect((await env.req('GET', '/v1/audit/events', 'test-admin-technique')).statusCode).toBe(403);
     const auditApi = env.app.ctx.audit as unknown as Record<string, unknown>;
     for (const m of ['delete', 'remove', 'update', 'truncate', 'clear']) expect(auditApi[m]).toBeUndefined();
     expect(env.app.ctx.audit.verify()).toMatchObject({ ok: true });

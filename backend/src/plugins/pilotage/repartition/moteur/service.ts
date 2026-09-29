@@ -295,7 +295,13 @@ export class MoteurRepartitionService {
     this.ctx.audit.append({ actor, action, resourceType, resourceId, details });
   }
   /** Le super-administrateur ne fait AUCUNE mutation financière (§ 18), même s'il cumulait un autre rôle. */
-  private noSuperAdmin(user: User): void {
+  /**
+   * Super-administrateur : aucune mutation financière (§ 18). Exception (décision du 29/09/2026, compte unique
+   * « Groupe Nseya — super-administrateur ») : `nseyaPropre` couvre les seules démarches de Groupe Nseya pour son propre
+   * droit (demande de règlement, contestation, coût technologique) — jamais vérifier, approuver, activer ni payer.
+   */
+  private noSuperAdmin(user: User, nseyaPropre = false): void {
+    if (nseyaPropre && user.roles.includes(ROLE_GROUPE_NSEYA)) return;
     if (user.roles.includes('R26')) {
       this.audit(user, 'moteur.mutation_refusee', 'moteur', 'R26', { reason: 'SUPER_ADMIN' });
       throw forbidden('SUPER_ADMIN_SANS_MUTATION_FINANCIERE', 'Super-administrateur : configuration et technique seulement, aucune modification financière (§ 18).');
@@ -344,7 +350,7 @@ export class MoteurRepartitionService {
         'Rédaction (maker) : super-administrateur, ministre des Finances ou validateur financier — saisie de pourcentages PROPOSÉS, sans effet.',
         'Vérification (checker) : juriste vérificateur ou validateur financier, personne distincte du rédacteur.',
         'Approbation (approver) : ministre des Finances ou directeur de cabinet, personne distincte des deux premières.',
-        'Activation : Gouverneur, ministre des Finances ou autorité de publication, quatrième personne distincte, authentification forte ; refusée sauf somme = 100,000 %, clé du § 37A ACTIVE (acte et conditions du § 37A.8) et règle CLE-REPARTITION-37A certifiée portant les mêmes taux.',
+        'Activation : Gouverneur, ministre des Finances ou autorité de publication, quatrième personne distincte, authentification forte ; refusée sauf somme = 100 %, clé du § 37A ACTIVE (acte et conditions du § 37A.8) et règle CLE-REPARTITION-37A certifiée portant les mêmes taux.',
       ],
       contradictions: CONTRADICTIONS,
       note: 'Historique jamais réécrit : chaque transaction garde la version qui l’a répartie ; une nouvelle version ne s’applique qu’à partir de sa date d’effet.',
@@ -1092,7 +1098,7 @@ export class MoteurRepartitionService {
    */
   draftSettlement(user: User, input: { beneficiary: string; currency: CurrencyCode; periodStart?: string; periodEnd?: string; amount?: string; motif: string }) {
     authorize(user, 'moteur:reglement.demander');
-    this.noSuperAdmin(user);
+    this.noSuperAdmin(user, true);
     this.sync();
     const vis = this.visibility(user);
     const own = user.roles.includes('R17') || (vis.kind === 'GROUPE_NSEYA' && input.beneficiary === 'GROUPE_NSEYA') || (vis.kind === 'ENTITE' && this.canSeeBeneficiary(vis, input.beneficiary));
@@ -1146,7 +1152,7 @@ export class MoteurRepartitionService {
 
   submitSettlement(user: User, id: string, input: { motif: string }) {
     authorize(user, 'moteur:reglement.demander');
-    this.noSuperAdmin(user);
+    this.noSuperAdmin(user, true);
     const d = this.demande(id);
     if (d.status !== 'BROUILLON') throw conflict('ETAPE_INVALIDE', `Demande au statut ${d.status}.`);
     if (d.requestedBy !== user.id) throw forbidden('HORS_PERIMETRE', 'Seul l’auteur du brouillon le soumet.');
@@ -1250,7 +1256,7 @@ export class MoteurRepartitionService {
 
   openDispute(user: User, input: { allocationId: string; beneficiary: string; motif: string }) {
     authorize(user, 'moteur:litige.ouvrir');
-    this.noSuperAdmin(user);
+    this.noSuperAdmin(user, true);
     const vis = this.visibility(user);
     if (!user.roles.includes('R17') && !((vis.kind === 'GROUPE_NSEYA' && input.beneficiary === 'GROUPE_NSEYA') || (vis.kind === 'ENTITE' && this.canSeeBeneficiary(vis, input.beneficiary)))) {
       throw forbidden('HORS_PERIMETRE', 'Contestation limitée à votre propre droit.');
@@ -1289,7 +1295,7 @@ export class MoteurRepartitionService {
 
   proposeCout(user: User, input: { provider: string; category: PosteCout; period: string; quantity: string; unitCost: string; currency: CurrencyCode; fundedBy: 'GOUVERNORAT' | 'GROUPE_NSEYA'; supportingInvoiceId?: string; motif: string }) {
     authorize(user, 'moteur:couts.proposer');
-    this.noSuperAdmin(user);
+    this.noSuperAdmin(user, true);
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(input.period)) throw badRequest('INVALID_PERIOD', 'Mois attendu : AAAA-MM.');
     if (!/^\d{1,12}(\.\d{1,6})?$/.test(input.quantity)) throw badRequest('QUANTITE_INVALIDE', 'Quantité décimale positive attendue.');
     const unit = Money.of(input.unitCost, input.currency);

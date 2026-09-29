@@ -15,7 +15,7 @@ import { authorize, definePolicy, GRANTS, PUBLIC_AGENT_ROLES } from '../../../..
 import { definePlugin } from '../../../types.js';
 import { FLOW_CODES } from '../model.js';
 import { ETATS_DROIT, METHODES, MODES_COUTS, MODES_POOL, MODES_REGLEMENT, POSTES_COUTS, TYPES_AGENT, LECTURES_POOL, type PosteCout } from './model.js';
-import { ENTITE_GROUPE_NSEYA, MoteurRepartitionService, ROLE_GROUPE_NSEYA, type Filtre } from './service.js';
+import { ENTITE_GROUPE_NSEYA, MoteurRepartitionService, type Filtre } from './service.js';
 import { TableauxMoteur } from './tableaux.js';
 
 const { always } = GRANTS;
@@ -120,7 +120,8 @@ export const moteurRepartitionPlugin = definePlugin<MoteurRepartitionService>({
     if (acces && !acces.entities.get(ENTITE_GROUPE_NSEYA)) {
       acces.entities.insert({ id: ENTITE_GROUPE_NSEYA, name: 'Groupe Nseya — investisseur et opérateur [EXEMPLE]', shortName: 'Groupe Nseya', kind: 'OPERATEUR_DELEGUE', parentId: null, status: 'ACTIVE', createdAt: ctx.clock.now().toISOString(), createdBy: 'systeme', demo: true });
     }
-    if (!ctx.users.get('u-groupe-nseya')) ctx.users.add({ id: 'u-groupe-nseya', name: 'Groupe Nseya — super-administrateur, lecture complète [EXEMPLE] (démo)', roles: [ROLE_GROUPE_NSEYA], entity: ENTITE_GROUPE_NSEYA });
+    // Décision du 29/09/2026 : plus de second compte Groupe Nseya — le compte de démonstration « Groupe Nseya —
+    // super-administrateur » (u-superadmin, R26 + R38, seed.ts) porte les deux rôles, comme sur la plateforme réelle.
     // Compte de règlement principal du Gouvernement [EXEMPLE] : PROPOSÉ (alias fictif du coffre), autorisation du Gouverneur requise.
     const tresor = ctx.users.get('u-tresor');
     if (tresor && ctx.vault.aliasExists('GVT-PROV-FLUX2-USD') && !svc.comptes.count()) {

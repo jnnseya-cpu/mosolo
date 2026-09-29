@@ -38,7 +38,9 @@ describe('Journal d’audit chaîné', () => {
   it('seuls les auditeurs lisent le journal', async () => {
     const env = await setup();
     expect((await env.req('GET', '/v1/audit/events?limit=5', 'u-auditeur')).json().items).toHaveLength(5);
-    for (const u of ['u-superadmin', 'u-gouverneur', 'u-tresor', 'u-contribuable']) {
+    // Décision du 29/09/2026 : u-superadmin = Groupe Nseya (R26 + R38, lecture complète) ; contrôle vérifié sur un R26 seul.
+    env.app.ctx.users.add({ id: 'test-admin-technique', name: 'Administrateur technique (test, R26 seul)', roles: ['R26'], entity: 'PLATEFORME' });
+    for (const u of ['test-admin-technique', 'u-gouverneur', 'u-tresor', 'u-contribuable']) {
       expect((await env.req('GET', '/v1/audit/events', u)).statusCode).toBe(403);
     }
     expect((await env.req('GET', '/v1/audit/events')).statusCode).toBe(401);
@@ -49,7 +51,9 @@ describe('Journal d’audit chaîné', () => {
 describe('Contrôle d’accès', () => {
   it('AC-ACC-01 : le super-administrateur ne lit aucun montant nominatif et ne modifie rien de financier', async () => {
     const env = await setup();
-    const u = 'u-superadmin';
+    // Décision du 29/09/2026 : u-superadmin porte aussi R38 (Groupe Nseya) ; le contrôle vise l'administrateur technique R26 seul.
+    env.app.ctx.users.add({ id: 'test-admin-technique', name: 'Administrateur technique (test, R26 seul)', roles: ['R26'], entity: 'PLATEFORME' });
+    const u = 'test-admin-technique';
     const obl = demoObligationId(env);
     const { order } = await payDemoObligation(env);
     const checks = await Promise.all([
