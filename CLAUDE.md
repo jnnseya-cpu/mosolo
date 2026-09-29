@@ -62,3 +62,16 @@ données de démonstration.
   terrain habilité) ; contestation → revue. Historique conservé (qui occupait quelle unité, quand). Aucune suggestion ne
   divulgue les données privées de l'autre partie avant vérification ; le lien sert les démarches et la fiscalité, jamais
   un accès au compte de l'autre.
+- **Moteur de paiement, de répartition et de règlement (29/09/2026, spécification v1.0 — `docs/sources/`)** : un seul
+  grand livre et un seul moteur de répartition pour tous les modules ; règle versionnée KIN-DEFAULT (70 % Gouvernorat,
+  10 % Groupe Nseya, 10 % ministère/département propriétaire du module, 10 % opérations de terrain), jamais codée en
+  dur, activation après circuit d'approbation, total exactement 100 %. **Pool de terrain** : agent direct 10 % ; agent
+  de sous-traitant 7 % + sous-traitant 3 % de la recette éligible rapprochée (décision qui précise celle du 27/09 sur
+  la réserve par points × qualité : les deux modes restent disponibles, le mode « par recette » est celui de la règle
+  V1 proposée). **Groupe Nseya** : rôle dédié à visibilité complète sur la plateforme (lecture, export, descente à la
+  transaction), sans pouvoir supprimer ni réécrire l'historique ; toute consultation de données personnelles
+  individuelles reste journalisée avec motif (critère C42-05). **Ministre des Finances** : visibilité financière
+  complète sur ce moteur. Historique immuable : corrections par contrepassation puis écriture corrigée.
+  À arbitrer : l'encaissement d'espèces « enregistré par l'agent » (§ 13 de la spécification) contredit le principe
+  « les agents de terrain ne reçoivent jamais d'espèces » — espèces limitées aux points agréés et guichets bancaires
+  tant que le maître d'ouvrage n'a pas tranché.
