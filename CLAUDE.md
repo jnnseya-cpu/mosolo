@@ -83,3 +83,5 @@ données de démonstration.
   R29 pour l'IA ; R28 pour la sécurité) et n'apparaissent pas au menu des autorités ; `KODA_SUCCESS_URL` laissé vide
   pour le retour vers MOSOLO ; le **Gouverneur** dispose du « Centre de commandement » (tableau complet) en plus des
   cinq entrées de son poste de décision.
+- **Frais de gestion de Groupe Nseya (29/09/2026)** : 5 % sur les coûts technologiques qu'il finance (IA, hébergement,
+  SMS, API…), distincts de ses 10 % ; aucun frais sur les coûts financés par le Gouvernorat.

@@ -307,7 +307,9 @@ export class MoteurRepartitionService {
       beneficiaries: defaultBeneficiaries(), scope: { revenus: [TOUT], modules: [TOUT], methodes: [TOUT] },
       effectiveFrom: V1_DATE_EFFET, effectiveUntil: null,
       legalBasis: 'Cahier des exigences v2.9, § 37A (clé CLE-REPARTITION-37A) ; spécification v1.0 du 29/09/2026 (§ 2, § 3, § 16) ; décision du maître d’ouvrage du 29/09/2026 (pool par recette générée) — acte juridique provincial requis (§ 37A.8)', approvalDocument: null,
-      pool: defaultPool(), couts: { mode: 'AUCUN', fraisGestionPct: null }, fractionnement: { infrastructureApprouvee: null }, status: 'ACTE_REQUIS', parDefaut: true,
+      // Frais de gestion de Groupe Nseya sur les coûts technologiques qu'il finance : 5 % (décision du maître d'ouvrage du
+      // 29/09/2026), distincts des 10 % ; sans effet sur les coûts financés par le Gouvernorat.
+      pool: defaultPool(), couts: { mode: 'FRAIS_GESTION_NSEYA', fraisGestionPct: '5.000' }, fractionnement: { infrastructureApprouvee: null }, status: 'ACTE_REQUIS', parDefaut: true,
       createdBy: 'systeme', createdAt: this.now(),
       history: [{ at: this.now(), by: 'systeme', action: 'VERSION_PROPOSEE_PAR_DEFAUT', motif: 'Reprise des constantes du § 37A (aucune valeur supprimée ni modifiée) et du pool décidé le 29/09/2026 ; activation par le circuit à quatre personnes après l’acte.' }],
     });

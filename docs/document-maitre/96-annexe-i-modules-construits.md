@@ -1568,3 +1568,6 @@ route, règle, écran ni donnée de démonstration existants n'est retiré. Modu
 | f | Ministre des Finances en visibilité complète contre ministres limités à leur ministère (28/09/2026) | Visibilité complète limitée à ce moteur financier ; menu inchangé | Tranché le 29/09/2026 |
 | g | Guichet bancaire : espèces ou électronique pour le droit de Groupe Nseya | Par défaut seul le point agréé est classé espèces | À arbitrer |
 | h | Pourcentage des frais de gestion technologiques de Groupe Nseya | Aucun pourcentage par défaut ; fixé par une version approuvée | À arbitrer |
+- **Décision du 29/09/2026** : frais de gestion de Groupe Nseya fixés à **5 %** des coûts technologiques qu'il finance
+  (règle KIN-DEFAULT V1, mode `FRAIS_GESTION_NSEYA`), distincts de ses 10 % ; sans effet sur les coûts financés par le
+  Gouvernorat.
