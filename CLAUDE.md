@@ -128,3 +128,7 @@ données de démonstration.
   carte, preuve) porte l'en-tête Ville de Kinshasa / « Ville-Province de Kinshasa » / KINSHASA MOSOLO + filet tricolore
   et le pied « réalisée par Groupe Nseya » (composants `PrintLetterhead` / `PrintFooterMark`, `core/brand.ts`, PDF
   commun) — annexe I, § I.48.
+- **Groupe Nseya selon la phase (30/09/2026)** : en démonstration, lecture globale (aucun « Accès refusé » en lecture) ;
+  plateforme en service : périmètre propre seulement (moteur de paiement/répartition, grand livre, trésor en agrégats,
+  règles, audit, supervision) — jamais les tableaux du Gouverneur ni les opérations quotidiennes des services (liste à
+  confirmer). Jamais d'écriture ; dossiers personnels par consultation motivée (C42-05) — annexe I, § I.50.

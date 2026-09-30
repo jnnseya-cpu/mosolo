@@ -4,7 +4,7 @@
  * Toute route appelle `authorize` ; aucune décision d'accès n'est prise dans l'interface.
  */
 import { AI_FORBIDDEN_ACTIONS, type RoleCode } from '@mosolo/shared';
-import type { Principal, User } from './auth.js';
+import { isDemoMode, type Principal, type User } from './auth.js';
 import { forbidden } from './errors.js';
 
 export type Action =
@@ -200,16 +200,47 @@ export const LECTURE_GROUPE_NSEYA_EXACTE: ReadonlySet<string> = new Set([
   'tresor:nomenclature.read', 'tresor:points.read', 'tresor:receivables.read', 'tresor:export', 'pilotage:export',
   'recouvrement:yield.read', 'campagnes:read', 'chaine:ruptures.read', 'plateforme:supervision.read', 'appeals:indicators.read',
   'programme:read', 'repartition:read', 'reserve:read', 'legalshares:read', 'referentiel:read', 'referentiel:conformite.read',
+  // Accès global (30/09/2026) : écrans de supervision et d'analyse relevés par le parcours de tous les écrans.
+  'ai.insight', 'canaux:point.supervise', 'canaux:enrolment.read', 'publicite:inventory', 'fiscal:object.read', 'documents:read',
+  'citoyen:activites.read', 'citoyen:cadastre.read', 'citoyen:locatif.read', 'citoyen:transport.lire', 'citoyen:vehicules.read',
 ]);
 const LECTURE_GROUPE_NSEYA_MOTIFS: RegExp[] = [
   /^(pilotage|decision|planification|postes):[\w.-]*read$/,
   /^moteur:[\w.-]*(read|export)$/,
   /:(indicators|indicateurs|indicators\.read|indicateurs\.read|application\.indicateurs)$/,
 ];
+/**
+ * Accès global en lecture (30/09/2026, consigne du maître d'ouvrage : « Groupe Nseya, super-administrateur, a un accès
+ * total et global ; un “Accès refusé” ne doit jamais apparaître ») : toute action de LECTURE de la plateforme (tableaux
+ * de tous les postes, registres, dossiers, cartes, journaux, exports), reconnue à son suffixe. Les actions d'écriture
+ * ou de décision restent exclues (le compte ne vérifie, n'approuve, n'active ni ne paie jamais).
+ */
+const LECTURE_GENERIQUE = /(^|[.:])(read|read\.any|read\.own|list|view|overview|export|dashboard|governor|indicators?|indicateurs|stats?|history|map|search|detail|summary|profile(\.[\w-]+)?|report|journal(\.all)?|objects|lifecycle\.read|plate\.profile)$/;
+const ECRITURE_EXCLUE = /(\.|:)(write|manage|assign|close|intake|qualify|respond|triage|committee|data_owner|incident|create|update|delete|approve|decide|pay|activate|sign)(\.|$)/;
+/**
+ * Lectures de dossiers personnels individuels : HORS de la lecture globale — elles passent par la consultation motivée
+ * (motif déclaré et journalisé, critère d'acceptation non négociable C42-05 de la spécification v1.0).
+ */
+export const LECTURE_PERSONNELLE = /^(taxpayer\.read|obligation\.read|citoyen:|titres:read|fiscal:(declaration|clearance|exemption|object)|parking:(plate\.profile|session\.read|violation\.read)|canaux:(card|enrolment|notice)|documents:read|recouvrement:notice|rakapay:(complaint|registry)|biens:)/;
+/**
+ * Plateforme EN SERVICE (30/09/2026, consigne du maître d'ouvrage : « une fois la plateforme en service, nous ne voyons
+ * PAS ce qui est réservé au Gouverneur ni ce que les services voient pour leurs opérations quotidiennes ; seulement ce
+ * que nous devons voir ») : hors démonstration, Groupe Nseya ne garde que la lecture de son périmètre — moteur de
+ * paiement et de répartition, grand livre, rapprochement, trésor en agrégats, règles, journaux d'audit, supervision de
+ * la plateforme. Liste « par défaut — à confirmer par le maître d'ouvrage ».
+ */
+const LECTURE_GROUPE_NSEYA_PRODUCTION: ReadonlySet<string> = new Set([
+  'audit.read', 'ledger.read', 'reconciliation.read', 'rule.read', 'provider.read', 'beneficiary.read',
+  'tresor:overview', 'tresor:closure.read', 'tresor:operation.read', 'tresor:exception.read', 'tresor:suspense.read', 'tresor:matching.read',
+  'tresor:nomenclature.read', 'tresor:receivables.read', 'tresor:export', 'plateforme:supervision.read',
+  'repartition:read', 'reserve:read', 'legalshares:read', 'referentiel:read', 'referentiel:conformite.read', 'programme:read',
+]);
 export function isLectureGroupeNseya(action: string): boolean {
-  return LECTURE_GROUPE_NSEYA_EXACTE.has(action) || LECTURE_GROUPE_NSEYA_MOTIFS.some((re) => re.test(action));
+  // Démonstration (construction et essais) : lecture globale ; en service : périmètre propre seulement.
+  if (!isDemoMode()) return LECTURE_GROUPE_NSEYA_PRODUCTION.has(action) || /^moteur:[\w.-]*(read|export)$/.test(action);
+  if (LECTURE_GROUPE_NSEYA_EXACTE.has(action) || LECTURE_GROUPE_NSEYA_MOTIFS.some((re) => re.test(action))) return true;
+  return LECTURE_GENERIQUE.test(action) && !ECRITURE_EXCLUE.test(action) && !LECTURE_PERSONNELLE.test(action);
 }
-
 /** Évalue une décision d'accès sans lever d'erreur. */
 export function evaluate(principal: Principal, action: AnyAction, resource: Resource = {}): Access | false {
   if (principal.kind === 'ai') {

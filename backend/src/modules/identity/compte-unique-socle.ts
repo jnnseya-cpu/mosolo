@@ -42,14 +42,14 @@ export function registerSocleContributions(reg: CompteUniqueRegistry, s: {
     module: 'obligations', titre: 'Obligations', lien: '/espace',
     collect: (tp) => s.assessment.byTaxpayer(tp).filter((o) => !o.supersededBy).map((o) => ({
       rubrique: 'OBLIGATION' as const, id: o.id, libelle: o.label, nature: o.revenueCategory, statut: o.status, montant: o.amount,
-      echeance: o.dueDate, date: o.createdAt, objectId: o.objectId, lien: '/espace',
+      echeance: o.dueDate, date: o.createdAt, objectId: o.objectId, lien: `/espace?obligation=${encodeURIComponent(o.id)}`,
     })),
   });
   reg.register({
     module: 'paiements', titre: 'Paiements (références)', lien: '/espace',
     collect: (tp) => s.payments.orders.find((p) => p.taxpayerId === tp).map((p) => ({
       rubrique: 'PAIEMENT' as const, id: p.id, libelle: `Référence ${p.paymentReference}`, statut: p.status, montant: p.amount, date: p.createdAt,
-      echeance: p.expiresAt, lien: '/espace',
+      echeance: p.expiresAt, lien: `/paiement/retour?ref=${encodeURIComponent(p.paymentReference)}`,
       ...(safeObject(s.assessment, p.obligationId) ? { objectId: safeObject(s.assessment, p.obligationId)! } : {}),
     })),
   });
@@ -65,7 +65,7 @@ export function registerSocleContributions(reg: CompteUniqueRegistry, s: {
     module: 'recours', titre: 'Recours et contestations', lien: '/espace',
     collect: (tp) => s.appeals.appeals.find((a) => a.taxpayerId === tp).map((a) => ({
       rubrique: 'RECOURS' as const, id: a.id, libelle: `Recours sur ${a.obligationId}`, nature: a.type ?? 'RECLAMATION', statut: a.status, date: a.submittedAt,
-      lien: '/espace', ...(safeObject(s.assessment, a.obligationId) ? { objectId: safeObject(s.assessment, a.obligationId)! } : {}),
+      lien: `/espace?obligation=${encodeURIComponent(a.obligationId)}`, ...(safeObject(s.assessment, a.obligationId) ? { objectId: safeObject(s.assessment, a.obligationId)! } : {}),
     })),
   });
   reg.register({

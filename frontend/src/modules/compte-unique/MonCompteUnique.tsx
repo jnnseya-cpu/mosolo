@@ -5,7 +5,7 @@
  * Données servies par GET /v1/compte-unique/me (ou /:taxpayerId pour un mandataire, dans le périmètre du mandat).
  */
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 // Parcours par rôle (29/09/2026) : liens adaptés au compte — un écran que le rôle n'utilise pas n'est pas proposé.
 import { LienEcran } from '../../components/LienEcran';
 import { formatMoney } from '@mosolo/shared';
@@ -156,6 +156,7 @@ export function MonCompteUnique({ taxpayerId, self }: { taxpayerId: string | nul
 
 function ElementRow({ e }: { e: CompteElement & { moduleTitre: string; moduleLien: string } }) {
   const { fmtDate } = useApp();
+  const loc = useLocation();
   return (
     <li className="list-row cu-row">
       <div className="min0">
@@ -165,7 +166,8 @@ function ElementRow({ e }: { e: CompteElement & { moduleTitre: string; moduleLie
       <div className="row-side">
         {e.montant && <span className="mono small">{formatMoney(e.montant)}</span>}
         {e.statut && <StatusBadge tone={toneOf(e.statut)} label={e.statut} />}
-        <LienEcran className="btn btn-ghost btn-sm" to={e.lien ?? e.moduleLien} aria-label={`Ouvrir — ${e.libelle}`}>Ouvrir</LienEcran>
+        {/* Aucun bouton quand il ne mènerait qu'à la page déjà ouverte (30/09/2026 : liens « Ouvrir » sans effet). */}
+        {(e.lien ?? e.moduleLien) !== loc.pathname && <LienEcran className="btn btn-ghost btn-sm" to={e.lien ?? e.moduleLien} aria-label={`Ouvrir — ${e.libelle}`}>Ouvrir</LienEcran>}
       </div>
     </li>
   );

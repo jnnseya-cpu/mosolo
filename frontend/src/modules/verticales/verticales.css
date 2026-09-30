@@ -79,3 +79,6 @@
 .sec-travaux { min-width: 0; }
 .sec-travaux .row-wrap { min-width: 0; max-width: 100%; }
 .sec-travaux .btn, .sec-chemin .btn { white-space: normal; max-width: 100%; min-width: 0; height: auto; text-align: left; overflow-wrap: anywhere; }
+
+/* Étape du parcours atteinte (30/09/2026) : section brièvement mise en évidence. */
+.vx-surligne { outline: 3px solid var(--flag-yellow, #F7D618); outline-offset: 4px; transition: outline-color .4s; }

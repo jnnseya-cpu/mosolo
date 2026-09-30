@@ -1837,3 +1837,24 @@ renvoyait l'adresse de la nouvelle page que l'ancienne version ne connaissait pa
   ordinaire ;
 - vérification d'une nouvelle version au retour sur l'onglet et toutes les 30 minutes (mise à jour automatique).
 Aucune donnée n'est concernée : le serveur reste la référence.
+
+## I.50 Groupe Nseya : lecture globale en démonstration, périmètre propre en service ; liens de parcours et du compte (30/09/2026)
+
+Deux consignes successives du maître d'ouvrage, harmonisées par phase (rien n'est retiré) :
+
+- « Groupe Nseya, super-administrateur, a un accès total et global : un “Accès refusé” ne doit jamais apparaître » →
+  **en démonstration** (construction, essais), le compte « Groupe Nseya — super-administrateur » lit tout écran de la
+  plateforme (toute action de lecture : tableaux de tous les postes dont celui du Gouverneur, registres, cartes,
+  journaux, exports). Parcours de contrôle : les 192 écrans ouverts avec ce compte, sans refus d'affichage.
+- « Une fois la plateforme en service, nous ne voyons PAS ce qui est réservé au Gouverneur ni ce que les services voient
+  pour leurs opérations quotidiennes ; seulement ce que nous devons voir » → **en service** (hors démonstration),
+  lecture limitée au périmètre de Groupe Nseya : moteur de paiement et de répartition, grand livre, rapprochement, trésor
+  en agrégats, règles, journaux d'audit, supervision de la plateforme (liste « par défaut — à confirmer par le maître
+  d'ouvrage »). Ni tableau du Gouverneur, ni poste de décision, ni opérations quotidiennes des services.
+- Dans les deux phases : jamais d'écriture, de vérification, d'approbation ni de paiement ; les dossiers personnels
+  individuels passent par la consultation motivée et journalisée (critère d'acceptation non négociable C42-05).
+- **Parcours de bout en bout** (espaces de services) : une étape servie par la page déjà ouverte descend jusqu'à sa
+  section (« Aller à cette étape ») au lieu d'un lien sans effet ; pour l'usager, « Certificat QR sur le lieu » ouvre
+  « Mes preuves » (l'usager ne vérifie rien).
+- **Mon espace → compte unique** : « Ouvrir » mène à l'obligation (volet de détail), à l'état réel d'une référence de
+  paiement ou au recours ; aucun bouton n'est affiché quand il ne mènerait qu'à la page déjà ouverte.
