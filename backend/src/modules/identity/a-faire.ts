@@ -57,7 +57,7 @@ function joursAvant(echeance: string, now: Date): number {
   return Math.floor((Date.parse(echeance.length === 10 ? `${echeance}T23:59:59Z` : echeance) - now.getTime()) / 86_400_000);
 }
 
-function ligne(e: CompteElement, now: Date): LigneAFaire | null {
+function ligne(e: CompteElement, now: Date, dejaCouverte: (obligationId: string) => boolean): LigneAFaire | null {
   if (IGNOREES.has(e.rubrique)) return null;
   const s = e.statut ?? '';
   const lien = lienUsager(e.lien) ?? '/espace';
@@ -67,6 +67,8 @@ function ligne(e: CompteElement, now: Date): LigneAFaire | null {
   // Paiements dus.
   if (e.rubrique === 'OBLIGATION') {
     if (!OBLIGATION_A_PAYER.includes(s)) return null;
+    // Déjà entièrement couverte par des paiements confirmés (rapprochement en cours) : rien à payer, l'usager suit.
+    if (dejaCouverte(e.id)) return { ...base, groupe: 'EN_VERIFICATION', urgence: 'NORMALE', etat: 'PAYEE_EN_RAPPROCHEMENT', action: { libelle: 'Voir la quittance', lien: '/espace#sec-rc' } };
     return { ...base, groupe: 'A_FAIRE', urgence: s === 'EN_RETARD' ? 'EN_RETARD' : urgence, action: { libelle: 'Payer', lien: '/espace', obligationId: e.id } };
   }
   if (e.rubrique === 'ARRIERE') {
@@ -100,8 +102,8 @@ function ligne(e: CompteElement, now: Date): LigneAFaire | null {
 
 const RANG_URGENCE = { EN_RETARD: 0, BIENTOT: 1, NORMALE: 2 } as const;
 
-export function aFaire(sections: CompteSection[], now: Date) {
-  const lignes = sections.flatMap((s) => s.elements).map((e) => ligne(e, now)).filter((l): l is LigneAFaire => !!l);
+export function aFaire(sections: CompteSection[], now: Date, dejaCouverte: (obligationId: string) => boolean = () => false) {
+  const lignes = sections.flatMap((s) => s.elements).map((e) => ligne(e, now, dejaCouverte)).filter((l): l is LigneAFaire => !!l);
   const tri = (a: LigneAFaire, b: LigneAFaire) => RANG_URGENCE[a.urgence] - RANG_URGENCE[b.urgence] || (a.echeance ?? '9999').localeCompare(b.echeance ?? '9999');
   const groupe = (g: GroupeAFaire) => lignes.filter((l) => l.groupe === g).sort(tri);
   return {

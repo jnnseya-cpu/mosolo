@@ -1678,3 +1678,30 @@ Décisions du maître d'ouvrage :
   « Mon espace », deuxième entrée de « Mon travail du jour ». Hors ligne : la dernière liste chargée reste affichée
   (commodité de l'appareil ; l'agent vérifie toujours sur le serveur). Réservé au titulaire du compte ; chaque source
   est lue avec les droits de l'usager ; ouverture journalisée.
+
+## I.43 Canaux et passerelles de paiement vérifiés de bout en bout ; KODA et BitriPay selon leur documentation (30/09/2026)
+
+Demande du maître d'ouvrage : « s'assurer que tous les canaux et passerelles fonctionnent », avec captures ; ajout
+d'Africell à KODA ; présentations de KODA et de BitriPay (`docs/sources/KODA_presentation_2026-09-30_resume.md`,
+`docs/sources/BitriPay_presentation_2026-09-30_resume.md`).
+
+- **Parcours vérifiés par des tests de bout en bout** (`backend/test/canaux-paiement-bout-en-bout.test.ts`) : Monnaie
+  mobile, Code QR, USSD (opérateur direct), Banque (notification signée de la banque), Carte (notification signée de la
+  passerelle carte) : référence → confirmation signée → quittance provisoire → relevé validé par deux personnes →
+  quittance définitive ; point agréé (référence ; versement et rapprochement couverts par `canaux-releve`) ; BitriPay et
+  KODA (`paiement-aller-retour`, `connectors`). Contrôle conservé : un crédit au relevé sans confirmation signée reste une
+  exception « crédit sans confirmation », jamais une quittance.
+- **Démonstration** : dans la console des prestataires du Trésor, « Confirmation d'un opérateur direct, d'une banque ou
+  d'une carte » envoie la notification SIGNÉE de l'opérateur de démonstration à la route réelle
+  (`POST /v1/providers/:provider/demo-operator-confirmation`) ; refusée hors démonstration ou avec un vrai secret.
+- **Écran de paiement** : mode d'emploi par canal ; lien « Suivre l'état réel » pour tous les canaux ; passerelles
+  proposées selon le canal — BitriPay : monnaie mobile, QR, **carte** ; KODA : monnaie mobile, QR, **USSD** (le client
+  paie comme d'habitude, KODA vérifie la confirmation de l'opérateur sans toucher l'argent).
+- **KODA** : opérateurs par défaut Orange Money, M-Pesa, **Airtel Money, Africell Money** (tous les opérateurs congolais ;
+  codes à confirmer). **BitriPay** : rail carte `card` à confirmer.
+- **Comptes de règlement** : une passerelle peut régler plusieurs comptes publics (un par régie :
+  `*_SETTLEMENT_ACCOUNT_ALIASES`), toujours le compte bénéficiaire de l'obligation, chacun inscrit au coffre. Corrige un
+  refus relevé en démonstration (obligation de la DGTK payée par BitriPay ou KODA).
+- **« À faire »** : une obligation déjà entièrement couverte par des paiements confirmés n'est plus proposée « à payer » ;
+  elle passe en « en cours de vérification » (rapprochement bancaire en cours).
+- **Frais des passerelles** : à la charge de qui, selon la convention — à confirmer par le maître d'ouvrage.

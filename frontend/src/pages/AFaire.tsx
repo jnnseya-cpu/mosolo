@@ -31,6 +31,7 @@ const URGENCE: Record<Ligne['urgence'], { label: string; tone: Tone } | null> = 
 };
 const ETAT_LISIBLE: Record<string, string> = {
   CONFIRMATION_BANCAIRE: 'Paiement reçu — confirmation bancaire en cours',
+  PAYEE_EN_RAPPROCHEMENT: 'Payée — rapprochement bancaire en cours',
   ENREGISTRE_A_VERIFIER: 'Enregistré — vérification par l’administration',
   EN_COURS: 'En cours',
   DEPOSE: 'Déposée', DEPOSEE: 'Déposée', DEMANDEE: 'Demandée', EN_INSTRUCTION: 'En instruction', ECART_A_INSTRUIRE: 'Écart en cours d’examen',

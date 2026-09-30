@@ -157,6 +157,19 @@ export function registerPaymentRoutes(app: FastifyInstance, ctx: AppContext): vo
     return { simulated: true, sandbox: true, ...ctx.payments.handleConnectorWebhook(connector.id, headers, raw) };
   });
 
+  // Démonstration (30/09/2026) : confirmation SIGNÉE d'un opérateur DIRECT (monnaie mobile, QR, USSD sans passerelle),
+  // envoyée à la route réelle des rappels. Refusée hors mode démonstration ou avec un vrai secret d'opérateur.
+  app.post<{ Params: { provider: string } }>('/v1/providers/:provider/demo-operator-confirmation', async (req, reply) => {
+    const user = requireUser(req);
+    authorize(user, 'provider.simulate');
+    if (!isDemoMode()) throw conflict('SIMULATION_FORBIDDEN', 'Simulation réservée au mode démonstration.');
+    const body = parse(z.object({ paymentReference: z.string().min(3).max(64) }).strict(), req.body);
+    const { raw, headers } = ctx.payments.demoOperatorCallback(req.params.provider, body.paymentReference);
+    ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'provider.demo_operator.simulated', resourceType: 'payment_reference', resourceId: body.paymentReference, details: { provider: req.params.provider } });
+    const res = await app.inject({ method: 'POST', url: `/v1/providers/${encodeURIComponent(req.params.provider)}/callbacks`, headers: { 'content-type': 'application/json', 'x-signature': headers.signature, 'x-nonce': headers.nonce, 'x-timestamp': headers.timestamp }, payload: raw });
+    return reply.code(res.statusCode).send({ simulated: true, provider: req.params.provider, ...(res.json() as object) });
+  });
+
   // Page de retour « /paiement/retour » (29/09/2026) : état RÉEL du paiement lu dans MOSOLO (jamais dans l'URL de retour).
   app.get<{ Params: { reference: string } }>('/v1/payment-orders/:reference/status', async (req, reply) => {
     const user = requireUser(req);

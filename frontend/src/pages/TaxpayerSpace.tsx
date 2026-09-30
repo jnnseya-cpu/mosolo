@@ -38,13 +38,27 @@ const FISCAL_LINKS: { to: string; icon: string; title: string; text: string }[] 
   { to: '/fiscal/carte', icon: 'pin', title: 'Carte de mes biens', text: 'Situation fiscale et vérification, en couleurs.' },
 ];
 
-/** Agrégateurs candidats (canaux Monnaie mobile et QR) : le règlement va toujours au compte public du coffre. */
-const PROVIDERS: { id: '' | 'bitripay' | 'koda'; label: string; hint: string }[] = [
-  { id: '', label: 'Opérateur direct', hint: 'Référence à saisir dans votre application ou par USSD' },
-  { id: 'bitripay', label: 'BitriPay', hint: 'Page de paiement hébergée et QR BitriPay' },
-  { id: 'koda', label: 'KODA', hint: 'Page de paiement KODA (Orange Money, M-Pesa)' },
+/**
+ * Passerelles candidates (30/09/2026, documentation des prestataires) : BitriPay — page hébergée et QR, carte et monnaie
+ * mobile (M-Pesa, Orange Money, Airtel Money, Africell Money) ; KODA — vous payez comme d'habitude (application, QR ou
+ * USSD de l'opérateur) et KODA VÉRIFIE la confirmation de l'opérateur, sans jamais toucher l'argent. Le paiement va
+ * toujours au compte public de la Ville.
+ */
+const PROVIDERS: { id: '' | 'bitripay' | 'koda'; label: string; hint: string; canaux: string[] }[] = [
+  { id: '', label: 'Opérateur direct', hint: 'Référence à saisir dans votre application ou par USSD', canaux: ['MOBILE_MONEY', 'QR', 'USSD', 'CARD'] },
+  { id: 'bitripay', label: 'BitriPay', hint: 'Page de paiement hébergée et QR BitriPay : carte, M-Pesa, Orange Money, Airtel Money, Africell Money', canaux: ['MOBILE_MONEY', 'QR', 'CARD'] },
+  { id: 'koda', label: 'KODA', hint: 'Vous payez comme d’habitude (application ou USSD de votre opérateur : Orange Money, M-Pesa, Airtel Money, Africell Money) ; KODA vérifie la confirmation de l’opérateur', canaux: ['MOBILE_MONEY', 'QR', 'USSD'] },
 ];
 
+/** Étapes par canal (opérateur direct, sans passerelle) — 30/09/2026. */
+const CHANNEL_STEPS: Record<string, string[]> = {
+  MOBILE_MONEY: ['Ouvrez votre application de monnaie mobile (Orange Money, M-Pesa, Airtel Money, Africell Money).', 'Choisissez « Payer une facture » → MOSOLO, puis saisissez la référence {ref}.', 'Validez avec votre code secret : vous recevez un SMS, puis la quittance provisoire apparaît dans « Mon espace ».'],
+  QR: ['Ouvrez votre application de monnaie mobile et choisissez « Scanner pour payer ».', 'Scannez le QR de la référence {ref} (ou saisissez la référence).', 'Validez : la quittance provisoire apparaît dès la confirmation signée de l’opérateur.'],
+  USSD: ['Composez le code court MOSOLO de votre opérateur (code à raccorder par convention).', 'Choisissez « Payer », saisissez la référence {ref} et validez avec votre code secret.', 'La quittance provisoire arrive par SMS et dans « Mon espace ».'],
+  BANK: ['Faites un virement ou payez au guichet de votre banque vers le compte public indiqué ci-dessus.', 'Indiquez OBLIGATOIREMENT la référence {ref} comme motif du paiement.', 'La banque notifie MOSOLO (notification signée) : quittance provisoire, puis définitive au rapprochement du relevé.'],
+  CARD: ['Payez par carte auprès de la passerelle carte agréée, avec la référence {ref}.', 'La passerelle notifie MOSOLO (notification signée) : quittance provisoire, puis définitive au rapprochement.'],
+  AGENT_POINT: ['Rendez-vous dans un point de paiement agréé (jamais auprès d’un agent de terrain).', 'Donnez la référence {ref} : l’opérateur encaisse et vous remet un reçu du point.', 'La quittance provisoire apparaît dans « Mon espace » ; elle devient définitive quand le versement du point est rapproché.'],
+};
 const CHANNELS: { id: string; icon: string; key: UIKey }[] = [
   { id: 'MOBILE_MONEY', icon: 'phone', key: 'pay.channel.MOBILE_MONEY' },
   { id: 'QR', icon: 'qr', key: 'pay.channel.QR' },
@@ -129,7 +143,10 @@ function PayFlow({ ob }: { ob: Obligation }) {
   const { tr, currency, fmtDate } = useApp();
   const [channel, setChannel] = useState('MOBILE_MONEY');
   const [provider, setProvider] = useState<'' | 'bitripay' | 'koda'>('');
-  const providerAllowed = channel === 'MOBILE_MONEY' || channel === 'QR';
+  const passerelles = PROVIDERS.filter((p) => p.id !== '' && p.canaux.includes(channel));
+  const providerAllowed = passerelles.length > 0;
+  // Passerelle non proposée pour ce canal : retour à l'opérateur direct.
+  useEffect(() => { if (provider && !PROVIDERS.find((p) => p.id === provider)?.canaux.includes(channel)) setProvider(''); }, [channel, provider]);
   const [idem] = useState(newIdempotencyKey);
   const [busy, setBusy] = useState(false);
   const [order, setOrder] = useState<PaymentOrder | null>(null);
@@ -187,14 +204,14 @@ function PayFlow({ ob }: { ob: Obligation }) {
             <fieldset className="field">
               <legend className="label">Passerelle de paiement</legend>
               <div className="choice-grid">
-                {PROVIDERS.map((p) => (
+                {PROVIDERS.filter((p) => p.canaux.includes(channel)).map((p) => (
                   <label key={p.id || 'direct'} className={`choice ${provider === p.id ? 'checked' : ''}`}>
                     <input type="radio" name="provider" value={p.id} checked={provider === p.id} onChange={() => setProvider(p.id)} />
                     <span><strong>{p.label}</strong><br /><span className="small muted">{p.hint}</span></span>
                   </label>
                 ))}
               </div>
-              <span className="hint">BitriPay et KODA sont des prestataires candidats : ils règlent le compte public de la Ville, aucun frais n’est prélevé sur votre paiement.</span>
+              <span className="hint">BitriPay et KODA sont des prestataires candidats. Votre paiement va toujours au compte public de la Ville : BitriPay l’achemine, KODA ne touche jamais l’argent et vérifie seulement la confirmation de l’opérateur. Le montant à payer est celui de votre obligation ; les frais éventuels de la passerelle relèvent de la convention avec la Ville (à confirmer).</span>
             </fieldset>
           )}
           <p className="small muted">{tr('pay.idempotency')} <span className="mono">{idem.slice(0, 8)}…</span></p>
@@ -231,13 +248,23 @@ function PayFlow({ ob }: { ob: Obligation }) {
               </div>
             </div>
           )}
-          {ussd.length > 0 && (
+          {/* Mode d'emploi par canal (30/09/2026) : ce que fait le contribuable, et comment MOSOLO apprend le paiement. */}
+          {!order.provider && CHANNEL_STEPS[order.channel ?? channel] && (
+            <div data-testid="pay-steps">
+              <h3 className="h-sub">Comment payer</h3>
+              <ol className="steps">{CHANNEL_STEPS[order.channel ?? channel]!.map((s2) => <li key={s2}>{s2.replace('{ref}', order.paymentReference)}</li>)}</ol>
+              {(order.channel ?? channel) === 'AGENT_POINT' && <Link className="btn btn-secondary btn-sm" to="/points-de-paiement">Trouver un point de paiement agréé</Link>}
+            </div>
+          )}
+          {!order.provider && <p className="small"><Link className="btn-link" to={`/paiement/retour?ref=${encodeURIComponent(order.paymentReference)}`}>Suivre l’état réel de ce paiement</Link> — la quittance provisoire arrive dès la confirmation signée, définitive après rapprochement bancaire.</p>}
+          {/* Instructions USSD du serveur : réservées au canal USSD (30/09/2026 — plus affichées pour la banque ou la carte). */}
+          {ussd.length > 0 && (order.channel ?? channel) === 'USSD' && (
             <div>
               <h3 className="h-sub">{tr('pay.ussdTitle')}</h3>
               <ol className="steps">{ussd.map((s, i) => <li key={i}>{s}</li>)}</ol>
             </div>
           )}
-          <p className="small">{tr('payment.ussdHint')}</p>
+          {['USSD', 'MOBILE_MONEY', 'QR'].includes(order.channel ?? channel) && <p className="small">{tr('payment.ussdHint')}</p>}
         </div>
       )}
     </div>

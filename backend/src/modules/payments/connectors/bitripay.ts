@@ -343,7 +343,8 @@ export class BitriPayConnector implements PaymentConnector {
         amount_minor: amountMinor,
         currency: req.amount.currency,
         // Rails de paiement (OpenAPI : rails[] ; anciennement « allowed_operators » sur la page publique) — identifiants à confirmer.
-        rails: this.config.allowedOperators,
+        // Carte (30/09/2026, BitriPay accepte la carte) : rail « card » — identifiant à confirmer auprès de BitriPay.
+        rails: req.channel === 'CARD' ? ['card'] : this.config.allowedOperators,
         capture_method: 'automatic',
         reference: req.paymentReference,
         description: `KINSHASA MOSOLO ${req.paymentReference}`,

@@ -27,7 +27,7 @@ const TONE: Record<PaymentStatusView['state'], 'warning' | 'info' | 'good' | 'cr
   EN_ATTENTE: 'warning', VERIFICATION_MANUELLE: 'info', CONFIRME: 'good', ECHEC: 'critical',
 };
 const ICON: Record<PaymentStatusView['state'], string> = { EN_ATTENTE: 'clock', VERIFICATION_MANUELLE: 'shieldCheck', CONFIRME: 'check', ECHEC: 'alert' };
-const PROVIDER: Record<string, string> = { bitripay: 'BitriPay', koda: 'KODA' };
+const PROVIDER: Record<string, string> = { 'mm-operator-a': 'Opérateur de monnaie mobile (direct)', 'bank-a': 'Banque', 'card-gateway': 'Passerelle carte', bitripay: 'BitriPay', koda: 'KODA' };
 /** Intervalle d'actualisation de l'état (confort d'affichage, sans effet sur le paiement). */
 const POLL_MS = 4_000;
 

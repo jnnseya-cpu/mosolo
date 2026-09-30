@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1597 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1598 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -48,7 +48,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1597 routes** dans 5
 | module identity | 6 |
 | module integrations | 7 |
 | module objects | 2 |
-| module payments | 11 |
+| module payments | 12 |
 | module receipts | 2 |
 | module rules | 26 |
 | module system | 3 |
@@ -1827,6 +1827,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1597 routes** dans 5
 | POST | `/v1/payment-orders/:reference/provider-verification-evidence` |
 | GET | `/v1/payment-orders/:reference/status` |
 | POST | `/v1/providers/:provider/callbacks` |
+| POST | `/v1/providers/:provider/demo-operator-confirmation` |
 | POST | `/v1/providers/:provider/sandbox-simulate` |
 | POST | `/v1/providers/:provider/test-connection` |
 | POST | `/v1/providers/bitripay/webhooks` |

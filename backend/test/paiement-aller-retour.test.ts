@@ -240,7 +240,7 @@ describe('KODA — aller-retour par page hébergée', () => {
     const create = sim.calls.find((c) => c.method === 'POST' && c.path === '/koda/v1/intents')!;
     expect(create.headers.authorization).toBe(`Bearer ${KODA_KEY}`);
     expect(JSON.parse(create.body)).toMatchObject({
-      amount: 15000, currency: 'USD', operators: ['orange_cd', 'mpesa_cd'], metadata: { order_id: expect.any(String), payment_reference: order.paymentReference },
+      amount: 15000, currency: 'USD', operators: ['orange_cd', 'mpesa_cd', 'airtel_cd', 'africell_cd'], metadata: { order_id: expect.any(String), payment_reference: order.paymentReference },
       success_url: `${PUBLIC}/paiement/retour?ref=${encodeURIComponent(order.paymentReference)}`,
     });
     expect((await statusOf(e, order.paymentReference)).json()).toMatchObject({ state: 'EN_ATTENTE' });

@@ -171,7 +171,9 @@ export function registerCompteUniqueRoutes(app: FastifyInstance, ctx: AppContext
         : forbidden('FORBIDDEN', 'Espace réservé aux titulaires d’un compte contribuable.');
     }
     const v = view(user, target, req.headers);
-    return { compte: { taxpayerId: v.compte.taxpayerId, nom: v.compte.nom }, viewer: v.viewer, ...aFaire(v.sections, ctx.clock.now()), genereLe: ctx.clock.now().toISOString() };
+    // Obligation dont le solde est nul (paiements confirmés, rapprochement en cours) : jamais proposée « à payer ».
+    const dejaCouverte = (id: string) => { try { const o = ctx.assessment.get(id); const reste = Money.fromJSON(o.amount).subtract(ctx.payments.paidOn(id)); return reste.isZero() || reste.isNegative(); } catch { return false; } };
+    return { compte: { taxpayerId: v.compte.taxpayerId, nom: v.compte.nom }, viewer: v.viewer, ...aFaire(v.sections, ctx.clock.now(), dejaCouverte), genereLe: ctx.clock.now().toISOString() };
   });
 
   app.get<{ Params: { taxpayerId: string }; Querystring: { consultation?: string } }>('/v1/compte-unique/:taxpayerId', async (req) => {

@@ -72,6 +72,7 @@ export const PROVIDER_ENV_VARS: Record<ConnectorId, { name: string; secret: bool
     { name: 'BITRIPAY_ED25519_REQUIRED', secret: false, requiredForReal: false, role: 'Exiger la signature Ed25519 (défaut : true dès qu’une clé BitriPay est configurée — décision du 29/09/2026)' },
     { name: 'BITRIPAY_BASE_URL', secret: false, requiredForReal: false, role: `URL de l'API (défaut : ${BITRIPAY_DEFAULT_BASE_URL})` },
     { name: 'BITRIPAY_SETTLEMENT_ACCOUNT_ALIAS', secret: false, requiredForReal: true, role: 'Alias du compte public de règlement, inscrit au coffre' },
+    { name: 'BITRIPAY_SETTLEMENT_ACCOUNT_ALIASES', secret: false, requiredForReal: false, role: 'Autres comptes publics de règlement (un par régie), séparés par des virgules, inscrits au coffre' },
     { name: 'BITRIPAY_ALLOWED_OPERATORS', secret: false, requiredForReal: false, role: 'Opérateurs proposés (défaut : orange_cd, mpesa_cd, airtel_cd, africell_cd)' },
     { name: 'BITRIPAY_ACCOUNT_ID', secret: false, requiredForReal: false, role: 'Compte connecté acct_… de la Ville (clé d’intégrateur seulement)' },
     { name: 'BITRIPAY_CDF_EXPONENT', secret: false, requiredForReal: false, role: 'Décimales du CDF chez BitriPay : 0 ou 2 (défaut 2, à confirmer)' },
@@ -83,7 +84,8 @@ export const PROVIDER_ENV_VARS: Record<ConnectorId, { name: string; secret: bool
     { name: 'KODA_WEBHOOK_SECRET', secret: true, requiredForReal: true, role: 'Secret HMAC des webhooks' },
     { name: 'KODA_BASE_URL', secret: false, requiredForReal: false, role: `URL de l'API (défaut : ${KODA_DEFAULT_BASE_URL})` },
     { name: 'KODA_SETTLEMENT_ACCOUNT_ALIAS', secret: false, requiredForReal: true, role: 'Alias du compte public de règlement, inscrit au coffre' },
-    { name: 'KODA_OPERATORS', secret: false, requiredForReal: false, role: 'Opérateurs proposés (défaut : orange_cd, mpesa_cd)' },
+    { name: 'KODA_SETTLEMENT_ACCOUNT_ALIASES', secret: false, requiredForReal: false, role: 'Autres comptes publics de réception (un par régie), séparés par des virgules, inscrits au coffre' },
+    { name: 'KODA_OPERATORS', secret: false, requiredForReal: false, role: 'Opérateurs proposés (défaut : orange_cd, mpesa_cd, airtel_cd, africell_cd — tous les opérateurs congolais ; codes à confirmer auprès de KODA)' },
     { name: 'KODA_SUCCESS_URL', secret: false, requiredForReal: false, role: 'URL de retour du portail officiel (sans valeur probante) ; à défaut : MOSOLO_PUBLIC_URL + /paiement/retour' },
   ],
 };
@@ -131,6 +133,13 @@ export class ConnectorRegistry {
   private setupState: ProviderSetup[] = [];
   /** Mode démonstration au moment de la construction (bac à sable local admis pour les confirmations). */
   demoMode = false;
+  /**
+   * Comptes publics de règlement ADDITIONNELS par passerelle (30/09/2026) : un compte de réception par régie (DGIPK,
+   * DGTK…). La doctrine reste entière : le paiement ne va qu'au compte public bénéficiaire de l'obligation, et chaque
+   * alias doit exister au coffre (démarrage refusé sinon). Variables <PRESTATAIRE>_SETTLEMENT_ACCOUNT_ALIASES.
+   */
+  extraSettlementAliases = new Map<ConnectorId, string[]>();
+  private demoSettlementAliases = new Map<ConnectorId, string[]>();
   private source?: ConnectorConfigSource;
   private builtFingerprint = '';
   /** Dernière reconstruction refusée (configuration invalide) : message sans valeur ; null si tout va bien. */
@@ -179,6 +188,7 @@ export class ConnectorRegistry {
       const next = buildConnectorRegistry(env, this.source.runtime, this.demoMode);
       if (this.aliasCheck) next.validate(this.aliasCheck);
       this.connectors = next.connectors;
+      this.extraSettlementAliases = next.extraSettlementAliases;
       this.setupState = this.withSources(next.setupState);
       this.configError = null;
       this.reloads += 1;
@@ -210,6 +220,14 @@ export class ConnectorRegistry {
   /** Validation au démarrage : chaque alias de règlement doit exister dans le coffre. */
   validate(aliasExists: (alias: string) => boolean): void {
     this.aliasCheck = aliasExists;
+    for (const [id, aliases] of this.extraSettlementAliases) {
+      for (const a of aliases) if (!aliasExists(a)) throw new ConnectorConfigError(`${id} : l'alias de compte de règlement « ${a} » n'existe pas dans le coffre.`);
+    }
+    // Démonstration : comptes publics de démonstration des autres régies, retenus seulement s'ils existent au coffre.
+    for (const [id, aliases] of this.demoSettlementAliases) {
+      const ok = aliases.filter((a) => aliasExists(a));
+      if (ok.length) this.extraSettlementAliases.set(id, [...new Set([...(this.extraSettlementAliases.get(id) ?? []), ...ok])]);
+    }
     for (const c of this.connectors.values()) {
       if (!c.settlementAccountAlias || !aliasExists(c.settlementAccountAlias)) {
         throw new ConnectorConfigError(
@@ -218,6 +236,14 @@ export class ConnectorRegistry {
         );
       }
     }
+  }
+
+  setDemoSettlementAliases(id: ConnectorId, aliases: string[]): void { this.demoSettlementAliases.set(id, aliases); }
+
+  /** Comptes publics où la passerelle peut régler : l'alias principal et les alias additionnels. */
+  settlementAliases(id: ConnectorId): string[] {
+    const c = this.connectors.get(id);
+    return c ? [...new Set([c.settlementAccountAlias, ...(this.extraSettlementAliases.get(id) ?? [])])] : [];
   }
 
   /** Vue masquée (aucun secret). */
@@ -251,7 +277,9 @@ export function buildConnectorRegistry(env: NodeJS.ProcessEnv | Record<string, s
       webhookSecret: kodaSecret,
       baseUrl: env.KODA_BASE_URL || KODA_DEFAULT_BASE_URL,
       settlementAccountAlias: env.KODA_SETTLEMENT_ACCOUNT_ALIAS || DEFAULT_SETTLEMENT_ACCOUNT_ALIAS,
-      operators: list(env.KODA_OPERATORS, ['orange_cd', 'mpesa_cd']),
+      // KODA fonctionne avec tous les opérateurs congolais (maître d'ouvrage, 30/09/2026) : Orange, M-Pesa, Airtel, Africell ;
+      // codes repris de BitriPay — à confirmer auprès de KODA.
+      operators: list(env.KODA_OPERATORS, ['orange_cd', 'mpesa_cd', 'airtel_cd', 'africell_cd']),
       successUrl: env.KODA_SUCCESS_URL || returnUrl || DEFAULT_RETURN_URL,
     },
     runtime,
@@ -286,6 +314,11 @@ export function buildConnectorRegistry(env: NodeJS.ProcessEnv | Record<string, s
   );
   const registry = new ConnectorRegistry([bitripay, koda].filter((c): c is BitriPayConnector | KodaConnector => c !== null));
   registry.demoMode = demoMode;
+  for (const [id, v] of [['bitripay', env.BITRIPAY_SETTLEMENT_ACCOUNT_ALIASES], ['koda', env.KODA_SETTLEMENT_ACCOUNT_ALIASES]] as const) {
+    if (v) registry.extraSettlementAliases.set(id, list(v, []));
+    // Démonstration sans liste explicite : les comptes de démonstration des deux régies (DGIPK et DGTK).
+    else if (demoMode) registry.setDemoSettlementAliases(id, [DEFAULT_SETTLEMENT_ACCOUNT_ALIAS, 'KIN-DGTK-RECETTES-01']);
+  }
   registry.setup = CONNECTOR_IDS.map((id) => describeSetup(id, env, registry.get(id) !== undefined, demoMode));
   return registry;
 }

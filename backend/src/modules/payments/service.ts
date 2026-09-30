@@ -20,11 +20,12 @@ import type { TaxpayerService } from '../identity/service.js';
 import type { ReceiptService } from '../receipts/service.js';
 import type { LedgerService } from '../treasury/ledger.js';
 import type { VaultService } from '../vault/service.js';
-import { DEFAULT_KEY_ID, NonceStore, isValidNonce, signCallback, verifyCallbackSignature, type ProviderKey } from './callback-signing.js';
+import { signedCallbackHeaders, DEFAULT_KEY_ID, NonceStore, isValidNonce, signCallback, verifyCallbackSignature, type ProviderKey } from './callback-signing.js';
 import { ProviderHttpError } from './connectors/http-client.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
 import { CONNECTOR_IDS } from './connectors/types.js';
 import { classifyResolution } from './connectors/bitripay.js';
+import { randomUUID } from 'node:crypto';
 import {
   WebhookPayloadError, WebhookVerificationError, type ConfirmationMethod, type ConnectorId, type HeaderBag,
   type ConnectionTestResult, type HoldEvent, type NormalizedProviderEvent, type PaymentConnector, type PaymentEvent, type SettlementEvent, type VerifiedWebhook, type WebhookChecks,
@@ -35,6 +36,8 @@ export type PaymentChannel = (typeof PAYMENT_CHANNELS)[number];
 
 export const CALLBACK_WINDOW_MS = 5 * 60 * 1000;
 export const REFERENCE_VALIDITY_HOURS = 48;
+/** Canaux proposés par passerelle (30/09/2026). */
+export const CANAUX_PAR_PASSERELLE: Record<string, readonly PaymentChannel[]> = { bitripay: ['MOBILE_MONEY', 'QR', 'CARD'], koda: ['MOBILE_MONEY', 'QR', 'USSD'] };
 
 export interface PaymentOrder {
   id: string;
@@ -559,13 +562,18 @@ export class PaymentService {
     if (connector.mode === 'SANDBOX_LOCAL' && !this.connectors.demoMode) {
       throw new ApiError(503, 'PROVIDER_NOT_CONFIGURED', `${connector.label} n'est pas raccordé (clé API absente) : choisissez un autre canal de paiement.`, { provider: connector.id });
     }
-    if (input.channel !== 'MOBILE_MONEY' && input.channel !== 'QR') {
-      throw unprocessable('PROVIDER_CHANNEL_UNSUPPORTED', `Le prestataire ${connector.label} n'est proposé que pour les canaux MOBILE_MONEY et QR.`);
+    // Canaux par passerelle (30/09/2026, documentation des prestataires) : BitriPay — monnaie mobile, QR et carte ;
+    // KODA — vérification de la confirmation de l'opérateur pour un paiement fait « comme d'habitude » (application,
+    // QR ou USSD de l'opérateur). KODA ne touche jamais l'argent.
+    const canaux = CANAUX_PAR_PASSERELLE[connector.id] ?? ['MOBILE_MONEY', 'QR'];
+    if (!canaux.includes(input.channel)) {
+      throw unprocessable('PROVIDER_CHANNEL_UNSUPPORTED', `Le prestataire ${connector.label} n'est proposé que pour les canaux ${canaux.join(', ')}.`);
     }
     const { obligation, draft } = this.prepareOrder(user, obligationId, input);
     // Doctrine : le règlement du prestataire va au compte public du coffre qui est aussi le bénéficiaire de l'ordre.
     this.vault.resolveAlias(connector.settlementAccountAlias);
-    if (connector.settlementAccountAlias !== draft.beneficiaryAlias) {
+    // Plusieurs comptes publics admis (un par régie, 30/09/2026) ; toujours celui de l'obligation, jamais un autre.
+    if (!this.connectors.settlementAliases(connector.id).includes(draft.beneficiaryAlias)) {
       throw unprocessable(
         'SETTLEMENT_ACCOUNT_MISMATCH',
         `Le compte de règlement de ${connector.label} (${connector.settlementAccountAlias}) n'est pas le compte bénéficiaire de l'obligation (${draft.beneficiaryAlias}).`,
@@ -1533,6 +1541,21 @@ export class PaymentService {
     const now = this.clock.now().toISOString();
     const settled = this.transition(o, 'REGLE', { settledAt: now });
     return this.transition(settled, 'RAPPROCHE', { reconciledAt: now, ledgerEntryIds: [...settled.ledgerEntryIds, ledgerEntryId] });
+  }
+
+  /**
+   * DÉMONSTRATION SEULEMENT (30/09/2026) : rappel SIGNÉ d'un opérateur DIRECT (monnaie mobile, QR, USSD sans passerelle)
+   * pour une référence, passé par la vérification réelle (signature, fraîcheur, nonce, montant, idempotence). Refusé
+   * si le secret de l'opérateur n'est pas un secret de démonstration : avec une vraie clé, seul l'opérateur confirme.
+   */
+  demoOperatorCallback(provider: string, paymentReference: string): { raw: string; headers: { signature: string; nonce: string; timestamp: string } } {
+    const secret = this.providerSecrets[provider];
+    if (!secret || !/^demo-/i.test(secret)) throw conflict('SIMULATION_FORBIDDEN', 'Simulation réservée à un opérateur de démonstration (secret de démonstration).');
+    const order = this.orders.findOne((o) => o.paymentReference === paymentReference);
+    if (!order) throw notFound('PAYMENT_REFERENCE_NOT_FOUND', `Référence inconnue : ${paymentReference}`);
+    if (order.provider) throw conflict('PROVIDER_ORDER', 'Référence liée à une passerelle (BitriPay, KODA) : utilisez la simulation de la passerelle.');
+    const raw = JSON.stringify({ providerTxnId: `DEMO-OP-${randomUUID()}`, paymentReference, amount: order.amount, status: 'SUCCESS', completedAt: this.clock.now().toISOString() });
+    return { raw, headers: signedCallbackHeaders(secret, raw, this.clock.now()) };
   }
 
   /** Signature v2 attendue d'un rappel (utilitaire pour la démo et les tests ; voir signedCallbackHeaders). */

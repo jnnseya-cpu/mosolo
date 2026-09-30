@@ -126,6 +126,8 @@ export default function Prestataires() {
 
           <ul className="pr-doctrine">{q.data.doctrine.map((d) => <li key={d}><Icon name="shieldCheck" size={16} /> {d}</li>)}</ul>
 
+          {canSimulate && <ConfirmationDirecte onDone={q.reload} />}
+
           <section className="panel" aria-labelledby="pr-orders">
             <div className="panel-head"><div><h2 className="panel-title" id="pr-orders">Ordres de paiement par prestataire</h2><p className="panel-sub">Références créées par les contribuables ; chaque confirmation arrive par webhook signé</p></div></div>
             {msg && <p className={`notice ${msg.ok ? 'notice-ok' : 'notice-err'}`} role="status">{msg.text}</p>}
@@ -195,5 +197,47 @@ export default function Prestataires() {
         </div>
       )}
     </div>
+  );
+}
+
+
+/**
+ * Démonstration (30/09/2026) : notification SIGNÉE d'un opérateur direct (monnaie mobile, QR, USSD), de la banque ou de la
+ * passerelle carte pour une référence — envoyée à la route réelle des rappels (signature, fraîcheur, montant, idempotence).
+ * Refusée par le serveur hors démonstration ou avec un vrai secret : en production, seul l'opérateur confirme.
+ */
+const SOURCES_DIRECTES = [
+  { id: 'mm-operator-a', label: 'Opérateur de monnaie mobile (monnaie mobile, code QR, USSD)' },
+  { id: 'bank-a', label: 'Banque (virement ou guichet bancaire)' },
+  { id: 'card-gateway', label: 'Passerelle carte' },
+];
+function ConfirmationDirecte({ onDone }: { onDone: () => void }) {
+  const [source, setSource] = useState(SOURCES_DIRECTES[0]!.id);
+  const [ref, setRef] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  async function go(e: React.FormEvent) {
+    e.preventDefault(); setBusy(true); setMsg(null);
+    try {
+      const r = await api<{ status?: string; receipt?: { number?: string; status?: string }; receiptNumber?: string }>(`/v1/providers/${source}/demo-operator-confirmation`, { method: 'POST', body: { paymentReference: ref.trim() } });
+      setMsg({ ok: true, text: `Notification signée reçue et vérifiée : paiement ${({ CONFIRME: 'confirmé', RAPPROCHE: 'rapproché', REGLE: 'réglé' } as Record<string, string>)[r.status ?? ''] ?? 'confirmé'}${r.receipt?.number ?? r.receiptNumber ? `, quittance ${r.receipt?.number ?? r.receiptNumber}` : ''} (provisoire jusqu’au rapprochement avec le relevé).` });
+      setRef(''); onDone();
+    } catch (x) { setMsg({ ok: false, text: describeError(x).message }); } finally { setBusy(false); }
+  }
+  return (
+    <section className="panel" aria-labelledby="pr-direct" data-testid="confirmation-directe">
+      <div className="panel-head"><div><h2 className="panel-title" id="pr-direct">Confirmation d’un opérateur direct, d’une banque ou d’une carte (démonstration)</h2>
+        <p className="panel-sub">Simule la notification signée que l’opérateur envoie après le paiement du contribuable avec sa référence. Refusée en production : seul l’opérateur confirme.</p></div></div>
+      <form className="form" onSubmit={(e) => void go(e)}>
+        <div className="field-row">
+          <div className="field"><label className="label" htmlFor="cd-src">Qui confirme</label>
+            <select id="cd-src" value={source} onChange={(e) => setSource(e.target.value)}>{SOURCES_DIRECTES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></div>
+          <div className="field"><label className="label" htmlFor="cd-ref">Référence de paiement</label>
+            <input id="cd-ref" className="mono" required minLength={3} value={ref} onChange={(e) => setRef(e.target.value)} placeholder="PR-XXXX-XXXX" /></div>
+        </div>
+        <button type="submit" className="btn btn-primary btn-sm" disabled={busy || ref.trim().length < 3}>Envoyer la notification signée</button>
+        {msg && <p className={`notice ${msg.ok ? 'notice-ok' : 'notice-err'}`} role="status">{msg.text}</p>}
+      </form>
+    </section>
   );
 }

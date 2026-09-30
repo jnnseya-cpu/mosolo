@@ -111,3 +111,7 @@ données de démonstration.
 - **Contrôles (30/09/2026)** : l'usager ne vérifie pas les agents (un agent n'agit qu'après invitation sur la
   plateforme) ; il présente ses preuves en UN CLIC (« Mes preuves » : bouton de l'en-tête, de « Mon espace » et du menu),
   chacune avec son code QR vérifiable par le résolveur universel (annexe I, § I.42).
+- **Paiements (30/09/2026)** : KODA = vérification de la confirmation de l'opérateur (ne touche jamais l'argent), tous
+  les opérateurs congolais (Orange, M-Pesa, Airtel, Africell), proposée pour monnaie mobile, QR et USSD ; BitriPay =
+  acheminement (monnaie mobile, QR, carte). Une vérification ou confirmation donne une quittance PROVISOIRE ; définitive
+  au rapprochement du relevé seulement. Frais des passerelles : selon convention, à confirmer (annexe I, § I.43).

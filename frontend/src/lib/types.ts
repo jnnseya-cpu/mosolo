@@ -43,6 +43,8 @@ export interface ObligationExplanation {
 export interface ObligationDetail extends Obligation { explanation?: ObligationExplanation }
 
 export interface PaymentOrder {
+  /** Canal choisi (MOBILE_MONEY, QR, BANK, CARD, USSD, AGENT_POINT). */
+  channel?: string;
   paymentReference: string; amount: MoneyJSON; indicativeAmount?: MoneyJSON | { amount: MoneyJSON; rate?: string } | null; beneficiaryAlias?: string;
   expiresAt?: string; createdAt?: string; status: PaymentStatus | string; ussdInstructions?: string | string[];
   /** Prestataire connecté (BitriPay, KODA) : intention, lien de paiement hébergé, QR du prestataire. */
