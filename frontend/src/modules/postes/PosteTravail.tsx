@@ -6,6 +6,8 @@
  * la source, où la décision est prise (mêmes gardes, mêmes quatre yeux).
  */
 // Parcours par rôle (29/09/2026) : liens adaptés au compte — un écran que le rôle n'utilise pas affiche « Réalisé par : … ».
+import { selonRattachement } from '../../components/Shell';
+import { useApp } from '../../context';
 import { LienEcran as Link } from '../../components/LienEcran';
 import { PageHead } from '../../components/Shell';
 import { EmptyState, ErrorState, Loading } from '../../components/States';
@@ -23,6 +25,7 @@ export interface Travail {
 }
 
 export function TravailVue({ t }: { t: Travail }) {
+  const { user } = useApp();
   return (
     <>
       {t.postes.map((p) => (
@@ -31,7 +34,7 @@ export function TravailVue({ t }: { t: Travail }) {
             <div key={k.code} className="ps-chiffre"><span className="ps-valeur ps-valeur-grand">{k.valeur ?? 'non mesuré'}{k.valeur !== null && <small> {k.unite}</small>}</span><span className="ps-libelle">{k.libelle}</span>
               <span className="ps-small">Indicateur dominant : {p.indicateurDominant} · <StatusBadge tone={k.statut === 'ATTEINTE' ? 'good' : k.statut === 'NON_ATTEINTE' ? 'critical' : 'neutral'} label={k.statut} /></span></div>
           ))}</div>
-          <nav className="ps-menu" aria-label={`Écrans : ${p.utilisateur}`}>{p.liens.map((l) => <Link key={l.chemin} to={l.chemin}>{l.libelle}</Link>)}</nav>
+          <nav className="ps-menu" aria-label={`Écrans : ${p.utilisateur}`}>{selonRattachement(p.liens.map((l) => ({ ...l, to: l.chemin })), user).map((l) => <Link key={l.chemin} to={l.chemin}>{l.libelle}</Link>)}</nav>
         </Bloc>
       ))}
       <Bloc titre="File de travail — en graphiques" sous="Éléments à traiter, retards et échéances">

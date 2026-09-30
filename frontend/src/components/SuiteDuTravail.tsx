@@ -6,7 +6,7 @@
 import { Link, useInRouterContext, useLocation } from 'react-router-dom';
 import { travailDuJour } from '@mosolo/shared';
 import { useApp } from '../context';
-import { menuDe } from './Shell';
+import { menuDe, selonRattachement } from './Shell';
 
 export function SuiteDuTravail({ texte = 'Prochaine action utile :' }: { texte?: string }) {
   // Hors routeur (composant rendu seul, tests) : rien à proposer.
@@ -17,7 +17,7 @@ function Suite({ texte }: { texte: string }) {
   const { user, tr } = useApp();
   const loc = useLocation();
   if (!user) return null;
-  const items = menuDe(user.roles, user.entity);
+  const items = selonRattachement(menuDe(user.roles, user.entity), user);
   const suite = travailDuJour(user.roles)
     .filter((p) => p !== loc.pathname)
     .map((p) => items.find((n) => n.to === p))

@@ -308,7 +308,7 @@ export function MenuOrganise({ items, roles }: { items: NavItem[]; roles: string
 }
 
 /** Agent de terrain (30/09/2026) : les écrans de contrôle des modules auxquels il n'est pas rattaché sont masqués. */
-function selonRattachement(items: NavItem[], user: { roles: string[]; modules?: string[] } | null): NavItem[] {
+export function selonRattachement<T extends { to: string }>(items: T[], user: { roles: string[]; modules?: string[] } | null): T[] {
   if (!user) return items;
   return items.filter((n) => { const m = ECRANS_CONTROLE_PAR_MODULE[n.to]; return !m || agentRattache(user, m); });
 }
