@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { agentRattache, ECRANS_CONTROLE_PAR_MODULE } from '@mosolo/shared';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useApp } from '../context';
 import { useOnline } from '../hooks/useOnline';
@@ -306,10 +307,16 @@ export function MenuOrganise({ items, roles }: { items: NavItem[]; roles: string
   );
 }
 
+/** Agent de terrain (30/09/2026) : les écrans de contrôle des modules auxquels il n'est pas rattaché sont masqués. */
+function selonRattachement(items: NavItem[], user: { roles: string[]; modules?: string[] } | null): NavItem[] {
+  if (!user) return items;
+  return items.filter((n) => { const m = ECRANS_CONTROLE_PAR_MODULE[n.to]; return !m || agentRattache(user, m); });
+}
+
 function Sidebar() {
   const { tr, user } = useApp();
   // Rattachements de modules aux entités (27/09/2026) : présentation seulement, les droits restent ceux du serveur.
-  const items = sansMasques(menuDe(user?.roles, user?.entity), useMenuRattachements(user?.id));
+  const items = selonRattachement(sansMasques(menuDe(user?.roles, user?.entity), useMenuRattachements(user?.id)), user);
   return (
     <nav className="sidebar" aria-label={tr('nav.main')}>
       <MenuOrganise items={items} roles={user?.roles} />
@@ -321,7 +328,7 @@ function Sidebar() {
 function BottomNav() {
   const { tr, user } = useApp();
   // Parcours par rôle (29/09/2026) : le travail du jour vient en premier dans la barre du bas.
-  const tous = sansMasques(menuDe(user?.roles, user?.entity), useMenuRattachements(user?.id));
+  const tous = selonRattachement(sansMasques(menuDe(user?.roles, user?.entity), useMenuRattachements(user?.id)), user);
   const { jour, reste } = menuOrganise(tous, user?.roles);
   const items = [...jour, ...reste];
   const hasMore = items.length > 5;

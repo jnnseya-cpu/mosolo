@@ -1,10 +1,10 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1602 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1603 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
-| extension acces | 89 |
+| extension acces | 90 |
 | extension apprentissage | 17 |
 | extension canaux | 46 |
 | extension catalogue-api | 20 |
@@ -63,6 +63,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1602 routes** dans 5
 | GET | `/v1/acces/accounts` |
 | POST | `/v1/acces/accounts/:id/revoke` |
 | POST | `/v1/acces/accounts/me/secrets` |
+| POST | `/v1/acces/agents/:id/modules` |
 | GET | `/v1/acces/arbitrations` |
 | GET | `/v1/acces/arbitrations/:id` |
 | POST | `/v1/acces/arbitrations/:id/decision` |

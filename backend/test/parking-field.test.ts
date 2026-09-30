@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { agentRattache } from '@mosolo/shared';
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { ManualClock } from '../src/core/clock.js';
@@ -247,7 +248,8 @@ describe('Commission de 10 % : tous les agents, quel que soit leur module', () =
     const e = await env();
     const vx = e.app.ctx.ext.verticales as { plates: { all(): { code: string; objectId: string; commune: string }[] } };
     const obligations = e.app.ctx.assessment.obligations;
-    const agents = e.app.ctx.users.all().filter((u) => u.roles.some((r) => r === 'R10' || r === 'R11') && u.territory?.length);
+    // Agents rattachés au module des services de la Ville (rattachement des agents, 30/09/2026).
+    const agents = e.app.ctx.users.all().filter((u) => u.roles.some((r) => r === 'R10' || r === 'R11') && u.territory?.length && agentRattache(u, 'VERTICALES'));
     const open = (objectId: string) => obligations.find((o) => o.objectId === objectId && o.status !== 'SOLDEE' && o.status !== 'ANNULEE' && e.app.ctx.payments.byObligation(o.id).length === 0);
     const plate = vx.plates.all().find((p) => agents.some((a) => a.territory!.includes(p.commune)) && open(p.objectId).length > 0)!;
     expect(plate).toBeDefined();

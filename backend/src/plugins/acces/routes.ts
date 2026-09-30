@@ -1,5 +1,5 @@
 /** Routes HTTP du module « acces » (préfixe /v1/acces). Toute décision d'accès passe par `authorize`. */
-import { LANGUAGE_CODES, ROLES, type RoleCode } from '@mosolo/shared';
+import { LANGUAGE_CODES, MODULE_VERIFICATION_CODES, ROLES, ROLES_AGENTS_TERRAIN, type ModuleVerification, type RoleCode } from '@mosolo/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../../context.js';
@@ -121,6 +121,20 @@ const orgSchema = z.object({
 type P = { Params: { id: string } };
 
 export function registerAccesRoutes(app: FastifyInstance, ctx: AppContext, svc: AccesService): void {
+  // Rattachement d'un agent de terrain (R09, R10, R11) à ses modules de contrôle (30/09/2026) : administrateur de son
+  // entité ; journalisé. L'agent ne contrôle, ne scanne et ne vérifie ensuite que dans ces modules.
+  app.post<{ Params: { id: string } }>('/v1/acces/agents/:id/modules', async (req) => {
+    const u = requireUser(req);
+    const agent = ctx.users.get(req.params.id);
+    if (!agent) throw notFound('USER_NOT_FOUND', 'Compte inconnu.');
+    authorize(u, 'acces:agent.modules', { entity: agent.entity });
+    if (!agent.roles.some((r) => (ROLES_AGENTS_TERRAIN as readonly string[]).includes(r))) throw unprocessable('NOT_A_FIELD_AGENT', 'Le rattachement aux modules concerne les agents de terrain (R09, R10, R11).');
+    const body = parse(z.object({ modules: z.array(z.enum(MODULE_VERIFICATION_CODES as [ModuleVerification, ...ModuleVerification[]])).min(1).max(8), motif: z.string().trim().min(5).max(500) }).strict(), req.body);
+    const before = agent.modules ?? null;
+    const out = ctx.users.setModules(agent.id, body.modules);
+    ctx.audit.append({ actor: { kind: 'user', id: u.id, roles: u.roles }, action: 'acces.agent.modules', resourceType: 'user', resourceId: agent.id, details: { avant: before, apres: out.modules, motif: body.motif } });
+    return { id: out.id, modules: out.modules };
+  });
   // Échéances (mandats, accès temporaires, invitations) balayées à chaque requête : la politique commune lit un état à jour.
   app.addHook('onRequest', async () => { svc.sweep(); });
 

@@ -3,6 +3,7 @@
  * échoue (publicité rejetée, constat terrain rejeté, contrôles « de loin », premier contrôle à heure déclarée,
  * signaux sans suite, conflit d'intérêts, droits jamais liquidés, clé de terminal prévisible).
  */
+import { agentRattache } from '@mosolo/shared';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
@@ -165,7 +166,8 @@ describe('3. Contrôles « de loin » et paiements spontanés : présence GPS, d
     const e = await env();
     const vx = e.app.ctx.ext.verticales as VerticalesService;
     const obligations = e.app.ctx.assessment.obligations;
-    const agents = e.app.ctx.users.all().filter((u) => u.roles.some((r) => r === 'R10' || r === 'R11') && u.territory?.length);
+    // Agents rattachés au module des services de la Ville (rattachement des agents, 30/09/2026).
+    const agents = e.app.ctx.users.all().filter((u) => u.roles.some((r) => r === 'R10' || r === 'R11') && u.territory?.length && agentRattache(u, 'VERTICALES'));
     const open = (objectId: string) => obligations.find((o) => o.objectId === objectId && o.status !== 'SOLDEE' && o.status !== 'ANNULEE' && o.status !== 'CONTESTEE' && e.app.ctx.payments.byObligation(o.id).length === 0);
     const plate = vx.plates.all().find((p) => p.status === 'POSEE' && agents.some((a) => a.territory!.includes(p.commune)) && open(p.objectId).length > 0)!;
     const scanner = agents.find((a) => a.territory!.includes(plate.commune))!.id;

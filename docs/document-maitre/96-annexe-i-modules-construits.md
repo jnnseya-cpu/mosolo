@@ -1858,3 +1858,23 @@ Deux consignes successives du maître d'ouvrage, harmonisées par phase (rien n'
   « Mes preuves » (l'usager ne vérifie rien).
 - **Mon espace → compte unique** : « Ouvrir » mène à l'obligation (volet de détail), à l'état réel d'une référence de
   paiement ou au recours ; aucun bouton n'est affiché quand il ne mènerait qu'à la page déjà ouverte.
+
+## I.51 Agents de terrain rattachés à leurs modules ; page d'accueil ; langues (30/09/2026)
+
+- **Rattachement** (consigne : « un agent de terrain n'est rattaché qu'aux modules qu'il peut vérifier ») : superviseur
+  (R09), agent (R10) et contrôleur (R11) portent la liste de leurs modules de contrôle — Stationnement, Titres, Chaîne
+  véhicule, Publicité, Foncier/locatif/patentes, Services de la Ville, Transport (RakaPay), Missions de terrain
+  (`shared/src/modules-agents.ts`). Le **serveur** refuse (`MODULE_NON_RATTACHE`) tout scan, contrôle ou vérification
+  hors rattachement (table unique « route → module », `app.ts`) ; le menu masque les écrans de contrôle des autres
+  modules. Missions de terrain : affectation et constat refusés hors du module de l'habilitation (`AGENT_OUT_OF_MODULE`,
+  écart relevé à l'audit). Rattachement fixé par l'administrateur de l'entité de l'agent (R08, ou responsable de module
+  R07), sur motif, journalisé : `POST /v1/acces/agents/:id/modules` ; amorçage de production : champ `modules`. Un
+  compte sans rattachement déclaré garde son comportement antérieur (à rattacher). Comptes de démonstration rattachés.
+- **Page d'accueil** : « /accueil » (bouton maison de l'en-tête) l'affiche depuis n'importe quel compte ; les cartes
+  « Accéder à la plateforme » portent les vrais noms d'écrans (les cartes « Plus » à clés techniques sont corrigées) ;
+  un visiteur n'y voit que les espaces publics.
+- **Langues** : l'interface n'était traduite que sur quelques libellés (écran à moitié traduit). L'interface reste en
+  français (version qui fait foi) avec un avis clair et un bouton « Afficher en français » ; la langue choisie sert aux
+  SMS et notifications. Traduction complète de l'interface : à faire valider par des traducteurs (langues nationales).
+- **Déploiement automatique** de la démonstration : `.github/workflows/deploy-demo.yml` (contrôles puis Cloud Run), à
+  activer par un secret GitHub (infra/gcp/README.md).

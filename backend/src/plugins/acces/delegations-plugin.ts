@@ -20,6 +20,8 @@ definePolicy('acces:delegation.request', allAgentRoles(always));
 definePolicy('acces:delegation.approve', { R08: sameEntity, R06: sameEntity, R07: sameEntity, R28: always });
 definePolicy('acces:abac.explain', { R08: always, R28: always, R22: always, R23: always, R26: always });
 definePolicy('acces:echeancier.run', { R08: always, R28: always, R26: always });
+// Rattachement des agents de terrain à leurs modules de contrôle (30/09/2026) : administrateur de l'entité de l'agent.
+definePolicy('acces:agent.modules', { R08: sameEntity, R07: sameEntity });
 
 export function echeancierEnabled(flag: string | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
   const f = (flag ?? '').trim().toLowerCase();

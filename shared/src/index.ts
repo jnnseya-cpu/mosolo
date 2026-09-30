@@ -16,3 +16,4 @@ export * from './profiles.js';
 export * from './programme.js';
 export * from './menu.js';
 export * from './comptes.js';
+export * from './modules-agents.js';

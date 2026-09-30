@@ -3,7 +3,7 @@
  * + séparation des tâches + garde de l'IA (§ 12.1, § 12.4, § 23.1).
  * Toute route appelle `authorize` ; aucune décision d'accès n'est prise dans l'interface.
  */
-import { AI_FORBIDDEN_ACTIONS, type RoleCode } from '@mosolo/shared';
+import { agentRattache, AI_FORBIDDEN_ACTIONS, MODULES_VERIFICATION, type ModuleVerification, type RoleCode } from '@mosolo/shared';
 import { isDemoMode, type Principal, type User } from './auth.js';
 import { forbidden } from './errors.js';
 
@@ -347,4 +347,15 @@ export function registerRelatedTaxpayersResolver(fn: RelatedResolver): void {
 export function assertNotRelated(user: User, taxpayerId: string | null | undefined, detail: string): void {
   if (!taxpayerId) return;
   if (relatedResolver(user).has(taxpayerId)) throw forbidden('CONFLICT_OF_INTEREST', detail);
+}
+
+/**
+ * Rattachement des agents de terrain (30/09/2026) : un superviseur, agent ou contrôleur ne contrôle, ne scanne et ne
+ * vérifie que dans les modules de son rattachement (shared/modules-agents.ts). Refus motivé sinon.
+ */
+export function assertModuleAgent(principal: Principal, module: ModuleVerification): void {
+  if (principal.kind !== 'user') return;
+  if (!agentRattache(principal, module)) {
+    throw forbidden('MODULE_NON_RATTACHE', `Vous n’êtes pas rattaché au module « ${MODULES_VERIFICATION[module]} » : contrôle réservé aux agents de ce module.`, { module, modules: principal.modules ?? [] });
+  }
 }

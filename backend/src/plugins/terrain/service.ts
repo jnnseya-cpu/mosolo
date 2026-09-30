@@ -695,6 +695,8 @@ export class TerrainService {
     if ((m.subcontractorId ?? null) !== (agent.subcontractorId ?? null)) throw unprocessable('AGENT_OUTSIDE_LOT', 'L’agent n’appartient pas à la structure titulaire du lot.');
     const h = agent.habilitation;
     if (!h.communes.includes(m.commune)) throw unprocessable('AGENT_OUT_OF_ZONE', `Agent non habilité pour la commune ${m.commune}.`);
+    // Rattachement au module (30/09/2026) : l'agent n'est habilité que pour le module de son habilitation.
+    if (h.module && m.module && h.module !== m.module) throw unprocessable('AGENT_OUT_OF_MODULE', `Agent habilité pour le module ${h.module}, pas pour ${m.module}.`);
     if (h.validUntil < m.dueDate) throw unprocessable('HABILITATION_EXPIRES', 'L’habilitation expire avant l’échéance de la mission.');
     if ((m.quartier && agent.declaredQuartiers.includes(m.quartier)) || m.objectIds.some((o) => agent.declaredObjectIds.includes(o))) {
       throw forbidden('CONFLICT_OF_INTEREST', 'Interdiction d’affecter un agent à son propre quartier ou aux objets de ses proches déclarés (§ 15A.5).');
@@ -801,6 +803,7 @@ export class TerrainService {
     if (!badge || badge.validUntil < today || agent.habilitation.validUntil < today) throw forbidden('HABILITATION_EXPIRED', 'Habilitation ou badge expiré.');
     const m = this.missions.get(missionId);
     if (!m || m.assignedAgentId !== u.id) throw forbidden('MISSION_NOT_ASSIGNED', 'Mission non affectée à cet agent.');
+    if (agent.habilitation.module && m.module && agent.habilitation.module !== m.module) throw forbidden('AGENT_OUT_OF_MODULE', `Agent habilité pour le module ${agent.habilitation.module}, pas pour ${m.module}.`);
 
     const sealContent = {
       clientRef: input.clientRef, missionId, objectId: input.objectId ?? null, agentId: u.id, outcome: input.outcome, observations: input.observations,

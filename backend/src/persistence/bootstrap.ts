@@ -11,6 +11,7 @@
  *
  * Contrôle préalable (sans base ni serveur) : `npx tsx src/persistence/bootstrap-cli.ts check amorcage.json`.
  */
+import { MODULE_VERIFICATION_CODES, type ModuleVerification } from '@mosolo/shared';
 import { ROLES, type RoleCode } from '@mosolo/shared';
 import { randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -30,6 +31,8 @@ const bootstrapSchema = z.object({
     roles: z.array(roleCode).min(1),
     entity: z.string().min(2).max(64),
     territory: z.array(z.string().min(1)).optional(),
+    /** Agent de terrain : modules de rattachement (30/09/2026 ; STATIONNEMENT, TITRES, VEHICULES, PUBLICITE…). */
+    modules: z.array(z.enum(MODULE_VERIFICATION_CODES as [ModuleVerification, ...ModuleVerification[]])).optional(),
     /** Enrôlement initial (mot de passe + TOTP aléatoires) s'il n'existe encore aucun identifiant pour ce compte. */
     enrol: z.boolean().optional(),
   }).strict()).default([]),
@@ -100,7 +103,7 @@ export function applyBootstrap(ctx: AppContext, doc: BootstrapDocument, env: Nod
   for (const u of doc.users) {
     if (ctx.users.get(u.id)) continue;
     // `add` refuse les rôles inconnus et tout cumul de rôles incompatibles (§ 12.5).
-    ctx.users.add({ id: u.id, name: u.name, roles: u.roles as RoleCode[], entity: u.entity, ...(u.territory ? { territory: u.territory } : {}) });
+    ctx.users.add({ id: u.id, name: u.name, roles: u.roles as RoleCode[], entity: u.entity, ...(u.territory ? { territory: u.territory } : {}), ...(u.modules ? { modules: u.modules } : {}) });
     report.users.push(u.id);
   }
 

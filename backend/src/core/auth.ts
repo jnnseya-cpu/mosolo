@@ -27,6 +27,8 @@ export interface User {
   personId?: string;
   /** Pour un mandataire (R31) : contribuables mandants. */
   mandants?: string[];
+  /** Agent de terrain (R09, R10, R11) : modules de rattachement, seuls lieux de ses contrôles (30/09/2026). */
+  modules?: string[];
   email?: string;
   phone?: string;
   lang?: LanguageCode;
@@ -89,6 +91,15 @@ export class UserDirectory {
 
   all(): User[] {
     return [...this.users.values()];
+  }
+
+  /** Rattache un agent de terrain à ses modules de contrôle (le journal est tenu par l'appelant). */
+  setModules(id: string, modules: string[]): User {
+    const u = this.users.get(id);
+    if (!u) throw new Error(`Utilisateur inconnu : ${id}`);
+    const out: User = { ...u, modules: [...new Set(modules)] };
+    this.users.set(id, out);
+    return out;
   }
 
   withRole(role: RoleCode): User[] {

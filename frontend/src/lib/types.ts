@@ -9,7 +9,7 @@ import type {
   ResidentialSituation, TerritorialAttribution,
 } from '@mosolo/shared';
 
-export interface DemoUser { id: string; name: string; roles: string[]; entity?: string; taxpayerId?: string; territory?: string[] }
+export interface DemoUser { id: string; name: string; roles: string[]; entity?: string; taxpayerId?: string; territory?: string[]; /** Agent de terrain : modules de rattachement (30/09/2026). */ modules?: string[] }
 
 export interface FiscalObject {
   id: string; category: string; label?: string; commune?: string; quartier?: string; localityRank?: number;

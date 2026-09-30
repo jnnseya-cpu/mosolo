@@ -41,7 +41,7 @@ export function registerSystemRoutes(app: FastifyInstance, ctx: AppContext): voi
     if (!isDemoMode()) throw notFound('ROUTE_NOT_FOUND', `Route inconnue : GET ${req.url}`);
     return ctx.users.all().map((u) => ({
       id: u.id, name: u.name, roles: u.roles, roleLabels: u.roles.map((r) => ROLES[r]), entity: u.entity,
-      ...(u.taxpayerId ? { taxpayerId: u.taxpayerId } : {}), ...(u.territory ? { territory: u.territory } : {}),
+      ...(u.taxpayerId ? { taxpayerId: u.taxpayerId } : {}), ...(u.territory ? { territory: u.territory } : {}), ...(u.modules ? { modules: u.modules } : {}),
     }));
   });
 }

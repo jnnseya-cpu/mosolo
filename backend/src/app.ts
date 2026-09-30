@@ -35,7 +35,8 @@ import { registerVaultRoutes } from './modules/vault/routes.js';
 import { seed } from './seed.js';
 import { applyBootstrap, loadBootstrapFile, type BootstrapDocument, type BootstrapReport } from './persistence/bootstrap.js';
 import { DEFAULT_PLUGINS } from './plugins/index.js';
-import { registerAutorisationMontantsResolver } from './core/policy.js';
+import { assertModuleAgent, registerAutorisationMontantsResolver } from './core/policy.js';
+import type { ModuleVerification } from '@mosolo/shared';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -98,6 +99,19 @@ export interface BuildOptions extends AppOptions {
   bootstrap?: BootstrapDocument;
 }
 
+/** Agents de terrain de démonstration → modules où ils contrôlent (données NON CONTRACTUELLES). */
+const RATTACHEMENTS_AGENTS_DEMO: Record<string, ModuleVerification[]> = {
+  'u-superviseur': ['FONCIER', 'TERRAIN'], 'u-agent-terrain': ['FONCIER', 'TERRAIN', 'VERTICALES'], 'u-agent-terrain-2': ['FONCIER', 'TERRAIN'],
+  'u-agent-gombe': ['FONCIER', 'TERRAIN'], 'u-controleur': ['FONCIER', 'TERRAIN', 'TITRES', 'VEHICULES', 'VERTICALES'],
+  'terrain-agent-regie-qc': ['FONCIER', 'TERRAIN'], 'terrain-st-agent-1': ['FONCIER', 'TERRAIN'], 'terrain-st-agent-2': ['FONCIER', 'TERRAIN'],
+  'pk-controleur': ['STATIONNEMENT', 'TITRES'], 'pk-superviseur': ['STATIONNEMENT', 'TITRES'],
+  'pb-inspecteur': ['PUBLICITE'], 'pb-inspecteur-2': ['PUBLICITE'], 'pb-superviseur': ['PUBLICITE'],
+  'rk-controleur': ['RAKAPAY', 'TITRES'],
+  'vc-u-controleur-rfck': ['VEHICULES'], 'vc-u-agent-fourriere-rfck': ['VEHICULES'],
+  'vx-instructeur-dgtk': ['VERTICALES', 'TITRES'], 'vx-agent-terrain-dgtk': ['VERTICALES', 'TITRES'],
+  'acces-u-controleur-limete': ['FONCIER'], 'canaux-agent-enrol': ['FONCIER'],
+};
+
 export function buildApp(opts: BuildOptions = {}): FastifyInstance {
   // Sûr par défaut : démonstration refusée en production, secrets de démonstration refusés hors démonstration.
   assertSafeDeployment(process.env);
@@ -126,6 +140,8 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
   if (seeded) {
     seed(ctx);
     for (const p of plugins) p.seed?.(ctx, ctx.ext[p.name]);
+    // Rattachement des agents de démonstration à leurs modules de contrôle (30/09/2026, données NON CONTRACTUELLES).
+    for (const [id, modules] of Object.entries(RATTACHEMENTS_AGENTS_DEMO)) if (ctx.users.get(id)) ctx.users.setModules(id, modules);
     // Doctrine (§ 18.1) : l'alias de règlement de chaque connecteur doit exister dans le coffre — sinon, pas de démarrage.
     // (Sans données semées, le contrôle est refait à chaque création d'intention par la résolution d'alias.)
     ctx.connectors.validate((alias) => ctx.vault.aliasExists(alias));
@@ -158,6 +174,25 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
 
   app.addHook('onRequest', async (req) => {
     req.user = resolveDemoUser(req, ctx.users);
+  });
+
+  // Rattachement des agents de terrain (30/09/2026) : chaque contrôle, scan ou vérification appartient à un module ;
+  // un superviseur, agent ou contrôleur n'y agit que s'il y est rattaché (shared/modules-agents.ts).
+  const MODULE_PAR_ROUTE: Record<string, ModuleVerification> = {
+    'POST /v1/titres/controles': 'TITRES', 'POST /v1/titres/controles/lots': 'TITRES', 'GET /v1/vehicules/:plaque/titres': 'TITRES',
+    'POST /v1/rakapay/wewa/controles': 'RAKAPAY',
+    'POST /v1/vehicules/scan': 'VEHICULES', 'POST /v1/vehicules/scans/:id/decision': 'VEHICULES',
+    'GET /v1/parking/control/:plate': 'STATIONNEMENT', 'POST /v1/parking/violations': 'STATIONNEMENT', 'POST /v1/parking/violations/:id/verify': 'STATIONNEMENT',
+    'GET /v1/parking/plates/:plate/active-titles': 'STATIONNEMENT',
+    'GET /v1/fiscal/plates/:code/scan': 'FONCIER',
+    'GET /v1/verticales/plates/:code/scan': 'VERTICALES', 'GET /v1/verticales/nfiu/plates/:code/situation': 'VERTICALES',
+    'GET /v1/verticales/vehicules/:plaque/controle': 'VERTICALES', 'GET /v1/verticales/fiches/embarcations/:ref/controle': 'VERTICALES',
+    'POST /v1/publicite/inspections': 'PUBLICITE', 'POST /v1/publicite/cases/:id/verify': 'PUBLICITE',
+    'POST /v1/terrain/missions/:id/findings': 'TERRAIN', 'POST /v1/terrain/proces-verbaux': 'TERRAIN',
+  };
+  app.addHook('preHandler', async (req) => {
+    const m = MODULE_PAR_ROUTE[`${req.method} ${req.routeOptions.url ?? ''}`];
+    if (m && req.user) assertModuleAgent(req.user, m);
   });
 
   app.setErrorHandler((err: unknown, req, reply) => {

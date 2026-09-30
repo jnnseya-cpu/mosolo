@@ -129,6 +129,7 @@ export function registerSocleRoutes(app: FastifyInstance, ctx: AppContext, svc: 
     return {
       sub: u.id, name: u.name, roles: u.roles, entity: u.entity,
       ...(u.territory ? { territory: u.territory } : {}),
+      ...(u.modules ? { modules: u.modules } : {}),
       ...(u.taxpayerId ? { taxpayerId: u.taxpayerId } : {}),
       mode: u.auth ? 'session' : 'demonstration',
       auth: u.auth ?? null,

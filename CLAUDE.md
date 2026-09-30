@@ -132,3 +132,6 @@ données de démonstration.
   plateforme en service : périmètre propre seulement (moteur de paiement/répartition, grand livre, trésor en agrégats,
   règles, audit, supervision) — jamais les tableaux du Gouverneur ni les opérations quotidiennes des services (liste à
   confirmer). Jamais d'écriture ; dossiers personnels par consultation motivée (C42-05) — annexe I, § I.50.
+- **Agents de terrain rattachés (30/09/2026)** : R09/R10/R11 ne contrôlent, scannent et vérifient que dans leurs modules
+  de rattachement (serveur : `MODULE_NON_RATTACHE` ; menu filtré) ; rattachement par l'administrateur de l'entité,
+  journalisé — annexe I, § I.51. Interface en français tant que les traductions ne sont pas validées.
