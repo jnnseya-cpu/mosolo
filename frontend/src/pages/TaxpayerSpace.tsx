@@ -347,6 +347,10 @@ export default function TaxpayerSpace() {
 
       {p && (
         <>
+          {/* « Mes preuves » en un clic (30/09/2026) : à montrer en cas de contrôle ou d'inspection. */}
+          {user?.roles.includes('R30') && user.taxpayerId === (p.id ?? taxpayerId) && (
+            <Link to="/mes-preuves" className="btn btn-primary btn-lg" data-testid="espace-mes-preuves" style={{ marginBottom: 12 }}><Icon name="qr" size={20} /> Mes preuves — à montrer en cas de contrôle</Link>
+          )}
           {/* « À faire » (30/09/2026) : tout ce qui concerne l'usager, en un seul endroit, avec une action par ligne. */}
           <AFaire taxpayerId={p.id ?? taxpayerId!} onPay={(id) => { const ob = obligations.find((o) => o.id === id); if (ob) setPanel({ kind: 'pay', ob }); }} />
           {/* Visuel de synthèse (27/09/2026) : dérivé du profil déjà chargé, sans appel supplémentaire. */}

@@ -108,3 +108,6 @@ données de démonstration.
   « À faire » de « Mon espace » (à faire maintenant / en cours de vérification par l'administration / à jour), avec une
   action par ligne. Le menu des usagers (R30, R31) ne contient ni outils de vérification ni écrans d'agents ; aucun lien
   proposé ne mène à une page réservée (annexe I, § I.41).
+- **Contrôles (30/09/2026)** : l'usager ne vérifie pas les agents (un agent n'agit qu'après invitation sur la
+  plateforme) ; il présente ses preuves en UN CLIC (« Mes preuves » : bouton de l'en-tête, de « Mon espace » et du menu),
+  chacune avec son code QR vérifiable par le résolveur universel (annexe I, § I.42).

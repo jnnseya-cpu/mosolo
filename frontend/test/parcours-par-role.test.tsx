@@ -81,7 +81,7 @@ describe('menus par rôle — nombre d’entrées et « Mon travail du jour » (
         "R27": "22 entrées · d’emblée 4 · jour /plateforme/supervision /integrite/incidents /plateforme/administration /acces/elevations · accueil /plateforme/supervision",
         "R28": "35 entrées · d’emblée 5 · jour /integrite/incidents /integrite/revue-acces /integrite/cles /acces/elevations /integrite/scellement · accueil /integrite/incidents",
         "R29": "5 entrées · d’emblée 5 · jour /ia/modeles /ia/journal /ia · accueil /ia/modeles",
-        "R30": "26 entrées · d’emblée 7 · jour /espace /mes-arrieres /espace/biens-relations /vehicules/mes-vehicules /fiscal/declarations /services /mon-espace/situation · accueil /espace",
+        "R30": "27 entrées · d’emblée 8 · jour /espace /mes-preuves /mes-arrieres /espace/biens-relations /vehicules/mes-vehicules /fiscal/declarations /services /mon-espace/situation · accueil /espace",
         "R31": "22 entrées · d’emblée 4 · jour /acces/mandats /fiscal/declarations /mes-arrieres /points-de-paiement · accueil /acces/mandats",
         "R32": "19 entrées · d’emblée 3 · jour /canaux/point-agree /verifier /preuve · accueil /canaux/point-agree",
         "R33": "18 entrées · d’emblée 3 · jour /verifier /preuve /transparence · accueil /verifier",

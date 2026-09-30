@@ -49,6 +49,7 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/fiscal/reprise', element: lazy(() => import('./fiscal/Reprise')), nav: { label: 'Reprise e-DGRK et import par lots', short: 'Reprise', icon: 'upload', group: 'operations', roles: ['R06', 'R07', 'R11', 'R12', 'R22', 'R23'] } },
   // Compte unique (ch. 9, 28/09/2026) : biens et relations (spécification « Liaison des biens et occupations » v1.0),
   // vue du propriétaire (occupation masquée) et file de revue (réviseurs habilités, agents de terrain affectés).
+  { path: '/mes-preuves', element: lazy(() => import('./compte-unique/MesPreuves')), nav: { label: 'Mes preuves (contrôle)', short: 'Preuves', icon: 'qr', group: 'public', roles: ['R30'] } },
   { path: '/espace/biens-relations', element: lazy(() => import('./compte-unique/BiensRelations')), nav: { label: 'Mes biens et relations', short: 'Mes biens', icon: 'building', group: 'public', roles: ['R30'] } },
   { path: '/espace/biens/:id', element: lazy(() => import('./compte-unique/VueProprietaire')) },
   { path: '/biens-relations/revue', element: lazy(() => import('./compte-unique/RevueBiens')), nav: { label: 'Revue des biens et relations', short: 'Revue biens', icon: 'scale', group: 'operations', roles: ['R06', 'R07', 'R11', 'R12', 'R22', 'R23', 'R10', 'R35'] } },

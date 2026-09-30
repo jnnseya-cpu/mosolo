@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1596 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1597 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -23,7 +23,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1596 routes** dans 5
 | extension pilotage | 132 |
 | extension plateforme | 23 |
 | extension postes | 29 |
-| extension preuves | 14 |
+| extension preuves | 15 |
 | extension publicite | 52 |
 | extension rakapay | 53 |
 | extension recouvrement | 75 |
@@ -1005,6 +1005,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1596 routes** dans 5
 | GET | `/l/signaler` |
 | POST | `/l/signaler` |
 | GET | `/l/v` |
+| GET | `/v1/moi/preuves` |
 | GET | `/v1/public/preuves` |
 | GET | `/v1/public/preuves/:code` |
 | GET | `/v1/public/preuves/:code/impression` |

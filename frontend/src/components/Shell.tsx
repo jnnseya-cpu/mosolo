@@ -178,7 +178,9 @@ function ThemeToggle() {
 }
 
 function Header() {
-  const { tr } = useApp();
+  const { tr, user } = useApp();
+  // « Mes preuves » en un clic (30/09/2026) : bouton permanent de l'en-tête pour le titulaire d'un compte (contrôle).
+  const titulaire = !!user?.taxpayerId && !!user.roles.includes('R30');
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   useEffect(() => setOpen(false), [loc.pathname]);
@@ -199,6 +201,11 @@ function Header() {
           <DemoUserSelector />
         </div>
         <div className="hdr-actions">
+          {titulaire && (
+            <NavLink to="/mes-preuves" className="hdr-btn btn-preuves" aria-label="Mes preuves (contrôle)" title="Mes preuves (contrôle)" data-testid="hdr-mes-preuves">
+              <Icon name="qr" size={20} /> <span className="btn-preuves-texte">Mes preuves</span>
+            </NavLink>
+          )}
           <ThemeToggle />
           <button type="button" className="hdr-btn hdr-settings" aria-expanded={open} aria-controls="hdr-controls" onClick={() => setOpen((v) => !v)}
             aria-label={tr('header.settings')} title={tr('header.settings')}>

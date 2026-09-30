@@ -1661,3 +1661,20 @@ un seul endroit ce qui doit l'être, facilement, et pouvoir agir. »
   sectorielles et grands redevables proposés hors de la DGTK, liens « Ouvrir » des autorités vers des pages en lecture
   agrégée seulement (`ECRANS_LECTURE_AGREGEE_AUTORITES`), commissions des agents du tableau de stationnement pour
   l'audit (message et lien « Accès aux montants » au lieu d'une page réservée). Résultat : 0 lien mort pour les usagers.
+
+## I.42 « Mes preuves » en un clic pour les contrôles ; pas de « vérifier un agent » dans l'espace usager (30/09/2026)
+
+Décisions du maître d'ouvrage :
+
+- **Pas de « Vérifier un agent de terrain » dans « Mon espace »** : un agent n'accède à la plateforme et ne traite avec
+  l'usager que s'il a été invité à la rejoindre (circuit d'invitation et d'habilitation existant) ; l'usager n'a pas à
+  le vérifier. L'écran public reste en place (règle n° 1), hors du menu et de l'espace des usagers.
+- **« Mes preuves (contrôle) »** (`/mes-preuves`, `GET /v1/moi/preuves`) : en cas de contrôle ou d'inspection, le
+  titulaire ouvre en UN CLIC toutes ses preuves en cours de validité — stationnement en cours, titres et pass,
+  abonnements et vignettes, autorisations et permis des services, quitus fiscal, supports publicitaires autorisés, gilet
+  de conducteur, dix dernières quittances — chacune avec son code QR (adresse `/preuve/<code>`) et son code en clair,
+  agrandissable en plein écran pour l'agent. Les codes sont ceux du résolveur universel des preuves (QR, saisie, SMS,
+  WhatsApp, USSD, version légère). Accès : bouton permanent « Mes preuves » dans l'en-tête, gros bouton en tête de
+  « Mon espace », deuxième entrée de « Mon travail du jour ». Hors ligne : la dernière liste chargée reste affichée
+  (commodité de l'appareil ; l'agent vérifie toujours sur le serveur). Réservé au titulaire du compte ; chaque source
+  est lue avec les droits de l'usager ; ouverture journalisée.

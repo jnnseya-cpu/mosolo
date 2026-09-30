@@ -195,7 +195,7 @@ export const TRAVAIL_DU_JOUR: Readonly<Record<string, readonly string[]>> = {
   R27: ['/plateforme/supervision', '/integrite/incidents', '/plateforme/administration', '/acces/elevations'],
   R28: ['/integrite/incidents', '/integrite/revue-acces', '/integrite/cles', '/acces/elevations', '/integrite/scellement'],
   R29: ['/ia/modeles', '/ia/journal', '/ia'],
-  R30: ['/espace', '/mes-arrieres', '/espace/biens-relations', '/vehicules/mes-vehicules', '/fiscal/declarations', '/services', '/mon-espace/situation'],
+  R30: ['/espace', '/mes-preuves', '/mes-arrieres', '/espace/biens-relations', '/vehicules/mes-vehicules', '/fiscal/declarations', '/services', '/mon-espace/situation'],
   R31: ['/acces/mandats', '/fiscal/declarations', '/mes-arrieres', '/fiscal/biens', '/points-de-paiement'],
   R32: ['/canaux/point-agree', '/verifier', '/preuve'],
   R33: ['/verifier', '/preuve', '/transparence'],
