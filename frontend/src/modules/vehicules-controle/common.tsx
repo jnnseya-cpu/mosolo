@@ -56,7 +56,7 @@ export const STATE: Record<string, { tone: Tone; label: string }> = {
   A_RACCORDER: { tone: 'neutral', label: 'À RACCORDER — convention requise' }, CONVENTION_ACTIVE: { tone: 'good', label: 'Convention active' },
   FRANCHIE: { tone: 'good', label: 'Franchie' }, PRETE_A_VALIDER: { tone: 'warning', label: 'Prête à valider' }, CONDITIONS_NON_REMPLIES: { tone: 'neutral', label: 'Conditions non remplies' },
   EN_ATTENTE_ETAPE_PRECEDENTE: { tone: 'neutral', label: 'Attend l’étape précédente' }, CONFORME: { tone: 'good', label: 'Conforme' }, A_FAIRE: { tone: 'warning', label: 'À faire' },
-  A_VERIFIER: { tone: 'warning', label: 'À vérifier' }, CONFIRME: { tone: 'good', label: 'Confirmé' }, RETIRE: { tone: 'neutral', label: 'Retiré' },
+  A_VERIFIER: { tone: 'warning', label: 'À vérifier' }, CONFIRME: { tone: 'good', label: 'Confirmé' }, DEMANDE: { tone: 'info', label: 'Demandé' }, ANNULE: { tone: 'neutral', label: 'Annulé' }, EN_ATTENTE: { tone: 'warning', label: 'En attente' }, RETIRE: { tone: 'neutral', label: 'Retiré' },
 };
 
 export function StateBadge({ state, label }: { state: string; label?: string }) {

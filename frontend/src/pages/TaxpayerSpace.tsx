@@ -245,7 +245,7 @@ function PayFlow({ ob }: { ob: Obligation }) {
         const b = x.body as Partial<PaymentOrder> & { existing?: Partial<PaymentOrder> };
         const ref = b.paymentReference ?? b.existing?.paymentReference;
         if (ref) {
-          const ex = { ...(b.existing ?? {}), paymentReference: ref, amount: b.amount ?? b.existing?.amount ?? ob.amount, status: b.status ?? b.existing?.status ?? 'INITIE' } as PaymentOrder;
+          const ex = { ...(b.existing ?? {}), paymentReference: ref, amount: b.existing?.amount ?? ob.amount, status: b.existing?.status ?? 'INITIE' } as PaymentOrder; // « status » du corps = code HTTP 409, jamais l'état de l'ordre
           setOrder(ex);
           setReused(true);
           setAutreMoyen(!!ex.channel && (ex.channel !== channel || (ex.provider ?? '') !== (providerAllowed ? provider : '')));
