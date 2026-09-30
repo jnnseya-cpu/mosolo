@@ -1925,3 +1925,27 @@ verrouiller ; retrouver et punir tous ceux qui sont impliqués ». Ajout (rien n
   « Cloud Translation » à activer et rôle `roles/cloudtranslate.user` à accorder (infra/gcp/README.md). Sans service
   configuré, l'avis l'indique et l'écran reste en français. La validation humaine des traductions des langues
   nationales reste à organiser (traducteurs) ; les SMS et notifications utilisent déjà la langue choisie.
+
+## I.54 Réforme de la DGRK (DGIPK / DGTK) ; programme routier du Gouvernorat (30/09/2026)
+
+Annonce du Gouvernorat transmise par le maître d'ouvrage : la DGRK est remplacée par deux régies — **DGIPK** (impôts
+provinciaux) et **DGTK** (droits, taxes et redevances de la Ville) ; 160 km de routes livrés, plus de 600 km en cours.
+
+- **Aiguillage des dossiers repris de l'ancienne DGRK** (`plugins/fiscal/aiguillage.ts`) : à la reprise d'un lot e-DGRK,
+  chaque objet, historique et compte est rattaché à la régie compétente — d'abord l'entité administrante de la fiche du
+  registre juridique ; sinon une table par défaut (foncier, bâtiments, unités locatives, IRL → DGIPK ; activités,
+  publicité, taxes, redevances, péage, voirie → DGTK ; véhicules et « autre » → à arbitrer) marquée « par défaut — à
+  confirmer par le maître d'ouvrage (acte de répartition DGIPK / DGTK) » ; sinon **À ARBITRER**. Arbitrage :
+  `POST /v1/fiscal/imports/:id/aiguillage` — décision motivée d'une personne distincte de celle qui a déposé le lot,
+  journalisée. Un compte (une personne = un compte) n'est jamais scindé : il porte les régies de ses objets et recettes.
+  Rien n'est supprimé : les lots, l'historique et leur provenance e-DGRK restent consultables.
+- **Compte de démonstration** `KIN-DGRK-MM-01` : alias et entité inchangés, libellé « Ancienne DGRK (historique, avant la
+  réforme DGIPK / DGTK) — compte marchand public (démo) ».
+- **Programme routier du Gouvernorat** (`GET /v1/pilotage/programme/routes`, écran « Programme routier du Gouvernorat »,
+  lien depuis « Projets publics et emploi des fonds », résumé dans la synthèse du programme) : 160 km livrés, plus de
+  600 km en cours — **chiffres annoncés, à confirmer** (rapport technique ou acte) ; recettes liées à la route mises en
+  regard (péage provincial — module 25 ; droits de voirie ; taxe spéciale de circulation routière — module 11) :
+  liquidé, rapproché, régie proposée. Mise en regard indicative : **aucune affectation automatique** des recettes aux
+  travaux (budget et acte). Montants agrégés, lecture journalisée (`programme.routier.viewed`).
+- **En attente du Gouvernorat** : la liste officielle des recettes relevant de la DGIPK et de la DGTK (acte de
+  répartition) ; elle remplacera la table par défaut et fixera l'entité administrante des fiches concernées.

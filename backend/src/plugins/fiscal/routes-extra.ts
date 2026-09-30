@@ -119,6 +119,9 @@ export function registerFiscalExtraRoutes(app: FastifyInstance, _ctx: AppContext
     return reply.code(201).send(svc.imports.view(svc.imports.upload(requireUser(req), b as Parameters<typeof svc.imports.upload>[1])));
   });
   app.post<P>('/v1/fiscal/imports/:id/commit', async (req) => svc.imports.view(svc.imports.commit(requireUser(req), req.params.id)));
+  // Réforme de la DGRK (30/09/2026) : arbitrage de la régie compétente (DGIPK / DGTK) d'une ligne reprise.
+  app.post<P>('/v1/fiscal/imports/:id/aiguillage', async (req) => svc.imports.view(svc.imports.arbitrer(requireUser(req), req.params.id,
+    parse(z.object({ ref: z.string().min(1).max(80), regie: z.enum(['DGIPK', 'DGTK']), motif: z.string().trim().min(10).max(1000) }).strict(), req.body))));
   app.post<{ Params: { id: string; line: string } }>('/v1/fiscal/imports/:id/duplicates/:line/decision', async (req) => {
     const b = parse(z.object({ decision: z.enum(['RATTACHER', 'CREER_DISTINCT']), reason }).strict(), req.body);
     return svc.imports.view(svc.imports.decideDuplicate(requireUser(req), req.params.id, Number(req.params.line), b));

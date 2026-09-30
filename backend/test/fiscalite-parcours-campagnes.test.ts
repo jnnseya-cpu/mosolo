@@ -179,6 +179,34 @@ describe('§ 2 / § 7.5 — reprise e-DGRK par lots, sans fusion silencieuse', (
     expect(e.app.ctx.taxpayers.get(DEMO.taxpayerId).fullName).not.toBe('Doublon téléphone');
   });
 
+  it('réforme de la DGRK : chaque ligne reprise est aiguillée vers la DGIPK ou la DGTK ; « à arbitrer » tranché par une autre personne', async () => {
+    const e = await full();
+    const lot = [
+      'type;ref_externe;nom;telephone;nif;forme;categorie;commune;quartier;rang;lat;lon;superficie_m2;compte_ref;exercice;recette;montant;devise;statut_paiement',
+      'COMPTE;R-001;Compte réforme;+243897650071;;PP;;;;;;;;;;;;;',
+      'OBJET;RO-1;;;;;PARCELLE;Limete;Kingabwa;2;-4.3911;15.3611;400;R-001;;;;;',
+      'OBJET;RO-2;;;;;PANNEAU;Gombe;Golf;1;-4.3011;15.3011;;R-001;;;;;',
+      'OBJET;RO-3;;;;;VEHICULE;Gombe;Golf;1;-4.3012;15.3012;;R-001;;;;;',
+      'HISTORIQUE;RH-1;;;;;;;;;;;;R-001;2024;Taxe sur la publicité;90;USD;IMPAYE',
+    ].join('\n');
+    const b = (await e.req('POST', '/v1/fiscal/imports', 'u-guichet', { source: 'E_DGRK', format: 'CSV', content: lot })).json();
+    const c = (await e.req('POST', `/v1/fiscal/imports/${b.id}/commit`, 'u-controleur')).json();
+    const ligne = (ref: string) => c.report.lines.find((l: { ref: string }) => l.ref === ref);
+    expect(ligne('RO-1').regie).toBe('DGIPK');
+    expect(ligne('RO-2').regie).toBe('DGTK');
+    expect(ligne('RO-3').regie).toBe('A_ARBITRER');
+    expect(ligne('RH-1').regie).toBe('DGTK');
+    expect(ligne('R-001').regies.sort()).toEqual(['DGIPK', 'DGTK']);
+    expect(c.aiguillage).toMatchObject({ DGIPK: 2, DGTK: 2, A_ARBITRER: 1 }); // le compte compte pour sa première régie
+    expect(c.aiguillage.statut).toMatch(/à confirmer/);
+    // Arbitrage : jamais par la personne qui a déposé le lot ; motif ; l'objet porte ensuite sa régie.
+    expect((await e.req('POST', `/v1/fiscal/imports/${b.id}/aiguillage`, 'u-guichet', { ref: 'RO-3', regie: 'DGIPK', motif: 'Vignette : impôt provincial (acte)' })).statusCode).toBe(403);
+    const a = (await e.req('POST', `/v1/fiscal/imports/${b.id}/aiguillage`, 'u-controleur', { ref: 'RO-3', regie: 'DGIPK', motif: 'Vignette : impôt provincial (acte)' })).json();
+    expect(a.aiguillage).toMatchObject({ DGIPK: 3, A_ARBITRER: 0 });
+    const obj = e.app.ctx.objects.objects.findOne((o) => o.importedFrom?.externalRef === 'RO-3')!;
+    expect(obj.attributes.regieResponsable).toBe('DGIPK');
+  });
+
   it('même NIF qu’un compte existant : compte repris créé sans téléphone et fusion PROPOSÉE (double validation)', async () => {
     const e = await full();
     const acces = e.app.ctx.ext['acces'] as { declareProof(u: unknown, t: string, i: unknown): unknown; merges: { all(): { status: string; survivorId: string }[] } };

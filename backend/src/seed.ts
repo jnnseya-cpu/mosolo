@@ -57,7 +57,8 @@ export function seed(ctx: AppContext): void {
   ctx.vault.seedAccount({ alias: DEMO.dgipkAlias, entity: 'DGIPK', bankName: 'Banque de recettes A (démo)', accountNumber: 'CD00 0000 0000 0000 0001 2345', holderName: 'DGIPK — Compte de recettes (démo)', currency: 'USD' });
   ctx.vault.seedAccount({ alias: DEMO.dgtkAlias, entity: 'DGTK', bankName: 'Banque de recettes B (démo)', accountNumber: 'CD00 0000 0000 0000 0009 8765', holderName: 'DGTK — Compte de recettes (démo)', currency: 'CDF' });
   // Module 60 : compte marchand Mobile Money PUBLIC (numéro FICTIF, [EXEMPLE] non contractuel) — même verrou que les comptes bancaires.
-  ctx.vault.seedAccount({ alias: 'KIN-DGRK-MM-01', entity: 'DGRK', kind: 'MOBILE_MONEY', bankName: 'Opérateur Mobile Money A (démo) [EXEMPLE]', accountNumber: 'MM 243 0000 0000 01', holderName: 'DGRK — Compte marchand public (démo)', currency: 'CDF' });
+  // Réforme de la DGRK (30/09/2026) : compte de démonstration conservé sous son alias, libellé « ancienne DGRK (historique) ».
+  ctx.vault.seedAccount({ alias: 'KIN-DGRK-MM-01', entity: 'DGRK', kind: 'MOBILE_MONEY', bankName: 'Opérateur Mobile Money A (démo) [EXEMPLE]', accountNumber: 'MM 243 0000 0000 01', holderName: 'Ancienne DGRK (historique, avant la réforme DGIPK / DGTK) — compte marchand public (démo)', currency: 'CDF' });
 
   // Registre des instruments juridiques.
   const instruments = [

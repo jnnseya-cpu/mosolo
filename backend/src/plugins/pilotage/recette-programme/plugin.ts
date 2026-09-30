@@ -55,6 +55,8 @@ export const recetteProgrammePlugin = definePlugin<ProgrammeService>({
   create: (ctx) => new ProgrammeService(ctx),
   routes: (app, _ctx, svc) => {
     app.get('/v1/pilotage/programme', async (req) => svc.synthese(requireUser(req)));
+    // Programme routier du Gouvernorat (30/09/2026) : km annoncés et recettes liées à la route mises en regard.
+    app.get('/v1/pilotage/programme/routes', async (req) => svc.programmeRoutier(requireUser(req)));
     // ch. 41 — registre des risques
     app.get('/v1/pilotage/programme/risques', async (req) => svc.registreRisques(requireUser(req)));
     app.post<{ Params: { code: string } }>('/v1/pilotage/programme/risques/:code/revues', async (req, reply) => reply.code(201).send(svc.reviewRisk(requireUser(req), req.params.code, parse(revueSchema, req.body))));

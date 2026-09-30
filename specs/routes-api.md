@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1609 routes** dans 51 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1611 routes** dans 51 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -14,13 +14,13 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1609 routes** dans 5
 | extension decision | 30 |
 | extension documents | 17 |
 | extension equipements | 12 |
-| extension fiscal | 110 |
+| extension fiscal | 111 |
 | extension ia | 40 |
 | extension integrite | 86 |
 | extension juridique | 11 |
 | extension opportunites | 32 |
 | extension parking | 74 |
-| extension pilotage | 132 |
+| extension pilotage | 133 |
 | extension plateforme | 23 |
 | extension postes | 29 |
 | extension preuves | 15 |
@@ -480,6 +480,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1609 routes** dans 5
 | GET | `/v1/fiscal/imports` |
 | POST | `/v1/fiscal/imports` |
 | GET | `/v1/fiscal/imports/:id` |
+| POST | `/v1/fiscal/imports/:id/aiguillage` |
 | POST | `/v1/fiscal/imports/:id/commit` |
 | POST | `/v1/fiscal/imports/:id/duplicates/:line/decision` |
 | GET | `/v1/fiscal/imports/format` |
@@ -895,6 +896,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1609 routes** dans 5
 | GET | `/v1/pilotage/programme/risques` |
 | POST | `/v1/pilotage/programme/risques/:code/proprietaire` |
 | POST | `/v1/pilotage/programme/risques/:code/revues` |
+| GET | `/v1/pilotage/programme/routes` |
 | GET | `/v1/pilotage/programme/versions` |
 | POST | `/v1/pilotage/programme/versions/:code/etat` |
 | GET | `/v1/pilotage/projets` |

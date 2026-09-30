@@ -17,6 +17,7 @@ import { isCommune } from '../../reference/kinshasa.js';
 import { OBJECT_CATEGORIES, type DataProvenance, type FiscalObject, type ObjectCategory } from '../../modules/objects/service.js';
 import { actorOf, type FiscalDeps } from './common.js';
 import type { RelationService } from './relations.js';
+import { aiguillerObjet, aiguillerRecette, AIGUILLAGE_STATUT, type Aiguillage, type Regie } from './aiguillage.js';
 
 const { always } = GRANTS;
 definePolicy('fiscal:import.upload', { R06: always, R07: always, R11: always, R12: always });
@@ -34,7 +35,13 @@ export const IMPORT_COLUMNS = [
 
 type Row = Partial<Record<(typeof IMPORT_COLUMNS)[number], string>>;
 
-export interface ImportLine { line: number; type: string; ref: string; ok: boolean; errors: string[]; outcome?: string; createdId?: string }
+export interface ImportLine {
+  line: number; type: string; ref: string; ok: boolean; errors: string[]; outcome?: string; createdId?: string;
+  /** Régie compétente après la réforme de la DGRK (DGIPK / DGTK) ; « A_ARBITRER » ⇒ décision d'une personne. */
+  regie?: Aiguillage; regieMotif?: string; regieDecision?: { by: string; at: string; motif: string };
+  /** Compte : régies de ses objets et recettes (un compte n'est jamais scindé). */
+  regies?: Regie[];
+}
 
 export interface DedupProposal {
   line: number;
@@ -58,6 +65,8 @@ export interface ImportedHistoryItem {
   receiptRef?: string;
   probativeStatus: 'IMPORTE_SOURCE_REGIE';
   note: string;
+  /** Régie compétente (réforme de la DGRK, 30/09/2026). */
+  regie?: Aiguillage;
 }
 
 export interface ImportBatch {
@@ -76,6 +85,8 @@ export interface ImportBatch {
   committedAt?: string;
   mapping: Record<string, string>;
   history: ImportedHistoryItem[];
+  /** Répartition des lignes reprises entre DGIPK, DGTK et « à arbitrer » (réforme de la DGRK). */
+  aiguillage?: { DGIPK: number; DGTK: number; A_ARBITRER: number; statut: string };
 }
 
 /** Lecture CSV (virgule ou point-virgule, guillemets doubles). */
@@ -200,6 +211,29 @@ export class ImportService {
     return b;
   }
 
+  /**
+   * Arbitrage d'une ligne « à arbitrer » (ou correction d'un aiguillage) : régie DGIPK ou DGTK, motif ≥ 10 caractères,
+   * personne distincte de celle qui a déposé le lot ; journalisé. L'objet repris porte ensuite sa régie responsable.
+   */
+  arbitrer(user: User, id: string, input: { ref: string; regie: Regie; motif: string }): ImportBatch {
+    authorize(user, 'fiscal:import.commit');
+    const b = this.get(id);
+    if (b.status !== 'INTEGRE') throw conflict('IMPORT_BAD_STATE', 'Aiguillage arbitré après intégration du lot.');
+    assertDistinctPerson(user.id, [b.uploadedBy], 'L’arbitrage est fait par une personne distincte de celle qui a déposé le lot.');
+    if (input.motif.trim().length < 10) throw badRequest('MOTIF_REQUIRED', 'Motif de l’arbitrage : 10 caractères au moins.');
+    const lines = b.report.lines.map((l) => ({ ...l }));
+    const l = lines.find((x) => x.ref === input.ref);
+    if (!l) throw notFound('IMPORT_LINE_NOT_FOUND', `Ligne inconnue : ${input.ref}`);
+    const avant = l.regie ?? null;
+    l.regie = input.regie; l.regieDecision = { by: user.id, at: this.d.nowIso(), motif: input.motif };
+    const history = b.history.map((h) => (h.ref === input.ref ? { ...h, regie: input.regie } : h));
+    if (l.createdId) { const o = this.d.ctx.objects.objects.get(l.createdId); if (o) this.d.ctx.objects.objects.update({ ...o, attributes: { ...o.attributes, regieResponsable: input.regie } }); }
+    const compte = (x: Aiguillage) => lines.filter((k) => k.ok && k.regie === x).length;
+    const out = this.batches.update({ ...b, report: { ...b.report, lines }, history, aiguillage: { DGIPK: compte('DGIPK'), DGTK: compte('DGTK'), A_ARBITRER: compte('A_ARBITRER'), statut: AIGUILLAGE_STATUT } });
+    this.d.ctx.audit.append({ actor: actorOf(user), action: 'fiscal.import.aiguillage_arbitre', resourceType: 'import_batch', resourceId: id, details: { ref: input.ref, avant, apres: input.regie, motif: input.motif } });
+    return out;
+  }
+
   get(id: string): ImportBatch {
     const b = this.batches.get(id);
     if (!b) throw notFound('IMPORT_NOT_FOUND', `Lot inconnu : ${id}`);
@@ -251,7 +285,9 @@ export class ImportService {
           }
         } else if (r.type === 'OBJET') {
           if (dup) { l.outcome = 'EN ATTENTE — objet probablement déjà recensé (aucune création)'; continue; }
-          const attributes: Record<string, unknown> = { ...(r.superficie_m2 ? { superficie_m2: r.superficie_m2 } : {}), ...(r.usage ? { usage: r.usage } : {}), ...(r.compte_ref ? { compteRepris: r.compte_ref } : {}) };
+          const aig = aiguillerObjet(r.categorie as ObjectCategory);
+          l.regie = aig.regie; l.regieMotif = aig.motif;
+          const attributes: Record<string, unknown> = { ...(r.superficie_m2 ? { superficie_m2: r.superficie_m2 } : {}), ...(r.usage ? { usage: r.usage } : {}), ...(r.compte_ref ? { compteRepris: r.compte_ref } : {}), regieResponsable: aig.regie };
           const o = this.d.ctx.objects.create(user, {
             category: r.categorie as ObjectCategory, commune: r.commune!, quartier: r.quartier!, localityRank: Number(r.rang) as 1 | 2 | 3 | 4,
             lat: Number(r.lat), lon: Number(r.lon), attributes, ...(r.avenue ? { avenue: r.avenue } : {}),
@@ -269,7 +305,9 @@ export class ImportService {
           } else if (r.compte_ref) l.outcome += ' ; rattachement à déclarer (compte repris ' + r.compte_ref + ')';
         } else if (r.type === 'HISTORIQUE') {
           const tpId = mapping[`COMPTE|${r.compte_ref}`] ?? null;
-          history.push({
+          const aigH = aiguillerRecette(r.recette ?? '', this.d.ctx.rules.list());
+          l.regie = aigH.regie; l.regieMotif = aigH.motif;
+          history.push({ regie: aigH.regie,
             ref: r.ref_externe!, taxpayerId: tpId, accountRef: r.compte_ref!, fiscalYear: r.exercice!, revenueLabel: r.recette!, amount: { amount: r.montant!, currency: r.devise! },
             paymentStatus: r.statut_paiement as 'PAYE' | 'IMPAYE', ...(r.quittance_ref ? { receiptRef: r.quittance_ref } : {}), probativeStatus: 'IMPORTE_SOURCE_REGIE',
             note: r.statut_paiement === 'IMPAYE' ? 'Impayé historique : information seulement ; reprise possible par le circuit de reprise d’arriérés (proposition motivée, validation).' : 'Paiement historique : information, sans quittance MOSOLO.',
@@ -282,8 +320,20 @@ export class ImportService {
         l.outcome = 'REJETEE à l’intégration';
       }
     }
-    const out = this.batches.update({ ...b, status: 'INTEGRE', committedBy: user.id, committedAt: at, report: { ...b.report, lines }, dedup, mapping, history });
-    this.d.ctx.audit.append({ actor: actorOf(user), action: 'fiscal.import.committed', resourceType: 'import_batch', resourceId: id, details: { uploadedBy: b.uploadedBy, created: lines.filter((l) => l.createdId).length, pending: dedup.filter((x) => x.status === 'A_EXAMINER').length, mergesProposed: dedup.filter((x) => x.status === 'PROPOSITION_DE_FUSION').length, history: history.length } });
+    // Comptes : rattachés aux régies de leurs objets et recettes repris (jamais scindés).
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i]!;
+      const r = b.rows[i]!;
+      if (r.type !== 'COMPTE' || !l.ok) continue;
+      const regies = [...new Set(b.rows.map((x, k) => (x.compte_ref === r.ref_externe ? lines[k]!.regie : undefined)).filter((x): x is Regie => x === 'DGIPK' || x === 'DGTK'))];
+      l.regies = regies;
+      l.regie = regies.length === 1 ? regies[0]! : regies.length > 1 ? regies[0]! : 'A_ARBITRER';
+      l.regieMotif = regies.length ? `Compte rattaché à : ${regies.join(' et ')} (d'après ses objets et recettes)` : 'Aucun objet ni recette repris : régie à arbitrer';
+    }
+    const compte = (x: Aiguillage) => lines.filter((l) => l.ok && l.regie === x).length;
+    const aiguillage = { DGIPK: compte('DGIPK'), DGTK: compte('DGTK'), A_ARBITRER: compte('A_ARBITRER'), statut: AIGUILLAGE_STATUT };
+    const out = this.batches.update({ ...b, status: 'INTEGRE', committedBy: user.id, committedAt: at, report: { ...b.report, lines }, dedup, mapping, history, aiguillage });
+    this.d.ctx.audit.append({ actor: actorOf(user), action: 'fiscal.import.committed', resourceType: 'import_batch', resourceId: id, details: { uploadedBy: b.uploadedBy, created: lines.filter((l) => l.createdId).length, pending: dedup.filter((x) => x.status === 'A_EXAMINER').length, mergesProposed: dedup.filter((x) => x.status === 'PROPOSITION_DE_FUSION').length, history: history.length, aiguillage } });
     return out;
   }
 

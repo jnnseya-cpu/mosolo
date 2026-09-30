@@ -4,6 +4,7 @@
  * financement est constaté sur acte budgétaire ; les réalisations financées sont publiées chaque trimestre.
  */
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
@@ -74,6 +75,7 @@ export default function Projets() {
   return (
     <div className="page page-wide">
       <PageHead eyebrow="Pilotage · § 27.2–27.3" title="Projets publics et emploi des fonds" lead="Collecte → comptabilité → partage légal → Trésor → budget → autorisation → engagement → dépense. L’IA compare des scénarios ; aucun transfert ni engagement n’est automatique." />
+      <p className="small">Programme du Gouvernorat : <Link to="/pilotage/programme-routier">Programme routier (km livrés et en cours, recettes liées à la route)</Link>.</p>
       <Callout><strong>L’IA propose, l’autorité décide.</strong> Les montants disponibles sont les recettes rapprochées ; la disponibilité budgétaire (niveau 11) relève du budget voté.</Callout>
       <Notice msg={r.msg} />
       {q.loading && !q.data ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : q.data && (
