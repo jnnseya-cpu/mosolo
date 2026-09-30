@@ -394,3 +394,29 @@ Simulation du retour arrière (`DRY_RUN=1 PROJECT_ID=projet-exemple ./infra/gcp/
     + curl -fsS 'https://mosolo-<numéro de projet>.africa-south1.run.app/health'
     Revenir à la dernière révision : gcloud run services update-traffic mosolo --region=africa-south1 --to-latest
 ```
+
+## Mise à jour automatique de la démonstration (30/09/2026)
+
+Le fichier `.github/workflows/deploy-demo.yml` déploie `mosolo-demo` à chaque envoi sur la branche de travail (ou sur
+`main`), **après** les contrôles (types, lint, tests, construction). Il suffit d'y donner accès à Google Cloud, une
+seule fois, depuis Cloud Shell (aucune valeur n'est écrite dans le dépôt) :
+
+```bash
+PROJECT_ID=mosolo
+gcloud iam service-accounts create mosolo-deploiement --project "$PROJECT_ID" --display-name "Déploiement GitHub (démo)"
+SA="mosolo-deploiement@$PROJECT_ID.iam.gserviceaccount.com"
+for r in roles/run.admin roles/iam.serviceAccountUser roles/cloudbuild.builds.editor roles/artifactregistry.writer \
+         roles/storage.admin roles/serviceusage.serviceUsageConsumer roles/logging.viewer; do
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:$SA" --role "$r" --condition=None >/dev/null
+done
+# Option simple : clé du compte de service (à coller dans GitHub, puis supprimer le fichier local)
+gcloud iam service-accounts keys create cle-deploiement.json --iam-account "$SA"
+```
+
+Puis, sur GitHub : dépôt → **Settings → Secrets and variables → Actions → New repository secret** :
+nom `GCP_SA_KEY`, valeur = tout le contenu de `cle-deploiement.json` ; ensuite `rm cle-deploiement.json`.
+(Option recommandée à terme, sans clé : fédération d'identité — secrets `GCP_WORKLOAD_IDENTITY_PROVIDER` et
+`GCP_DEPLOY_SERVICE_ACCOUNT`.) Sans secret, le déploiement est sauté et les contrôles tournent quand même.
+
+Suivi : onglet **Actions** du dépôt → « Déploiement automatique (démonstration) ». Une nouvelle version publiée est
+chargée d'elle-même par les navigateurs (§ I.49).

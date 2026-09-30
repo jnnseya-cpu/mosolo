@@ -1,0 +1,87 @@
+# KINSHASA MOSOLO — mise à jour AUTOMATIQUE de la démonstration (30/09/2026, demande du maître d'ouvrage) :
+# à chaque envoi sur la branche de travail (ou sur main), contrôles (types, tests, construction), puis déploiement
+# Cloud Run du service de démonstration `mosolo-demo` — la même commande que le déploiement manuel :
+#   gcloud run deploy mosolo-demo --source . --project mosolo --region africa-south1
+# Aucun secret dans le dépôt : l'accès à Google Cloud vient des secrets GitHub du dépôt (voir infra/gcp/README.md,
+# « Mise à jour automatique ») — fédération d'identité (recommandé) ou clé de compte de service. Sans secret
+# configuré, le déploiement est simplement sauté (les contrôles tournent quand même).
+name: Déploiement automatique (démonstration)
+
+on:
+  push:
+    branches: [main, claude/beautiful-hawking-3tw7gb]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'mosolo' }}
+  REGION: ${{ vars.GCP_REGION || 'africa-south1' }}
+  SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'mosolo-demo' }}
+
+jobs:
+  controles:
+    name: Contrôles avant déploiement
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MOSOLO_DEMO_MODE: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build -w frontend
+
+  deploiement:
+    name: Déploiement Cloud Run (mosolo-demo)
+    needs: controles
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Accès Google Cloud configuré ?
+        id: acces
+        env:
+          WIF: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          # (les secrets ne peuvent pas figurer dans une condition « if » : le mode est calculé ici)
+          if [ -n "$WIF" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; echo "mode=wif" >> "$GITHUB_OUTPUT";
+          elif [ -n "$KEY" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; echo "mode=key" >> "$GITHUB_OUTPUT"; else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Déploiement sauté : aucun secret GCP_WORKLOAD_IDENTITY_PROVIDER ni GCP_SA_KEY (voir infra/gcp/README.md)."
+          fi
+      - name: Authentification (fédération d'identité)
+        if: steps.acces.outputs.mode == 'wif'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - name: Authentification (clé de compte de service)
+        if: steps.acces.outputs.mode == 'key'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+        if: steps.acces.outputs.ok == 'true'
+      - name: Déploiement
+        if: steps.acces.outputs.ok == 'true'
+        run: gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" --quiet
+      - name: Vérification de santé
+        if: steps.acces.outputs.ok == 'true'
+        run: |
+          url=$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')
+          for i in 1 2 3 4 5 6; do curl -fsS "$url/health" && exit 0; sleep 10; done
+          echo "::error::Le service ne répond pas sur /health après déploiement."; exit 1
