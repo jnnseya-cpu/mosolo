@@ -1,6 +1,8 @@
 /**
  * Construction de l'application Fastify. `buildApp({ clock, secrets })` : horloge et secrets injectables (tests).
  */
+import { registerTraductionRoutes } from './modules/traduction/routes.js';
+import { TraductionService, traducteurGoogle, type Traducteur } from './modules/traduction/service.js';
 import { loggerOptions } from './plugins/plateforme/supervision.js';
 import { parseRange, readRange, staticSiteFromEnv } from './core/static-site.js';
 import { installDemoAccessGate } from './core/demo-gate.js';
@@ -97,6 +99,8 @@ export interface BuildOptions extends AppOptions {
   logger?: boolean;
   /** Amorçage hors démonstration (défaut : fichier MOSOLO_BOOTSTRAP_FILE s'il est défini). Ignoré si les données de démonstration sont semées. */
   bootstrap?: BootstrapDocument;
+  /** Fournisseur de traduction automatique (tests) ; défaut : Google Cloud Translation selon l'environnement. */
+  traducteur?: Traducteur | null;
 }
 
 /** Agents de terrain de démonstration → modules où ils contrôlent (données NON CONTRACTUELLES). */
@@ -247,6 +251,8 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
   });
 
   registerSystemRoutes(app, ctx);
+  // Traduction automatique de l'interface (30/09/2026) : Google Cloud Translation, version française faisant foi.
+  registerTraductionRoutes(app, new TraductionService(opts.traducteur !== undefined ? opts.traducteur : traducteurGoogle()));
   registerIdentityRoutes(app, ctx);
   registerCompteUniqueRoutes(app, ctx);
   registerObjectRoutes(app, ctx);

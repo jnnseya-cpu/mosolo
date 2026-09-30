@@ -139,3 +139,6 @@ données de démonstration.
   exigé pour les pass personnels ; copies détectées à chaque scan ; gilets par numéro refusés ; vignettes techniques
   signées ; mémoire hors ligne ; chaîne de la fraude, instruction, décision par une personne distincte, recette perdue
   facturée au titulaire — jamais de sanction automatique (annexe I, § I.52).
+- **Accueil et traduction (30/09/2026)** : « / » reste la page d'accueil pour tout compte (bouton « Ouvrir mon espace de
+  travail » ; `/?travail` pour l'ouverture directe) ; traduction automatique de l'écran par Google Cloud Translation
+  (mention « la version française fait foi ») ; seuils anti-fraude confirmés — annexe I, § I.53.

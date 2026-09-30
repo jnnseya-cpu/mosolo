@@ -83,17 +83,16 @@ export default function Home() {
   const nf = (n: number) => n.toLocaleString(lang === 'en' ? 'en-GB' : 'fr-FR');
   // Visiteur sans compte : seulement les espaces publics ; compte connecté : ses propres écrans.
   const areas = visibleNav(user?.roles, user?.entity).filter((n) => n.to !== '/' && (user ? true : n.group === 'public'));
-  // Page d'accueil toujours accessible (30/09/2026 : « depuis n'importe quel compte, revenir à la page d'accueil ») :
-  // « /accueil » (lien de l'en-tête et du menu) ou « ?presentation » affichent la présentation, quel que soit le compte.
-  const vitrine = typeof window !== 'undefined' && (window.location.pathname === '/accueil' || new URLSearchParams(window.location.search).has('presentation'));
-  // Autorités (Gouverneur, cabinet, secrétariat exécutif, ministres) : l'écran d'accueil est le poste de décision (§ 27.2).
-  if (!vitrine && user?.roles.some((r) => AUTORITES_POSTE.includes(r))) return <Navigate to="/poste-de-decision" replace />;
-  // Groupe Nseya (R38, 29/09/2026) : l'écran d'accueil est son centre de commandement.
-  if (!vitrine && user?.roles.includes('R38')) return <Navigate to="/groupe-nseya/command-centre" replace />;
-  // Parcours par rôle (29/09/2026) : chaque compte s'ouvre sur son propre travail (premier écran de « Mon travail du
-  // jour ») ; la présentation publique reste la page d'accueil des visiteurs et s'ouvre avec « ?presentation ».
-  const accueil = accueilDuRole(user?.roles, user?.entity);
-  if (accueil && accueil !== '/' && !vitrine) return <Navigate to={accueil} replace />;
+  // Page d'accueil (30/09/2026, consigne du maître d'ouvrage : « rester sur la page d'accueil, ne pas être emmené
+  // automatiquement dans le compte ») : « / » et « /accueil » affichent TOUJOURS la présentation ; chaque compte y trouve
+  // le bouton « Ouvrir mon espace de travail » (poste de décision, centre de commandement ou travail du jour). Le
+  // parcours par rôle du 29/09/2026 reste disponible : « /?travail » ouvre directement l'espace de travail.
+  const espaceTravail = !user ? null
+    : user.roles.some((r) => AUTORITES_POSTE.includes(r)) ? '/poste-de-decision'
+      : user.roles.includes('R38') ? '/groupe-nseya/command-centre'
+        : (() => { const a = accueilDuRole(user.roles, user.entity); return a && a !== '/' ? a : '/espace'; })();
+  const directTravail = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('travail');
+  if (directTravail && espaceTravail) return <Navigate to={espaceTravail} replace />;
   return (
     <div className="landing">
       {/* 1. Ouverture institutionnelle : visuel officiel, non modifié, logo jamais recadré */}
@@ -119,7 +118,9 @@ export default function Home() {
           <h1 id="hero-title" className="display-1">{tr('app.motto')}</h1>
           <p className="hero-lead">{tr('app.tagline')}</p>
           <div className="hero-cta">
-            <Link to="/espace" className="btn btn-light btn-lg">{tr('home.cta.space')} <Icon name="arrowRight" size={18} /></Link>
+            {espaceTravail && espaceTravail !== '/espace'
+              ? <Link to={espaceTravail} className="btn btn-light btn-lg" data-testid="home-espace-travail">Ouvrir mon espace de travail <Icon name="arrowRight" size={18} /></Link>
+              : <Link to="/espace" className="btn btn-light btn-lg">{tr('home.cta.space')} <Icon name="arrowRight" size={18} /></Link>}
             <Link to="/verifier" className="btn btn-outline-light btn-lg"><Icon name="shieldCheck" size={18} /> {tr('home.cta.verify')}</Link>
           </div>
           <div className="hero-install"><InstallButton variant="link" /></div>

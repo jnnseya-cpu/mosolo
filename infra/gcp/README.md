@@ -420,3 +420,18 @@ nom `GCP_SA_KEY`, valeur = tout le contenu de `cle-deploiement.json` ; ensuite `
 
 Suivi : onglet **Actions** du dépôt → « Déploiement automatique (démonstration) ». Une nouvelle version publiée est
 chargée d'elle-même par les navigateurs (§ I.49).
+
+## Traduction automatique de l'interface (30/09/2026)
+
+Une seule fois, dans Cloud Shell (le service utilise son compte de service : aucune clé à créer) :
+
+```bash
+PROJECT_ID=mosolo; REGION=africa-south1; SERVICE=mosolo-demo
+gcloud services enable translate.googleapis.com --project "$PROJECT_ID"
+SA=$(gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT_ID" --format='value(spec.template.spec.serviceAccountName)')
+[ -z "$SA" ] && SA="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:$SA" --role roles/cloudtranslate.user --condition=None
+```
+
+Coût : facturation Cloud Translation à l'usage (les libellés d'interface sont traduits une fois puis mis en cache).
+Désactivation : variable `MOSOLO_TRADUCTION=off`. Hors Cloud Run : variable `GOOGLE_TRANSLATE_API_KEY`.

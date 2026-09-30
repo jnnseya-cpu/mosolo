@@ -1,5 +1,8 @@
 import { CURRENCIES, CURRENCY_CODES, FAMILLE_DU_ROLE, FAMILLES_COMPTES, LANGUAGES, LANGUAGE_CODES, ORDRE_FAMILLES, isCurrencyCode, isLanguageCode, type LanguageCode, type RoleCode } from '@mosolo/shared';
+import { useEffect, useState } from 'react';
 import { useApp } from '../context';
+import { api } from '../lib/api';
+import { TraducteurEcran } from '../lib/traductionAuto';
 import { hasKey, isDraftLanguage, tr } from '../lib/i18n';
 import type { DemoUser } from '../lib/types';
 
@@ -23,11 +26,11 @@ export function LanguageSelector({ id = 'lang-select' }: { id?: string }) {
     <div className="ctl">
       <label htmlFor={id} className="ctl-label">{tr('common.language')}</label>
       <div className="ctl-row">
-        <select id={id} value={lang} onChange={(e) => isLanguageCode(e.target.value) && setLang(e.target.value)}>
+        {/* Noms natifs, jamais traduits ; mention « brouillon » conservée ; l'avis précise « traduction automatique ». */}
+        <select id={id} value={lang} translate="no" data-no-translate onChange={(e) => isLanguageCode(e.target.value) && setLang(e.target.value)}
+          title={LANGUAGE_CODES.some(isDraftLanguage) ? tr('lang.draftHint') : undefined}>
           {LANGUAGE_CODES.map((c) => (
-            <option key={c} value={c} lang={c}>
-              {LANGUAGES[c].nativeName}{isDraftLanguage(c) ? ` (${tr('lang.draft')})` : ''}
-            </option>
+            <option key={c} value={c} lang={c}>{LANGUAGES[c].nativeName}{isDraftLanguage(c) ? ` (${tr('lang.draft')})` : ''}</option>
           ))}
         </select>
       </div>
@@ -36,21 +39,40 @@ export function LanguageSelector({ id = 'lang-select' }: { id?: string }) {
 }
 
 /**
- * Langue choisie encore non traduite à l'écran (30/09/2026, remarque du maître d'ouvrage : « la traduction ne fonctionne
- * pas et fait doublon ») : un seul avis clair, au lieu d'un écran à moitié traduit et d'étiquettes répétées. Les
- * messages (SMS, notifications) utilisent déjà la langue choisie ; l'interface reste en français (version qui fait foi)
- * tant que la traduction n'est pas validée. Retour au français en un clic.
+ * Langue de l'interface (30/09/2026) : l'interface est rédigée en français (version qui fait foi). Une autre langue
+ * choisie déclenche la TRADUCTION AUTOMATIQUE de tout l'écran (Google Cloud Translation, par le serveur) avec la
+ * mention « traduction automatique » et un retour au français en un clic. Service non configuré : avis clair, l'écran
+ * reste en français et la langue choisie sert aux SMS et notifications.
  */
 export function AvisLangue() {
   const { lang, setLang } = useApp();
+  const [etat, setEtat] = useState<'verif' | 'actif' | 'indisponible' | 'erreur'>('verif');
+  useEffect(() => {
+    if (lang === 'fr') return;
+    let traducteur: TraducteurEcran | null = null;
+    let annule = false;
+    setEtat('verif');
+    void api<{ disponible: boolean }>('/v1/traduction/etat').then((e) => {
+      if (annule) return;
+      if (!e.disponible) { setEtat('indisponible'); return; }
+      traducteur = new TraducteurEcran(lang);
+      traducteur.onErreur = () => setEtat('erreur');
+      traducteur.demarrer();
+      setEtat('actif');
+    }).catch(() => { if (!annule) setEtat('indisponible'); });
+    return () => { annule = true; traducteur?.arreter(); };
+  }, [lang]);
   if (lang === 'fr') return null;
   return (
     <div className="callout callout-info avis-langue" role="status" data-testid="avis-langue">
       <span>
-        <strong>{LANGUAGES[lang].nativeName}</strong> : vos SMS et notifications sont envoyés dans cette langue. L’interface
-        reste en français, version qui fait foi, tant que sa traduction n’est pas validée.
+        <strong translate="no">{LANGUAGES[lang].nativeName}</strong>{' '}
+        {etat === 'actif' ? ': traduction automatique de l’écran — la version française fait foi.'
+          : etat === 'verif' ? ': traduction en cours…'
+            : etat === 'erreur' ? ': service de traduction momentanément indisponible — certains textes restent en français.'
+              : ': traduction automatique non configurée sur ce serveur — l’interface reste en français ; vos SMS et notifications sont envoyés dans cette langue.'}
       </span>
-      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setLang('fr')}>Afficher en français</button>
+      <button type="button" className="btn btn-secondary btn-sm" translate="no" data-no-translate onClick={() => setLang('fr')}>Afficher en français</button>
     </div>
   );
 }

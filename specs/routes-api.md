@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1607 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1609 routes** dans 51 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -52,6 +52,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1607 routes** dans 5
 | module receipts | 2 |
 | module rules | 26 |
 | module system | 3 |
+| module traduction | 2 |
 | module treasury | 8 |
 | module vault | 4 |
 
@@ -1889,6 +1890,13 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1607 routes** dans 5
 | GET | `/health` |
 | GET | `/v1/demo/users` |
 | GET | `/v1/meta` |
+
+## Module traduction
+
+| Méthode | Chemin |
+|---|---|
+| POST | `/v1/traduction` |
+| GET | `/v1/traduction/etat` |
 
 ## Module treasury
 

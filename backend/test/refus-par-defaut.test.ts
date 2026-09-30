@@ -28,6 +28,8 @@ const PUBLIC_BY_DESIGN = new Set([
   '/v1/partenaires/api/v1', '/v1/rakapay/catalogue', '/v1/rakapay/cooperatives', '/v1/rakapay/lignes', '/v1/rakapay/offres',
   '/v1/rakapay/operateurs', '/v1/rakapay/stations', '/v1/referentiel/espaces', '/v1/titres/cle-publique', '/v1/titres/types',
   '/v1/verticales', '/v1/verticales/marches/plan', '/v1/verticales/secteurs',
+  // Traduction automatique (30/09/2026) : état du service, sans donnée (visiteurs et comptes).
+  '/v1/traduction/etat',
 ]);
 
 describe('Refus par défaut sans authentification', () => {

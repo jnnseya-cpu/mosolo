@@ -52,11 +52,11 @@ const OFFLINE_MAX_AGE_MS = 72 * HOUR_MS;
 const MAX_PACKS_PER_DEVICE = 50;
 
 /**
- * Seuils de détection des copies (30/09/2026) — « par défaut — à confirmer par le maître d'ouvrage ».
+ * Seuils de détection des copies — CONFIRMÉS par le maître d'ouvrage le 30/09/2026.
  * Déplacement impossible : vitesse apparente > 80 km/h entre deux contrôles distants de plus de 2 km ;
  * agents simultanés : 3 agents distincts ou plus en 10 minutes ; scans excessifs : plus de 12 en une heure.
  */
-export const SEUILS_CLONE = { vitesseMaxKmH: 80, distanceMinKm: 2, fenetreAgentsMin: 10, agentsMax: 3, scansMaxHeure: 12, statut: 'par défaut — à confirmer par le maître d’ouvrage' } as const;
+export const SEUILS_CLONE = { vitesseMaxKmH: 80, distanceMinKm: 2, fenetreAgentsMin: 10, agentsMax: 3, scansMaxHeure: 12, statut: 'confirmés par le maître d’ouvrage (30/09/2026)' } as const;
 definePolicy('titres:fraude.read', { R24: GRANTS.always, R22: GRANTS.always, R23: GRANTS.always, R06: GRANTS.sameEntity, R07: GRANTS.sameEntity, R09: GRANTS.sameEntity });
 definePolicy('titres:fraude.instruire', { R24: GRANTS.always });
 definePolicy('titres:fraude.decider', { R06: GRANTS.sameEntity, R22: GRANTS.always });

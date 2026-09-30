@@ -1892,7 +1892,7 @@ verrouiller ; retrouver et punir tous ceux qui sont impliqués ». Ajout (rien n
    refusés ; la page publique ne publie plus de QR copiable pour ces pass.
 3. **Pass lié à son titulaire** : seul le compte qui l'a acheté (ou son titulaire) génère le QR animé, toutes les 30 s ;
    chaque génération est tracée.
-4. **Copies détectées à chaque scan** (seuils « par défaut — à confirmer ») : même code en deux lieux à plus de 80 km/h
+4. **Copies détectées à chaque scan** (seuils **confirmés par le maître d'ouvrage le 30/09/2026**) : même code en deux lieux à plus de 80 km/h
    apparents (plus de 2 km), 3 agents distincts en 10 minutes, plus de 12 scans en une heure ⇒ rouge immédiat, blocage
    conservatoire, alerte, dossier.
 5. **Gilets et vignettes** : gilet présenté par son seul numéro refusé (alerte) ; QR de vignette technique **signé**
@@ -1907,3 +1907,21 @@ verrouiller ; retrouver et punir tous ceux qui sont impliqués ». Ajout (rien n
    classement (blocage levé) ou fraude établie (titre révoqué, **recette perdue retenue pour facturation au titulaire**
    par la fiche ACTIVE et le circuit commun, saisine de l'autorité compétente) ; suivi qualité des agents mis en cause.
    Amendes et mesures disciplinaires : autorité compétente seulement.
+
+## I.53 Page d'accueil conservée ; traduction automatique de tout l'écran ; seuils anti-fraude confirmés (30/09/2026)
+
+- **Seuils de détection des copies** (§ I.52, point 4) : **confirmés par le maître d'ouvrage** (80 km/h apparents au-delà
+  de 2 km ; 3 agents en 10 minutes ; plus de 12 scans en une heure).
+- **Page d'accueil** (consigne : « rester sur la page d'accueil, ne pas être emmené automatiquement dans le compte ») :
+  « / » et « /accueil » affichent toujours la présentation, quel que soit le compte ; le bouton « Ouvrir mon espace de
+  travail » mène au poste de décision, au centre de commandement ou au travail du jour. Le parcours par rôle du
+  29/09/2026 reste disponible par « /?travail » (ouverture directe de l'espace de travail).
+- **Traduction** (consigne : « la traduction complète ne fonctionne pas ») : l'interface reste rédigée en français (version
+  qui fait foi) ; une autre langue choisie (lingala, kiswahili, kikongo, tshiluba, anglais) déclenche la **traduction
+  automatique de tout l'écran** — textes, listes, graphiques, infobulles — par Google Cloud Translation, via le serveur
+  (`POST /v1/traduction`, cache, limites de débit), avec la mention « traduction automatique — la version française fait
+  foi » et le retour au français en un clic. Codes, plaques, montants (« mono ») et champs de saisie ne sont jamais
+  traduits. Sur Cloud Run, le service utilise le compte de service de la plateforme (aucune clé dans le dépôt) : API
+  « Cloud Translation » à activer et rôle `roles/cloudtranslate.user` à accorder (infra/gcp/README.md). Sans service
+  configuré, l'avis l'indique et l'écran reste en français. La validation humaine des traductions des langues
+  nationales reste à organiser (traducteurs) ; les SMS et notifications utilisent déjà la langue choisie.
