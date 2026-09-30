@@ -7,6 +7,7 @@
  * donnée fiscale individuelle n'apparaît sur un écran d'accueil ; les illustrations des maquettes sont des données de
  * démonstration marquées [EXEMPLE], montrées à part des chiffres calculés, jamais à leur place.
  */
+import { BRAND_CSS, brandFooterHtml, brandHeaderHtml } from '../../core/brand.js';
 import type { MoneyJSON, RevenueLadderLevel } from '@mosolo/shared';
 import { ROLES } from '@mosolo/shared';
 import type { User } from '../../core/auth.js';
@@ -765,7 +766,7 @@ export class Vues {
   exportHtml(titre: string, rows: Chiffre[], extra = ''): string {
     const h = (x: string) => x.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
     const lignes = rows.map((r) => `<tr class="${r.estimation ? 'estimation' : ''}${r.exemple ? ' exemple' : ''}">${ligneExport(r).map((c) => `<td>${h(c)}</td>`).join('')}</tr>`).join('');
-    return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${h(titre)}</title><style>body{font-family:sans-serif;font-size:12px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:3px}.estimation td{font-style:italic;background:#fff7e0}.exemple td{border-style:dashed;color:#555}</style></head><body><h1>${h(titre)}</h1><p>Chaque chiffre conserve son état, sa date de production et son taux de conversion (§ 27.10). Les estimations sont en italique ; les illustrations ${EXEMPLE} sont en pointillés.</p>${extra}<table><thead><tr>${COLONNES_EXPORT.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${lignes}</tbody></table><p>${h(PIED_POSTES)}</p></body></html>`;
+    return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${h(titre)}</title><style>body{font-family:sans-serif;font-size:12px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:3px}.estimation td{font-style:italic;background:#fff7e0}.exemple td{border-style:dashed;color:#555}${BRAND_CSS}</style></head><body>${brandHeaderHtml('Postes de décision')}<h1>${h(titre)}</h1><p>Chaque chiffre conserve son état, sa date de production et son taux de conversion (§ 27.10). Les estimations sont en italique ; les illustrations ${EXEMPLE} sont en pointillés.</p>${extra}<table><thead><tr>${COLONNES_EXPORT.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${lignes}</tbody></table><p>${h(PIED_POSTES)}</p>${brandFooterHtml()}</body></html>`;
   }
 
   // ————————————————————————— référentiel (§ 27) —————————————————————————

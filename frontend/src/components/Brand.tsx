@@ -45,3 +45,33 @@ export function MakerMark() {
 export function Tricolour({ className }: { className?: string }) {
   return <div className={`tricolour ${className ?? ''}`} aria-hidden="true"><i /><i /><i /></div>;
 }
+
+/**
+ * En-tête de marque des documents imprimés (30/09/2026 : « tout document généré, imprimé ou PDF est à l'image de la
+ * plateforme ») : logo de la Ville de Kinshasa (inchangé), « Ville-Province de Kinshasa », « KINSHASA MOSOLO » et le
+ * type de document, filet tricolore.
+ */
+export function PrintLetterhead({ document, compact }: { document?: string; compact?: boolean }) {
+  return (
+    <div className={`print-letterhead ${compact ? 'print-letterhead-compact' : ''}`}>
+      <div className="print-letterhead-row">
+        <CityLogo height={compact ? 26 : 40} variant="onLight" />
+        <div className="print-letterhead-text">
+          <strong>Ville-Province de Kinshasa</strong>
+          <span>KINSHASA MOSOLO{document ? ` · ${document}` : ''}</span>
+        </div>
+      </div>
+      <Tricolour className="print-letterhead-tri" />
+    </div>
+  );
+}
+
+/** Pied de marque des documents imprimés : « Plateforme KINSHASA MOSOLO — réalisée par Groupe Nseya » (logo inchangé). */
+export function PrintFooterMark() {
+  return (
+    <div className="print-footermark">
+      <img src="/logo-groupe-nseya.png" alt="" width={14} height={15} />
+      <span>Plateforme KINSHASA MOSOLO — réalisée par Groupe Nseya</span>
+    </div>
+  );
+}

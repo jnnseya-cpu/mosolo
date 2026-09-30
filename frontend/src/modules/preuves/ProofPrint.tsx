@@ -7,6 +7,7 @@
  * - un papier ne peut pas décompter : il porte l'ÉCHÉANCIER DES COULEURS (vert jusqu'à…, orange jusqu'à…, rouge jusqu'à…)
  *   selon la règle 50 % / 1 %, et rappelle que seule la vérification en ligne fait foi.
  */
+import { PrintFooterMark } from '../../components/Brand';
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
@@ -71,7 +72,7 @@ export function PrintedProof({ r, format, verifyUrl }: { r: ProofResult; format:
         <img src="/logo-ville-de-kinshasa.png" alt="Ville de Kinshasa" className="pv-logo" />
         <div className="pv-brand">
           <strong>VILLE DE KINSHASA</strong>
-          <span>KINSHASA MOSOLO · preuve vérifiable</span>
+          <span>Ville-Province de Kinshasa · KINSHASA MOSOLO · preuve vérifiable</span>
         </div>
       </header>
       <div className="pv-flag" aria-hidden="true"><i /><i /><i /></div>
@@ -124,6 +125,7 @@ export function PrintedProof({ r, format, verifyUrl }: { r: ProofResult; format:
         <span>Imprimé le {kin(r.printedAt ?? r.checkedAt)} (heure du serveur)</span>
         <span className="pv-demo">DÉMONSTRATION — NON OPPOSABLE</span>
       </footer>
+      <PrintFooterMark />
     </article>
   );
 }

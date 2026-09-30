@@ -20,7 +20,6 @@ export function receiptPdf(r: Receipt, receipts: ReceiptService, opts: { payment
     subject: 'Quittance électronique KINSHASA MOSOLO',
     qr: r.qrPayload,
     blocks: [
-      { text: 'KINSHASA MOSOLO — Ville-Province de Kinshasa', size: 9 },
       { text: 'Quittance électronique', size: 18, bold: true, gap: 6 },
       { text: r.mention, size: 11, bold: true, gap: 4 },
       ...(opts.duplicate ? [{ text: 'DUPLICATA — même numéro, même signature', bold: true }] : []),

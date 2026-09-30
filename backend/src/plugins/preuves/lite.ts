@@ -3,6 +3,7 @@
  * forfaits de quelques Mo : HTML rendu par le serveur, SANS JavaScript, sans police ni image externe, < 10 Ko par page,
  * formulaires GET/POST simples. Même résolveur que l'application, l'USSD, le SMS et WhatsApp : même réponse partout.
  */
+import { BRAND_CSS, brandFooterHtml, brandHeaderHtml } from '../../core/brand.js';
 import QRCode from 'qrcode';
 import { formatValidityDuration } from '@mosolo/shared';
 import type { ProofResult } from './service.js';
@@ -35,8 +36,11 @@ dl{margin:8px 0}dt{font-size:13px;color:#444}dd{margin:0 0 6px;font-weight:600}
 .n{background:#fff7e3;border:1px solid #e0b64a;padding:8px;border-radius:4px;font-size:14px}
 nav a{display:inline-block;margin:0 10px 6px 0}footer{padding:12px;font-size:12px;color:#555;border-top:1px solid #ddd}
 @media print{header{background:#fff;color:#000;border-bottom:2px solid #000}nav,form,.np{display:none}}
-</style></head><body><header><b>VILLE DE KINSHASA — MOSOLO</b><small>Version légère officielle · sans application · faible débit</small></header><main>${body}</main>
-<footer>Aucun agent ne reçoit d’espèces ni ne demande de code secret. USSD gratuit ${esc(USSD_CODE_LABEL)} · SVI ${esc(IVR_NUMBER_LABEL)} · Données de démonstration non opposables.</footer></body></html>`;
+header .mb-head{padding:4px 0 2px}header .mb-head b,header .mb-head span{color:#fff}header .mb-head img{background:#fff;border-radius:3px;padding:2px}
+@media print{header .mb-head b,header .mb-head span{color:#000}}
+${BRAND_CSS}
+</style></head><body><header>${brandHeaderHtml('version légère', true)}<b>VILLE DE KINSHASA — MOSOLO</b><small>Version légère officielle · sans application · faible débit</small></header><main>${body}</main>
+<footer>Aucun agent ne reçoit d’espèces ni ne demande de code secret. USSD gratuit ${esc(USSD_CODE_LABEL)} · SVI ${esc(IVR_NUMBER_LABEL)} · Données de démonstration non opposables.${brandFooterHtml(true)}</footer></body></html>`;
 }
 
 const nav = `<nav class="np"><a href="/l">Accueil</a><a href="/l/v">Vérifier</a><a href="/l/points">Où payer</a><a href="/l/payer">Comment payer</a><a href="/l/signaler">Signaler</a></nav>`;

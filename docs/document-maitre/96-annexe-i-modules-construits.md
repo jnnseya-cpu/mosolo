@@ -1805,3 +1805,23 @@ avec les étapes du canal nouvellement coché — et BitriPay / KODA n'étaient 
   annulée) et une nouvelle référence est émise avec le moyen choisi (BitriPay / KODA : page de paiement). Un paiement
   tardif sur l'ancienne référence n'est jamais perdu (paiements non imputés → revue). Une référence déjà payée ne peut
   pas être remplacée (`PAYMENT_ALREADY_PROCESSED`).
+
+## I.48 Tout document généré est à l'image de la plateforme (30/09/2026)
+
+Consigne du maître d'ouvrage : « tout document généré, imprimé, PDF et tout ce qui est de cette nature doit porter la
+marque ». Ajout (logos non modifiés : mise à l'échelle seule ; rien n'est retiré) :
+
+- **PDF** (quittance électronique, rapport d'anomalies CALCU et tout PDF du générateur commun `receipts/pdf.ts`) :
+  en-tête sur chaque page — logo de la Ville de Kinshasa, « Ville-Province de Kinshasa », « KINSHASA MOSOLO », filet
+  tricolore — et pied « Plateforme KINSHASA MOSOLO — réalisée par Groupe Nseya » avec son logo, en plus du numéro de
+  page. Les logos sont incorporés (JPEG) ; le cachet électronique Ed25519 couvre le document entier, logos compris.
+- **Documents imprimés depuis l'application** : en-tête commun `PrintLetterhead` et pied `PrintFooterMark` sur les avis
+  de recouvrement, l'avis MOSOLO à pictogrammes, la quittance du point de paiement agréé, la carte MOSOLO (logo) et la
+  preuve imprimable (pied Groupe Nseya, mention « Ville-Province de Kinshasa »).
+- **Pages HTML générées par le serveur** (version légère `/l`, note hebdomadaire des postes de décision et ses
+  exports) : même en-tête et même pied, logos en « data: » (compatibles avec la politique de sécurité des pages
+  légères). La version légère, limitée à 10 Ko par page, garde cette limite : logo minimal (≈ 1,6 Ko) et mention
+  « réalisée par Groupe Nseya » en texte.
+- Le modèle de courriel était déjà à la marque. Les SMS, USSD et fichiers de données (CSV, JSON) ne portent pas de logo
+  (texte ou données brutes) ; les SMS nomment « Ville de Kinshasa — KINSHASA MOSOLO ».
+- Logos serveur générés par `tools/gen_brand_assets.py` depuis `frontend/public` (à relancer si un logo change).

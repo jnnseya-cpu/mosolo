@@ -124,3 +124,7 @@ données de démonstration.
 - **Redevance de contrôle technique (30/09/2026)** : liquidée à la prise de rendez-vous par la fiche ACTIVE, payée par
   le circuit commun, jamais en espèces au centre ; le centre confirme le créneau après paiement. Tarif réel par
   catégorie et compte bénéficiaire à confirmer (démo : barème fictif) — annexe I, § I.46.
+- **Marque des documents (30/09/2026)** : tout document généré (PDF, impression, page HTML du serveur, avis, quittance,
+  carte, preuve) porte l'en-tête Ville de Kinshasa / « Ville-Province de Kinshasa » / KINSHASA MOSOLO + filet tricolore
+  et le pied « réalisée par Groupe Nseya » (composants `PrintLetterhead` / `PrintFooterMark`, `core/brand.ts`, PDF
+  commun) — annexe I, § I.48.

@@ -1159,3 +1159,18 @@ input[type='file'] { font-size: 13.5px; max-width: 100%; }
 @media (max-width: 1440px) { .btn-preuves .btn-preuves-texte { display: none; } .hdr-btn.btn-preuves { width: 44px; padding: 0; justify-content: center; } }
 /* Téléphone : « Preuves » est le deuxième bouton de la barre du bas (un seul geste) ; l'en-tête reste lisible. */
 @media (max-width: 560px) { .hdr-btn.btn-preuves { display: none; } }
+
+/* Marque des documents imprimés (30/09/2026) : en-tête Ville-Province / KINSHASA MOSOLO, pied Groupe Nseya. */
+.print-letterhead { margin: 0 0 10px; }
+.print-letterhead-row { display: flex; align-items: center; gap: 10px; }
+.print-letterhead-text { display: flex; flex-direction: column; line-height: 1.2; }
+.print-letterhead-text strong { font-size: 14px; }
+.print-letterhead-text span { font-size: 11px; letter-spacing: .06em; }
+.print-letterhead-compact .print-letterhead-text strong { font-size: 11px; }
+.print-letterhead-compact .print-letterhead-text span { font-size: 9px; }
+.print-letterhead-tri { margin-top: 6px; }
+.print-footermark { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #555; margin-top: 8px; }
+.print-footermark img { height: 14px; width: auto; }
+@media print {
+  .print-letterhead, .print-footermark, .print-letterhead-tri { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

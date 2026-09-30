@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CityLogo, PrintFooterMark, PrintLetterhead } from '../../components/Brand';
 import { Link, useParams } from 'react-router-dom';
 import type { MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../../context';
@@ -35,7 +36,7 @@ export function MosoloCardFace({ card }: { card: CardView & { taxpayerId?: strin
   return (
     <article className={`cx-card ${card.status !== 'ACTIVE' ? 'cx-card-void' : ''}`} aria-label={`Carte MOSOLO ${card.numberFormatted}`}>
       <header className="cx-card-head">
-        <span className="cx-card-brand">KINSHASA MOSOLO</span>
+        <span className="cx-card-brand"><CityLogo height={20} variant="onLight" /> KINSHASA MOSOLO</span>
         <span className="cx-card-kind">Carte MOSOLO</span>
       </header>
       <div className="cx-card-stripe" aria-hidden="true"><span /><span /><span /></div>
@@ -62,6 +63,7 @@ export function PictogramNotice({ n }: { n: Notice }) {
   const { fmtDate } = useApp();
   return (
     <article className="cx-notice" aria-label="Avis MOSOLO à pictogrammes">
+      <PrintLetterhead document="Avis MOSOLO" />
       <header className="cx-notice-head">
         <div><p className="eyebrow">Ville-Province de Kinshasa</p><h2>Avis MOSOLO</h2></div>
         <div className="cx-notice-holder"><strong>{n.holder.initials}</strong><span className="mono">{n.holder.iuc}</span>{n.holder.cardNumber && <span className="mono">Carte {n.holder.cardNumber}</span>}</div>
@@ -89,6 +91,7 @@ export function PictogramNotice({ n }: { n: Notice }) {
         {n.warnings.map((w) => <p key={w.pictogram}><Pictogram code={w.pictogram} size={28} /> {w.text}</p>)}
         <p className="small">USSD {n.channels.ussd} · SVI {n.channels.ivr} · édité le {fmtDate(n.generatedAt, true)}</p>
       </footer>
+      <PrintFooterMark />
     </article>
   );
 }

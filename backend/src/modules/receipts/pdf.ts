@@ -7,6 +7,7 @@
  * Signature PAdES qualifiée (certificat d'un prestataire de services de confiance) : à raccorder — acte requis.
  */
 import QRCode from 'qrcode';
+import { BRAND_TEXT, LOGO_NSEYA, LOGO_VILLE } from '../../core/brand-assets.js';
 import type { ReceiptService } from './service.js';
 
 export interface PdfBlock {
@@ -22,12 +23,21 @@ export interface PdfDocumentInput {
   blocks: PdfBlock[];
   /** Contenu du QR code dessiné en haut à droite de la première page. */
   qr?: string;
+  /**
+   * En-tête et pied de page de marque (30/09/2026 : « tout document généré est à l'image de la plateforme ») : logo de
+   * la Ville de Kinshasa, « Ville-Province de Kinshasa · KINSHASA MOSOLO », filet tricolore ; pied « réalisée par
+   * Groupe Nseya » avec son logo. Actif par défaut.
+   */
+  brand?: boolean;
 }
 
 const PAGE_W = 595;
 const PAGE_H = 842;
 const MARGIN = 50;
 const SIG_MARK = '%MOSOLO-CACHET ';
+/** Hauteur réservée à l'en-tête de marque (points) et hauteur du logo. */
+const HEADER_H = 70;
+const LOGO_H = 44;
 
 /** Caractères hors Latin-1 courants en français → octets WinAnsi. */
 const WIN_ANSI: Record<string, number> = {
@@ -84,22 +94,45 @@ function qrOps(content: string, x: number, yTop: number, size: number): string {
 
 /** Construit un PDF 1.4 (octets) : pagination automatique, polices standard (aucune incorporation). */
 export function buildPdf(doc: PdfDocumentInput): Buffer {
+  const brand = doc.brand !== false;
+  const top = PAGE_H - MARGIN + 20 - (brand ? HEADER_H : 20);
+  const bottom = brand ? MARGIN + 12 : MARGIN;
   const pages: string[][] = [[]];
-  let y = PAGE_H - MARGIN;
+  let y = top;
   const textWidth = PAGE_W - 2 * MARGIN - (doc.qr ? 130 : 0);
   let first = true;
-  if (doc.qr) pages[0]!.push(qrOps(doc.qr, PAGE_W - MARGIN - 120, PAGE_H - MARGIN + 10, 130));
+  if (doc.qr) pages[0]!.push(qrOps(doc.qr, PAGE_W - MARGIN - 120, top + 10, 130));
   for (const b of doc.blocks) {
     const size = b.size ?? 10;
     y -= b.gap ?? 0;
-    for (const line of wrap(b.text, size, first && y > PAGE_H - MARGIN - 140 ? textWidth : PAGE_W - 2 * MARGIN)) {
-      if (y - size * 1.4 < MARGIN) { pages.push([]); y = PAGE_H - MARGIN; first = false; }
+    for (const line of wrap(b.text, size, first && y > top - 140 ? textWidth : PAGE_W - 2 * MARGIN)) {
+      if (y - size * 1.4 < bottom) { pages.push([]); y = top; first = false; }
       y -= size * 1.4;
       pages[pages.length - 1]!.push(`BT /${b.bold ? 'F2' : 'F1'} ${size} Tf ${MARGIN} ${y.toFixed(2)} Td ${pdfString(line)} Tj ET`);
     }
   }
-  // Pied de page : numéro de page.
-  pages.forEach((ops, i) => ops.push(`BT /F1 8 Tf ${MARGIN} 30 Td ${pdfString(`${doc.title} — page ${i + 1}/${pages.length}`)} Tj ET`));
+  // En-tête et pied de page de marque, puis numéro de page.
+  const logoW = (LOGO_VILLE.width * LOGO_H) / LOGO_VILLE.height;
+  const third = (PAGE_W - 2 * MARGIN) / 3;
+  pages.forEach((ops, i) => {
+    if (brand) {
+      const yLogo = PAGE_H - 22 - LOGO_H;
+      ops.unshift(
+        `q ${logoW.toFixed(2)} 0 0 ${LOGO_H} ${MARGIN} ${yLogo} cm /LogoVille Do Q`,
+        `BT /F2 11 Tf ${(MARGIN + logoW + 12).toFixed(2)} ${yLogo + 26} Td ${pdfString(BRAND_TEXT.institution)} Tj ET`,
+        `BT /F1 9 Tf ${(MARGIN + logoW + 12).toFixed(2)} ${yLogo + 12} Td ${pdfString(BRAND_TEXT.plateforme)} Tj ET`,
+        // Filet tricolore (bleu, jaune, rouge).
+        `q 0.118 0.608 0.843 rg ${MARGIN} ${yLogo - 8} ${third.toFixed(2)} 3 re f 0.969 0.839 0.094 rg ${(MARGIN + third).toFixed(2)} ${yLogo - 8} ${third.toFixed(2)} 3 re f 0.843 0.078 0.102 rg ${(MARGIN + 2 * third).toFixed(2)} ${yLogo - 8} ${third.toFixed(2)} 3 re f Q`,
+      );
+      const nH = 14;
+      const nW = (LOGO_NSEYA.width * nH) / LOGO_NSEYA.height;
+      ops.push(
+        `q ${nW.toFixed(2)} 0 0 ${nH} ${MARGIN} 16 cm /LogoNseya Do Q`,
+        `BT /F1 7 Tf ${(MARGIN + nW + 6).toFixed(2)} 20 Td ${pdfString(BRAND_TEXT.realisation)} Tj ET`,
+      );
+    }
+    ops.push(`BT /F1 8 Tf ${MARGIN} ${brand ? 38 : 30} Td ${pdfString(`${doc.title} — page ${i + 1}/${pages.length}`)} Tj ET`);
+  });
 
   const objects: string[] = [];
   const add = (body: string) => { objects.push(body); return objects.length; };
@@ -107,11 +140,16 @@ export function buildPdf(doc: PdfDocumentInput): Buffer {
   const pagesId = add('');
   const f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
   const f2 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+  const image = (img: { width: number; height: number; jpegBase64: string }) => {
+    const bytes = Buffer.from(img.jpegBase64, 'base64');
+    return add(`<< /Type /XObject /Subtype /Image /Width ${img.width} /Height ${img.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${bytes.length} >>\nstream\n${bytes.toString('latin1')}\nendstream`);
+  };
+  const xobjects = brand ? ` /XObject << /LogoVille ${image(LOGO_VILLE)} 0 R /LogoNseya ${image(LOGO_NSEYA)} 0 R >>` : '';
   const pageIds: number[] = [];
   for (const ops of pages) {
     const content = Buffer.from(ops.join('\n'), 'latin1');
     const cid = add(`<< /Length ${content.length} >>\nstream\n${content.toString('latin1')}\nendstream`);
-    pageIds.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >> >> /Contents ${cid} 0 R >>`));
+    pageIds.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >>${xobjects} >> /Contents ${cid} 0 R >>`));
   }
   objects[catalogId - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
   objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageIds.map((p) => `${p} 0 R`).join(' ')}] /Count ${pageIds.length} >>`;

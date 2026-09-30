@@ -3,6 +3,7 @@
  * décision, échéancier) : mentions obligatoires, empreinte du contenu, preuve de notification, accusé de lecture.
  * L'ouverture par le contribuable destinataire enregistre l'accusé de lecture (horodaté côté serveur).
  */
+import { PrintFooterMark, PrintLetterhead } from '../../components/Brand';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useApp } from '../../context';
@@ -47,6 +48,7 @@ export default function NoticeView() {
       </div>
       <article className="rc-print" aria-label={`${c.title} ${c.number}`}>
         {c.demo && <p className="rc-demo-band">DÉMONSTRATION — règle fictive, document sans valeur juridique</p>}
+        <PrintLetterhead document={c.title} />
         <header className="rc-doc-head">
           <div>
             <p className="rc-doc-issuer">Ville-Province de Kinshasa</p>
@@ -103,6 +105,7 @@ export default function NoticeView() {
         <footer className="rc-doc-foot">
           <p className="small">Empreinte SHA-256 du contenu : <span className="mono rc-hash">{n.contentHash}</span></p>
           <p className="small">Notification : {n.notification === 'NOTIFIE' ? 'délivrée' : 'non délivrée'}{readAt ? ` · lu le ${fmtDate(readAt, true)}` : ' · non lu'}</p>
+          <PrintFooterMark />
         </footer>
       </article>
       {proof.data && (

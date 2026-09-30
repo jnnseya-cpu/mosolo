@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { PrintFooterMark, PrintLetterhead } from '../../components/Brand';
 import type { MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { useApi, type ApiState } from '../../hooks/useApi';
@@ -28,6 +29,7 @@ export function PrintableReceipt({ r }: { r: ReceiptPrint }) {
   return (
     <article className="cx-receipt" aria-label={`Reçu ${r.receiptNumber}`}>
       {r.duplicata && <span className="cx-dup">DUPLICATA</span>}
+      <PrintLetterhead document="Quittance — point de paiement agréé" compact />
       <header className="cx-receipt-head">
         <div><span className="cx-card-brand">KINSHASA MOSOLO</span><h3>Quittance {r.receiptStatus === 'DEFINITIVE' ? 'définitive' : 'provisoire'}</h3></div>
         <QrCode value={r.qrPayload} size={96} alt="QR signé de la quittance" />
@@ -46,6 +48,7 @@ export function PrintableReceipt({ r }: { r: ReceiptPrint }) {
       <div className="cx-receipt-pictos">{r.pictograms.map((p) => <Pictogram key={p} code={p} size={30} showLabel />)}</div>
       <ul className="cx-receipt-notes">{r.notices.map((n) => <li key={n}>{n}</li>)}</ul>
       <p className="small muted">{r.mention}</p>
+      <PrintFooterMark />
     </article>
   );
 }
