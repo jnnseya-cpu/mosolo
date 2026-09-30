@@ -6,7 +6,7 @@ import { CityNight } from '../components/CityNight';
 import { Icon } from '../components/Icon';
 import { accueilDuRole, AUTORITES_POSTE, InstallButton, visibleNav } from '../components/Shell';
 import { MakerMark, Tricolour } from '../components/Brand';
-import type { UIKey } from '../lib/i18n';
+import { hasKey, type UIKey } from '../lib/i18n';
 import { ChartGrid } from '../components/viz';
 import { CatalogueEvenementsVisuel } from './visuels';
 
@@ -81,12 +81,15 @@ export default function Home() {
   const { tr, lang, user } = useApp();
   const mandatory = EVENTS.filter((e) => e.obligatoire).length;
   const nf = (n: number) => n.toLocaleString(lang === 'en' ? 'en-GB' : 'fr-FR');
-  const areas = visibleNav(user?.roles, user?.entity).filter((n) => n.to !== '/');
-  const vitrine = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('presentation');
+  // Visiteur sans compte : seulement les espaces publics ; compte connecté : ses propres écrans.
+  const areas = visibleNav(user?.roles, user?.entity).filter((n) => n.to !== '/' && (user ? true : n.group === 'public'));
+  // Page d'accueil toujours accessible (30/09/2026 : « depuis n'importe quel compte, revenir à la page d'accueil ») :
+  // « /accueil » (lien de l'en-tête et du menu) ou « ?presentation » affichent la présentation, quel que soit le compte.
+  const vitrine = typeof window !== 'undefined' && (window.location.pathname === '/accueil' || new URLSearchParams(window.location.search).has('presentation'));
   // Autorités (Gouverneur, cabinet, secrétariat exécutif, ministres) : l'écran d'accueil est le poste de décision (§ 27.2).
-  if (user?.roles.some((r) => AUTORITES_POSTE.includes(r))) return <Navigate to="/poste-de-decision" replace />;
+  if (!vitrine && user?.roles.some((r) => AUTORITES_POSTE.includes(r))) return <Navigate to="/poste-de-decision" replace />;
   // Groupe Nseya (R38, 29/09/2026) : l'écran d'accueil est son centre de commandement.
-  if (user?.roles.includes('R38')) return <Navigate to="/groupe-nseya/command-centre" replace />;
+  if (!vitrine && user?.roles.includes('R38')) return <Navigate to="/groupe-nseya/command-centre" replace />;
   // Parcours par rôle (29/09/2026) : chaque compte s'ouvre sur son propre travail (premier écran de « Mon travail du
   // jour ») ; la présentation publique reste la page d'accueil des visiteurs et s'ouvre avec « ?presentation ».
   const accueil = accueilDuRole(user?.roles, user?.entity);
@@ -200,8 +203,9 @@ export default function Home() {
               <li key={n.to}>
                 <Link to={n.to} className="access-link">
                   <span className="access-num">{String(i + 1).padStart(2, '0')}</span>
-                  <span className="access-name">{tr(n.key)}</span>
-                  <span className="access-desc">{tr(`home.area.${n.to.slice(1)}` as UIKey)}</span>
+                  {/* Nom réel de l'écran (30/09/2026 : des dizaines de cartes « Plus » avec des clés techniques affichées). */}
+                  <span className="access-name">{n.label ?? tr(n.key)}</span>
+                  {hasKey(`home.area.${n.to.slice(1)}`) && <span className="access-desc">{tr(`home.area.${n.to.slice(1)}` as UIKey)}</span>}
                   <Icon name="arrowRight" size={18} className="access-arrow" />
                 </Link>
               </li>

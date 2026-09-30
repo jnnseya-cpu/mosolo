@@ -27,6 +27,7 @@ export function App() {
       <Suspense fallback={<Splash compact />}>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/accueil" element={<Home />} />
           <Route path="/inscription" element={<Registration />} />
           <Route path="/espace" element={<TaxpayerSpace />} />
           <Route path="/services" element={<Services />} />

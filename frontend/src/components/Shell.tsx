@@ -206,6 +206,10 @@ function Header() {
               <Icon name="qr" size={20} /> <span className="btn-preuves-texte">Mes preuves</span>
             </NavLink>
           )}
+          {/* Retour à la page d'accueil (présentation) depuis n'importe quel compte (30/09/2026). */}
+          <NavLink to="/accueil" className="hdr-btn" aria-label="Page d’accueil" title="Page d’accueil" data-testid="hdr-accueil">
+            <Icon name="home" size={20} />
+          </NavLink>
           <ThemeToggle />
           <button type="button" className="hdr-btn hdr-settings" aria-expanded={open} aria-controls="hdr-controls" onClick={() => setOpen((v) => !v)}
             aria-label={tr('header.settings')} title={tr('header.settings')}>
