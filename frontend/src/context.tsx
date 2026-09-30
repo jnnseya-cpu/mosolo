@@ -123,7 +123,9 @@ export function AppProvider({ children, initialLang }: { children: ReactNode; in
     return {
       lang, setLang, currency, setCurrency, theme, resolvedTheme, setTheme,
       users, usersError, user: users.find((u) => u.id === userId) ?? null, setUserId, rates,
-      tr: (key, vars) => tr(lang, key, vars),
+      // Interface en français tant que la traduction n'est pas validée (30/09/2026, avis « AvisLangue ») ; la langue
+      // choisie reste celle des messages (SMS, notifications) — les traductions partagées sont conservées pour eux.
+      tr: (key, vars) => tr('fr', key, vars),
       locale,
       fmtDate: (iso, withTime = false) => {
         if (!iso) return '—';

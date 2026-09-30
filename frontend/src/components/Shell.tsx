@@ -6,7 +6,7 @@ import { useInstallPrompt } from '../hooks/useInstallPrompt';
 import type { UIKey } from '../lib/i18n';
 import { CityLogo, MakerMark, Tricolour } from './Brand';
 import { Icon } from './Icon';
-import { CurrencySelector, DemoUserSelector, LanguageSelector } from './Selectors';
+import { AvisLangue, CurrencySelector, DemoUserSelector, LanguageSelector } from './Selectors';
 import { MODULE_ROUTES } from '../modules/registry';
 import { horsMenuUsager, menuMasque, ROLES_TOUS_MODULES, travailDuJour } from '@mosolo/shared';
 import { focusables, useFocusTrap } from '../hooks/useFocusTrap';
@@ -389,6 +389,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <div className="app-body">
         {!immersive && <Sidebar />}
         <main id="main" className="app-main" tabIndex={-1}>
+          <AvisLangue />
           {children}
           {!immersive && <Footer />}
         </main>

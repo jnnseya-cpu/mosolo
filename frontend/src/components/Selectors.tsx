@@ -30,8 +30,27 @@ export function LanguageSelector({ id = 'lang-select' }: { id?: string }) {
             </option>
           ))}
         </select>
-        {isDraftLanguage(lang) && <span className="tag tag-draft" title={tr('lang.draftHint')}>{tr('lang.draft')}</span>}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Langue choisie encore non traduite à l'écran (30/09/2026, remarque du maître d'ouvrage : « la traduction ne fonctionne
+ * pas et fait doublon ») : un seul avis clair, au lieu d'un écran à moitié traduit et d'étiquettes répétées. Les
+ * messages (SMS, notifications) utilisent déjà la langue choisie ; l'interface reste en français (version qui fait foi)
+ * tant que la traduction n'est pas validée. Retour au français en un clic.
+ */
+export function AvisLangue() {
+  const { lang, setLang } = useApp();
+  if (lang === 'fr') return null;
+  return (
+    <div className="callout callout-info avis-langue" role="status" data-testid="avis-langue">
+      <span>
+        <strong>{LANGUAGES[lang].nativeName}</strong> : vos SMS et notifications sont envoyés dans cette langue. L’interface
+        reste en français, version qui fait foi, tant que sa traduction n’est pas validée.
+      </span>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setLang('fr')}>Afficher en français</button>
     </div>
   );
 }
