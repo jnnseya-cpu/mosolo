@@ -211,7 +211,7 @@ function PayFlow({ ob }: { ob: Obligation }) {
                   </label>
                 ))}
               </div>
-              <span className="hint">BitriPay et KODA sont des prestataires candidats. Votre paiement va toujours au compte public de la Ville : BitriPay l’achemine, KODA ne touche jamais l’argent et vérifie seulement la confirmation de l’opérateur. Le montant à payer est celui de votre obligation ; les frais éventuels de la passerelle relèvent de la convention avec la Ville (à confirmer).</span>
+              <span className="hint">BitriPay et KODA sont des prestataires candidats. Votre paiement va toujours au compte public de la Ville : BitriPay l’achemine, KODA ne touche jamais l’argent et vérifie seulement la confirmation de l’opérateur. Vous payez exactement le montant de votre obligation : les frais de la passerelle sont à la charge de la Ville.</span>
             </fieldset>
           )}
           <p className="small muted">{tr('pay.idempotency')} <span className="mono">{idem.slice(0, 8)}…</span></p>

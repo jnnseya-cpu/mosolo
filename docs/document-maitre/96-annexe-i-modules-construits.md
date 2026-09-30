@@ -1704,4 +1704,18 @@ d'Africell à KODA ; présentations de KODA et de BitriPay (`docs/sources/KODA_p
   refus relevé en démonstration (obligation de la DGTK payée par BitriPay ou KODA).
 - **« À faire »** : une obligation déjà entièrement couverte par des paiements confirmés n'est plus proposée « à payer » ;
   elle passe en « en cours de vérification » (rapprochement bancaire en cours).
-- **Frais des passerelles** : à la charge de qui, selon la convention — à confirmer par le maître d'ouvrage.
+- **Frais des passerelles** : tranché le 30/09/2026 — voir ci-dessous.
+
+### I.43 bis Frais des passerelles à la charge de la Ville (décision du 30/09/2026)
+
+- Le contribuable paie **exactement le montant de son obligation** ; aucun frais n'est ajouté (écran de paiement).
+- Les frais de BitriPay, de KODA et des autres passerelles sont **à la charge de la Ville**, **facturés à part** : jamais
+  retenus sur la recette publique (règle conservée : un frais retenu déclenche une alerte critique et l'écart apparaît
+  au rapprochement). Chaque facture est enregistrée comme **coût technologique « API de paiement »** financé par le
+  Gouvernorat dans le moteur de répartition (position nette du Gouvernorat ; sans frais de gestion de Groupe Nseya,
+  réservés aux coûts qu'il finance). La répartition 70/10/10/10 porte sur la recette brute rapprochée.
+- **Raccordement réel (décision du 30/09/2026)** : les codes retenus (rail carte `card` de BitriPay ; opérateurs KODA
+  `orange_cd`, `mpesa_cd`, `airtel_cd`, `africell_cd`) sont confirmés par le maître d'ouvrage et le niveau de
+  confirmation de KODA n'est pas requis ; il ne reste à fournir que les **clés API et les secrets de webhook** de
+  BitriPay et de KODA, saisis dans « Clés et raccordements » (ou dans l'environnement du serveur).
+

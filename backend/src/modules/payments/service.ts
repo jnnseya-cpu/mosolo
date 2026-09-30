@@ -1272,9 +1272,11 @@ export class PaymentService {
     if (ev.applicationFeeMinor) {
       // Le payeur a bien payé : la quittance reste due. Mais un frais retenu sur une recette publique est interdit ;
       // le rapprochement fera apparaître l'écart au compte public. Alerte critique, sans blocage du contribuable.
+      // Décision du 30/09/2026 : les frais des passerelles sont à la charge de la Ville, FACTURÉS À PART (coût
+      // technologique « API de paiement » financé par le Gouvernorat), jamais retenus sur la recette.
       this.alerts.raise({
         type: 'APPLICATION_FEE_ON_PUBLIC_REVENUE', severity: 'CRITICAL', source: `prestataire:${providerId}`,
-        detail: `Frais d'application de ${ev.applicationFeeMinor} unités mineures retenu sur ${paymentReference} : interdit sur une recette publique.`,
+        detail: `Frais d'application de ${ev.applicationFeeMinor} unités mineures retenu sur ${paymentReference} : interdit sur une recette publique (les frais de la passerelle sont à la charge de la Ville et facturés à part).`,
         context: { eventId: ev.eventId, paymentReference, providerIntentId: ev.providerIntentId, applicationFeeMinor: ev.applicationFeeMinor },
         actor: { kind: 'provider', id: providerId },
       });

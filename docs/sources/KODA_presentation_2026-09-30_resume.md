@@ -32,7 +32,6 @@ Résumé fidèle du texte reçu (langue d'origine : anglais). Sert de référenc
 ## Conséquences dans MOSOLO (30/09/2026)
 
 - Passerelle KODA proposée pour **Monnaie mobile, Code QR et USSD** (le client paie comme d'habitude) ; opérateurs par
-  défaut **Orange Money, M-Pesa, Airtel Money, Africell Money** (`KODA_OPERATORS`, codes à confirmer).
+  défaut **Orange Money, M-Pesa, Airtel Money, Africell Money** (`KODA_OPERATORS`, codes retenus par le maître d'ouvrage le 30/09/2026).
 - La vérification KODA produit une **quittance provisoire** ; elle ne devient définitive qu'au rapprochement du relevé
-  (« vérifié » n'est pas une preuve de règlement). Le niveau de confirmation est à relever dans l'API (nom du champ à
-  confirmer) ; les montants élevés passent par la revue humaine existante.
+  (« vérifié » n'est pas une preuve de règlement). Le niveau de confirmation n'est pas requis (décision du 30/09/2026) ; les montants élevés passent par la revue humaine existante.

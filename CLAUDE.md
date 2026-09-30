@@ -114,4 +114,6 @@ données de démonstration.
 - **Paiements (30/09/2026)** : KODA = vérification de la confirmation de l'opérateur (ne touche jamais l'argent), tous
   les opérateurs congolais (Orange, M-Pesa, Airtel, Africell), proposée pour monnaie mobile, QR et USSD ; BitriPay =
   acheminement (monnaie mobile, QR, carte). Une vérification ou confirmation donne une quittance PROVISOIRE ; définitive
-  au rapprochement du relevé seulement. Frais des passerelles : selon convention, à confirmer (annexe I, § I.43).
+  au rapprochement du relevé seulement. **Frais des passerelles à la charge de la Ville** (décision du 30/09/2026),
+  facturés à part (coût « API de paiement » du Gouvernorat), jamais retenus sur la recette ; le contribuable paie le
+  montant exact de son obligation (annexe I, § I.43 bis).

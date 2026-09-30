@@ -16,11 +16,11 @@ Résumé fidèle des textes « About BitriPay » (15/09/2026) et « How BitriPay
   yeux (crédits administratifs, émission, gros retraits, vérifications manuelles), filtrage des sanctions, plafonds par
   niveau de connaissance du client (niveau 1 : 50 $ par opération… niveau 4 : entreprise, sur dossier).
 - **Frais publiés** (grille BitriPay) : paiement marchand 0,8 % ; lien de paiement 0,7 % ; entrée par monnaie mobile 0,7 % ;
-  paiement de factures 0,5 % ; etc. **Qui supporte ces frais pour les recettes de la Ville relève de la convention — à
-  confirmer par le maître d'ouvrage** (MOSOLO n'ajoute rien au montant de l'obligation).
+  paiement de factures 0,5 % ; etc. **Décision du maître d'ouvrage (30/09/2026) : la Ville supporte ces frais**, facturés à part (jamais retenus
+  sur la recette) ; le contribuable paie exactement le montant de son obligation.
 
 ## Conséquences dans MOSOLO (30/09/2026)
 
-- Passerelle BitriPay proposée pour **Monnaie mobile, Code QR et Carte** (rail carte : identifiant `card` à confirmer).
+- Passerelle BitriPay proposée pour **Monnaie mobile, Code QR et Carte** (rail carte `card`, retenu le 30/09/2026 ; seules les clés API et le webhook restent à fournir).
 - Plusieurs comptes publics de règlement admis (un par régie : `BITRIPAY_SETTLEMENT_ACCOUNT_ALIASES`), toujours celui de
   l'obligation.
