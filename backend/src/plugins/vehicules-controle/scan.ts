@@ -12,7 +12,7 @@
  */
 import type { User } from '../../core/auth.js';
 import { sha256Hex } from '../../core/crypto.js';
-import { conflict, forbidden, notFound } from '../../core/errors.js';
+import { conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { authorize } from '../../core/policy.js';
 import { InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import type { TitresService } from '../titres/service.js';
@@ -141,16 +141,40 @@ export class ScanService {
     return this.centres.centres.get(id)?.name ?? id;
   }
 
-  scan(user: User, input: { saisie: string; place: { commune?: string; lat?: number; lon?: number }; deviceId?: string }) {
+  scan(user: User, input: { saisie: string; place: { commune?: string; lat?: number; lon?: number }; deviceId?: string; plaqueLue?: string }) {
     authorize(user, 'vc:scan');
-    const r = this.resolve(input.saisie);
+    const r0 = this.resolve(input.saisie);
+    // Anti-fraude (30/09/2026) : un QR (vignette fiscale ou technique) se contrôle avec la plaque RÉELLEMENT lue.
+    let fraude: { kind: string; label: string; caseId: string } | null = null;
+    let r = r0;
+    if (r0.method !== 'PLAQUE') {
+      if (!input.plaqueLue?.trim()) throw unprocessable('PLAQUE_CONSTATEE_REQUISE', 'QR de vignette : saisissez ou scannez aussi la plaque du véhicule contrôlé.');
+      const lue = this.d.plate(input.plaqueLue);
+      if (lue !== r0.plate) {
+        r = { plate: lue, method: r0.method };
+        const t = this.titres;
+        if (r0.method === 'QR_VIGNETTE_TECHNIQUE') {
+          const v = this.ct.publicVerify(input.saisie) as { number?: string };
+          const st = v.number ? this.ct.sticker(v.number) : undefined;
+          const fc = t?.openFraudReference(user, 'VIGNETTE_AUTRE_VEHICULE', st?.number ?? 'vignette', `Vignette technique ${st?.number ?? ''} (véhicule ${r0.plate}) vue sur ${lue}.`);
+          if (st) this.ct.flagStickerCopy(user, st, lue, fc?.id);
+          if (fc) fraude = { kind: fc.kind, label: 'Vignette technique vue sur un autre véhicule', caseId: fc.id };
+        } else if (t) {
+          const cred = t.resolvePresented(input.saisie.trim(), this.d.ctx.clock.now().getTime()).credential;
+          if (cred) {
+            const fc = t.lockForFraud(user, cred, 'PLAQUE_DIFFERENTE', `Vignette fiscale ${cred.number} (véhicule ${r0.plate}) présentée sur ${lue}.`);
+            fraude = { kind: fc.kind, label: 'Vignette fiscale d’un autre véhicule', caseId: fc.id };
+          }
+        }
+      }
+    }
     const view = this.view(r.plate, input.place.commune);
     const ev = this.scans.append({
       id: this.d.ids.next('SCAN', 6), plate: r.plate, method: r.method, agentId: user.id, roles: user.roles, position: input.place, at: this.d.now(), courtesyId: view.courtesy?.id ?? null,
       ...(input.deviceId ? { deviceId: input.deviceId } : {}),
     });
     this.d.audit(user, 'vc.scan.recorded', 'scan_vehicule', ev.id, { plate: r.plate, method: r.method, position: input.place, courtesy: !!view.courtesy, ct: view.controleTechnique.state, vf: view.vignetteFiscale.state });
-    return { scanId: ev.id, method: r.method, ...view };
+    return { scanId: ev.id, method: r.method, ...view, ...(fraude ? { fraude, alerte: `FRAUDE : ${fraude.label} — preuve bloquée à titre conservatoire, dossier ${fraude.caseId}. La situation affichée est celle du véhicule contrôlé.` } : {}) };
   }
 
   decide(user: User, scanId: string, input: { decision: AgentDecision; motif: string; position: { lat?: number; lon?: number; commune?: string } }) {

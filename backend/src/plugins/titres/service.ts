@@ -25,8 +25,8 @@ import { isCommune } from '../../reference/kinshasa.js';
 import {
   KINSHASA_OFFSET_MS, penaltyRuleCode, VALIDITY_MODEL_LABELS, visualFor,
   type Constat, type ConstatPenalty, type ControlMethod, type ControlResult, type Credential, type CredentialPlace, type CredentialState, type CredentialSubject,
-  type CredentialType, type DisplayStatus, type Issuance, type IssuanceItem, type IssuancePayment, type Revocation, type UsageEvent,
-  type UsePlace, type VerificationEvent,
+  type CredentialType, type DisplayStatus, type FraudCase, type FraudKind, type Issuance, type IssuanceItem, type IssuancePayment, type Revocation, type UsageEvent,
+  type UsePlace, type VerificationEvent, FRAUD_LABELS,
 } from './model.js';
 import { DYNAMIC_WINDOW_SECONDS, TokenSigner } from './tokens.js';
 import { computeWindow, controlResultOf, statusAt, type StatusView } from './validity.js';
@@ -51,6 +51,23 @@ const MIN = 60_000;
 const OFFLINE_MAX_AGE_MS = 72 * HOUR_MS;
 const MAX_PACKS_PER_DEVICE = 50;
 
+/**
+ * Seuils de détection des copies (30/09/2026) — « par défaut — à confirmer par le maître d'ouvrage ».
+ * Déplacement impossible : vitesse apparente > 80 km/h entre deux contrôles distants de plus de 2 km ;
+ * agents simultanés : 3 agents distincts ou plus en 10 minutes ; scans excessifs : plus de 12 en une heure.
+ */
+export const SEUILS_CLONE = { vitesseMaxKmH: 80, distanceMinKm: 2, fenetreAgentsMin: 10, agentsMax: 3, scansMaxHeure: 12, statut: 'par défaut — à confirmer par le maître d’ouvrage' } as const;
+definePolicy('titres:fraude.read', { R24: GRANTS.always, R22: GRANTS.always, R23: GRANTS.always, R06: GRANTS.sameEntity, R07: GRANTS.sameEntity, R09: GRANTS.sameEntity });
+definePolicy('titres:fraude.instruire', { R24: GRANTS.always });
+definePolicy('titres:fraude.decider', { R06: GRANTS.sameEntity, R22: GRANTS.always });
+
+function distanceKm(a: { lat?: number; lon?: number }, b: { lat?: number; lon?: number }): number | null {
+  if (a.lat === undefined || a.lon === undefined || b.lat === undefined || b.lon === undefined) return null;
+  const r = Math.PI / 180;
+  const h = Math.sin(((b.lat - a.lat) * r) / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(((b.lon - a.lon) * r) / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
+
 export const placeSchema = z.object({
   lat: z.number().min(-90).max(90).optional(),
   lon: z.number().min(-180).max(180).optional(),
@@ -71,6 +88,8 @@ export const offlineBatchSchema = z.object({
     offlineResult: z.enum(['VALIDE', 'INVALIDE', 'EXPIRE']),
     /** Module contrôlé (même règle qu'en ligne : un titre d'un autre service est refusé). */
     module: z.string().max(10).optional(),
+    /** Plaque lue sur le véhicule (30/09/2026) : vérification croisée avec le titre présenté. */
+    observedPlate: z.string().max(20).optional(),
   }).strict()).max(500),
 }).strict();
 
@@ -102,7 +121,12 @@ export interface ControlInput {
   place: UsePlace & { commune?: string };
   deviceId?: string;
   module?: string;
+  /** Plaque RÉELLEMENT lue sur le véhicule contrôlé (30/09/2026) : obligatoire pour un titre lié à une plaque. */
+  observedPlate?: string;
 }
+
+/** Refus décidé avant l'enregistrement du contrôle (anti-fraude) : résultat rouge, aucun usage consommé. */
+export interface RefusControle { reason: string; fraud?: FraudKind; detail?: string }
 
 export interface MinimalControlView {
   controlId: string;
@@ -123,6 +147,8 @@ export interface MinimalControlView {
   /** Un titre valide n'a rien à payer : aucune référence de paiement ni constat ne peut être produit. */
   nothingToPay: boolean;
   constat?: { id: string; notice: string };
+  /** Fraude détectée : titre bloqué à titre conservatoire, dossier ouvert (décision par une personne). */
+  fraude?: { kind: FraudKind; label: string; caseId: string };
   method: ControlMethod;
   offline: false;
 }
@@ -144,6 +170,9 @@ export class TitresService {
   readonly usages = new InMemoryAppendOnlyRepository<UsageEvent>();
   readonly constats = new InMemoryRepository<Constat>();
   readonly revocations = new InMemoryAppendOnlyRepository<Revocation>();
+  /** Dossiers de fraude sur les preuves (blocage conservatoire, instruction, décision par une personne distincte). */
+  readonly fraudCases = new InMemoryRepository<FraudCase>();
+  private readonly dynamicAudit = new Map<string, number>();
   readonly signer = new TokenSigner();
   private readonly ids = new IdGenerator();
   private readonly offlineBatches = new Map<string, { fingerprint: string; result: unknown }>();
@@ -623,6 +652,12 @@ export class TitresService {
     authorize(user, 'titres:read.own', { taxpayerId: holder });
     const now = this.ctx.clock.now();
     const d = this.signer.dynamicFor(c.id, now.getTime());
+    // Chaîne de la fraude (30/09/2026) : qui génère le QR animé, et quand (une trace par titre et par 10 minutes).
+    const last = this.dynamicAudit.get(`${c.id}|${user.id}`) ?? 0;
+    if (now.getTime() - last > 10 * MIN) {
+      this.dynamicAudit.set(`${c.id}|${user.id}`, now.getTime());
+      this.ctx.audit.append({ actor: this.actor(user), action: 'titres.qr_dynamique.genere', resourceType: 'credential', resourceId: c.id, details: {} });
+    }
     return { ...d, windowSeconds: DYNAMIC_WINDOW_SECONDS, number: c.number, prefix: c.number.split('-')[0], validUntil: c.validUntil, status: this.status(c), serverTime: now.toISOString() };
   }
 
@@ -717,7 +752,9 @@ export class TitresService {
     /** Module contrôlé (si aucun titre n'est trouvé, le constat reste rattaché au module). */
     module?: string;
     offline?: { at: string; batchId: string; offlineResult: ControlResult };
-  }): { event: VerificationEvent; status?: StatusView; constat?: Constat } {
+    /** Anti-fraude (30/09/2026) : refus décidé avant l'enregistrement (plaque différente, QR fixe d'un pass…). */
+    refus?: RefusControle;
+  }): { event: VerificationEvent; status?: StatusView; constat?: Constat; fraudCase?: FraudCase } {
     const nowIso = this.ctx.clock.now().toISOString();
     const at = input.offline?.at ?? nowIso;
     const atDate = new Date(at);
@@ -726,10 +763,16 @@ export class TitresService {
     let consumed = false;
     let alreadyUsed: VerificationEvent['alreadyUsed'];
     let reason = input.failure;
+    // Copie détectée à ce scan (déplacement impossible, agents simultanés, scans excessifs) : rouge immédiatement.
+    let refus = input.refus;
+    if (c && !refus) {
+      const clone = this.detectClone(c, { at, place: input.place, controllerId: user.id });
+      if (clone) refus = { reason: FRAUD_LABELS[clone.kind], fraud: clone.kind, detail: clone.detail };
+    }
     if (c) {
       status = statusAt(c, atDate);
       if (c.state === 'CONSOMME' && c.firstUse) alreadyUsed = { at: c.firstUse.at, place: c.firstUse.place };
-      if ((c.model === 'USAGE_UNIQUE' || c.model === 'CARNET_USAGES') && controlResultOf(status.status) === 'VALIDE' && (c.usesLeft ?? 0) > 0) {
+      if (!refus && (c.model === 'USAGE_UNIQUE' || c.model === 'CARNET_USAGES') && controlResultOf(status.status) === 'VALIDE' && (c.usesLeft ?? 0) > 0) {
         const left = (c.usesLeft ?? 1) - 1;
         consumed = true;
         c = this.credentials.update({
@@ -749,7 +792,8 @@ export class TitresService {
         reason = reason ?? status.text;
       }
     }
-    const result: ControlResult = status ? controlResultOf(status.status) : 'INVALIDE';
+    if (refus) reason = refus.reason;
+    const result: ControlResult = refus ? 'INVALIDE' : status ? controlResultOf(status.status) : 'INVALIDE';
     const event = this.controls.append({
       id: this.ids.next('CTL'), ...(c ? { credentialId: c.id, typeCode: c.typeCode, module: c.module } : input.module ? { module: input.module } : {}), method: input.method,
       presented: input.method === 'PLAQUE' ? normalizePlate(input.presented) : sha256Hex(input.presented).slice(0, 16),
@@ -786,14 +830,193 @@ export class TitresService {
       outcome: result === 'VALIDE' ? 'SUCCESS' : 'FAILURE',
       details: { credentialId: c?.id ?? null, method: input.method, result, place: input.place, deviceId: input.deviceId ?? null, constatId: constat?.id ?? null, consumedUse: consumed, ...(suspendedBy ? { constatSuspendu: suspendedBy } : {}) },
     });
+    const fraudCase = c && refus?.fraud ? this.lockForFraud(user, c, refus.fraud, refus.detail ?? refus.reason, event) : undefined;
     // Statut présenté = état AU MOMENT du contrôle (avant consommation d'un usage).
-    return { event, ...(status ? { status } : {}), ...(constat ? { constat } : {}) };
+    return { event, ...(status ? { status } : {}), ...(constat ? { constat } : {}), ...(fraudCase ? { fraudCase } : {}) };
+  }
+
+  // ------------------------------------------------------------------ Anti-fraude des preuves (30/09/2026)
+
+  /**
+   * Chaîne de la fraude (30/09/2026) : qui a acheté, qui a généré le QR animé, qui a imprimé ou vérifié publiquement,
+   * où et quand le code a été présenté, quels agents l'ont laissé passer. Recette perdue : PROPOSITION seulement
+   * (décision par une personne ; facturation par la fiche ACTIVE et le circuit commun).
+   */
+  fraudChain(user: User, id: string) {
+    const f = this.fraudCases.get(id);
+    if (!f) throw notFound('FRAUD_CASE_NOT_FOUND', 'Dossier de fraude inconnu.');
+    const c = f.credentialId ? this.credentials.get(f.credentialId) : undefined;
+    authorize(user, 'titres:fraude.read', c ? { entity: c.entity } : {});
+    const audit = (action: string, resourceId: string) => this.ctx.audit.list({ action, resourceId, limit: 200 }).items.map((a) => ({ at: a.at, acteur: a.actor.id, details: a.details ?? null }));
+    const controles = c ? this.controls.find((e) => e.credentialId === c.id).map((e) => ({ id: e.id, at: e.at, agent: e.controllerId, lieu: e.place, methode: e.method, resultat: e.result, motif: e.reason ?? null, horsLigne: e.offline })) : [];
+    const valides = controles.filter((x) => x.resultat === 'VALIDE').length;
+    const recettePerdue = c?.amount && valides > 1 ? Money.fromJSON(c.amount).multiply(String(valides - 1)).toJSON() : null;
+    this.ctx.audit.append({ actor: this.actor(user), action: 'titres.fraude.chaine_consultee', resourceType: 'fraud_case', resourceId: f.id, details: {} });
+    return {
+      dossier: { ...f, libelle: FRAUD_LABELS[f.kind] },
+      titre: c ? {
+        id: c.id, numero: c.number, type: c.typeCode, etat: c.state, motifEtat: c.stateReason ?? null, emisLe: c.issuedAt, plaque: c.subject.plate ?? null,
+        achat: { payeur: c.payerTaxpayerId, titulaire: c.holderTaxpayerId ?? null, referencePaiement: c.paymentReference ?? null, quittances: c.receiptNumbers, montant: c.amount ?? null },
+      } : null,
+      qrAnimeGenere: c ? audit('titres.qr_dynamique.genere', c.id) : [],
+      impressions: c ? audit('proof.printed', `TITRE:${c.shortCode}`).concat(audit('proof.printed', `PASS_WEWA:${c.shortCode}`)) : [],
+      verificationsPubliques: c ? audit('proof.verified', `TITRE:${c.shortCode}`).concat(audit('proof.verified', `PASS_WEWA:${c.shortCode}`)) : [],
+      controles,
+      agentsAyantLaissePasser: [...new Set(f.acceptedBy.map((a) => a.controllerId))].map((agent) => ({ agent, controles: f.acceptedBy.filter((a) => a.controllerId === agent).length })),
+      recettePerdueProposee: recettePerdue ? { montant: recettePerdue, base: `${valides - 1} présentation(s) acceptée(s) au-delà de la première`, statut: 'PROPOSITION — décision humaine ; facturation au titulaire par la fiche ACTIVE et le circuit commun' } : null,
+      doctrine: [
+        'Le titre est bloqué à titre conservatoire (mesure de protection, pas une sanction).',
+        'Instruction par un enquêteur anti-fraude ; décision par une personne distincte, motivée et contestable.',
+        'Amendes et mesures disciplinaires : autorité compétente seulement. Aucune sanction automatique.',
+      ],
+    };
+  }
+
+  /** Dossiers de fraude (file de l'anti-fraude et des responsables). */
+  fraudList(user: User) {
+    // Anti-fraude, audit : tous les dossiers ; responsables et superviseurs : ceux des preuves de leur entité.
+    authorize(user, 'titres:fraude.read', { entity: user.entity });
+    const tous = evaluate(user, 'titres:fraude.read', {}) !== false;
+    const visibles = this.fraudCases.all().filter((f) => tous || (f.credentialId ? this.credentials.get(f.credentialId)?.entity === user.entity : false));
+    const items = visibles.sort((a, b) => b.openedAt.localeCompare(a.openedAt)).map((f) => ({ ...f, libelle: FRAUD_LABELS[f.kind], titre: f.credentialId ? this.credentials.get(f.credentialId)?.number ?? null : null }));
+    // Suivi qualité : agents ayant laissé passer des preuves ensuite reconnues frauduleuses (dossiers « fraude établie »).
+    const parAgent = new Map<string, { agent: string; dossiers: number; etablis: number }>();
+    for (const f of visibles) for (const a of new Set(f.acceptedBy.map((x) => x.controllerId))) {
+      const row = parAgent.get(a) ?? { agent: a, dossiers: 0, etablis: 0 };
+      row.dossiers += 1; if (f.decision?.outcome === 'FRAUDE_ETABLIE') row.etablis += 1;
+      parAgent.set(a, row);
+    }
+    return { items, agents: [...parAgent.values()].sort((a, b) => b.etablis - a.etablis || b.dossiers - a.dossiers), seuils: SEUILS_CLONE };
+  }
+
+  /** Prise en charge par un enquêteur (R24) ; jamais un agent mis en cause. */
+  fraudInstruct(user: User, id: string) {
+    authorize(user, 'titres:fraude.instruire', {});
+    const f = this.fraudCases.get(id);
+    if (!f) throw notFound('FRAUD_CASE_NOT_FOUND', 'Dossier de fraude inconnu.');
+    if (f.status === 'DECIDE') throw conflict('FRAUD_CASE_CLOSED', 'Dossier déjà décidé.');
+    if (f.acceptedBy.some((a) => a.controllerId === user.id) || f.detectedBy === user.id) throw forbidden('CONFLICT_OF_INTEREST', 'Une personne intervenue dans le dossier ne l’instruit pas.');
+    const out = this.fraudCases.update({ ...f, status: 'EN_INSTRUCTION', investigatorId: user.id });
+    this.ctx.audit.append({ actor: this.actor(user), action: 'titres.fraude.instruction', resourceType: 'fraud_case', resourceId: id, details: {} });
+    return out;
+  }
+
+  /**
+   * Décision (personne distincte de l'enquêteur, du détecteur et des agents mis en cause ; motif ≥ 20 caractères) :
+   * CLASSEMENT ⇒ blocage levé ; FRAUDE_ETABLIE ⇒ titre révoqué, recette perdue retenue pour facturation au titulaire,
+   * saisine de l'autorité compétente pour toute amende ou mesure disciplinaire (jamais par la plateforme).
+   */
+  fraudDecide(user: User, id: string, input: { outcome: 'CLASSEMENT' | 'FRAUDE_ETABLIE'; motif: string; retenirRecettePerdue?: boolean }) {
+    const f = this.fraudCases.get(id);
+    if (!f) throw notFound('FRAUD_CASE_NOT_FOUND', 'Dossier de fraude inconnu.');
+    authorize(user, 'titres:fraude.decider', f.credentialId ? { entity: this.credentials.get(f.credentialId)?.entity } : {});
+    if (f.status === 'DECIDE') throw conflict('FRAUD_CASE_CLOSED', 'Dossier déjà décidé.');
+    if (!f.investigatorId) throw conflict('INSTRUCTION_REQUIRED', 'Instruction préalable par un enquêteur anti-fraude requise.');
+    if ([f.investigatorId, f.detectedBy, ...f.acceptedBy.map((a) => a.controllerId)].includes(user.id)) throw forbidden('SEPARATION_OF_DUTIES', 'Le décideur est distinct de l’enquêteur, du détecteur et des agents mis en cause.');
+    if (input.motif.trim().length < 20) throw badRequest('MOTIF_REQUIRED', 'Motif de la décision : 20 caractères au moins.');
+    const c = f.credentialId ? this.credentials.get(f.credentialId) : undefined;
+    const chain = this.fraudChain(user, id);
+    if (c) {
+      if (input.outcome === 'CLASSEMENT' && c.state === 'SUSPENDU') this.setState(c, 'EMIS', `Blocage levé après instruction : ${input.motif}`, user.id);
+      if (input.outcome === 'FRAUDE_ETABLIE' && c.state !== 'REVOQUE') this.setState(c, 'REVOQUE', `Fraude établie (${FRAUD_LABELS[f.kind]}) : ${input.motif}`, user.id);
+    }
+    const lost = input.outcome === 'FRAUDE_ETABLIE' && input.retenirRecettePerdue ? chain.recettePerdueProposee?.montant ?? null : null;
+    const out = this.fraudCases.update({ ...f, status: 'DECIDE', decision: { by: user.id, at: this.ctx.clock.now().toISOString(), outcome: input.outcome, motif: input.motif, lostRevenueProposal: lost } });
+    this.ctx.audit.append({ actor: this.actor(user), action: 'titres.fraude.decision', resourceType: 'fraud_case', resourceId: id, details: { outcome: input.outcome, recettePerdue: lost, agentsMisEnCause: chain.agentsAyantLaissePasser.map((a) => a.agent) } });
+    return { ...out, suite: input.outcome === 'FRAUDE_ETABLIE'
+      ? ['Titre révoqué.', ...(lost ? [`Recette perdue retenue (${lost.amount} ${lost.currency}) : à liquider au titulaire par la fiche ACTIVE et le circuit commun.`] : []), 'Saisine de l’autorité compétente pour toute amende ; agents mis en cause signalés à leur hiérarchie (suivi qualité), mesure disciplinaire par l’autorité compétente.']
+      : ['Blocage conservatoire levé ; titre de nouveau valable.'] };
+  }
+
+  /** Dossier de fraude sur une preuve hors moteur de titres (vignette technique…) : alerte HAUTE + dossier à instruire. */
+  openFraudReference(user: User, kind: FraudKind, reference: string, detail: string): FraudCase {
+    const now = this.ctx.clock.now().toISOString();
+    const open = this.fraudCases.findOne((f) => f.reference === reference && f.kind === kind && f.status !== 'DECIDE');
+    const fc = open ? this.fraudCases.update({ ...open, detail: `${open.detail}\n${detail}` })
+      : this.fraudCases.insert({ id: this.ids.next('FRD'), kind, reference, detail, openedAt: now, detectedBy: user.id, acceptedBy: [], status: 'A_INSTRUIRE' });
+    this.ctx.alerts.raise({ type: `FRAUDE_PREUVE_${kind}`, severity: 'HIGH', source: 'titres', detail: `${FRAUD_LABELS[kind]} — ${detail} Dossier ${fc.id} à instruire.`, context: { reference, caseId: fc.id }, actor: { kind: 'user', id: user.id, roles: user.roles } });
+    this.ctx.audit.append({ actor: this.actor(user), action: 'titres.fraude.dossier_reference', resourceType: 'preuve', resourceId: reference, details: { kind, caseId: fc.id } });
+    return fc;
+  }
+
+  /** Pass personnel (au porteur) : ni plaque, ni objet, valable sur une durée — présentable par le QR animé seulement. */
+  isPassPersonnel(c: Credential): boolean {
+    return !c.subject.plate && !c.subject.objectId && c.model !== 'USAGE_UNIQUE' && c.model !== 'CARNET_USAGES';
+  }
+
+  /**
+   * Règles avant enregistrement : (1) un titre lié à une plaque exige la plaque RÉELLEMENT lue — différente ⇒ rouge,
+   * blocage conservatoire, dossier ; (2) un pass personnel n'est accepté que par le QR animé de l'application de son
+   * titulaire (lié à son compte) — QR fixe, capture ou code : refusé. `enLigne` : plaque absente ⇒ refus de saisie.
+   */
+  antiFraude(res: { credential?: Credential; method: ControlMethod }, observedPlate: string | undefined, enLigne: boolean): RefusControle | undefined {
+    const c = res.credential;
+    if (!c || res.method === 'PLAQUE') return undefined;
+    if (this.isPassPersonnel(c) && res.method !== 'QR_DYNAMIQUE') {
+      return { reason: 'QR fixe, capture ou code refusé pour un pass personnel : le titulaire présente le QR animé de l’application, lié à son compte.' };
+    }
+    if (!c.subject.plate) return undefined;
+    if (!observedPlate?.trim()) {
+      if (enLigne) throw unprocessable('PLAQUE_CONSTATEE_REQUISE', 'Titre lié à une plaque : saisissez ou scannez la plaque du véhicule contrôlé.');
+      return undefined;
+    }
+    const lue = normalizePlate(observedPlate);
+    if (lue === normalizePlate(c.subject.plate)) return undefined;
+    return {
+      reason: `Plaque différente : ce titre appartient à un autre véhicule (plaque finissant par ${normalizePlate(c.subject.plate).slice(-3)}), présenté sur ${lue}`,
+      fraud: 'PLAQUE_DIFFERENTE', detail: `Titre ${c.number} (plaque ${normalizePlate(c.subject.plate)}) présenté sur le véhicule ${lue}.`,
+    };
+  }
+
+  /** Détection de copie à chaque scan (seuils SEUILS_CLONE, par défaut — à confirmer). */
+  private detectClone(c: Credential, cur: { at: string; place: UsePlace; controllerId: string }): { kind: FraudKind; detail: string } | null {
+    const t = new Date(cur.at).getTime();
+    const recent = this.controls.find((e) => e.credentialId === c.id && Math.abs(t - new Date(e.at).getTime()) <= 60 * MIN);
+    for (const e of recent) {
+      const d = distanceKm(e.place, cur.place);
+      if (d === null || d <= SEUILS_CLONE.distanceMinKm) continue;
+      const h = Math.max(Math.abs(t - new Date(e.at).getTime()) / HOUR_MS, 1 / 60);
+      if (d / h > SEUILS_CLONE.vitesseMaxKmH) {
+        return { kind: 'CLONE_DEPLACEMENT_IMPOSSIBLE', detail: `Titre ${c.number} : ${d.toFixed(1)} km en ${Math.round(h * 60)} min (${e.place.label ?? 'lieu 1'} → ${cur.place.label ?? 'lieu 2'}).` };
+      }
+    }
+    const agents = new Set([...recent.filter((e) => Math.abs(t - new Date(e.at).getTime()) <= SEUILS_CLONE.fenetreAgentsMin * MIN).map((e) => e.controllerId), cur.controllerId]);
+    if (agents.size >= SEUILS_CLONE.agentsMax) return { kind: 'CLONE_AGENTS_SIMULTANES', detail: `Titre ${c.number} contrôlé par ${agents.size} agents en ${SEUILS_CLONE.fenetreAgentsMin} minutes.` };
+    if (recent.length + 1 > SEUILS_CLONE.scansMaxHeure) return { kind: 'CLONE_SCANS_EXCESSIFS', detail: `Titre ${c.number} scanné ${recent.length + 1} fois en une heure.` };
+    return null;
+  }
+
+  /**
+   * Verrouillage : titre SUSPENDU à titre conservatoire (mesure de protection, pas une sanction ; levée ou décision par
+   * une personne habilitée), alerte HAUTE transmise à l'anti-fraude, dossier de fraude avec la chaîne des agents qui ont
+   * laissé passer ce titre dans les 24 h. Aucune amende, aucune sanction automatique.
+   */
+  lockForFraud(user: User, c0: Credential, kind: FraudKind, detail: string, event?: VerificationEvent): FraudCase {
+    let c = this.credentials.get(c0.id) ?? c0;
+    if (c.state === 'EMIS') c = this.setState(c, 'SUSPENDU', `Blocage conservatoire anti-fraude : ${FRAUD_LABELS[kind]} — levée ou décision par une personne habilitée`, 'systeme-anti-fraude');
+    const now = this.ctx.clock.now().toISOString();
+    const since = new Date(event?.at ?? now).getTime() - 24 * HOUR_MS;
+    const acceptedBy = this.controls
+      .find((e) => e.credentialId === c.id && e.result === 'VALIDE' && new Date(e.at).getTime() >= since && e.id !== event?.id)
+      .map((e) => ({ controllerId: e.controllerId, controlId: e.id, at: e.at }));
+    const open = this.fraudCases.findOne((f) => f.credentialId === c.id && f.kind === kind && f.status !== 'DECIDE');
+    const fc = open
+      ? this.fraudCases.update({ ...open, detail: `${open.detail}\n${detail}`, acceptedBy: [...open.acceptedBy, ...acceptedBy.filter((a) => !open.acceptedBy.some((b) => b.controlId === a.controlId))] })
+      : this.fraudCases.insert({ id: this.ids.next('FRD'), kind, credentialId: c.id, detail, ...(event ? { controlId: event.id } : {}), openedAt: now, detectedBy: user.id, acceptedBy, status: 'A_INSTRUIRE' });
+    this.ctx.alerts.raise({
+      type: `FRAUDE_PREUVE_${kind}`, severity: 'HIGH', source: 'titres', detail: `${FRAUD_LABELS[kind]} — ${detail} Titre bloqué à titre conservatoire ; dossier ${fc.id} à instruire.`,
+      context: { credentialId: c.id, caseId: fc.id, controlId: event?.id ?? null, agentsAyantAccepte: acceptedBy.map((a) => a.controllerId) }, actor: { kind: 'user', id: user.id, roles: user.roles },
+    });
+    this.ctx.audit.append({ actor: this.actor(user), action: 'titres.fraude.blocage_conservatoire', resourceType: 'credential', resourceId: c.id, details: { kind, caseId: fc.id, controlId: event?.id ?? null } });
+    return fc;
   }
 
   minimalView(ev: VerificationEvent, status: StatusView | undefined, c: Credential | undefined, constat?: Constat): MinimalControlView {
     const t = c ? this.types.findOne((x) => x.code === c.typeCode) : undefined;
     const shown = status && ev.consumedUse ? { ...status, text: `${status.text} — usage consommé${c?.usesLeft !== undefined && c.usesLeft > 0 ? ` (${c.usesLeft} restant${c.usesLeft > 1 ? 's' : ''})` : ''}` } : status;
-    const pres = shown ? { status: shown.status, color: shown.color, icon: shown.icon, signal: shown.signal, text: shown.text, remainingSeconds: shown.remainingSeconds }
+    // Refus anti-fraude d'un titre par ailleurs valable (plaque différente, QR fixe d'un pass, copie) : noir, motif affiché.
+    const refuse = !!shown && ev.result === 'INVALIDE' && controlResultOf(shown.status) === 'VALIDE';
+    const pres = shown && !refuse ? { status: shown.status, color: shown.color, icon: shown.icon, signal: shown.signal, text: shown.text, remainingSeconds: shown.remainingSeconds }
       : { status: 'INCONNU' as const, color: 'noir', icon: 'ban', signal: 'DISTINCT', text: `INVALIDE — ${ev.reason ?? 'titre inconnu'}` };
     return {
       controlId: ev.id, result: ev.result, ...pres, serverTime: this.ctx.clock.now().toISOString(),
@@ -831,10 +1054,13 @@ export class TitresService {
     const now = this.ctx.clock.now().getTime();
     const presented = input.qr ?? input.code;
     if (!input.plate && !presented) throw badRequest('NOTHING_PRESENTED', 'QR, code court ou plaque requis.');
-    const res = this.resolveControl({ ...(input.plate ? { plate: input.plate } : { presented }), ...(input.module ? { module: input.module } : {}) }, now);
-    const r = this.recordControl(user, { ...res, place: input.place, ...(input.deviceId ? { deviceId: input.deviceId } : {}) });
+    // Code présenté ET plaque (30/09/2026) : le contrôle porte sur le CODE, la plaque lue sert à la vérification croisée.
+    const res = this.resolveControl({ ...(presented ? { presented } : { plate: input.plate }), ...(input.module ? { module: input.module } : {}) }, now);
+    const refus = this.antiFraude(res, input.observedPlate ?? (presented ? input.plate : undefined), true);
+    const r = this.recordControl(user, { ...res, place: input.place, ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(refus ? { refus } : {}) });
     const view = this.minimalView(r.event, r.status, res.credential ? this.credentials.get(res.credential.id) : undefined, r.constat);
-    return input.plate ? { ...view, plate: normalizePlate(input.plate) } : view;
+    const out = r.fraudCase ? { ...view, fraude: { kind: r.fraudCase.kind, label: FRAUD_LABELS[r.fraudCase.kind], caseId: r.fraudCase.id } } : view;
+    return input.plate ? { ...out, plate: normalizePlate(input.plate) } : out;
   }
 
   // ------------------------------------------------------------------ Contrôle hors ligne
@@ -865,7 +1091,7 @@ export class TitresService {
     return {
       serverTime: now.toISOString(), algorithm: 'Ed25519', publicKeyPem: this.signer.publicKeyPem(),
       revocations: this.revocationList(), plates: { ...platesDoc, signature: this.signer.signDocument(platesDoc) },
-      types: this.types.all().map((t) => ({ code: t.code, prefix: t.prefix, label: t.label, module: t.module, amberMinutes: t.validity.amberMinutes, toleranceMinutes: t.validity.toleranceMinutes })),
+      types: this.types.all().map((t) => ({ code: t.code, prefix: t.prefix, label: t.label, module: t.module, model: t.validity.model, plateBound: t.plateBound, amberMinutes: t.validity.amberMinutes, toleranceMinutes: t.validity.toleranceMinutes })),
       notice: 'Résultat hors ligne marqué « vérifié hors ligne » et reconfirmé à la synchronisation. Heure de référence : dernière synchronisation avec le serveur.',
     };
   }
@@ -924,8 +1150,9 @@ export class TitresService {
       }
       // Même résolveur qu'en ligne, à l'instant du contrôle (QR dynamique vérifié sur sa fenêtre de 30 s).
       const res = this.resolveControl({ ...(op.plate ? { plate: op.plate } : { presented: op.token }), ...(op.module ? { module: op.module } : {}) }, at);
+      const refus = this.antiFraude(res, op.observedPlate, false);
       const r = this.recordControl(user, {
-        ...res, place: op.place, deviceId: device.id,
+        ...res, place: op.place, deviceId: device.id, ...(refus ? { refus } : {}),
         offline: { at: new Date(at).toISOString(), batchId: batch.batchId, offlineResult: op.offlineResult },
       });
       results.push({

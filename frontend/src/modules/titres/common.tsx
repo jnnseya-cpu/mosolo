@@ -94,6 +94,8 @@ export interface ControlView {
   driverVerified?: boolean | null;
   offline?: boolean;
   penalitesImpayees?: OverduePenaltiesData;
+  /** Anti-fraude (30/09/2026) : preuve bloquée à titre conservatoire, dossier ouvert. */
+  fraude?: { kind: string; label: string; caseId: string };
 }
 
 export const STATUS_LABEL: Record<string, string> = {

@@ -16,6 +16,8 @@ import { ScanVisuels } from './visuels';
 interface Line { state: string; label: string; number?: string | null; receipt?: string | null }
 export interface ScanView {
   scanId: string; method: string; plate: string;
+  /** Anti-fraude (30/09/2026) : QR d'un autre véhicule — preuve bloquée, dossier ouvert. */
+  fraude?: { kind: string; label: string; caseId: string }; alerte?: string;
   identification: { plate: string; categoryLabel: string; ownerRef: string | null; accountLink: string };
   vignetteFiscale: Line; taxeCirculation: Line; autorisationTransport: Line;
   controleTechnique: { state: string; label: string; lastDate: string | null; centre: string | null; result: string | null; echeance: string | null; stickerNumber: string | null };
@@ -75,6 +77,8 @@ export function ScanResult({ v }: { v: ScanView }) {
 export default function ScanVehicule() {
   const { user } = useApp();
   const [saisie, setSaisie] = useState('');
+  // Plaque RÉELLEMENT lue (30/09/2026) : obligatoire quand on scanne un QR de vignette — un QR d'un autre véhicule est bloqué.
+  const [plaqueLue, setPlaqueLue] = useState('');
   const [commune, setCommune] = useState('');
   const [scan, setScan] = useState(false);
   const [view, setView] = useState<ScanView | null>(null);
@@ -88,7 +92,7 @@ export default function ScanVehicule() {
   async function run(value = saisie) {
     setMsg(null);
     try {
-      setView(await api<ScanView>('/v1/vehicules/scan', { method: 'POST', body: { saisie: value, place: commune ? { commune } : {} } }));
+      setView(await api<ScanView>('/v1/vehicules/scan', { method: 'POST', body: { saisie: value, place: commune ? { commune } : {}, ...(plaqueLue.trim() ? { plaqueLue: plaqueLue.trim() } : {}) } }));
     } catch (e) { const d = describeError(e); setMsg({ ok: false, text: `${d.message}${d.code ? ` (${d.code})` : ''}` }); }
   }
   async function decide() {
@@ -111,6 +115,7 @@ export default function ScanVehicule() {
           {/* Formulaire : Entrée dans le champ lance la vérification (clavier seul, lecteur de code qui termine par Entrée). */}
           <form className="vc-row" onSubmit={(e) => { e.preventDefault(); if (saisie.trim()) void run(); }}>
             <label className="vc-form" style={{ flex: 1 }}><span>Plaque ou contenu du QR</span><input value={saisie} onChange={(e) => setSaisie(e.target.value)} placeholder="KN-0000-AB ou QR" /></label>
+            <label className="vc-form"><span>Plaque lue sur le véhicule (si QR)</span><input value={plaqueLue} onChange={(e) => setPlaqueLue(e.target.value)} placeholder="KN-0000-AB" data-testid="vc-plaque-lue" /></label>
             <label className="vc-form"><span>Commune du contrôle</span><input value={commune} onChange={(e) => setCommune(e.target.value)} placeholder="Gombe" /></label>
             <button type="submit" className="btn btn-primary" disabled={!saisie.trim()}>Vérifier</button>
             <button type="button" className="btn btn-secondary" onClick={() => setScan(true)}>Scanner un QR</button>
@@ -123,6 +128,7 @@ export default function ScanVehicule() {
           {msg && <p className={msg.ok ? 'notice notice-ok' : 'notice notice-err'} role={msg.ok ? 'status' : 'alert'}>{msg.text}</p>}
           {/* Annonce du résultat aux lecteurs d'écran (deuxième passe adverse, 27/09/2026) : le résultat s'affichait sans être lu. */}
           <p className="sr-only" role="status" aria-live="polite">{view ? `Résultat du contrôle ${view.plate} : vignette fiscale ${view.vignetteFiscale.label} ; contrôle technique ${view.controleTechnique.label} ; quitus ${view.quitus.label}.` : ''}</p>
+          {view?.alerte && <div className="callout callout-danger" role="alert" data-testid="vc-fraude"><span><strong>{view.alerte}</strong> N’acceptez pas ce document ; aucune sanction sur place.</span></div>}
           {view && (
             <>
               <ScanResult v={view} />

@@ -323,3 +323,38 @@ export interface Revocation {
   by: string;
   at: string;
 }
+
+/**
+ * Anti-fraude des preuves (30/09/2026, consigne du maître d'ouvrage : « un code imprimé ne doit pas servir à plusieurs
+ * personnes ; tout verrouiller ») : motif de blocage conservatoire d'un titre et dossier de fraude à instruire.
+ */
+export type FraudKind =
+  | 'PLAQUE_DIFFERENTE' | 'CLONE_DEPLACEMENT_IMPOSSIBLE' | 'CLONE_AGENTS_SIMULTANES' | 'CLONE_SCANS_EXCESSIFS'
+  | 'GILET_NON_SIGNE' | 'VIGNETTE_AUTRE_VEHICULE';
+
+export const FRAUD_LABELS: Record<FraudKind, string> = {
+  PLAQUE_DIFFERENTE: 'Titre présenté pour un autre véhicule que le sien',
+  CLONE_DEPLACEMENT_IMPOSSIBLE: 'Même code scanné en deux lieux trop éloignés pour le temps écoulé (copie)',
+  CLONE_AGENTS_SIMULTANES: 'Même code contrôlé par plusieurs agents en même temps (copie)',
+  CLONE_SCANS_EXCESSIFS: 'Même code scanné trop souvent (partage)',
+  GILET_NON_SIGNE: 'Gilet présenté par son seul numéro (copie possible)',
+  VIGNETTE_AUTRE_VEHICULE: 'Vignette technique vue sur un autre véhicule que le sien',
+};
+
+export interface FraudCase {
+  id: string;
+  kind: FraudKind;
+  credentialId?: string;
+  /** Référence de l'objet hors titres (vignette technique…). */
+  reference?: string;
+  detail: string;
+  controlId?: string;
+  openedAt: string;
+  /** Agent dont le contrôle a déclenché la détection. */
+  detectedBy: string;
+  /** Contrôles VALIDES de ce titre par des agents dans les 24 h précédentes : agents qui l'ont laissé passer. */
+  acceptedBy: { controllerId: string; controlId: string; at: string }[];
+  status: 'A_INSTRUIRE' | 'EN_INSTRUCTION' | 'DECIDE';
+  investigatorId?: string;
+  decision?: { by: string; at: string; outcome: 'CLASSEMENT' | 'FRAUDE_ETABLIE'; motif: string; lostRevenueProposal?: MoneyJSON | null };
+}

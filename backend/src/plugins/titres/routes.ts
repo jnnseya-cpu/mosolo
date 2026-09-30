@@ -38,6 +38,8 @@ const controlSchema = z.object({
   place: placeSchema,
   deviceId: z.string().max(100).optional(),
   module: z.string().max(10).optional(),
+  /** Plaque lue sur le véhicule contrôlé (obligatoire pour un titre lié à une plaque). */
+  observedPlate: z.string().trim().min(2).max(20).optional(),
 }).strict().refine((b) => b.qr || b.code || b.plate, { message: 'qr, code ou plate requis' });
 
 const decisionSchema = z.object({
@@ -144,6 +146,13 @@ export function registerTitresRoutes(app: FastifyInstance, ctx: AppContext, svc:
     const cred = ev?.credentialId ? svc.credentials.get(ev.credentialId) : undefined;
     return reply.code(201).send(withOverdue(ctx, user, view, { plate: view.plate ?? cred?.subject.plate ?? null, taxpayerId: cred?.holderTaxpayerId ?? null }, 'TITRES', view.controlId));
   });
+
+  // Anti-fraude des preuves (30/09/2026) : dossiers, chaîne de la fraude, instruction, décision par une personne distincte.
+  app.get('/v1/titres/fraudes', async (req) => svc.fraudList(requireUser(req)));
+  app.get<{ Params: { id: string } }>('/v1/titres/fraudes/:id', async (req) => svc.fraudChain(requireUser(req), req.params.id));
+  app.post<{ Params: { id: string } }>('/v1/titres/fraudes/:id/instruction', async (req) => svc.fraudInstruct(requireUser(req), req.params.id));
+  app.post<{ Params: { id: string } }>('/v1/titres/fraudes/:id/decision', async (req) => svc.fraudDecide(requireUser(req), req.params.id,
+    parse(z.object({ outcome: z.enum(['CLASSEMENT', 'FRAUDE_ETABLIE']), motif: z.string().trim().min(20).max(2000), retenirRecettePerdue: z.boolean().optional() }).strict(), req.body)));
 
   // Paquet hors ligne : clé publique, liste de révocation signée, plaques actives.
   app.get<{ Querystring: { deviceId?: string; module?: string } }>('/v1/titres/hors-ligne/paquet', async (req) =>

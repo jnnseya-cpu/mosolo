@@ -187,10 +187,12 @@ describe('Contrôle protecteur et vérification passager', () => {
     const s = await setup();
     const me = (await s.env.req('GET', '/v1/rakapay/wewa/moi', RK_DEMO.driverUser)).json();
     const qr = (await s.env.req('GET', `/v1/titres/${me.currentPass.id}/qr`, RK_DEMO.driverUser)).json();
-    const ok = (await s.env.req('POST', '/v1/rakapay/wewa/controles', RK_DEMO.controllerUser, { qr: qr.token, place: KALAMU })).json();
+    // Anti-fraude (30/09/2026) : QR du téléphone + plaque lue sur la moto.
+    const plaque = s.titres.credentials.get(me.currentPass.id)!.subject.plate!;
+    const ok = (await s.env.req('POST', '/v1/rakapay/wewa/controles', RK_DEMO.controllerUser, { qr: qr.token, plate: plaque, place: KALAMU })).json();
     expect(ok).toMatchObject({ result: 'VALIDE', driverVerified: true });
     s.clock.advance(40_000);
-    expect((await s.env.req('POST', '/v1/rakapay/wewa/controles', RK_DEMO.controllerUser, { qr: qr.token, place: KALAMU })).json().result).toBe('INVALIDE');
+    expect((await s.env.req('POST', '/v1/rakapay/wewa/controles', RK_DEMO.controllerUser, { qr: qr.token, plate: plaque, place: KALAMU })).json().result).toBe('INVALIDE');
   });
 
   it('passager : vérification publique minimale du gilet (aucun nom)', async () => {

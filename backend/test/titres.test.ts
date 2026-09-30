@@ -385,8 +385,8 @@ describe('Décisions humaines motivées', () => {
     expect(rep.credential.state).toBe('REMPLACE');
     expect(rep.replacement.status.status).toBe('VALIDE');
     expect(rep.replacement.validUntil).toBe(c.validUntil);
-    expect((await s.env.req('POST', '/v1/titres/controles', CTRL, { qr: c.staticToken, place: PLACE })).json().result).toBe('INVALIDE');
-    expect((await s.env.req('POST', '/v1/titres/controles', CTRL, { qr: rep.replacement.staticToken, place: PLACE })).json().result).toBe('VALIDE');
+    expect((await s.env.req('POST', '/v1/titres/controles', CTRL, { qr: c.staticToken, observedPlate: c.subject.plate, place: PLACE })).json().result).toBe('INVALIDE');
+    expect((await s.env.req('POST', '/v1/titres/controles', CTRL, { qr: rep.replacement.staticToken, observedPlate: c.subject.plate, place: PLACE })).json().result).toBe('VALIDE');
     // Changement de plaque sans motif de correction : refusé (non transférable).
     expect((await s.env.req('POST', `/v1/titres/${rep.replacement.id}/decisions`, 'tt-chef', { decision: 'REMPLACER', motif: 'Revente de la moto', subject: { plate: 'KN 2 B' } })).statusCode).toBe(422);
     const cancel = (await s.env.req('POST', `/v1/titres/${rep.replacement.id}/decisions`, 'tt-chef', { decision: 'ANNULER', motif: 'Titre émis par erreur' })).json();

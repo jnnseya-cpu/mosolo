@@ -20,6 +20,7 @@ import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../
 import { authorize } from '../../core/policy.js';
 import { InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { taxpayerRecipient } from '../../modules/identity/recipients.js';
+import { hmacSha256Hex, safeEqualHex } from '../../core/crypto.js';
 import { enginePrincipal, paymentState } from '../parking/support.js';
 import type { CentresService } from './centres.js';
 import { addDays, type VcDeps } from './common.js';
@@ -224,7 +225,25 @@ export class CtService {
     if (this.stickers.findOne((x) => x.pvId === pv.id && x.status === 'ATTRIBUEE')) throw conflict('PV_DEJA_VIGNETTE', 'Ce procès-verbal porte déjà une vignette.');
     const out = this.stickers.update({ ...s, status: 'ATTRIBUEE', plate: pv.plate, pvId: pv.id, attributedAt: this.d.now(), attributedBy: user.id });
     this.d.audit(user, 'vc.sticker.assigned', 'vignette_securisee', s.number, { plate: pv.plate, pvId: pv.id, centreId: s.centreId });
-    return { ...out, qr: this.domaine.verifyUrl('ct', out.number) };
+    return { ...out, qr: this.stickerQr(out) };
+  }
+
+  /**
+   * QR SIGNÉ de la vignette technique (30/09/2026) : adresse du domaine officiel + signature (numéro et plaque) ; une
+   * photocopie du QR d'une autre vignette, ou un QR fabriqué, ne porte pas une signature valable pour ce véhicule.
+   */
+  private stickerSig(number: string, plate: string): string {
+    return hmacSha256Hex(`vignette-technique|${this.d.ctx.secrets.auditHmacKey}`, `${number}|${plate}`).slice(0, 20);
+  }
+  stickerQr(s: SecureSticker): string {
+    return `${this.domaine.verifyUrl('ct', s.number)}?s=${s.plate ? this.stickerSig(s.number, s.plate) : ''}`;
+  }
+
+  /** Vignette vue sur un autre véhicule : signalée (vérification publique « signalée »), alerte, dossier titres. */
+  flagStickerCopy(user: User, s: SecureSticker, observedPlate: string, caseId?: string): SecureSticker {
+    const out = this.stickers.update({ ...s, suspectedCopy: { at: this.d.now(), observedPlate, by: user.id, ...(caseId ? { caseId } : {}) } });
+    this.d.audit(user, 'vc.sticker.copy_suspected', 'vignette_securisee', s.number, { plate: s.plate ?? null, observedPlate, caseId: caseId ?? null }, 'DENIED');
+    return out;
   }
 
   cancelSticker(user: User, number: string, reason: string, mode: 'ANNULEE' | 'REVOQUEE'): SecureSticker {
@@ -257,6 +276,7 @@ export class CtService {
     const input = raw.trim();
     let number = input.toUpperCase();
     let domainVerdict: string = 'SAISIE_DIRECTE';
+    let sig: string | null = null;
     if (/^https?:\/\//i.test(input)) {
       let url: URL;
       try { url = new URL(input); } catch { return { found: false, authentic: false, state: 'NON_AUTHENTIQUE', message: 'QR illisible.', checkedAt: this.d.now() }; }
@@ -269,6 +289,7 @@ export class CtService {
       }
       const m = /\/v\/ct\/([^/?#]+)/.exec(url.pathname);
       number = decodeURIComponent(m?.[1] ?? '').toUpperCase();
+      sig = url.searchParams.get('s');
     }
     const s = this.stickers.get(number);
     if (!s) {
@@ -279,9 +300,15 @@ export class CtService {
     const base = { found: true, number: s.number, centre: centre ? { name: centre.name, publicCode: centre.publicCode } : null, domainVerdict, checkedAt: this.d.now() };
     if (s.status === 'EN_STOCK') return { ...base, authentic: false, state: 'NON_ATTRIBUEE', message: 'Vignette authentique mais jamais attribuée à un véhicule : ne vaut pas contrôle.' };
     if (s.status !== 'ATTRIBUEE') return { ...base, authentic: false, state: s.status, message: s.status === 'REVOQUEE' ? 'Vignette révoquée.' : 'Vignette annulée.' };
+    // Signature du QR (30/09/2026) : fausse ⇒ copie ou fabrication (alerte) ; absente ⇒ ancienne vignette, à confirmer.
+    if (sig !== null && sig !== '' && !safeEqualHex(sig, this.stickerSig(s.number, s.plate!))) {
+      this.d.ctx.alerts.raise({ type: 'VIGNETTE_QR_FALSIFIE', severity: 'HIGH', source: 'vehicules-controle', detail: `QR de la vignette ${s.number} avec une signature invalide : copie ou fabrication.`, context: { number: s.number } });
+      return { ...base, authentic: false, state: 'NON_AUTHENTIQUE', message: 'Signature du QR invalide : copie ou fabrication de vignette. Signalez-la.' };
+    }
+    if (s.suspectedCopy) return { ...base, authentic: false, state: 'SIGNALEE', message: 'Vignette signalée : vue sur un autre véhicule — vérification en cours par l’anti-fraude.' };
     const st = this.status(s.plate!);
     const masked = `${s.plate!.slice(0, 2)}•••${s.plate!.slice(-2)}`;
-    return { ...base, authentic: true, state: st.state, plateMasked: masked, echeance: st.pv?.echeance ?? null, validity: st.validity, message: st.label };
+    return { ...base, authentic: true, state: st.state, plateMasked: masked, echeance: st.pv?.echeance ?? null, validity: st.validity, message: sig ? st.label : `${st.label} (QR sans signature : ancienne vignette — le numéro est contrôlé au registre)` , qrSigne: !!sig };
   }
 
   // ——— Mode courtoisie ———

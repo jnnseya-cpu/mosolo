@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1603 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1607 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -31,7 +31,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1603 routes** dans 5
 | extension sanctions | 12 |
 | extension socle | 24 |
 | extension terrain | 64 |
-| extension titres | 22 |
+| extension titres | 26 |
 | extension tresor | 43 |
 | extension vehicules-controle | 85 |
 | extension verticales | 194 |
@@ -1363,6 +1363,10 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1603 routes** dans 5
 | GET | `/v1/titres/constats/mine` |
 | POST | `/v1/titres/controles` |
 | POST | `/v1/titres/controles/lots` |
+| GET | `/v1/titres/fraudes` |
+| GET | `/v1/titres/fraudes/:id` |
+| POST | `/v1/titres/fraudes/:id/decision` |
+| POST | `/v1/titres/fraudes/:id/instruction` |
 | GET | `/v1/titres/hors-ligne/paquet` |
 | GET | `/v1/titres/indicateurs` |
 | GET | `/v1/titres/revocations` |

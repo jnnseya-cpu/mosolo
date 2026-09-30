@@ -135,7 +135,9 @@ export class PreuvesService {
           state, title: t?.label ?? c.typeCode, facts,
           validity: blocked ? null : validityView(c.validFrom, c.validUntil, now),
           message: s.text,
-          print: { qrValue: c.staticToken, prefix: t?.prefix ?? c.number.split('-')[0] ?? 'TIT', pictogram: c.module },
+          // Pass personnel (30/09/2026) : aucun QR copiable publié — seul le QR animé de l'application du titulaire vaut.
+          ...(!c.subject?.plate && !c.subject?.objectId && c.model !== 'USAGE_UNIQUE' && c.model !== 'CARNET_USAGES'
+            ? {} : { print: { qrValue: c.staticToken, prefix: t?.prefix ?? c.number.split('-')[0] ?? 'TIT', pictogram: c.module } }),
         });
       }
     }

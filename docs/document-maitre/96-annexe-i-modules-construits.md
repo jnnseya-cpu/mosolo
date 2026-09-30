@@ -1878,3 +1878,32 @@ Deux consignes successives du maître d'ouvrage, harmonisées par phase (rien n'
   SMS et notifications. Traduction complète de l'interface : à faire valider par des traducteurs (langues nationales).
 - **Déploiement automatique** de la démonstration : `.github/workflows/deploy-demo.yml` (contrôles puis Cloud Run), à
   activer par un secret GitHub (infra/gcp/README.md).
+
+## I.52 Anti-fraude des preuves : un code ne sert qu'une personne, un véhicule, un lieu à la fois (30/09/2026)
+
+Consigne du maître d'ouvrage : « un code imprimé ne doit pas servir à plusieurs personnes pour éviter de payer ; tout
+verrouiller ; retrouver et punir tous ceux qui sont impliqués ». Ajout (rien n'est retiré ; aucune sanction automatique) :
+
+1. **Plaque réellement lue obligatoire** : un titre lié à une plaque, présenté par QR ou code, se contrôle avec la plaque
+   lue sur le véhicule (`observedPlate` ; `PLAQUE_CONSTATEE_REQUISE` sinon). Écart ⇒ résultat noir « Plaque différente »,
+   titre **bloqué à titre conservatoire**, alerte HAUTE, dossier de fraude. Même règle au scan unique du véhicule
+   (vignette fiscale ou technique : `plaqueLue`), aux sorties de carrière et au contrôle RakaPay par QR.
+2. **QR animé exigé pour un pass personnel** (sans plaque ni objet, valable sur une durée) : QR fixe, capture ou code
+   refusés ; la page publique ne publie plus de QR copiable pour ces pass.
+3. **Pass lié à son titulaire** : seul le compte qui l'a acheté (ou son titulaire) génère le QR animé, toutes les 30 s ;
+   chaque génération est tracée.
+4. **Copies détectées à chaque scan** (seuils « par défaut — à confirmer ») : même code en deux lieux à plus de 80 km/h
+   apparents (plus de 2 km), 3 agents distincts en 10 minutes, plus de 12 scans en une heure ⇒ rouge immédiat, blocage
+   conservatoire, alerte, dossier.
+5. **Gilets et vignettes** : gilet présenté par son seul numéro refusé (alerte) ; QR de vignette technique **signé**
+   (numéro + plaque) — signature fausse ⇒ « copie ou fabrication » ; vignette vue sur un autre véhicule ⇒ signalée
+   publiquement (« vérification en cours ») et dossier.
+6. **Mémoire hors ligne** : le terminal retient chaque titre contrôlé hors ligne ; un usage unique déjà utilisé sur ce
+   terminal est refusé sans réseau ; plaque lue vérifiée contre le titre signé ; après chaque synchronisation, le paquet
+   signé est rechargé (consommations et blocages des autres terminaux de l'équipe).
+7. **Chaîne de la fraude et décision** : écran « Fraudes sur les preuves » (`/anti-fraude/preuves`) — achat, QR animé
+   généré, impressions, vérifications publiques, chaque présentation (qui, où, quand, résultat), **agents qui ont laissé
+   passer** ; instruction par un enquêteur (R24) ; décision par une personne distincte (motif ≥ 20 caractères) :
+   classement (blocage levé) ou fraude établie (titre révoqué, **recette perdue retenue pour facturation au titulaire**
+   par la fiche ACTIVE et le circuit commun, saisine de l'autorité compétente) ; suivi qualité des agents mis en cause.
+   Amendes et mesures disciplinaires : autorité compétente seulement.

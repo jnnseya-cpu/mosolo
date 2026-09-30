@@ -208,7 +208,7 @@ describe('4. « Premier contrôle » à l’heure du serveur ; attribution acqui
     const c = ti.credentials.all().find((x) => x.holderTaxpayerId && x.state === 'EMIS')!;
     e.clock.set(new Date(Date.parse(c.validUntil) + 3_600_000).toISOString());
     const t0 = e.clock.now().getTime();
-    const ctl = (await e.req('POST', '/v1/titres/controles', 'rk-controleur', { code: c.shortCode, place: { commune: 'Kalamu', label: 'Rond-point Victoire' } })).json();
+    const ctl = (await e.req('POST', '/v1/titres/controles', 'rk-controleur', { code: c.shortCode, ...(c.subject.plate ? { observedPlate: c.subject.plate } : {}), place: { commune: 'Kalamu', label: 'Rond-point Victoire' } })).json();
     expect(ctl.result).not.toBe('VALIDE');
     // Contrôle hors ligne d'un autre agent : heure déclarée 30 min AVANT, reçu 19 min APRÈS (avant le paiement).
     ti.controls.append({

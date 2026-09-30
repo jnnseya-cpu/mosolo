@@ -220,7 +220,7 @@ describe('Commission de 10 % : tous les agents, quel que soit leur module', () =
     // Titre échu : le contrôle est non valide.
     e.clock.set(new Date(Date.parse(c.validUntil) + 3_600_000).toISOString());
     const place = { commune: 'Kalamu', label: 'Rond-point Victoire' };
-    const ctl = (await e.req('POST', '/v1/titres/controles', 'rk-controleur', { code: c.shortCode, place })).json();
+    const ctl = (await e.req('POST', '/v1/titres/controles', 'rk-controleur', { code: c.shortCode, place, ...(c.subject.plate ? { observedPlate: c.subject.plate } : {}) })).json();
     expect(ctl.result).not.toBe('VALIDE');
     // Le titulaire rachète un titre du même type dans l'heure : paiement généré par le contrôle.
     e.clock.advance(20 * 60_000);

@@ -123,6 +123,8 @@ export interface SecureSticker {
   cancelledAt?: string;
   cancelledBy?: string;
   cancelReason?: string;
+  /** Anti-fraude (30/09/2026) : vignette vue sur un autre véhicule que le sien — signalée, vérification en cours. */
+  suspectedCopy?: { at: string; observedPlate: string; by: string; caseId?: string };
   demo?: boolean;
 }
 export interface StickerLot { id: string; centreId: string; first: string; last: string; quantity: number; issuedBy: string; issuedAt: string; demo?: boolean }

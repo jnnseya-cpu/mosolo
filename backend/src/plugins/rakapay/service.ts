@@ -496,21 +496,27 @@ export class RakaPayService {
     let moto: Moto | undefined;
     let presented: string;
     let method: 'QR_STATIQUE' | 'PLAQUE' | 'QR_DYNAMIQUE' = 'QR_STATIQUE';
+    let giletNu = false;
     if (input.vest) {
       presented = input.vest;
       const p = this.titres.signer.verifyStatic(input.vest);
-      driver = p && p.k === 'GILET' && typeof p.d === 'string' ? this.drivers.get(p.d) : this.drivers.findOne((d) => d.vestNumber === input.vest!.trim().toUpperCase());
+      // Anti-fraude (30/09/2026) : le numéro seul d'un gilet (séquentiel, recopiable) ne vaut plus contrôle.
+      giletNu = !(p && p.k === 'GILET' && typeof p.d === 'string');
+      driver = giletNu ? undefined : this.drivers.get(p!.d as string);
+      if (giletNu) {
+        this.ctx.alerts.raise({ type: 'GILET_NON_SIGNE', severity: 'MEDIUM', source: 'rakapay', detail: `Gilet présenté par son seul numéro (${input.vest.trim().slice(0, 20)}) : refusé, copie possible.`, context: { presented: input.vest.trim().slice(0, 20) }, actor: { kind: 'user', id: user.id, roles: user.roles } });
+      }
       moto = driver?.currentMotoId ? this.motos.get(driver.currentMotoId) : undefined;
     } else if (input.sticker) {
       presented = input.sticker;
       const p = this.titres.signer.verifyStatic(input.sticker);
       moto = p && p.k === 'AUTOCOLLANT' && typeof p.m === 'string' ? this.motos.get(p.m) : undefined;
-    } else if (input.plate) {
+    } else if (input.plate && !input.qr) {
       presented = input.plate;
       method = 'PLAQUE';
       moto = this.motos.findOne((m) => normalizePlate(m.plate) === normalizePlate(input.plate!));
     } else if (input.qr) {
-      const view = this.titres.control(user, { qr: input.qr, place: input.place, module: MODULE_WEWA, ...(input.deviceId ? { deviceId: input.deviceId } : {}) });
+      const view = this.titres.control(user, { qr: input.qr, place: input.place, module: MODULE_WEWA, ...(input.plate ? { observedPlate: input.plate } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}) });
       const c = view.plate ? this.titres.byPlate(view.plate, MODULE_WEWA)[0] : undefined;
       const m = c?.subject.motoId ? this.motos.get(c.subject.motoId) : undefined;
       const d = m ? this.drivers.findOne((x) => x.currentMotoId === m.id) : undefined;
@@ -520,7 +526,8 @@ export class RakaPayService {
     }
     if (moto && !driver) driver = this.drivers.findOne((d) => d.currentMotoId === moto!.id);
     const best = moto ? this.titres.byPlate(moto.plate, MODULE_WEWA)[0] : undefined;
-    const failure = !moto ? (driver ? 'Conducteur sans moto affectée' : 'Gilet, autocollant ou plaque non enregistré') : best ? undefined : 'Aucun pass pour cette moto';
+    const failure = giletNu ? 'Gilet présenté par son seul numéro : refusé (copie possible) — scannez le QR signé du gilet'
+      : !moto ? (driver ? 'Conducteur sans moto affectée' : 'Gilet, autocollant ou plaque non enregistré') : best ? undefined : 'Aucun pass pour cette moto';
     const r = this.titres.recordControl(user, {
       ...(best ? { credential: best } : {}), module: MODULE_WEWA, method, presented, place: input.place, ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(failure ? { failure } : {}),
     });

@@ -87,7 +87,7 @@ export function registerVehiculesRoutes(app: FastifyInstance, s: VehiculesContro
   app.post<{ Params: { id: string } }>('/v1/vehicules/courtoisie/:id/fin', async (req) => s.ct.endCourtesy(U(req), req.params.id, parse(z.object({ motif: t(3, 500) }).strict(), req.body).motif));
 
   // ——— Scan unique ———
-  app.post('/v1/vehicules/scan', async (req) => s.scan.scan(U(req), parse(z.object({ saisie: t(3, 2000), place, deviceId: t(1, 80).optional() }).strict(), req.body)));
+  app.post('/v1/vehicules/scan', async (req) => s.scan.scan(U(req), parse(z.object({ saisie: t(3, 2000), place, deviceId: t(1, 80).optional(), plaqueLue: t(2, 20).optional() }).strict(), req.body)));
   app.post<{ Params: { id: string } }>('/v1/vehicules/scans/:id/decision', async (req, reply) => reply.code(201).send(s.scan.decide(U(req), req.params.id, parse(z.object({ decision: z.enum(['AUCUNE_SUITE', 'INFORMATION_USAGER', 'CONSTAT_A_INSTRUIRE']), motif: t(3, 1000), position: place }).strict(), req.body))));
   app.get('/v1/vehicules/hors-ligne/paquet', async (req) => s.scan.offlinePack(U(req)));
 

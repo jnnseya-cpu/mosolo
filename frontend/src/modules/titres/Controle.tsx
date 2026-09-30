@@ -32,13 +32,21 @@ interface Pack {
   publicKeyPem: string;
   revocations: { entries: { id: string; number: string; state: string }[]; generatedAt: string };
   plates: { plates: { plate: string; number: string; validFrom: string; validUntil: string; toleranceMinutes: number; amberMinutes: number }[] };
+  types?: { code: string; model?: string; plateBound?: boolean }[];
 }
-interface QueuedControl { opId: string; ownerId: string; token?: string; plate?: string; controlledAt: string; place: { label?: string; lat?: number; lon?: number }; offlineResult: 'VALIDE' | 'INVALIDE' | 'EXPIRE'; note: string }
+interface QueuedControl { opId: string; ownerId: string; token?: string; plate?: string; observedPlate?: string; controlledAt: string; place: { label?: string; lat?: number; lon?: number }; offlineResult: 'VALIDE' | 'INVALIDE' | 'EXPIRE'; note: string }
 interface Constat { id: string; reason: string; at: string; status: string; place: { label?: string }; presented: string; duringGrace: boolean }
 interface SyncResult { batchId: string; results: { opId: string; offlineResult: string; reconfirmed?: string; divergent?: boolean; rejected?: string; constatId?: string; alreadyUsed?: { at: string } }[]; divergences: number; replayed?: boolean }
 
 const PACK_KEY = 'mosolo.titres.pack';
 const QUEUE_KEY = 'mosolo.titres.queue';
+/**
+ * Mémoire hors ligne du terminal (30/09/2026) : chaque titre contrôlé hors ligne est retenu (numéro, heure, lieu) ;
+ * un titre à usage unique déjà utilisé sur CE terminal est refusé, même sans réseau. Les consommations de l'équipe
+ * reviennent par le paquet signé, rechargé à chaque synchronisation (liste des titres consommés ou bloqués).
+ */
+const MEMOIRE_KEY = 'mosolo.titres.memoireHorsLigne';
+interface Memoire { [credentialId: string]: { at: string; label?: string; model?: string } }
 const COMMUNES_FALLBACK = ['Kalamu', 'Lemba', 'Limete', 'Gombe'];
 
 function readJson<T>(k: string, d: T): T {
@@ -108,6 +116,12 @@ function ResultCard({ r }: { r: ControlView }) {
         {r.driverVerified !== undefined && r.driverVerified !== null && <div><dt>Conducteur</dt><dd>{r.driverVerified ? 'Enregistré et affecté à cette moto' : 'Non vérifié pour cette moto'}</dd></div>}
         <div><dt>Heure de référence</dt><dd>{fmtDate(r.serverTime, true)} (serveur)</dd></div>
       </dl>
+      {r.fraude && (
+        <div className="callout callout-danger" role="alert" style={{ margin: 0 }} data-testid="tt-fraude">
+          <Icon name="ban" size={18} />
+          <p><strong>FRAUDE : {r.fraude.label}.</strong> Preuve bloquée à titre conservatoire ; dossier {r.fraude.caseId} transmis à l’anti-fraude. N’acceptez pas ce document ; aucune sanction sur place — la décision appartient à une personne habilitée.</p>
+        </div>
+      )}
       {r.constat && (
         <div className="callout callout-warn" style={{ margin: 0 }}>
           <Icon name="file" size={18} />
@@ -141,6 +155,8 @@ export default function Controle() {
   const [syncing, setSyncing] = useState(false);
   const [device, setDevice] = useState(() => ({ id: safeGet('mosolo.titres.deviceId') ?? 'dev-rakapay-01', key: safeGet('mosolo.titres.deviceKey') ?? 'demo-device-key-rakapay-01' }));
   const [sync, setSync] = useState<SyncResult | null>(null);
+  // Plaque RÉELLEMENT lue sur le véhicule (30/09/2026) : obligatoire pour un titre lié à une plaque.
+  const [plaqueLue, setPlaqueLue] = useState('');
   const constats = useApi(() => api<Constat[]>(`/v1/titres/constats${scope === '81' ? '?module=81' : ''}`), [user?.id, scope, result?.controlId]);
 
   useEffect(() => { if (user?.territory?.length && !user.territory.includes(commune)) setCommune(user.territory[0]!); }, [user, commune]);
@@ -165,10 +181,11 @@ export default function Controle() {
     const decoded = payload.startsWith('MT1.') ? decodeStatic(payload) : null;
     let body: Record<string, unknown>;
     let url = scope === '81' ? '/v1/rakapay/wewa/controles' : '/v1/titres/controles';
+    const lue = plaqueLue.trim();
     if (mode === 'plate') body = { plate: payload, place };
     else if (mode === 'vest' || decoded?.k === 'GILET') { body = { vest: payload, place }; url = '/v1/rakapay/wewa/controles'; }
     else if (decoded?.k === 'AUTOCOLLANT') { body = { sticker: payload, place }; url = '/v1/rakapay/wewa/controles'; }
-    else body = scope === '81' ? { qr: payload, place } : payload.startsWith('MD1.') || payload.startsWith('MT1.') ? { qr: payload, place } : { code: payload, place };
+    else body = scope === '81' ? { qr: payload, place, ...(lue ? { plate: lue } : {}) } : { ...(payload.startsWith('MD1.') || payload.startsWith('MT1.') ? { qr: payload } : { code: payload }), place, ...(lue ? { observedPlate: lue } : {}) };
     // Terminal enregistré (module 71) : l'identifiant configuré sur ce poste accompagne le contrôle en ligne.
     if (url === '/v1/titres/controles' && safeGet('mosolo.titres.deviceId')) body = { ...body, deviceId: device.id };
     return api<ControlView>(url, { method: 'POST', body });
@@ -190,8 +207,20 @@ export default function Controle() {
       const sig = await verifyStaticOffline(payload, pack.publicKeyPem);
       if (sig === false) invalid = 'QR non authentique (signature invalide ou QR malformé)';
       else if (sig !== true) unverifiable = true; // jamais VALIDE sans signature vérifiée
-      else if (pack.revocations.entries.some((e) => e.id === decoded.id)) invalid = 'Titre révoqué, suspendu, remplacé ou déjà utilisé';
-      else found = { plate: String(decoded.p ?? ''), number: String(decoded.n), validFrom: String(decoded.f), validUntil: String(decoded.u), toleranceMinutes: 0, amberMinutes: 120 };
+      else if (pack.revocations.entries.some((e) => e.id === decoded.id)) invalid = 'Titre révoqué, suspendu, remplacé ou déjà utilisé (paquet de l’équipe)';
+      else {
+        const model = pack.types?.find((t) => t.code === decoded.ty)?.model;
+        const deja = readJson<Memoire>(MEMOIRE_KEY, {})[String(decoded.id)];
+        const lue = plaqueLue.trim() ? normalizePlate(plaqueLue) : '';
+        if (decoded.p && !lue) throw new Error('Titre lié à une plaque : saisissez la plaque lue sur le véhicule.');
+        if (decoded.p && lue && lue !== String(decoded.p)) invalid = `Plaque différente : ce titre appartient à un autre véhicule (présenté sur ${lue}) — signalé à la synchronisation`;
+        else if (deja && model === 'USAGE_UNIQUE') invalid = `Déjà utilisé sur ce terminal le ${fmtDate(deja.at, true)}${deja.label ? ` — ${deja.label}` : ''}`;
+        else found = { plate: String(decoded.p ?? ''), number: String(decoded.n), validFrom: String(decoded.f), validUntil: String(decoded.u), toleranceMinutes: 0, amberMinutes: 120 };
+        if (found || invalid) {
+          const m = readJson<Memoire>(MEMOIRE_KEY, {});
+          if (!m[String(decoded.id)]) { m[String(decoded.id)] = { at: new Date(now).toISOString(), ...(place.label ? { label: place.label } : {}), ...(model ? { model } : {}) }; safeSet(MEMOIRE_KEY, JSON.stringify(m)); }
+        }
+      }
     } else invalid = mode === 'vest' || decoded?.k === 'GILET' ? 'Gilet : lisez la plaque ou l’autocollant hors ligne' : 'QR dynamique : contrôle en ligne uniquement';
     if (plate) found = pack.plates.plates.filter((p) => p.plate === plate).sort((a, b) => b.validUntil.localeCompare(a.validUntil))[0];
     let res: ControlView;
@@ -211,7 +240,7 @@ export default function Controle() {
       res = { ...res, ...(found.plate ? { plate: found.plate } : {}), typeLabel: found.number, validFrom: found.validFrom, validUntil: found.validUntil };
     }
     if ((plate || token) && user) {
-      persistQueue((q) => [...q, { opId: uid('op'), ownerId: user.id, ...(token ? { token } : { plate: plate! }), controlledAt: new Date(now).toISOString(), place: { ...(place.label ? { label: place.label } : {}), ...(gps ?? {}) }, offlineResult: res.result, note: res.text }]);
+      persistQueue((q) => [...q, { opId: uid('op'), ownerId: user.id, ...(token ? { token } : { plate: plate! }), ...(token && plaqueLue.trim() ? { observedPlate: normalizePlate(plaqueLue) } : {}), controlledAt: new Date(now).toISOString(), place: { ...(place.label ? { label: place.label } : {}), ...(gps ?? {}) }, offlineResult: res.result, note: res.text }]);
     }
     return res;
   }
@@ -229,7 +258,7 @@ export default function Controle() {
       setErr(describeError(ex).message);
     } finally { setBusy(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- justifié : dépendances volontairement restreintes aux valeurs listées (sinon boucle de rendu ou rechargement à chaque rendu)
-  }, [value, offline, mode, scope, place, pack, persistQueue]);
+  }, [value, offline, mode, scope, place, pack, persistQueue, plaqueLue]);
 
   async function downloadPack() {
     setErr(null);
@@ -253,6 +282,8 @@ export default function Controle() {
       // Ne retirer que les contrôles dont le serveur a rendu le résultat : ceux saisis pendant l'envoi restent en file.
       const done = new Set(r.results.map((x) => x.opId));
       setSync(r); persistQueue((q) => q.filter((c) => !done.has(c.opId))); constats.reload();
+      // Partage dans l'équipe : paquet signé rechargé (consommations et blocages des autres terminaux synchronisés).
+      void downloadPack();
     } catch (ex) { setErr(describeError(ex).message); } finally { setSyncing(false); }
   }
 
@@ -295,6 +326,8 @@ export default function Controle() {
                   <label className="label" htmlFor="tt-val">{mode === 'vest' ? 'Contenu du QR du gilet ou numéro de gilet' : 'Contenu du QR ou code court'}</label>
                   <textarea id="tt-val" className="tt-token-input" value={value} onChange={(e) => setValue(e.target.value)} placeholder={mode === 'vest' ? 'W-KAL-0001 ou MT1.…' : 'MD1.… (téléphone), MT1.… (papier, autocollant), WEW…'} rows={3} />
                   {scan ? <QrScanner onResult={(raw) => { setScan(false); onCode(raw); }} onClose={() => setScan(false)} /> : <button type="button" className="btn btn-secondary" onClick={() => setScan(true)}><Icon name="camera" size={18} /> Lire avec la caméra</button>}
+                  <label className="label" htmlFor="tt-plaque-lue" style={{ marginTop: 8 }}>Plaque lue sur le véhicule <span className="small muted">(obligatoire pour un titre lié à une plaque : un titre présenté sur un autre véhicule est bloqué)</span></label>
+                  <input id="tt-plaque-lue" className="tt-plate-input" value={plaqueLue} onChange={(e) => setPlaqueLue(e.target.value)} placeholder="KN-1234-AB" autoComplete="off" autoCapitalize="characters" data-testid="tt-plaque-lue" />
                 </div>
               )}
               <div className="tt-inline-fields">

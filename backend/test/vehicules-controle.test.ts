@@ -104,7 +104,8 @@ describe('Procès-verbal structuré et vignettes sécurisées', () => {
     const num = stock[0].number as string;
     const a = await env.req('POST', `/v1/vehicules/vignettes-securisees/${num}/attribution`, U.centre1, { pvId: p.id });
     expect(a.statusCode).toBe(200);
-    expect(a.json().qr).toBe(`https://verification.exemple.cd/v/ct/${num}`);
+    // QR signé (30/09/2026) : adresse officielle + signature liée au numéro et à la plaque.
+    expect(a.json().qr).toMatch(new RegExp(`^https://verification\\.exemple\\.cd/v/ct/${num}\\?s=[0-9a-f]{20}$`));
     const dup = await env.req('POST', `/v1/vehicules/vignettes-securisees/${num}/attribution`, U.centre1, { pvId: p.id });
     expect(dup.statusCode).toBe(409);
     expect(dup.json().code).toBe('VIGNETTE_DEJA_UTILISEE');
@@ -193,7 +194,7 @@ describe('Scan unique — vue hiérarchique, deux vignettes distinctes, mode cou
   it('scan par le QR de la vignette technique ; mode courtoisie : aucun constat (scan et moteur de titres)', async () => {
     const env = await setupVc();
     const sticker = env.svc.ct.stickers.find((s) => s.status === 'ATTRIBUEE')[0]!;
-    const byQr = (await env.req('POST', '/v1/vehicules/scan', U.controleur, { saisie: `https://verification.exemple.cd/v/ct/${sticker.number}`, place: { commune: 'Limete' } })).json();
+    const byQr = (await env.req('POST', '/v1/vehicules/scan', U.controleur, { saisie: `https://verification.exemple.cd/v/ct/${sticker.number}`, plaqueLue: sticker.plate, place: { commune: 'Limete' } })).json();
     expect(byQr.method).toBe('QR_VIGNETTE_TECHNIQUE');
     expect(byQr.plate).toBe(normalizePlate(VC_DEMO.plates.aJour));
     expect(byQr.controleTechnique.stickerNumber).toBe(sticker.number);

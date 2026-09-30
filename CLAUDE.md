@@ -135,3 +135,7 @@ données de démonstration.
 - **Agents de terrain rattachés (30/09/2026)** : R09/R10/R11 ne contrôlent, scannent et vérifient que dans leurs modules
   de rattachement (serveur : `MODULE_NON_RATTACHE` ; menu filtré) ; rattachement par l'administrateur de l'entité,
   journalisé — annexe I, § I.51. Interface en français tant que les traductions ne sont pas validées.
+- **Anti-fraude des preuves (30/09/2026)** : plaque lue obligatoire (écart ⇒ blocage conservatoire + dossier) ; QR animé
+  exigé pour les pass personnels ; copies détectées à chaque scan ; gilets par numéro refusés ; vignettes techniques
+  signées ; mémoire hors ligne ; chaîne de la fraude, instruction, décision par une personne distincte, recette perdue
+  facturée au titulaire — jamais de sanction automatique (annexe I, § I.52).

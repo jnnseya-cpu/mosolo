@@ -92,6 +92,8 @@ export const MODULE_ROUTES: ModuleRoute[] = [
 
   // Titres, RakaPay, pass wewa
   { path: '/titres/controle', element: lazy(() => import('./titres/Controle')), nav: { label: 'Contrôle des titres', short: 'Contrôle', icon: 'qr', group: 'operations', roles: ['R10', 'R11', 'R35'] } },
+  // Anti-fraude des preuves (30/09/2026) : dossiers, chaîne de la fraude, instruction et décision par des personnes distinctes.
+  { path: '/anti-fraude/preuves', element: lazy(() => import('./titres/FraudesPreuves')), nav: { label: 'Fraudes sur les preuves', short: 'Fraudes preuves', icon: 'shieldCheck', group: 'operations', roles: ['R24', 'R22', 'R23', 'R06', 'R07', 'R09'] } },
   { path: '/titres/catalogue', element: lazy(() => import('./titres/Catalogue')), nav: { label: 'Catalogue des titres', short: 'Titres', icon: 'ticket', group: 'public', roles: [] } },
   { path: '/rakapay/cooperative', element: lazy(() => import('./rakapay/Cooperative')), nav: { label: 'Espace coopérative wewa', short: 'Coopérative', icon: 'users', group: 'operations', roles: ['R30', 'R06', 'R07'] } },
   { path: '/rakapay/pilotage', element: lazy(() => import('./rakapay/Pilotage')), nav: { label: 'Pilotage RakaPay', short: 'RakaPay', icon: 'chart', group: 'pilotage', roles: ['R01', 'R02', 'R05', 'R06', 'R07', 'R22', 'R23', 'R24', 'R36'] } },

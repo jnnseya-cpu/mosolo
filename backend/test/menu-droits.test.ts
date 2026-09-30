@@ -180,6 +180,7 @@ const LECTURES: Record<string, string[]> = {
   '/terrain/supervision': ['/v1/terrain/indicators', '/v1/terrain/missions', '/v1/terrain/findings', '/v1/terrain/agents', '/v1/terrain/lots', '/v1/terrain/quality', '/v1/terrain/counter-visits'],
   '/titres/catalogue': ['/v1/titres/indicateurs', '/v1/titres/types'],
   '/titres/controle': ['/v1/titres/constats'],
+  '/anti-fraude/preuves': ['/v1/titres/fraudes'],
   '/transparence': ['/v1/public/transparency', '/v1/public/transparence/repartition/2026-09'],
   '/tresor': ['/v1/ledger/balance', '/v1/tresor/grand-livre/indicateurs', '/v1/beneficiary-accounts'],
   '/tresor/appariements': ['/v1/tresor/appariements'],

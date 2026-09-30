@@ -179,10 +179,10 @@ describe('Fiche 22 — carrières : bons à usage unique, comptage des sorties, 
     const slipB = titres(env).credentials.find((c) => c.subject.objectId === other.id)[0]!;
     expect(slip.model).toBe('USAGE_UNIQUE');
     const exit = (body: Record<string, unknown>) => env.req('POST', `/v1/verticales/fiches/carrieres/${site.id}/sorties`, U.fieldAgent, body);
-    const e1 = await exit({ code: slip.shortCode, volume_m3: '20' });
+    const e1 = await exit({ code: slip.shortCode, plate: 'KN-1111-AA', volume_m3: '20' });
     expect(e1.statusCode).toBe(201);
     expect(e1.json()).toMatchObject({ exit: { result: 'VALIDE' }, control: { result: 'VALIDE' } });
-    const e2 = (await exit({ code: slip.shortCode })).json();
+    const e2 = (await exit({ code: slip.shortCode, plate: 'KN-1111-AA' })).json();
     expect(e2.exit).toMatchObject({ result: 'INVALIDE', alreadyUsed: true });
     expect(e2.control.text).toBe('DÉJÀ UTILISÉ');
     expect(e2.control.constat.id).toBeTruthy();
