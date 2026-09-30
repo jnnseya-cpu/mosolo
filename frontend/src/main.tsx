@@ -17,7 +17,17 @@ import { flushPendingDrafts, hydrateDrafts } from './lib/drafts';
 
 captureInstallPrompt();
 try {
-  registerSW({ immediate: true });
+  // Nouvelle version publiée (30/09/2026) : vérification au retour sur l'onglet et toutes les 30 minutes ; la mise à jour
+  // automatique recharge alors la page, pour ne jamais garder d'anciens écrans après une mise en ligne.
+  registerSW({
+    immediate: true,
+    onRegisteredSW(_url, reg) {
+      if (!reg) return;
+      const verifier = () => { if (navigator.onLine) void reg.update().catch(() => undefined); };
+      window.setInterval(verifier, 30 * 60_000);
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') verifier(); });
+    },
+  });
 } catch {
   // Service worker indisponible (contexte isolé, stockage bloqué) : l'application fonctionne en ligne, sans hors-ligne.
 }

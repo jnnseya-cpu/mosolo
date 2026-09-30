@@ -1825,3 +1825,15 @@ marque ». Ajout (logos non modifiés : mise à l'échelle seule ; rien n'est re
 - Le modèle de courriel était déjà à la marque. Les SMS, USSD et fichiers de données (CSV, JSON) ne portent pas de logo
   (texte ou données brutes) ; les SMS nomment « Ville de Kinshasa — KINSHASA MOSOLO ».
 - Logos serveur générés par `tools/gen_brand_assets.py` depuis `frontend/public` (à relancer si un logo change).
+
+## I.49 Plus d'anciens écrans après une mise en ligne (30/09/2026)
+
+Constat du maître d'ouvrage : `…/demo/passerelle/koda?ref=…` affichait « Page introuvable » sur le lien en ligne. Cause :
+l'application (utilisable hors ligne) gardait l'ANCIENNE version dans le navigateur ; le serveur, déjà mis à jour,
+renvoyait l'adresse de la nouvelle page que l'ancienne version ne connaissait pas. Ajout :
+
+- sur une adresse inconnue, l'application vérifie une fois (par adresse et par session) si le serveur publie une version
+  plus récente ; si oui, elle vide son cache et se recharge (« Mise à jour de l'application… ») ; sinon, page 404
+  ordinaire ;
+- vérification d'une nouvelle version au retour sur l'onglet et toutes les 30 minutes (mise à jour automatique).
+Aucune donnée n'est concernée : le serveur reste la référence.
