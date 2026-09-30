@@ -121,3 +121,6 @@ données de démonstration.
   (`/demo/passerelle/…`, bandeau explicite, aucun logo) dont le webhook signé passe par la route réelle ; refusée dès
   qu'une vraie clé est configurée. Mise en service réelle : clés + adresse de webhook + « Tester la connexion » + un
   paiement de test (annexe I, § I.45).
+- **Redevance de contrôle technique (30/09/2026)** : liquidée à la prise de rendez-vous par la fiche ACTIVE, payée par
+  le circuit commun, jamais en espèces au centre ; le centre confirme le créneau après paiement. Tarif réel par
+  catégorie et compte bénéficiaire à confirmer (démo : barème fictif) — annexe I, § I.46.

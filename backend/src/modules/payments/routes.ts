@@ -219,6 +219,12 @@ export function registerPaymentRoutes(app: FastifyInstance, ctx: AppContext): vo
     return ctx.payments.paymentStatusFor(user, req.params.reference);
   });
 
+  // Changer de moyen de paiement (30/09/2026) : ferme la référence non payée du payeur, puis une nouvelle est demandée.
+  app.post<{ Params: { reference: string } }>('/v1/payment-orders/:reference/changer-moyen', async (req) => {
+    const user = requireUser(req);
+    return ctx.payments.changePaymentMethod(user, req.params.reference);
+  });
+
   // « Ce paiement a-t-il eu lieu ? » auprès du prestataire : pièce de dossier (legalEffect AUCUN).
   app.post<{ Params: { reference: string } }>('/v1/payment-orders/:reference/provider-resolution', async (req, reply) => {
     const user = requireUser(req);

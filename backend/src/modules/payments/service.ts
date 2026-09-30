@@ -84,7 +84,7 @@ export interface PaymentOrder {
 }
 
 /** Fermeture d'une référence INITIE sans paiement : état terminal ECHOUE de la table partagée, motif explicite. */
-export type OrderClosedReason = 'REFERENCE_EXPIREE' | 'OBLIGATION_REMPLACEE' | 'OBLIGATION_NON_PAYABLE' | 'ECHEC_PRESTATAIRE';
+export type OrderClosedReason = 'REFERENCE_EXPIREE' | 'OBLIGATION_REMPLACEE' | 'OBLIGATION_NON_PAYABLE' | 'ECHEC_PRESTATAIRE' | 'MOYEN_CHANGE';
 
 /**
  * Paiement reçu mais NON AFFECTÉ (doublon, référence expirée ou fermée, obligation déjà couverte, rectifiée ou
@@ -488,7 +488,9 @@ export class PaymentService {
     }
     const active = this.orders.findOne((x) => x.obligationId === obligationId && this.isActive(x, now));
     if (active) {
-      throw conflict('ACTIVE_PAYMENT_REFERENCE_EXISTS', `Une référence active existe déjà pour cette obligation.`, { paymentReference: active.paymentReference });
+      throw conflict('ACTIVE_PAYMENT_REFERENCE_EXISTS', `Une référence active existe déjà pour cette obligation.`, {
+        paymentReference: active.paymentReference, existing: orderView(active),
+      });
     }
     const beneficiaryAlias = this.vault.resolveAlias(obligation.beneficiaryAccountAlias);
     const accountVersion = this.vault.current(beneficiaryAlias)?.version;
@@ -622,6 +624,21 @@ export class PaymentService {
     const now = this.clock.now();
     return this.orders.find((x) => x.obligationId === obligationId && x.status === 'INITIE').map((o) =>
       this.closeOrder(o, new Date(o.expiresAt) <= now ? 'REFERENCE_EXPIREE' : 'OBLIGATION_NON_PAYABLE', actor, reason));
+  }
+
+  /**
+   * Changer de moyen de paiement (30/09/2026) : le payeur ferme SA référence non payée (INITIE → ECHOUE, motif
+   * MOYEN_CHANGE, journalisé) pour en obtenir une nouvelle avec un autre canal ou une autre passerelle. Un paiement
+   * tardif sur l'ancienne référence n'est jamais perdu : il va aux paiements non imputés (revue), comme une référence
+   * expirée. La règle « une seule référence active par obligation » est conservée.
+   */
+  changePaymentMethod(user: User, paymentReference: string): { closed: string; obligationId: string } {
+    const o = this.byReference(paymentReference);
+    if (!o) throw notFound('PAYMENT_REFERENCE_NOT_FOUND', 'Référence de paiement inconnue.');
+    authorize(user, 'payment.create', { taxpayerId: o.taxpayerId });
+    if (o.status !== 'INITIE') throw conflict('PAYMENT_ALREADY_PROCESSED', `Référence au statut ${o.status} : elle ne peut plus être remplacée.`);
+    this.closeOrder(o, 'MOYEN_CHANGE', { kind: 'user', id: user.id, roles: user.roles }, 'Changement de moyen de paiement demandé par le payeur');
+    return { closed: o.paymentReference, obligationId: o.obligationId };
   }
 
   /** Ferme une référence non payée (INITIE → ECHOUE, motif daté) et annule l'intention prestataire liée. */

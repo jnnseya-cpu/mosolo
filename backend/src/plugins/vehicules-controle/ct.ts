@@ -13,22 +13,35 @@
  * - Mode courtoisie : paramètre daté par catégorie et commune, décidé par l'autorité compétente et journalisé ; pendant
  *   la courtoisie, aucun constat ni procès-verbal de vignette n'est créé.
  */
+import { isRuleExecutable, type MoneyJSON } from '@mosolo/shared';
 import { validityView } from '../../core/validity.js';
 import type { User } from '../../core/auth.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../core/errors.js';
 import { authorize } from '../../core/policy.js';
 import { InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { taxpayerRecipient } from '../../modules/identity/recipients.js';
+import { enginePrincipal, paymentState } from '../parking/support.js';
 import type { CentresService } from './centres.js';
 import { addDays, type VcDeps } from './common.js';
 import type { DomaineService } from './domaine.js';
 import {
   CT_POINTS, PV_TRANSMISSION_MAX_MINUTES, VEHICLE_CATEGORIES, type CourtesyPeriod, type CtPoint, type CtPointResult, type CtResult, type ProcesVerbal, type SecureSticker, type StickerLot,
   type VehicleCategory,
+  RULE_CODES,
 } from './model.js';
 
 export interface VehicleRecord { id: string; plate: string; category: VehicleCategory; objectId?: string; taxpayerId?: string; commune?: string; source: 'OBJET_MOSOLO' | 'REGISTRE_RFCK' | 'CENTRE'; updatedAt: string }
-export interface Appointment { id: string; plate: string; centreId: string; date: string; taxpayerId: string; status: 'DEMANDE' | 'CONFIRME' | 'ANNULE'; createdAt: string; confirmedBy?: string }
+/**
+ * Redevance de contrôle technique liée au rendez-vous (30/09/2026) : liquidée à la prise de rendez-vous par la fiche
+ * ACTIVE du registre (RFCK-REDEVANCE-CT), payée par le circuit commun (référence, monnaie mobile, QR, USSD, banque,
+ * carte, point agréé, BitriPay ou KODA) vers le compte public — JAMAIS en espèces au centre. Sans fiche ACTIVE : aucun
+ * montant (« acte requis »), le rendez-vous suit son cours comme avant.
+ */
+export interface AppointmentFee {
+  status: 'LIQUIDEE' | 'ACTE_REQUIS' | 'VEHICULE_A_RATTACHER';
+  obligationId?: string; amount?: MoneyJSON; legalReference?: string; reason?: string;
+}
+export interface Appointment { id: string; plate: string; centreId: string; date: string; taxpayerId: string; status: 'DEMANDE' | 'CONFIRME' | 'ANNULE'; createdAt: string; confirmedBy?: string; fee?: AppointmentFee }
 
 /** Chiffre de contrôle (Luhn mod 10) d'un numéro de vignette sécurisée. */
 function checkDigit(digits: string): string {
@@ -324,9 +337,41 @@ export class CtService {
     if (!taxpayerId) throw unprocessable('VEHICULE_NON_RATTACHE', 'Véhicule non rattaché à votre compte.');
     this.centres.assertCanOperate(input.centreId, 'CONTROLE_TECHNIQUE', v?.category);
     if (input.date < this.d.today()) throw unprocessable('DATE_PASSEE', 'Date passée.');
-    const a = this.appointments.insert({ id: this.d.ids.next('RDV', 5), plate: this.d.plate(input.plate), centreId: input.centreId, date: input.date, taxpayerId, status: 'DEMANDE', createdAt: this.d.now() });
-    this.d.audit(user, 'vc.appointment.requested', 'rendez_vous_ct', a.id, { centreId: a.centreId, date: a.date });
-    return a;
+    const id = this.d.ids.next('RDV', 5);
+    const fee = this.liquidateFee(taxpayerId, v?.objectId, id);
+    const a = this.appointments.insert({ id, plate: this.d.plate(input.plate), centreId: input.centreId, date: input.date, taxpayerId, status: 'DEMANDE', createdAt: this.d.now(), fee });
+    this.d.audit(user, 'vc.appointment.requested', 'rendez_vous_ct', a.id, { centreId: a.centreId, date: a.date, fee: fee.status, obligationId: fee.obligationId ?? null });
+    return this.appointmentView(a);
+  }
+
+  /** Liquidation de la redevance par la fiche ACTIVE (moteur de liquidation, jamais un montant saisi). */
+  private liquidateFee(taxpayerId: string, objectId: string | undefined, appointmentId: string): AppointmentFee {
+    const now = this.d.ctx.clock.now();
+    const versions = this.d.ctx.rules.list().filter((r) => r.code === RULE_CODES.redevanceCt).sort((a, b) => b.version - a.version);
+    const rule = versions.find((r) => isRuleExecutable(r, now).ok);
+    if (!rule) return { status: 'ACTE_REQUIS', reason: versions.length ? `Aucune version ACTIVE de la redevance (dernière : v${versions[0]!.version} ${versions[0]!.status}) : aucun montant tant que l'acte n'est pas certifié.` : 'Fiche de redevance absente du registre.' };
+    if (!objectId) return { status: 'VEHICULE_A_RATTACHER', reason: 'Véhicule à rattacher à votre compte (objet véhicule) avant liquidation de la redevance.' };
+    const known: Record<string, string> = { quantite: '1', nombre: '1' };
+    const required = this.d.ctx.rules.requiredInputs(rule);
+    const missing = required.filter((k) => !(k in known));
+    if (missing.length) return { status: 'ACTE_REQUIS', reason: `Donnée requise par la fiche non disponible : ${missing.join(', ')}.` };
+    const engine = enginePrincipal('svc-controle-technique', `Liquidation de la redevance — rendez-vous ${appointmentId}`, rule.administeringEntity);
+    const r = this.d.ctx.assessment.calculate(engine, { ruleId: rule.id, taxpayerId, objectId, inputs: Object.fromEntries(required.map((k) => [k, known[k]!])), simulate: false });
+    return { status: 'LIQUIDEE', obligationId: r.obligation!.id, amount: r.obligation!.amount, legalReference: `${rule.code} v${rule.version} — ${rule.articles.join(' ; ')}` };
+  }
+
+  /** Rendez-vous avec l'état RÉEL du paiement de sa redevance (lu dans le grand livre, jamais déclaré par le centre). */
+  appointmentView(a: Appointment) {
+    const pay = a.fee?.obligationId ? paymentState(this.d.ctx, a.fee.obligationId) : null;
+    const paye = !a.fee?.obligationId || (pay !== null && ['PAYE', 'RAPPROCHE'].includes(pay.state));
+    return {
+      ...a,
+      ...(pay ? { feePayment: pay } : {}),
+      redevancePayee: paye,
+      notice: a.fee?.status === 'LIQUIDEE'
+        ? 'Redevance payable depuis « Mon espace » (monnaie mobile, QR, USSD, banque, carte, point agréé, BitriPay ou KODA) vers le compte public. Aucun paiement en espèces au centre : le centre confirme le créneau dès que le paiement est confirmé.'
+        : 'Aucune redevance liquidée pour ce rendez-vous (fiche non active) : aucun paiement ne peut vous être demandé au centre.',
+    };
   }
 
   confirmAppointment(user: User, id: string): Appointment {
@@ -334,6 +379,10 @@ export class CtService {
     const a = this.appointments.get(id);
     if (!a) throw notFound('RDV_INCONNU', `Rendez-vous inconnu : ${id}`);
     this.centres.assertMember(user, a.centreId);
+    // Redevance liquidée : le créneau n'est confirmé qu'une fois le paiement confirmé par le circuit commun (30/09/2026).
+    if (a.fee?.obligationId && !this.appointmentView(a).redevancePayee) {
+      throw conflict('REDEVANCE_NON_PAYEE', 'Redevance de contrôle technique non encore payée : le créneau est confirmé dès la confirmation du paiement (jamais d’encaissement au centre).');
+    }
     const out = this.appointments.update({ ...a, status: 'CONFIRME', confirmedBy: user.id });
     this.d.audit(user, 'vc.appointment.confirmed', 'rendez_vous_ct', id, {});
     return out;

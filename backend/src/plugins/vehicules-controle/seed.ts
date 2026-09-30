@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
 import { DEMO } from '../../seed.js';
+import { DEMO_INSTRUMENT, DGTK_ALIAS, publishDemoRule } from '../parking/support.js';
 import { addDays } from './common.js';
 import { ARRETE_CT, CT_POINTS, MODULES_VEHICULES, NOTE_NUMEROTATION, RFCK, RULE_CODES, type CtPointResult } from './model.js';
 import type { VehiculesControleService } from './service.js';
@@ -66,6 +67,19 @@ export function seedVehicules(ctx: AppContext, svc: VehiculesControleService): v
     sheet(RULE_CODES.gardiennage, 'Frais de gardiennage (fourrière)', 'Jours de garde entamés, comptés depuis les horodatages d’entrée et de sortie', 'jours * tarif_jour'),
   ];
   for (const s of sheets) if (!ctx.rules.rules.find((r) => r.code === s.code).length) ctx.rules.rules.insert({ ...s, createdAt: at, sample: true } as never);
+  // Redevance de contrôle technique — version de DÉMONSTRATION (30/09/2026) publiée par le circuit réel (quatre visas),
+  // barème FICTIF et non opposable, pour montrer le paiement lié au rendez-vous. La fiche v1 « à vérifier » est conservée ;
+  // le tarif réel sera celui de l'acte certifié (à confirmer par le maître d'ouvrage). Compte de démonstration.
+  publishDemoRule(ctx, {
+    code: RULE_CODES.redevanceCt, revenueCategory: 'REDEVANCE_SERVICE',
+    label: 'DÉMONSTRATION — redevance de contrôle technique (barème fictif, non opposable)',
+    legalInstrumentIds: [DEMO_INSTRUMENT], articles: ['Article 1 (fictif)'], competentAuthority: 'Ministère provincial des Transports et de la Mobilité urbaine (démonstration)',
+    administeringEntity: RFCK.id, taxableEvent: 'Contrôle technique d’un véhicule (démonstration)', liableParty: 'Propriétaire ou détenteur du véhicule',
+    baseDefinition: 'Un contrôle × tarif fictif de démonstration', formula: 'quantite * tarif', rateTable: { tarif: '35000' },
+    currency: 'CDF', rounding: 'HALF_UP', periodicity: 'PONCTUELLE', dueRule: 'Avant la date du rendez-vous (démonstration)',
+    exemptions: [], penalties: [], effectiveFrom: today, beneficiaryAccountAlias: DGTK_ALIAS,
+    appealPath: 'Réclamation auprès de la RFCK via MOSOLO (démonstration)', sourceVerification: 'OFFICIEL_CERTIFIE',
+  });
 
   // Espace d'entité RFCK et fiches des trois modules (module d'accès, s'il est chargé).
   const acces = ctx.ext['acces'] as { entities?: { get(id: string): unknown; insert(x: unknown): unknown }; modules?: { get(id: string): unknown; insert(x: unknown): unknown } } | undefined;

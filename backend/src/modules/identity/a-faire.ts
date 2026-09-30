@@ -92,6 +92,12 @@ function ligne(e: CompteElement, now: Date, dejaCouverte: (obligationId: string)
   if (e.rubrique === 'QUITTANCE') {
     return s === 'PROVISOIRE' ? { ...base, groupe: 'EN_VERIFICATION', urgence: 'NORMALE', etat: 'CONFIRMATION_BANCAIRE', action: { libelle: 'Voir la quittance', lien: '/espace#sec-rc' } } : null;
   }
+  // Démarche payante (30/09/2026) : rendez-vous de contrôle technique — la redevance se paie ici, jamais en espèces au
+  // centre ; une fois payée, le centre confirme le créneau.
+  if (e.rubrique === 'DEMARCHE' && e.obligationId && s === 'DEMANDE') {
+    if (dejaCouverte(e.obligationId)) return { ...base, groupe: 'EN_VERIFICATION', urgence: 'NORMALE', etat: 'PAYE_ATTENTE_CENTRE', action: { libelle: 'Voir la quittance', lien: '/espace#sec-rc' } };
+    return { ...base, groupe: 'A_FAIRE', urgence: 'BIENTOT', etat: 'REDEVANCE_A_PAYER', action: { libelle: 'Payer la redevance', lien: '/espace', obligationId: e.obligationId } };
+  }
   // Démarches : compléter si l'administration le demande ; sinon suivre.
   if (A_COMPLETER.includes(s)) return { ...base, groupe: 'A_FAIRE', urgence: 'BIENTOT', action: { libelle: 'Répondre ou compléter', lien } };
   if (EN_COURS.includes(s)) return { ...base, groupe: 'EN_VERIFICATION', urgence: 'NORMALE', action: { libelle: 'Suivre', lien } };
@@ -115,7 +121,8 @@ const RANG_URGENCE = { EN_RETARD: 0, BIENTOT: 1, NORMALE: 2 } as const;
 export function aFaire(sections: CompteSection[], now: Date, dejaCouverte: (obligationId: string) => boolean = () => false) {
   const elements = sections.flatMap((s) => s.elements);
   // Une obligation déjà portée par un constat ou un dossier (paiement direct sur cette ligne) n'est pas répétée.
-  const portees = new Set(elements.filter((e) => e.rubrique === 'ARRIERE' && e.obligationId).map((e) => e.obligationId!));
+  // Idem pour une démarche payante (rendez-vous de contrôle technique et sa redevance, 30/09/2026).
+  const portees = new Set(elements.filter((e) => (e.rubrique === 'ARRIERE' || e.rubrique === 'DEMARCHE') && e.obligationId).map((e) => e.obligationId!));
   const lignes = elements.filter((e) => !(e.rubrique === 'OBLIGATION' && portees.has(e.id))).map((e) => ligne(e, now, dejaCouverte)).filter((l): l is LigneAFaire => !!l);
   const tri = (a: LigneAFaire, b: LigneAFaire) => RANG_URGENCE[a.urgence] - RANG_URGENCE[b.urgence] || (a.echeance ?? '9999').localeCompare(b.echeance ?? '9999');
   const groupe = (g: GroupeAFaire) => lignes.filter((l) => l.groupe === g).sort(tri);

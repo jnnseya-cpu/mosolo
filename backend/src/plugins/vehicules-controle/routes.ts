@@ -94,12 +94,12 @@ export function registerVehiculesRoutes(app: FastifyInstance, s: VehiculesContro
   // ——— Couche usager ———
   app.get('/v1/vehicules/mes-vehicules', async (req) => s.myVehicles(U(req)));
   app.post('/v1/vehicules/rendez-vous', async (req, reply) => reply.code(201).send(s.ct.book(U(req), parse(z.object({ plate: t(3, 20), centreId: t(3, 60), date: isoDateString }).strict(), req.body))));
-  app.post<{ Params: { id: string } }>('/v1/vehicules/rendez-vous/:id/confirmation', async (req) => s.ct.confirmAppointment(U(req), req.params.id));
+  app.post<{ Params: { id: string } }>('/v1/vehicules/rendez-vous/:id/confirmation', async (req) => s.ct.appointmentView(s.ct.confirmAppointment(U(req), req.params.id)));
   app.get('/v1/vehicules/rendez-vous', async (req) => {
     const u = U(req);
-    if (u.roles.includes('R34')) { authorize(u, 'vc:appointment.confirm'); return { items: s.ct.appointments.find((a) => a.centreId === u.entity) }; }
+    if (u.roles.includes('R34')) { authorize(u, 'vc:appointment.confirm'); return { items: s.ct.appointments.find((a) => a.centreId === u.entity).map((a) => s.ct.appointmentView(a)) }; }
     authorize(u, 'vc:vehicle.own', { ...(u.taxpayerId ? { taxpayerId: u.taxpayerId } : {}) });
-    return { items: s.ct.appointments.find((a) => a.taxpayerId === u.taxpayerId) };
+    return { items: s.ct.appointments.find((a) => a.taxpayerId === u.taxpayerId).map((a) => s.ct.appointmentView(a)) };
   });
 
   // ——— Fourrières ———

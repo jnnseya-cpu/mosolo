@@ -25,7 +25,7 @@ export function contribuerCompteUnique(ctx: AppContext, svc: VehiculesControleSe
             statut: pv ? pv.result : 'AUCUN_CONTROLE', ...(pv?.echeance ? { echeance: pv.echeance } : {}), lien: '/vehicules/mes-vehicules',
           };
         }),
-        ...svc.ct.appointments.find((a) => a.taxpayerId === tp).map((a) => ({ rubrique: 'DEMARCHE' as const, id: a.id, libelle: `Rendez-vous de contrôle technique ${a.plate} (${a.date})`, nature: 'RENDEZ_VOUS', statut: a.status, date: a.createdAt, lien: '/vehicules/mes-vehicules' })),
+        ...svc.ct.appointments.find((a) => a.taxpayerId === tp).map((a) => ({ rubrique: 'DEMARCHE' as const, id: a.id, libelle: `Rendez-vous de contrôle technique ${a.plate} (${a.date})`, nature: 'RENDEZ_VOUS', statut: a.status, date: a.createdAt, lien: '/vehicules/mes-vehicules', ...(a.fee?.obligationId ? { obligationId: a.fee.obligationId } : {}), ...(a.fee?.amount ? { montant: a.fee.amount } : {}) })),
         ...svc.fourriere.dossiers.find((x) => x.taxpayerId === tp).map((x) => ({ rubrique: 'ARRIERE' as const, id: x.id, libelle: `Dossier de fourrière ${x.plate}`, nature: 'FOURRIERE', statut: x.status, date: x.constat.at, ...(x.objectId ? { objectId: x.objectId } : {}), lien: '/vehicules/fourrieres' })),
       ];
     },

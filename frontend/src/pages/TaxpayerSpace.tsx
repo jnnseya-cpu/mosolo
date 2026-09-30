@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { isCurrencyCode, CURRENCIES, formatMoney, type CurrencyCode, type MapStatusColor, type MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../context';
@@ -215,8 +215,21 @@ function PayFlow({ ob }: { ob: Obligation }) {
   const [reused, setReused] = useState(false);
   const display: CurrencyCode | undefined = currency !== ob.amount.currency && isCurrencyCode(currency) && CURRENCIES[currency].payable ? currency : undefined;
 
-  async function go(e: FormEvent) {
-    e.preventDefault();
+  // Référence déjà active avec un AUTRE moyen que celui choisi (30/09/2026) : on le dit, et on propose d'en changer.
+  const [autreMoyen, setAutreMoyen] = useState(false);
+  const libelleMoyen = (o: { channel?: string; provider?: string }) => `${tr(CHANNELS.find((c) => c.id === o.channel)?.key ?? 'pay.chooseChannel')}${o.provider ? ` via ${o.provider === 'bitripay' ? 'BitriPay' : 'KODA'}` : ''}`;
+  async function changerDeMoyen() {
+    if (!order) return;
+    setBusy(true); setErr(null);
+    try {
+      await api(`/v1/payment-orders/${encodeURIComponent(order.paymentReference)}/changer-moyen`, { method: 'POST', body: {} });
+      setOrder(null); setReused(false); setAutreMoyen(false);
+      await go();
+    } catch (x) { setErr(describeError(x).message); setBusy(false); }
+  }
+
+  async function go(e?: FormEvent) {
+    e?.preventDefault();
     setBusy(true); setErr(null);
     try {
       const r = await api<PaymentOrder>(`/v1/obligations/${encodeURIComponent(ob.id)}/payment-orders`, {
@@ -232,8 +245,10 @@ function PayFlow({ ob }: { ob: Obligation }) {
         const b = x.body as Partial<PaymentOrder> & { existing?: Partial<PaymentOrder> };
         const ref = b.paymentReference ?? b.existing?.paymentReference;
         if (ref) {
-          setOrder({ ...(b.existing ?? {}), paymentReference: ref, amount: b.amount ?? b.existing?.amount ?? ob.amount, status: b.status ?? b.existing?.status ?? 'INITIE' } as PaymentOrder);
+          const ex = { ...(b.existing ?? {}), paymentReference: ref, amount: b.amount ?? b.existing?.amount ?? ob.amount, status: b.status ?? b.existing?.status ?? 'INITIE' } as PaymentOrder;
+          setOrder(ex);
           setReused(true);
+          setAutreMoyen(!!ex.channel && (ex.channel !== channel || (ex.provider ?? '') !== (providerAllowed ? provider : '')));
           return;
         }
       }
@@ -281,7 +296,18 @@ function PayFlow({ ob }: { ob: Obligation }) {
         </form>
       ) : (
         <div className="result-card" role="status">
-          {reused && <p className="notice notice-ok">{tr('pay.reused')}</p>}
+          {reused && !autreMoyen && <p className="notice notice-ok">{tr('pay.reused')}</p>}
+          {reused && autreMoyen && (
+            <div className="callout callout-warn" role="alert" data-testid="pay-autre-moyen">
+              <Icon name="info" size={18} />
+              <div className="stack-sm">
+                <p>Une référence est déjà ouverte pour cette obligation avec un autre moyen : <strong>{libelleMoyen(order)}</strong>. Les étapes ci-dessous sont celles de ce moyen.</p>
+                <p className="small">Vous préférez <strong>{libelleMoyen({ channel, ...(providerAllowed && provider ? { provider } : {}) })}</strong> ? L’ancienne référence est fermée (si vous l’aviez déjà payée, le paiement n’est jamais perdu : il est examiné et imputé) et une nouvelle vous est donnée.</p>
+                <div><button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void changerDeMoyen()} data-testid="pay-changer-moyen">Utiliser plutôt {libelleMoyen({ channel, ...(providerAllowed && provider ? { provider } : {}) })}</button></div>
+                {err && <p className="notice notice-err" role="alert">{err}</p>}
+              </div>
+            </div>
+          )}
           <p className="label">{tr('payment.reference')}</p>
           <p className="ref-big mono">{order.paymentReference}</p>
           <dl className="kv">
@@ -412,6 +438,15 @@ export default function TaxpayerSpace() {
     const ob = obligations.find((o) => o.id === wanted);
     if (ob) setPanel({ kind: 'explain', ob });
   }, [wanted, obligations]);
+  // Paiement direct depuis un autre écran de l'usager (ex. redevance d'un rendez-vous de contrôle technique) :
+  // « /espace?payer=<obligationId> » ouvre le choix du moyen de paiement, une seule fois.
+  const aPayer = params.get('payer');
+  const payerOuvert = useRef<string | null>(null);
+  useEffect(() => {
+    if (!aPayer || !p || payerOuvert.current === aPayer) return;
+    payerOuvert.current = aPayer;
+    void ouvrir('pay', aPayer);
+  });
 
   return (
     <div className="page">

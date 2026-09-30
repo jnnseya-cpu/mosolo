@@ -148,4 +148,26 @@ describe('Canaux de paiement du contribuable, de bout en bout', () => {
     delete process.env.MOSOLO_DEMO_MODE;
     expect((await env.req('GET', '/v1/demo/passerelle/koda?ref=X-1', 'u-contribuable')).statusCode).not.toBe(200);
   });
+  it('changer de moyen de paiement : la référence existante indique son moyen ; le payeur la ferme et obtient une nouvelle référence (BitriPay)', async () => {
+    const env = await setup('demo-secret-mm-operator-a', true);
+    const ob = obligation(env);
+    const pay = (body: unknown) => env.req('POST', `/v1/obligations/${ob}/payment-orders`, 'u-contribuable', body, { 'idempotency-key': randomUUID() });
+    const first = await pay({ channel: 'MOBILE_MONEY' });
+    expect(first.statusCode, first.body).toBe(201);
+    const again = await pay({ channel: 'MOBILE_MONEY', provider: 'bitripay' });
+    expect(again.json().code).toBe('ACTIVE_PAYMENT_REFERENCE_EXISTS');
+    expect(again.json().existing).toMatchObject({ paymentReference: first.json().paymentReference, channel: 'MOBILE_MONEY' });
+    // Un autre usager ne peut pas fermer la référence d'autrui.
+    expect((await env.req('POST', `/v1/payment-orders/${first.json().paymentReference}/changer-moyen`, 'u-locataire', {})).statusCode).toBe(403);
+    const ch = await env.req('POST', `/v1/payment-orders/${first.json().paymentReference}/changer-moyen`, 'u-contribuable', {});
+    expect(ch.statusCode, ch.body).toBe(200);
+    expect(env.app.ctx.payments.byReference(first.json().paymentReference)).toMatchObject({ status: 'ECHOUE', closedReason: 'MOYEN_CHANGE' });
+    const second = await pay({ channel: 'MOBILE_MONEY', provider: 'bitripay' });
+    expect(second.statusCode, second.body).toBe(201);
+    expect(second.json()).toMatchObject({ provider: 'bitripay', channel: 'MOBILE_MONEY' });
+    expect(second.json().paymentReference).not.toBe(first.json().paymentReference);
+    // Une référence déjà payée ne peut plus être remplacée.
+    await env.req('POST', `/v1/demo/passerelle/bitripay/payer`, 'u-contribuable', { paymentReference: second.json().paymentReference, operateur: 'mpesa_cd' });
+    expect((await env.req('POST', `/v1/payment-orders/${second.json().paymentReference}/changer-moyen`, 'u-contribuable', {})).json().code).toBe('PAYMENT_ALREADY_PROCESSED');
+  });
 });

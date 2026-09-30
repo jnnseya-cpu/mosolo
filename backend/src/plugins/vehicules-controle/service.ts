@@ -97,7 +97,7 @@ export class VehiculesControleService {
           plate, identification: view.identification, vignetteFiscale: view.vignetteFiscale, taxeCirculation: view.taxeCirculation, controleTechnique: view.controleTechnique,
           autorisationTransport: view.autorisationTransport, quitus: view.quitus,
           fourriere: this.fourriere.byTaxpayer(taxpayerId).filter((x) => x.plate === plate),
-          appointments: this.ct.appointments.find((a) => a.plate === plate && a.taxpayerId === taxpayerId),
+          appointments: this.ct.appointments.find((a) => a.plate === plate && a.taxpayerId === taxpayerId).map((a) => this.ct.appointmentView(a)),
           attestation: this.ct.status(plate).pv ? { number: this.ct.status(plate).pv!.number, result: this.ct.status(plate).pv!.result, echeance: this.ct.status(plate).pv!.echeance } : null,
         };
       }),

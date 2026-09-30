@@ -1766,3 +1766,42 @@ clés et le webhook tout fonctionne ». Ajout (rien n'est retiré) :
   de production ; (5) contrôler la quittance provisoire, puis le rapprochement. Les noms de champs non encore confirmés
   par les prestataires restent listés dans `connectors/a-confirmer.ts` : tout écart constaté au test (4) se corrige dans
   le connecteur, jamais en assouplissant un contrôle.
+
+## I.46 Redevance de contrôle technique payée à la prise de rendez-vous — jamais en espèces au centre (30/09/2026)
+
+Remarque du maître d'ouvrage : « rien n'est gratuit : comment le rendez-vous se paie-t-il ? En espèces au centre ? ».
+Réponse et ajout (rien n'est retiré) :
+
+- **Jamais d'espèces au centre** : la prise de rendez-vous (`POST /v1/vehicules/rendez-vous`) **liquide la redevance** par
+  la fiche ACTIVE du registre `RFCK-REDEVANCE-CT` (moteur de liquidation, jamais un montant saisi) ; l'obligation reçoit
+  sa référence de paiement et se paie par le **circuit commun** — monnaie mobile, QR, USSD, banque, carte, point agréé,
+  BitriPay ou KODA — vers le compte public ; quittance provisoire, puis définitive au rapprochement ; répartition par le
+  moteur unique. Le suivi est celui de toute recette (grand livre, référence, quittance).
+- **Usager** : « Mes véhicules » affiche, par rendez-vous, le montant et l'état (« à payer » / « payée ») avec **Payer la
+  redevance** (ouvre le choix du moyen de paiement dans « Mon espace », `/espace?payer=<obligation>`) ; « À faire »
+  porte une seule ligne « Payer la redevance » (l'obligation n'est pas répétée).
+- **Centre agréé** : écran « Contrôle technique » → « Rendez-vous du centre » ; **Confirmer le créneau** n'est possible
+  qu'une fois le paiement confirmé (état lu dans le grand livre ; refus `REDEVANCE_NON_PAYEE` sinon). Le centre
+  n'encaisse jamais rien.
+- **Sans fiche ACTIVE** (cas réel tant que l'acte tarifaire n'est pas certifié) : aucun montant (« acte requis »),
+  aucun paiement ne peut être demandé et le rendez-vous suit son cours comme avant.
+- **Démonstration** : une version v2 **fictive** de la fiche (« DÉMONSTRATION — barème fictif, non opposable », 35 000 CDF,
+  quatre visas du circuit réel) montre le parcours ; la fiche v1 « à vérifier » est conservée. **Le tarif réel, par
+  catégorie de véhicule, et le compte bénéficiaire (RFCK) restent à confirmer par le maître d'ouvrage.**
+- Principe général : toute démarche payante (rendez-vous, autorisation, prestation) suit ce même schéma —
+  fiche ACTIVE → obligation → référence → paiement numérique → quittance → rapprochement.
+
+## I.47 Changer de moyen de paiement : la référence ouverte n'est plus « réutilisée » avec les étapes d'un autre canal (30/09/2026)
+
+Constat du maître d'ouvrage (lien en ligne) : choisir successivement monnaie mobile, banque, USSD, BitriPay puis KODA pour
+la même obligation affichait toujours la MÊME référence (règle « une seule référence active par obligation », conservée),
+avec les étapes du canal nouvellement coché — et BitriPay / KODA n'étaient jamais atteints. Correction :
+
+- Le refus `ACTIVE_PAYMENT_REFERENCE_EXISTS` renvoie la référence ouverte **avec son moyen** (canal, passerelle, page de
+  paiement) ; l'écran affiche les étapes de CE moyen, et dit clairement qu'une référence est déjà ouverte avec un autre
+  moyen.
+- **« Utiliser plutôt <moyen choisi> »** : `POST /v1/payment-orders/:reference/changer-moyen` (payeur de l'ordre
+  seulement) ferme la référence non payée (INITIE → ECHOUE, motif `MOYEN_CHANGE`, journalisé, intention du prestataire
+  annulée) et une nouvelle référence est émise avec le moyen choisi (BitriPay / KODA : page de paiement). Un paiement
+  tardif sur l'ancienne référence n'est jamais perdu (paiements non imputés → revue). Une référence déjà payée ne peut
+  pas être remplacée (`PAYMENT_ALREADY_PROCESSED`).

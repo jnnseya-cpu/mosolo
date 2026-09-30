@@ -181,7 +181,8 @@ describe('Scan unique — vue hiérarchique, deux vignettes distinctes, mode cou
     const lines = (await env.req('GET', `/v1/vehicules/${VC_DEMO.plates.echu}/lignes-de-recettes`, U.chef)).json().lines;
     expect(lines.map((l: { code: string }) => l.code)).toEqual(REVENUE_LINES.map((l) => l.code));
     expect(lines.find((l: { code: string }) => l.code === 'VIGNETTE_FISCALE').state).toBe('PAYEE');
-    expect(lines.find((l: { code: string }) => l.code === 'REDEVANCE_CT').state).toBe('ACTE_REQUIS');
+    // Démonstration : fiche v2 fictive ACTIVE (30/09/2026, rendez-vous payant) ; sans fiche ACTIVE l'état reste ACTE_REQUIS.
+    expect(lines.find((l: { code: string }) => l.code === 'REDEVANCE_CT').state).toBe('SELON_FICHE');
     // Décision de l'agent enregistrée (identité, position, horodatage).
     const d = await env.req('POST', `/v1/vehicules/scans/${v.scanId}/decision`, U.controleur, { decision: 'INFORMATION_USAGER', motif: 'Contre-visite conseillée', position: { lat: -4.3, lon: 15.3 } });
     expect(d.statusCode).toBe(201);

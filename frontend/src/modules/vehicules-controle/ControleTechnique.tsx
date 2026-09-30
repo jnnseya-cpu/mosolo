@@ -19,6 +19,7 @@ import { CtVisuels } from './visuels';
 interface Pv { id: string; number: string; plate: string; category: string; centreId: string; result: string; echeance: string; endedAt: string; supersededBy?: string; incoherence?: string; demo?: boolean }
 interface Ref { points: { code: string; label: string }[]; categories: { code: string; label: string }[]; phases2026: { code: string; label: string; date: string; statut: string }[] }
 interface Courtesy { id: string; categories: string[]; communes: string[]; from: string; to: string; authority: string; decisionRef: string; reason: string; exemple?: boolean }
+interface Rdv { id: string; plate: string; date: string; status: string; redevancePayee?: boolean; fee?: { status: string; amount?: { amount: string; currency: string }; reason?: string }; feePayment?: { state: string; paymentReference?: string } }
 interface Sticker { number: string; centreId: string; status: string; plate?: string }
 
 export default function ControleTechnique() {
@@ -29,8 +30,9 @@ export default function ControleTechnique() {
   const stickers = useApi(() => api<{ items: Sticker[] }>('/v1/vehicules/vignettes-securisees'), [user?.id]);
   const courtesy = useApi(() => api<{ items: Courtesy[] }>('/v1/vehicules/courtoisie'), [user?.id]);
   const reload = () => { ind.reload(); pvs.reload(); stickers.reload(); courtesy.reload(); };
-  const r = useRunner(reload);
+  const r = useRunner(() => { reload(); rdvs.reload(); });
   const isCentre = hasRole(user?.roles, 'R34');
+  const rdvs = useApi(isCentre ? () => api<{ items: Rdv[] }>('/v1/vehicules/rendez-vous') : null, [user?.id, isCentre]);
   const [plate, setPlate] = useState('');
   const [category, setCategory] = useState('PARTICULIER');
   const [inspecteur, setInspecteur] = useState('');
@@ -70,6 +72,21 @@ export default function ControleTechnique() {
             ]} />
           )}
         </Section>
+
+        {/* Rendez-vous du centre (30/09/2026) : confirmation du créneau après paiement de la redevance — état lu dans le
+            grand livre ; le centre n'encaisse jamais rien. */}
+        {isCentre && (
+          <Section title="Rendez-vous du centre" sub="Le créneau se confirme une fois la redevance payée par l’usager (circuit commun). Aucun encaissement au centre.">
+            {rdvs.error ? <ErrorState error={rdvs.error} onRetry={rdvs.reload} /> : (
+              <DataTable caption="Rendez-vous" rows={rdvs.data?.items ?? []} rowKey={(a) => a.id} empty={<EmptyState title="Aucun rendez-vous" icon="car" />} columns={[
+                { key: 'p', label: 'Plaque', primary: true, render: (a) => <><strong>{a.plate}</strong><span className="small muted" style={{ display: 'block' }}>{a.id} · {a.date}</span></> },
+                { key: 'f', label: 'Redevance', render: (a) => a.fee?.amount ? <>{Number(a.fee.amount.amount).toLocaleString('fr-FR')} {a.fee.amount.currency} — <StateBadge state={a.redevancePayee ? 'A_JOUR' : 'EN_ATTENTE'} label={a.redevancePayee ? 'Payée' : 'Non payée'} /></> : <span className="small muted">{a.fee?.reason ?? 'Aucune redevance liquidée'}</span> },
+                { key: 's', label: 'État', render: (a) => <StateBadge state={a.status} /> },
+                { key: 'a', label: 'Action', render: (a) => a.status === 'DEMANDE' ? <button type="button" className="btn btn-primary btn-sm" disabled={r.busy || !a.redevancePayee} title={a.redevancePayee ? undefined : 'En attente du paiement de la redevance'} onClick={() => void r.run(`/v1/vehicules/rendez-vous/${a.id}/confirmation`, {}, 'Créneau confirmé.')}>Confirmer le créneau</button> : null },
+              ]} />
+            )}
+          </Section>
+        )}
 
         {isCentre && ref.data && (
           <Section title="Transmettre un procès-verbal (centre agréé)" sub="À transmettre au moment du contrôle : un procès-verbal tardif est refusé.">

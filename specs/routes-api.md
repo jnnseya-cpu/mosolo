@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1601 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1602 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -48,7 +48,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1601 routes** dans 5
 | module identity | 6 |
 | module integrations | 7 |
 | module objects | 2 |
-| module payments | 14 |
+| module payments | 15 |
 | module receipts | 2 |
 | module rules | 26 |
 | module system | 3 |
@@ -1826,6 +1826,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1601 routes** dans 5
 | GET | `/v1/demo/passerelle/:provider` |
 | POST | `/v1/demo/passerelle/:provider/payer` |
 | POST | `/v1/obligations/:id/payment-orders` |
+| POST | `/v1/payment-orders/:reference/changer-moyen` |
 | POST | `/v1/payment-orders/:reference/provider-resolution` |
 | POST | `/v1/payment-orders/:reference/provider-verification-evidence` |
 | GET | `/v1/payment-orders/:reference/status` |
