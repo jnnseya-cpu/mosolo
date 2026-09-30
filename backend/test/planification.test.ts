@@ -286,7 +286,7 @@ describe('Projets publics et emploi des fonds (§ 27.2–27.3)', () => {
     const rec = await env.req('POST', '/v1/pilotage/projets/recommandations', 'u-ministre-finances', { period: '2026-T3', currency: 'USD', legalFundSource: 'Recettes propres rapprochées (fictif)' });
     expect(rec.statusCode).toBe(201);
     const batch = rec.json();
-    expect(batch.scenarios).toHaveLength(3);
+    expect(batch.scenarios).toHaveLength(4);
     const sc = batch.scenarios.find((x: { items: { code: string }[] }) => x.items.some((i) => i.code === 'LIM-ECL-01'));
     expect(sc).toMatchObject({ status: 'PROPOSE', proposedBy: { kind: 'ai', agent: 'ALLOCATION' }, available: { amount: '150.00', currency: 'USD' } });
     const item = sc.items.find((i: { code: string }) => i.code === 'LIM-ECL-01');

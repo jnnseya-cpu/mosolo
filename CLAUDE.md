@@ -147,5 +147,6 @@ données de démonstration.
   confirmer », sinon arbitrage motivé par une personne distincte) ; compte démo KIN-DGRK-MM-01 libellé « ancienne DGRK
   (historique) » ; **objectif de la plateforme : les recettes** — ni section ni projet pour le programme routier ; l'écran
   « Emploi des recettes — suggestions de l'IA » (ex-« Projets publics ») ne crée pas de projets : l'IA ne suggère
-  qu'à partir des besoins de Kinshasa recensés par les services et des recettes réellement générées. Répartition officielle DGIPK / DGTK attendue du
+  qu'à partir des besoins de Kinshasa recensés par les services, des **écarts de collecte par commune** (liquidé −
+  rapproché, besoins de recouvrement sans dépense) et des recettes réellement générées. Répartition officielle DGIPK / DGTK attendue du
   Gouvernorat (annexe I, § I.54).

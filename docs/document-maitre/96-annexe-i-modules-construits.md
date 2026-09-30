@@ -1951,5 +1951,13 @@ provinciaux) et **DGTK** (droits, taxes et redevances de la Ville) ; 160 km de r
   (rapprochées)**. L'IA ne crée aucun projet, n'invente aucun besoin (sans besoin recensé : « Aucun besoin recensé »),
   n'approuve aucune dépense et ne déplace aucun franc ; sa notice rappelle ces deux seules bases. Décision humaine
   motivée inchangée.
+- **Écarts de collecte par commune = besoins** (consigne du maître d'ouvrage, 30/09/2026) : à chaque demande de
+  scénarios, l'IA calcule par commune le liquidé échu sur la période (obligations non annulées, dans la devise) moins
+  le rapproché, le taux de recouvrement et, quand une assignation est certifiée pour l'exercice, l'écart à
+  l'assignation. Ces écarts sont des **besoins de recouvrement** (relances, contrôle de terrain ciblé, enrôlement) : ils
+  ne consomment aucun franc du scénario et toute action reste décidée par une personne. Une quatrième logique de
+  classement, « Besoins des communes aux plus forts écarts de collecte », ordonne les besoins recensés selon l'écart de
+  leurs communes. Sans besoin recensé ni écart : aucune suggestion. Écran : tableau « Écarts de collecte par commune
+  (besoins) » ; aucune donnée individuelle.
 - **En attente du Gouvernorat** : la liste officielle des recettes relevant de la DGIPK et de la DGTK (acte de
   répartition) ; elle remplacera la table par défaut et fixera l'entité administrante des fiches concernées.

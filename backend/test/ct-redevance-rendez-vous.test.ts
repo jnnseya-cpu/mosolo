@@ -54,3 +54,12 @@ describe('Rendez-vous de contrôle technique : redevance payée par le circuit c
     expect(c2.json()).toMatchObject({ status: 'CONFIRME', redevancePayee: true });
   });
 });
+
+describe('Redevance CT de démonstration — date d’effet au jour de Kinshasa', () => {
+  it('démarrage entre 23 h et minuit UTC (déjà le lendemain à Kinshasa) : la règle de démonstration est publiée sans erreur', async () => {
+    const { buildApp: build } = await import('../src/app.js');
+    const { ManualClock: Clock } = await import('../src/core/clock.js');
+    const { DEFAULT_PLUGINS: plugins } = await import('../src/plugins/index.js');
+    expect(() => build({ clock: new Clock('2026-09-30T23:30:00.000Z'), seed: true, plugins, secrets: { auditHmacKey: 'k', providerSecrets: {}, commsProviderKeys: {} } })).not.toThrow();
+  });
+});

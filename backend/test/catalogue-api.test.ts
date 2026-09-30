@@ -375,7 +375,7 @@ describe('Catalogue des API — terrain, recours, alertes, pilotage', () => {
     const rec = await env.req('POST', '/v1/affectations/scenarios', 'u-ministre-finances', { period: '2026-T3', currency: 'USD', legalFundSource: 'Recettes propres rapprochées (fictif)' });
     expect(rec.statusCode, rec.body).toBe(201);
     // Scénarios PROPOSÉS par l'IA ; la décision appartient à l'autorité ; aucune dépense exécutée.
-    expect(rec.json().scenarios).toHaveLength(3);
+    expect(rec.json().scenarios).toHaveLength(4);
     expect(rec.json().scenarios.every((sc: { status: string; proposedBy: { kind: string } }) => sc.status === 'PROPOSE' && sc.proposedBy.kind === 'ai')).toBe(true);
     expect(env.app.ctx.audit.list({ action: 'pilotage.fund_scenario.proposed', limit: 5 }).items.length).toBeGreaterThan(0);
     expect(env.app.ctx.ledger.balance()).toEqual(ledger);

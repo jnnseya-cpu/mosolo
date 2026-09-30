@@ -26,7 +26,7 @@ import {
   additionalGrossMinor, addDays, amountsOf, EXEMPLE_ILLUSTRATIF, BASELINE_METRICS, dayCount, HYPOTHESIS_VARIABLES, INSTRUCTION_ORIGINS, MATURITY, meetsThreshold, moneyOfMinor, parseEntriesCsv,
   pickHypothesis, PILOT_COMMUNES, PILOT_COMMUNES_46, PILOT_CRITERIA, PILOT_CRITERIA_46, PILOT_MILESTONES, PILOT_SEQUENCE_46, PROCUREMENT, PROJECT_DOMAINS, prorate, RANV_COMPONENTS, SCENARIO_CODES, SCENARIOS,
   selectEntries, SLA_KINDS, tenths, validateEntry,
-  type BaselineEntry, type BaselineSet, type FundScenario, type FundScenarioItem, type Hypothesis, type HypothesisVariable, type Instruction, type InstructionOrigin,
+  type BaselineEntry, type BaselineSet, type CollectionGapNeed, type FundScenario, type FundScenarioItem, type Hypothesis, type HypothesisVariable, type Instruction, type InstructionOrigin,
   type Maturity, type Milestone, type Procurement, type ProjectDomain, type PublicProject, type RanvComponent, type ScenarioCode, type SetKind, type SlaAgreement,
   type SlaKind, type SlaRequest, type TargetEntry, type TargetSet,
 } from './model.js';
@@ -846,6 +846,38 @@ export class PlanificationService implements PilotagePlanningHooks {
    * Recommandation d'emploi des fonds (agent d'allocation) : PROPOSE jusqu'à trois scénarios classés sur les fonds
    * RAPPROCHÉS de la période. N'approuve aucune dépense, ne déplace aucun franc (§ 27.2, limite de l'IA d'affectation).
    */
+  /**
+   * Écarts de collecte par commune sur la période (besoins, consigne du 30/09/2026) : obligations échues sur la période,
+   * non annulées, dans la devise ; rapproché = paiements rapprochés de ces obligations ; écart à l'assignation certifiée
+   * de l'exercice en complément. Communes sans écart omises ; classement par écart décroissant. Aucune donnée individuelle.
+   */
+  collectionGaps(facts: Facts, currency: CurrencyCode, range: { from: string; to: string }): CollectionGapNeed[] {
+    const known = new Set<string>(COMMUNES as readonly string[]);
+    const obs = facts.obligations.filter((o) => !o.cancelled && o.amount.currency === currency && known.has(o.commune) && o.dueDate >= range.from && o.dueDate <= range.to);
+    const communeOf = new Map(obs.map((o) => [o.id, o.commune]));
+    const assessed = new Map<string, bigint>(); const reconciled = new Map<string, bigint>();
+    for (const o of obs) assessed.set(o.commune, (assessed.get(o.commune) ?? 0n) + minorOf(o.amount));
+    for (const o of facts.orders) {
+      const c = communeOf.get(o.obligationId);
+      if (!c || !isReconciled(o) || o.amount.currency !== currency) continue;
+      reconciled.set(c, (reconciled.get(c) ?? 0n) + minorOf(o.amount));
+    }
+    const t = this.certifiedTargets(range.from.slice(0, 4));
+    const targetGap = new Map<string, bigint>();
+    if (t) for (const r of this.gaps(t, {}).rows) if (r.gap.currency === currency) targetGap.set(r.commune, (targetGap.get(r.commune) ?? 0n) + minorOf(r.gap));
+    const pct = (a: bigint, b: bigint) => (b > 0n ? (() => { const q = (a * 2000n + b) / (2n * b); return `${q / 10n}.${q % 10n}`; })() : null);
+    return [...assessed.entries()]
+      .map(([commune, a]) => ({ commune, a, r: reconciled.get(commune) ?? 0n }))
+      .map((x) => ({ ...x, g: x.a > x.r ? x.a - x.r : 0n }))
+      .filter((x) => x.g > 0n)
+      .sort((x, y) => (y.g > x.g ? 1 : y.g < x.g ? -1 : x.commune.localeCompare(y.commune, 'fr')))
+      .map((x, i) => ({
+        rank: i + 1, commune: x.commune, assessed: moneyOfMinor(x.a, currency), reconciled: moneyOfMinor(x.r, currency), gap: moneyOfMinor(x.g, currency), recoveryPct: pct(x.r, x.a),
+        targetGap: targetGap.has(x.commune) ? moneyOfMinor(targetGap.get(x.commune)!, currency) : null,
+        suggestion: 'Réduire l’écart de collecte : relances, contrôle de terrain ciblé et enrôlement dans la commune (aucune dépense ; décision par une personne).',
+      }));
+  }
+
   recommend(user: User, input: { period: string; currency: CurrencyCode; legalFundSource: string }) {
     this.gate(user, 'project.recommend');
     const range = periodRange(input.period);
@@ -873,15 +905,20 @@ export class PlanificationService implements PilotagePlanningHooks {
     const candidates = this.projects.find((p) => ['PROPOSE', 'RETENU'].includes(p.status) && p.cost.currency === input.currency);
     // Consigne du 30/09/2026 : l'IA ne suggère qu'à partir des besoins recensés par les services et des recettes générées ;
     // elle n'invente ni ne crée aucun projet.
-    if (candidates.length === 0) throw conflict('NO_CANDIDATE', `Aucun besoin recensé (proposé ou retenu) en ${input.currency} : l’IA ne suggère qu’à partir des besoins recensés par les services.`);
+    // Écarts de collecte par commune : besoins à part entière (30/09/2026).
+    const collectionGaps = this.collectionGaps(facts, input.currency, range);
+    if (candidates.length === 0 && collectionGaps.length === 0) throw conflict('NO_CANDIDATE', `Aucun besoin recensé (proposé ou retenu) ni écart de collecte en ${input.currency} : l’IA ne suggère qu’à partir des besoins recensés par les services et des écarts de collecte.`);
+    const gapOf = new Map(collectionGaps.map((g) => [g.commune, minorOf(g.gap)]));
+    const gapShare = (p: PublicProject) => p.communes.reduce((a, c) => a + (gapOf.get(c) ?? 0n), 0n);
     const share = (p: PublicProject) => p.communes.reduce((a, c) => a + (byCommune.get(c) ?? 0n), 0n);
     const variants: { variant: string; label: string; sort: (a: PublicProject, b: PublicProject) => number; factors: (p: PublicProject) => { label: string; value: string }[] }[] = [
       { variant: 'MATURITE', label: 'Priorité à la maturité des projets', sort: (a, b) => MATURITY[b.maturity] - MATURITY[a.maturity] || (minorOf(a.cost) < minorOf(b.cost) ? -1 : 1), factors: (p) => [{ label: 'Maturité', value: p.maturity }] },
       { variant: 'CONTRIBUTION', label: 'Lien visible impôt payé – service rendu (communes contributrices)', sort: (a, b) => (share(b) > share(a) ? 1 : share(b) < share(a) ? -1 : 0), factors: (p) => [{ label: 'Rapproché des communes du projet', value: moneyOfMinor(share(p), input.currency).amount }] },
+      { variant: 'ECARTS_COLLECTE', label: 'Besoins des communes aux plus forts écarts de collecte', sort: (a, b) => (gapShare(b) > gapShare(a) ? 1 : gapShare(b) < gapShare(a) ? -1 : 0), factors: (p) => [{ label: 'Écart de collecte des communes du besoin', value: moneyOfMinor(gapShare(p), input.currency).amount }] },
       { variant: 'COUT_RECURRENT', label: 'Soutenabilité : coût récurrent le plus faible', sort: (a, b) => (minorOf(a.recurringCost) < minorOf(b.recurringCost) ? -1 : minorOf(a.recurringCost) > minorOf(b.recurringCost) ? 1 : 0), factors: (p) => [{ label: 'Coût récurrent', value: p.recurringCost.amount }] },
     ];
     const batchId = this.ids.next('LOT');
-    const notice = 'Suggestions fondées uniquement sur les besoins de Kinshasa recensés par les services et sur les recettes réellement générées (rapprochées) ; l’IA ne crée aucun projet. L’IA propose des scénarios classés ; elle n’approuve aucune dépense et ne déplace aucun franc. La décision appartient aux autorités budgétaires (collecte → comptabilité → partage légal → Trésor → budget → autorisation → engagement → dépense).';
+    const notice = 'Suggestions fondées uniquement sur les besoins de Kinshasa recensés par les services, les écarts de collecte par commune (liquidé − rapproché) et les recettes réellement générées (rapprochées) ; l’IA ne crée aucun projet. L’IA propose des scénarios classés ; elle n’approuve aucune dépense et ne déplace aucun franc. La décision appartient aux autorités budgétaires (collecte → comptabilité → partage légal → Trésor → budget → autorisation → engagement → dépense).';
     const out = variants.map((v) => {
       let left = available;
       const items: FundScenarioItem[] = [];
@@ -899,11 +936,12 @@ export class PlanificationService implements PilotagePlanningHooks {
         id: this.ids.next('SCEN'), batchId, variant: v.variant, label: v.label, currency: input.currency, period: input.period, available: moneyOfMinor(available, input.currency),
         availableBasis: `Recettes rapprochées (niveau 9) de ${input.period} ; source légale : ${input.legalFundSource}. La disponibilité budgétaire (niveau 11) relève du budget voté. ${budgetBasis}`,
         items, unallocated: moneyOfMinor(left, input.currency), proposedBy: { kind: 'ai', agent: 'ALLOCATION' }, proposedAt: this.now(), requestedBy: user.id, status: 'PROPOSE', notice,
+        collectionGaps,
       });
       this.audit({ kind: 'ai', id: 'agent:ALLOCATION' }, 'pilotage.fund_scenario.proposed', 'fund_scenario', s.id, { requestedBy: user.id, variant: v.variant, items: items.length, available: s.available });
       return s;
     });
-    return { batchId, notice, scenarios: out };
+    return { batchId, notice, collectionGaps, scenarios: out };
   }
 
   /** Décision humaine motivée sur un scénario (retenu ou écarté) : aucun effet financier. */

@@ -432,6 +432,23 @@ export interface FundScenarioItem {
   maturity: string; recurringCost: MoneyJSON; procurement: string; risks: string; approvalAuthority: string; legalFundSource: string;
   proposedAmount: MoneyJSON; rank: number; factors: { label: string; value: string }[];
 }
+/**
+ * Écart de collecte d'une commune, traité comme un BESOIN (consigne du maître d'ouvrage, 30/09/2026) : liquidé (échu
+ * sur la période, non annulé) − rapproché ; écart à l'assignation certifiée en complément quand elle existe. Besoin de
+ * recouvrement : il ne consomme aucun franc du scénario ; l'action suggérée reste décidée par une personne.
+ */
+export interface CollectionGapNeed {
+  rank: number;
+  commune: string;
+  assessed: MoneyJSON;
+  reconciled: MoneyJSON;
+  gap: MoneyJSON;
+  recoveryPct: string | null;
+  /** Assignation certifiée − rapproché (même devise), si une assignation est certifiée pour l'exercice. */
+  targetGap: MoneyJSON | null;
+  suggestion: string;
+}
+
 export interface FundScenario {
   id: string;
   batchId: string;
@@ -449,4 +466,6 @@ export interface FundScenario {
   status: 'PROPOSE' | 'RETENU' | 'ECARTE';
   decision?: { by: string; at: string; motif: string };
   notice: string;
+  /** Écarts de collecte par commune, traités comme des besoins (30/09/2026). */
+  collectionGaps?: CollectionGapNeed[];
 }

@@ -7,6 +7,7 @@
 import { createHash } from 'node:crypto';
 import type { AppContext } from '../../context.js';
 import type { User } from '../../core/auth.js';
+import { kinshasaDay } from '../../core/clock.js';
 import { DEMO } from '../../seed.js';
 import { DEMO_INSTRUMENT, DGTK_ALIAS, publishDemoRule } from '../parking/support.js';
 import { addDays } from './common.js';
@@ -44,7 +45,7 @@ function sheet(code: string, label: string, baseDefinition: string, formula: str
 
 export function seedVehicules(ctx: AppContext, svc: VehiculesControleService): void {
   const at = ctx.clock.now().toISOString();
-  const today = at.slice(0, 10);
+  const today = kinshasaDay(at); // jour de Kinshasa (UTC+1) : la date d'effet ne précède jamais la publication, même entre 23 h et minuit UTC
   const U = VC_DEMO.users;
   const add = (u: Parameters<AppContext['users']['add']>[0]) => { if (!ctx.users.get(u.id)) ctx.users.add(u); };
   add({ id: U.dg, name: 'Direction générale — RFCK (démo)', roles: ['R06'], entity: RFCK.id });

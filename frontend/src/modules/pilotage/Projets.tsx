@@ -25,7 +25,8 @@ import { BarresParDevise, etatsDe, lignesCompte, nombre, Tuiles, Visuels } from 
 import type { Indicator } from '../decision/commun';
 
 interface Project { id: string; code: string; title: string; domain: string; communes: string[]; beneficiaries: string; expectedResult: string; maturity: string; cost: MoneyJSON; recurringCost: MoneyJSON; procurement: string; risks: string; approvalAuthority: string; legalFundSource: string; status: string; progressPct?: string; funding?: { decisionReference: string }; example?: boolean }
-interface FundScenario { id: string; label: string; variant: string; period: string; available: MoneyJSON; availableBasis: string; unallocated: MoneyJSON; status: string; notice: string; items: { projectId: string; code: string; title: string; communes: string[]; proposedAmount: MoneyJSON; rank: number; maturity: string; recurringCost: MoneyJSON; procurement: string; beneficiaries: string; approvalAuthority: string; factors: { label: string; value: string }[] }[]; decision?: { by: string; motif: string } }
+interface FundScenario { id: string; label: string; variant: string; period: string; available: MoneyJSON; availableBasis: string; unallocated: MoneyJSON; status: string; notice: string; items: { projectId: string; code: string; title: string; communes: string[]; proposedAmount: MoneyJSON; rank: number; maturity: string; recurringCost: MoneyJSON; procurement: string; beneficiaries: string; approvalAuthority: string; factors: { label: string; value: string }[] }[]; decision?: { by: string; motif: string }; collectionGaps?: CollectionGap[] }
+interface CollectionGap { rank: number; commune: string; assessed: MoneyJSON; reconciled: MoneyJSON; gap: MoneyJSON; recoveryPct: string | null; targetGap: MoneyJSON | null; suggestion: string }
 interface ListResponse { domains: Record<string, string>; maturity: Record<string, number>; procurement: Record<string, string>; items: Project[]; scenarios: FundScenario[]; envelopes?: Envelope[]; indicators?: Indicator[] }
 
 export const PROJECT_STATUS: Record<string, { label: string; tone: Tone }> = {
@@ -77,7 +78,7 @@ export default function Projets() {
   const decide = hasRole(user?.roles, 'R01', 'R05');
   return (
     <div className="page page-wide">
-      <PageHead eyebrow="Pilotage · § 27.2–27.3" title="Emploi des recettes — suggestions de l’IA" lead="L’IA suggère l’emploi des recettes réellement générées (rapprochées) pour répondre aux besoins de Kinshasa recensés par les services. Elle ne crée aucun projet, n’approuve aucune dépense et ne déplace aucun franc." />
+      <PageHead eyebrow="Pilotage · § 27.2–27.3" title="Emploi des recettes — suggestions de l’IA" lead="L’IA suggère l’emploi des recettes réellement générées (rapprochées) pour répondre aux besoins de Kinshasa : besoins recensés par les services et écarts de collecte par commune. Elle ne crée aucun projet, n’approuve aucune dépense et ne déplace aucun franc." />
       <Callout><strong>L’IA propose, l’autorité décide.</strong> Les montants disponibles sont les recettes rapprochées ; la disponibilité budgétaire (niveau 11) relève du budget voté.</Callout>
       <Notice msg={r.msg} />
       {q.loading && !q.data ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : q.data && (
@@ -103,10 +104,20 @@ export default function Projets() {
               <Field label="Motif de décision (10 caractères minimum)" value={motif} onChange={setMotif} />
             </div>
           </Section>
-          <Section title="Suggestions de l’IA : emploi des recettes générées" sub="À partir des seules recettes rapprochées et des besoins recensés ; trois logiques de classement ; décision humaine motivée ; aucun effet financier">
+          <Section title="Écarts de collecte par commune (besoins)" sub="Liquidé échu sur la période − rapproché, par commune, calculé par l’IA à chaque demande de scénarios ; écart à l’assignation certifiée quand elle existe. Besoin de recouvrement : aucune dépense ; action décidée par une personne.">
+            <DataTable caption="Écarts de collecte par commune" rows={q.data.scenarios[0]?.collectionGaps ?? []} rowKey={(g) => g.commune} empty={<EmptyState title="Aucun écart de collecte calculé" icon="analysis">Demandez des scénarios : l’IA calcule les écarts de la période.</EmptyState>} columns={[
+              { key: 'c', label: 'Commune', primary: true, render: (g) => <><strong>{g.rank}. {g.commune}</strong><span className="small muted" style={{ display: 'block' }}>{g.suggestion}</span></> },
+              { key: 'l', label: 'Liquidé', num: true, render: (g) => moneyText(g.assessed) },
+              { key: 'r', label: 'Rapproché', num: true, render: (g) => moneyText(g.reconciled) },
+              { key: 'e', label: 'Écart de collecte', num: true, render: (g) => <strong>{moneyText(g.gap)}</strong> },
+              { key: 't', label: 'Taux de recouvrement', num: true, render: (g) => (g.recoveryPct ? `${g.recoveryPct} %` : '—') },
+              { key: 'a', label: 'Écart à l’assignation', num: true, render: (g) => (g.targetGap ? moneyText(g.targetGap) : 'non certifiée') },
+            ]} />
+          </Section>
+          <Section title="Suggestions de l’IA : emploi des recettes générées" sub="À partir des seules recettes rapprochées, des besoins recensés et des écarts de collecte par commune ; quatre logiques de classement ; décision humaine motivée ; aucun effet financier">
             <DataTable caption="Scénarios" rows={q.data.scenarios} rowKey={(s) => s.id} empty={<EmptyState title="Aucun scénario proposé" icon="analysis" />} columns={[
               { key: 'l', label: 'Scénario', primary: true, render: (s) => <><strong>{s.label}</strong><span className="small muted" style={{ display: 'block' }}>{s.period} · disponible {moneyText(s.available)} · non affecté {moneyText(s.unallocated)}</span></> },
-              { key: 'i', label: 'Projets classés', render: (s) => <ol className="small">{s.items.map((it) => <li key={it.projectId}>{it.title} — {moneyText(it.proposedAmount)} ({it.communes.join(', ')} ; {it.maturity} ; récurrent {moneyText(it.recurringCost)} ; {it.procurement} ; {it.approvalAuthority})</li>)}</ol> },
+              { key: 'i', label: 'Besoins classés', render: (s) => <ol className="small">{s.items.map((it) => <li key={it.projectId}>{it.title} — {moneyText(it.proposedAmount)} ({it.communes.join(', ')} ; {it.maturity} ; récurrent {moneyText(it.recurringCost)} ; {it.procurement} ; {it.approvalAuthority})</li>)}</ol> },
               { key: 's', label: 'Décision', render: (s) => (s.status !== 'PROPOSE' ? <StatusBadge tone={s.status === 'RETENU' ? 'good' : 'neutral'} label={s.status === 'RETENU' ? 'Retenu' : 'Écarté'} /> : decide ? (
                 <div className="btn-row">
                   <button type="button" className="btn btn-primary btn-sm" disabled={r.busy || motif.trim().length < 10} onClick={() => void r.run(`/v1/pilotage/projets/scenarios/${s.id}/decision`, { retain: true, motif }, 'Scénario retenu (aucun transfert).')}>Retenir</button>
