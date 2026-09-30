@@ -48,6 +48,7 @@ describe('Module 48 — recommandation d’investissement public', () => {
     expect(rec.scenarios[0].available.amount).toBe('1.00');
     expect(rec.scenarios[0].availableBasis).toMatch(/Enveloppe du budget voté/);
     expect(rec.notice).toMatch(/n’approuve aucune dépense/);
+    expect(rec.notice).toMatch(/uniquement sur les besoins de Kinshasa recensés par les services et sur les recettes réellement générées/); // consigne du 30/09/2026
     await req('POST', `/v1/pilotage/projets/scenarios/${rec.scenarios[0].id}/decision`, 'u-gouverneur', { retain: true, motif: 'Scénario retenu par l’autorité (test)' });
     const list = (await req('GET', '/v1/pilotage/projets', 'u-gouverneur')).json();
     expect(list.indicators.find((i: { code: string }) => i.code === 'SCENARIOS_PRODUITS').value).toBe('3');

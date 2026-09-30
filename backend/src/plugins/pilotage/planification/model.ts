@@ -425,13 +425,6 @@ export interface PublicProject {
   createdAt: string;
   history: { at: string; by: string; action: string; text?: string }[];
   example?: boolean;
-  /**
-   * Coût non encore communiqué (30/09/2026) : le projet figure dans la liste, mais l'agent d'allocation ne le classe
-   * dans aucun scénario tant qu'un coût confirmé n'est pas saisi (un coût nul fausserait le classement).
-   */
-  costToConfirm?: boolean;
-  /** Source d'un projet annoncé (communiqué, acte) et état de confirmation des chiffres. */
-  announcement?: { source: string; status: string; figures: { label: string; value: string }[] };
 }
 
 export interface FundScenarioItem {

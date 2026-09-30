@@ -1941,13 +1941,15 @@ provinciaux) et **DGTK** (droits, taxes et redevances de la Ville) ; 160 km de r
   Rien n'est supprimé : les lots, l'historique et leur provenance e-DGRK restent consultables.
 - **Compte de démonstration** `KIN-DGRK-MM-01` : alias et entité inchangés, libellé « Ancienne DGRK (historique, avant la
   réforme DGIPK / DGTK) — compte marchand public (démo) ».
-- **Programme routier du Gouvernorat — un projet parmi les autres** (décision du maître d'ouvrage, 30/09/2026 : « la
-  plateforme est un système de recettes ; pas de section propre à ce programme ») : il figure dans « Projets publics et
-  emploi des fonds », dont l'agent d'allocation (IA) propose des scénarios, sous le code `GOUV-ROUTES` (domaine Voirie)
-  avec ses chiffres annoncés (160 km livrés, plus de 600 km en cours — à confirmer). Son coût n'ayant pas été communiqué,
-  il est marqué « coût à confirmer » : l'IA le cite (« non classés faute de coût confirmé ») sans le classer — un coût
-  nul fausserait le classement. Une personne habilitée saisit le coût confirmé (`POST /v1/pilotage/projets/:id/cout`,
-  motif, journalisé) ; le projet devient alors classable. Aucun chiffre inventé ; aucune dépense ni affectation
-  automatique. L'écran dédié proposé un moment n'a pas été retenu.
+- **Programme routier du Gouvernorat — ni section ni projet** (décisions du maître d'ouvrage, 30/09/2026 : « la
+  plateforme ne doit pas dévier de son objectif ; elle ne crée pas de projets et ne se concentre pas sur des projets ;
+  l'agent d'IA ne suggère qu'à partir des besoins de Kinshasa et des recettes générées »). L'écran dédié puis le projet
+  `GOUV-ROUTES` proposés un moment n'ont pas été retenus ; aucune donnée du programme routier n'est enregistrée.
+- **Emploi des recettes — suggestions de l'IA** (écran `/pilotage/projets`, anciennement « Projets publics et emploi des
+  fonds », § 27.2–27.3 ; mêmes routes, mêmes données, mêmes contrôles) : présenté comme la liste des **besoins de
+  Kinshasa recensés par les services** et les **suggestions de l'IA** pour l'emploi des **recettes réellement générées
+  (rapprochées)**. L'IA ne crée aucun projet, n'invente aucun besoin (sans besoin recensé : « Aucun besoin recensé »),
+  n'approuve aucune dépense et ne déplace aucun franc ; sa notice rappelle ces deux seules bases. Décision humaine
+  motivée inchangée.
 - **En attente du Gouvernorat** : la liste officielle des recettes relevant de la DGIPK et de la DGTK (acte de
   répartition) ; elle remplacera la table par défaut et fixera l'entité administrante des fiches concernées.

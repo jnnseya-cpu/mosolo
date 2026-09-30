@@ -145,7 +145,7 @@ données de démonstration.
 - **Réforme de la DGRK (30/09/2026)** : DGRK remplacée par DGIPK (impôts provinciaux) et DGTK (droits, taxes et
   redevances) ; les dossiers repris de l'e-DGRK sont aiguillés (fiche du registre, sinon table « par défaut — à
   confirmer », sinon arbitrage motivé par une personne distincte) ; compte démo KIN-DGRK-MM-01 libellé « ancienne DGRK
-  (historique) » ; **pas de section propre au programme routier** (système de recettes) : il figure comme projet
-  `GOUV-ROUTES` dans « Projets publics et emploi des fonds » (propositions de l'IA), chiffres annoncés à confirmer, coût
-  « à confirmer » — l'IA le cite sans le classer tant qu'une personne n'a pas saisi le coût. Répartition officielle DGIPK / DGTK attendue du
+  (historique) » ; **objectif de la plateforme : les recettes** — ni section ni projet pour le programme routier ; l'écran
+  « Emploi des recettes — suggestions de l'IA » (ex-« Projets publics ») ne crée pas de projets : l'IA ne suggère
+  qu'à partir des besoins de Kinshasa recensés par les services et des recettes réellement générées. Répartition officielle DGIPK / DGTK attendue du
   Gouvernorat (annexe I, § I.54).

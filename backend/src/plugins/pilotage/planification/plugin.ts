@@ -180,7 +180,6 @@ export const planificationPlugin = definePlugin<PlanificationService>({
       return reply.code(201).send(svc.recommend(requireUser(req), { period: b.period, currency: b.currency as CurrencyCode, legalFundSource: b.legalFundSource }));
     });
     app.post<{ Params: { id: string } }>('/v1/pilotage/projets/scenarios/:id/decision', async (req) => svc.decideScenario(requireUser(req), req.params.id, parse(scenarioDecisionSchema, req.body)));
-    app.post<{ Params: { id: string } }>('/v1/pilotage/projets/:id/cout', async (req) => svc.confirmCost(requireUser(req), req.params.id, parse(z.object({ cost: moneySchema, recurringCost: moneySchema, motif }).strict(), req.body)));
     app.post<{ Params: { id: string } }>('/v1/pilotage/projets/:id/financement', async (req) => svc.recordFunding(requireUser(req), req.params.id, parse(fundingSchema, req.body) as Parameters<PlanificationService['recordFunding']>[2]));
     app.post<{ Params: { id: string } }>('/v1/pilotage/projets/:id/avancement', async (req) => svc.recordProgress(requireUser(req), req.params.id, parse(progressSchema, req.body)));
   },

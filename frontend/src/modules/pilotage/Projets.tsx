@@ -1,4 +1,8 @@
 /**
+ * Emploi des recettes — suggestions de l'IA (§ 27.2–27.3 ; consigne du maître d'ouvrage du 30/09/2026 : la plateforme
+ * est un système de recettes, elle ne crée pas de projets ; l'IA ne suggère qu'à partir des besoins de Kinshasa
+ * recensés par les services et des recettes réellement générées). Les « projets » du § 27.2 sont présentés comme des
+ * besoins recensés.
  * Projets publics et recommandation d'emploi des fonds (§ 27.2–27.3). L'agent d'allocation propose des scénarios
  * classés sur les fonds rapprochés ; il n'approuve aucune dépense et ne déplace aucun franc. L'autorité décide ; le
  * financement est constaté sur acte budgétaire ; les réalisations financées sont publiées chaque trimestre.
@@ -20,7 +24,7 @@ import { BarChartViz, DonutViz, fmtNombre, KpiTile, ProgressMeter, StatusDistrib
 import { BarresParDevise, etatsDe, lignesCompte, nombre, Tuiles, Visuels } from './visuels';
 import type { Indicator } from '../decision/commun';
 
-interface Project { id: string; code: string; title: string; domain: string; communes: string[]; beneficiaries: string; expectedResult: string; maturity: string; cost: MoneyJSON; recurringCost: MoneyJSON; procurement: string; risks: string; approvalAuthority: string; legalFundSource: string; status: string; progressPct?: string; funding?: { decisionReference: string }; example?: boolean; areas?: string; costToConfirm?: boolean; announcement?: { source: string; status: string; figures: { label: string; value: string }[] } }
+interface Project { id: string; code: string; title: string; domain: string; communes: string[]; beneficiaries: string; expectedResult: string; maturity: string; cost: MoneyJSON; recurringCost: MoneyJSON; procurement: string; risks: string; approvalAuthority: string; legalFundSource: string; status: string; progressPct?: string; funding?: { decisionReference: string }; example?: boolean }
 interface FundScenario { id: string; label: string; variant: string; period: string; available: MoneyJSON; availableBasis: string; unallocated: MoneyJSON; status: string; notice: string; items: { projectId: string; code: string; title: string; communes: string[]; proposedAmount: MoneyJSON; rank: number; maturity: string; recurringCost: MoneyJSON; procurement: string; beneficiaries: string; approvalAuthority: string; factors: { label: string; value: string }[] }[]; decision?: { by: string; motif: string } }
 interface ListResponse { domains: Record<string, string>; maturity: Record<string, number>; procurement: Record<string, string>; items: Project[]; scenarios: FundScenario[]; envelopes?: Envelope[]; indicators?: Indicator[] }
 
@@ -36,18 +40,18 @@ export function VisuelsProjets({ d }: { d: ListResponse }) {
   const exemple = d.items.some((x) => x.example);
   return (
     <>
-      <Tuiles label="Projets publics — synthèse" max={4}>
-        <KpiTile hero label="Projets" value={d.items.length} format={entier} example={exemple} state={{ label: `${d.items.filter((x) => x.status === 'PROPOSE').length} proposé(s)`, tone: 'info' }} />
+      <Tuiles label="Besoins recensés et emploi des recettes — synthèse" max={4}>
+        <KpiTile hero label="Besoins recensés" value={d.items.length} format={entier} example={exemple} state={{ label: `${d.items.filter((x) => x.status === 'PROPOSE').length} proposé(s)`, tone: 'info' }} />
         <KpiTile label="Financés sur acte" value={suivis.length} format={entier} state={{ label: 'Acte budgétaire', tone: 'good' }} />
         <KpiTile label="Scénarios à décider" value={d.scenarios.filter((s) => s.status === 'PROPOSE').length} format={entier} state={{ label: 'Décision humaine', tone: 'warning' }} />
         <KpiTile label="Enveloppes certifiées" value={(d.envelopes ?? []).filter((e) => e.status === 'CERTIFIEE').length} format={entier} unit={`/ ${(d.envelopes ?? []).length}`} state={{ label: 'Budget voté', tone: 'neutral' }} />
       </Tuiles>
-      <Visuels label="Projets en graphiques">
-        <StatusDistribution title="Projets par statut" unitLabel="projets" emptyText="Aucun projet" example={exemple} items={etatsDe(d.items, (x) => x.status, PROJECT_STATUS)} />
-        <DonutViz title="Projets par domaine" centerLabel="projets" emptyText="Aucun projet" example={exemple} slices={lignesCompte(d.items, (x) => x.domain).map((r) => ({ key: r.key, label: d.domains[r.key] ?? r.key, value: r.values.n }))} />
-        <BarChartViz title="Projets par maturité" orientation="horizontal" format={entier} emptyText="Aucun projet" example={exemple} series={[{ key: 'n', label: 'Projets' }]}
+      <Visuels label="Besoins recensés en graphiques">
+        <StatusDistribution title="Besoins par statut" unitLabel="besoins" emptyText="Aucun besoin recensé" example={exemple} items={etatsDe(d.items, (x) => x.status, PROJECT_STATUS)} />
+        <DonutViz title="Besoins par domaine" centerLabel="besoins" emptyText="Aucun besoin recensé" example={exemple} slices={lignesCompte(d.items, (x) => x.domain).map((r) => ({ key: r.key, label: d.domains[r.key] ?? r.key, value: r.values.n }))} />
+        <BarChartViz title="Besoins par maturité" orientation="horizontal" format={entier} emptyText="Aucun besoin recensé" example={exemple} series={[{ key: 'n', label: 'Besoins' }]}
           rows={Object.keys(d.maturity).map((m) => ({ key: m, label: m.replace(/_/g, ' ').toLowerCase(), values: { n: d.items.filter((x) => x.maturity === m).length } }))} />
-        <BarresParDevise className="viz-span-2" title="Coût et coût récurrent par projet" series={[{ key: 'c', label: 'Coût' }, { key: 'r', label: 'Récurrent annuel' }]}
+        <BarresParDevise className="viz-span-2" title="Coût et coût récurrent par besoin" series={[{ key: 'c', label: 'Coût' }, { key: 'r', label: 'Récurrent annuel' }]}
           rows={d.items.map((x) => ({ key: x.id, label: `${x.code} — ${x.title}${x.example ? ' [EXEMPLE]' : ''}`, values: { c: x.cost, r: x.recurringCost } }))} />
         {suivis.length > 0 && (
           <VizFrame frame={{ title: 'Avancement des projets financés', subtitle: 'Déclaré par le service porteur' }} empty={false}
@@ -69,26 +73,25 @@ export default function Projets() {
   const [motif, setMotif] = useState('');
   const [rec, setRec] = useState({ period: currentQuarter(), currency: 'USD', legalFundSource: '' });
   const [p, setP] = useState({ code: '', title: '', domain: 'VOIRIE', communes: '', beneficiaries: '', expectedResult: '', maturity: 'IDEE', cost: '', recurringCost: '', currency: 'USD', procurement: 'A_DETERMINER', risks: '', approvalAuthority: '', legalFundSource: '' });
-  const [fund, setFund] = useState({ reference: '', progress: '', cost: '', recurring: '' });
+  const [fund, setFund] = useState({ reference: '', progress: '' });
   const decide = hasRole(user?.roles, 'R01', 'R05');
   return (
     <div className="page page-wide">
-      <PageHead eyebrow="Pilotage · § 27.2–27.3" title="Projets publics et emploi des fonds" lead="Collecte → comptabilité → partage légal → Trésor → budget → autorisation → engagement → dépense. L’IA compare des scénarios ; aucun transfert ni engagement n’est automatique." />
+      <PageHead eyebrow="Pilotage · § 27.2–27.3" title="Emploi des recettes — suggestions de l’IA" lead="L’IA suggère l’emploi des recettes réellement générées (rapprochées) pour répondre aux besoins de Kinshasa recensés par les services. Elle ne crée aucun projet, n’approuve aucune dépense et ne déplace aucun franc." />
       <Callout><strong>L’IA propose, l’autorité décide.</strong> Les montants disponibles sont les recettes rapprochées ; la disponibilité budgétaire (niveau 11) relève du budget voté.</Callout>
       <Notice msg={r.msg} />
       {q.loading && !q.data ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : q.data && (
         <div className="dash-grid">
           <VisuelsProjets d={q.data} />
           <EnveloppesBudget envelopes={q.data.envelopes ?? []} indicators={q.data.indicators ?? []} roles={user?.roles} userId={user?.id} onDone={q.reload} />
-          <Section title="Projets" sub="Fiches complètes du § 27.2 : bénéficiaires, impact géographique, résultat, maturité, coût récurrent, passation, risques, autorité">
-            <DataTable caption="Projets" rows={q.data.items} rowKey={(x) => x.id} empty={<EmptyState title="Aucun projet" icon="building" />} columns={[
-              { key: 't', label: 'Projet', primary: true, render: (x) => <><strong>{x.title}</strong><span className="small muted" style={{ display: 'block' }}>{x.code} · {q.data!.domains[x.domain] ?? x.domain} · {x.communes.join(', ') || x.areas}{x.example ? ' · donnée de démonstration non contractuelle' : ''}</span>{x.announcement && <span className="small" style={{ display: 'block' }}>{x.announcement.figures.map((f) => `${f.label} : ${f.value}`).join(' · ')} — {x.announcement.status} ({x.announcement.source})</span>}</> },
-              { key: 'c', label: 'Coût / récurrent', num: true, render: (x) => x.costToConfirm ? <StatusBadge tone="warning" label="Coût à confirmer — non classé par l’IA" /> : `${moneyText(x.cost)} / ${moneyText(x.recurringCost)}` },
+          <Section title="Besoins de Kinshasa recensés par les services" sub="Seule base des suggestions de l’IA, avec les recettes générées. Fiches du § 27.2 : bénéficiaires, communes, résultat, maturité, coût récurrent, passation, risques, autorité">
+            <DataTable caption="Besoins recensés" rows={q.data.items} rowKey={(x) => x.id} empty={<EmptyState title="Aucun besoin recensé" icon="building" />} columns={[
+              { key: 't', label: 'Besoin', primary: true, render: (x) => <><strong>{x.title}</strong><span className="small muted" style={{ display: 'block' }}>{x.code} · {q.data!.domains[x.domain] ?? x.domain} · {x.communes.join(', ')}{x.example ? ' · donnée de démonstration non contractuelle' : ''}</span></> },
+              { key: 'c', label: 'Coût / récurrent', num: true, render: (x) => `${moneyText(x.cost)} / ${moneyText(x.recurringCost)}` },
               { key: 'm', label: 'Maturité', render: (x) => x.maturity },
               { key: 's', label: 'Statut', render: (x) => <><StatusBadge tone={PROJECT_STATUS[x.status]?.tone ?? 'neutral'} label={PROJECT_STATUS[x.status]?.label ?? x.status} />{x.progressPct && <span className="small"> {x.progressPct} %</span>}</> },
               { key: 'a', label: 'Actions', render: (x) => (
                 <div className="btn-row">
-                  {x.costToConfirm && hasRole(user?.roles, 'R03', 'R05', 'R06', 'R08', 'R15') && <button type="button" className="btn btn-secondary btn-sm" disabled={r.busy || !fund.cost || motif.trim().length < 10} onClick={() => void r.run(`/v1/pilotage/projets/${x.id}/cout`, { cost: { amount: fund.cost, currency: x.cost.currency }, recurringCost: { amount: fund.recurring || '0.00', currency: x.cost.currency }, motif }, 'Coût confirmé : le projet sera classé par l’IA.')}>Confirmer le coût</button>}
                   {decide && x.status === 'RETENU' && <button type="button" className="btn btn-primary btn-sm" disabled={r.busy || fund.reference.trim().length < 3 || motif.trim().length < 10} onClick={() => void r.run(`/v1/pilotage/projets/${x.id}/financement`, { decisionReference: fund.reference, amount: x.cost, motif }, 'Financement constaté sur acte.')}>Constater le financement</button>}
                   {hasRole(user?.roles, 'R05', 'R06', 'R07', 'R08') && ['FINANCE', 'EN_COURS'].includes(x.status) && <button type="button" className="btn btn-secondary btn-sm" disabled={r.busy || !fund.progress} onClick={() => void r.run(`/v1/pilotage/projets/${x.id}/avancement`, { progressPct: fund.progress, note: 'Avancement déclaré par le service porteur', ...(fund.progress === '100' ? { status: 'ACHEVE' } : {}) }, 'Avancement enregistré.')}>Avancement</button>}
                 </div>
@@ -97,12 +100,10 @@ export default function Projets() {
             <div className="form">
               <Field label="Référence de l’acte budgétaire (financement)" value={fund.reference} onChange={(v) => setFund({ ...fund, reference: v })} />
               <Field label="Avancement (%)" value={fund.progress} onChange={(v) => setFund({ ...fund, progress: v })} />
-              <Field label="Coût confirmé (projet « coût à confirmer »)" value={fund.cost} onChange={(v) => setFund({ ...fund, cost: v })} />
-              <Field label="Coût récurrent confirmé" value={fund.recurring} onChange={(v) => setFund({ ...fund, recurring: v })} />
               <Field label="Motif de décision (10 caractères minimum)" value={motif} onChange={setMotif} />
             </div>
           </Section>
-          <Section title="Scénarios d’emploi des fonds (proposés par l’IA)" sub="Classés selon trois logiques ; décision humaine motivée ; aucun effet financier">
+          <Section title="Suggestions de l’IA : emploi des recettes générées" sub="À partir des seules recettes rapprochées et des besoins recensés ; trois logiques de classement ; décision humaine motivée ; aucun effet financier">
             <DataTable caption="Scénarios" rows={q.data.scenarios} rowKey={(s) => s.id} empty={<EmptyState title="Aucun scénario proposé" icon="analysis" />} columns={[
               { key: 'l', label: 'Scénario', primary: true, render: (s) => <><strong>{s.label}</strong><span className="small muted" style={{ display: 'block' }}>{s.period} · disponible {moneyText(s.available)} · non affecté {moneyText(s.unallocated)}</span></> },
               { key: 'i', label: 'Projets classés', render: (s) => <ol className="small">{s.items.map((it) => <li key={it.projectId}>{it.title} — {moneyText(it.proposedAmount)} ({it.communes.join(', ')} ; {it.maturity} ; récurrent {moneyText(it.recurringCost)} ; {it.procurement} ; {it.approvalAuthority})</li>)}</ol> },
@@ -123,7 +124,7 @@ export default function Projets() {
             )}
           </Section>
           {hasRole(user?.roles, 'R03', 'R05', 'R06', 'R08', 'R15') && (
-            <Section title="Nouveau projet" sub="Bénéficiaires décrits collectivement : jamais de nom ni de donnée personnelle">
+            <Section title="Recenser un besoin (service)" sub="Besoin constaté par un service de la Ville ; bénéficiaires décrits collectivement : jamais de nom ni de donnée personnelle">
               <div className="form">
                 <Field label="Code" value={p.code} onChange={(v) => setP({ ...p, code: v })} />
                 <Field label="Intitulé" value={p.title} onChange={(v) => setP({ ...p, title: v })} />
@@ -143,7 +144,7 @@ export default function Projets() {
                   code: p.code, title: p.title, domain: p.domain, communes: p.communes.split(',').map((x) => x.trim()).filter(Boolean), beneficiaries: p.beneficiaries, expectedResult: p.expectedResult,
                   maturity: p.maturity, cost: { amount: p.cost, currency: p.currency }, recurringCost: { amount: p.recurringCost, currency: p.currency }, procurement: p.procurement, risks: p.risks,
                   approvalAuthority: p.approvalAuthority, legalFundSource: p.legalFundSource,
-                }, 'Projet enregistré.')}>Enregistrer le projet</button></div>
+                }, 'Besoin recensé.')}>Enregistrer le besoin</button></div>
               </div>
             </Section>
           )}

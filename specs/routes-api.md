@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1611 routes** dans 51 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1610 routes** dans 51 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -20,7 +20,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1611 routes** dans 5
 | extension juridique | 11 |
 | extension opportunites | 32 |
 | extension parking | 74 |
-| extension pilotage | 133 |
+| extension pilotage | 132 |
 | extension plateforme | 23 |
 | extension postes | 29 |
 | extension preuves | 15 |
@@ -901,7 +901,6 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1611 routes** dans 5
 | GET | `/v1/pilotage/projets` |
 | POST | `/v1/pilotage/projets` |
 | POST | `/v1/pilotage/projets/:id/avancement` |
-| POST | `/v1/pilotage/projets/:id/cout` |
 | POST | `/v1/pilotage/projets/:id/financement` |
 | POST | `/v1/pilotage/projets/enveloppes` |
 | POST | `/v1/pilotage/projets/enveloppes/:id/certification` |
