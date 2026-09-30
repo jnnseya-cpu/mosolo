@@ -14,16 +14,13 @@ import { assertDistinctPerson, authorize } from '../../../core/policy.js';
 import { InMemoryRepository } from '../../../core/repository.js';
 import { COMMUNES } from '../../../reference/kinshasa.js';
 import { etatFonction, pointJuridiqueTranche, recoupementDonneesAutorise } from '../../juridique/gates.js';
-import { aiguillerRecette } from '../../fiscal/aiguillage.js';
 import { ExportSigner, EXPORT_KEY_ID, jsonPayload } from '../exports.js';
-import { isReconciled } from '../ladder.js';
-import { CurrencyTotals } from '../money.js';
 import type { PlanificationService } from '../planification/service.js';
 import { PILOT_COMMUNES } from '../planification/model.js';
 import type { PilotageService } from '../service.js';
 import {
   CONTRADICTION_SIGNALEE, CRITERES_42, DECISIONS_48, DEVISE_FR2, ETATS_ACTION, ETATS_SUIVI, ETATS_VERSION, IMPACTS, PAR_DEFAUT, PERIODICITE_REVUE_JOURS,
-  PLAN_100_JOURS_47, PROBABILITES, PROGRAMME_ROUTIER, RECITS_43, RISQUES_41, SOURCE_FR2, STATUTS_DECISION, STRATEGIE_45, SUIVIS_EXTERNES, SYNTHESE_48_2, VERSIONS_44,
+  PLAN_100_JOURS_47, PROBABILITES, RECITS_43, RISQUES_41, SOURCE_FR2, STATUTS_DECISION, STRATEGIE_45, SUIVIS_EXTERNES, SYNTHESE_48_2, VERSIONS_44,
   zoneDe, ZONES_CRITICITE,
   type EtatAction, type EtatSuivi, type EtatVersion, type Impact, type LienDeblocage, type Probabilite, type RisqueRef, type StatutDecision,
 } from './referentiels.js';
@@ -426,48 +423,6 @@ export class ProgrammeService {
 
   // ————————————————————————————————— synthèse —————————————————————————————————
 
-  // ——————————————— Programme routier du Gouvernorat (30/09/2026) — recettes liées à la route mises en regard ———————————————
-
-  /**
-   * Programme routier annoncé (km livrés, km en cours) et recettes liées à la route : péage provincial, droits de voirie,
-   * taxe de circulation. Rattachement d'une obligation à une ligne : code, libellé ou catégorie de la fiche de règle, ou
-   * titre du module (reçu de péage, vignette). Montants agrégés, sans donnée personnelle ; aucune affectation automatique.
-   */
-  programmeRoutier(user: User) {
-    this.gate(user, 'read');
-    const pil = this.pil;
-    const facts = pil?.facts();
-    const fiches = new Map(this.ctx.rules.list().map((r) => [r.code, `${r.code} ${r.label}`]));
-    const titres = (this.ctx.ext.titres as { credentials?: { all(): { module: string; obligationId?: string }[] } } | undefined)?.credentials?.all() ?? [];
-    const lignes = PROGRAMME_ROUTIER.lignesRecettes.map((l) => {
-      const re = new RegExp(l.motsCles, 'i');
-      const parTitre = new Set(titres.filter((c) => l.modules.includes(c.module)).map((c) => c.obligationId).filter((x): x is string => !!x));
-      const obs = (facts?.obligations ?? []).filter((o) => !o.cancelled && (re.test(fiches.get(o.ruleCode) ?? o.ruleCode) || re.test(o.category) || parTitre.has(o.id)));
-      const ids = new Set(obs.map((o) => o.id));
-      const liquide = new CurrencyTotals(); const rapproche = new CurrencyTotals();
-      obs.forEach((o) => liquide.add(o.amount));
-      const payes = (facts?.orders ?? []).filter((o) => ids.has(o.obligationId) && isReconciled(o));
-      payes.forEach((o) => rapproche.add(o.amount));
-      return {
-        code: l.code, libelle: l.libelle, modules: l.modules, obligations: obs.length, paiementsRapproches: payes.length,
-        liquide: liquide.toJSON(), rapproche: rapproche.toJSON(), regie: aiguillerRecette(l.libelle, this.ctx.rules.list()),
-      };
-    });
-    const total = new CurrencyTotals();
-    lignes.forEach((l) => l.rapproche.forEach((m) => total.add(m)));
-    const km = Object.fromEntries(PROGRAMME_ROUTIER.indicateurs.map((i) => [i.code, i.valeur]));
-    this.audit(user, 'programme.routier.viewed', 'programme', PROGRAMME_ROUTIER.code);
-    return {
-      code: PROGRAMME_ROUTIER.code, intitule: PROGRAMME_ROUTIER.intitule, source: PROGRAMME_ROUTIER.source, statut: PROGRAMME_ROUTIER.statut,
-      indicateurs: PROGRAMME_ROUTIER.indicateurs,
-      kmTotalAnnonce: (km.KM_LIVRES ?? 0) + (km.KM_EN_COURS ?? 0),
-      partLivreePct: Math.round(((km.KM_LIVRES ?? 0) / Math.max(1, (km.KM_LIVRES ?? 0) + (km.KM_EN_COURS ?? 0))) * 1000) / 10,
-      recettes: { lignes, totalRapproche: total.toJSON(), base: 'Recettes rapprochées (relevé bancaire), toutes périodes ; liquidé = obligations non annulées.', donneesDisponibles: !!facts },
-      avertissement: PROGRAMME_ROUTIER.avertissement,
-      generatedAt: facts?.asOf ?? this.now(),
-    };
-  }
-
   synthese(user: User) {
     this.gate(user, 'read');
     const r = this.registreRisques(user).synthese;
@@ -479,7 +434,6 @@ export class ProgrammeService {
       risques: r, decisions: d, versions: { total: v.length, construites: v.filter((x) => x.construction === 'CONSTRUIT').length, enService: v.filter((x) => x.etat === 'EN_SERVICE').length },
       recette: { criteres: CRITERES_42.length, recits: RECITS_43.length, pointsStrategie: STRATEGIE_45.length, suivisExternes: SUIVIS_EXTERNES.length },
       centJours: c,
-      programmeRoutier: { code: PROGRAMME_ROUTIER.code, indicateurs: PROGRAMME_ROUTIER.indicateurs, statut: PROGRAMME_ROUTIER.statut },
     };
   }
 }

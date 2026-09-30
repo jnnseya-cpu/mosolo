@@ -4,7 +4,6 @@
  * financement est constaté sur acte budgétaire ; les réalisations financées sont publiées chaque trimestre.
  */
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import type { MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
@@ -21,7 +20,7 @@ import { BarChartViz, DonutViz, fmtNombre, KpiTile, ProgressMeter, StatusDistrib
 import { BarresParDevise, etatsDe, lignesCompte, nombre, Tuiles, Visuels } from './visuels';
 import type { Indicator } from '../decision/commun';
 
-interface Project { id: string; code: string; title: string; domain: string; communes: string[]; beneficiaries: string; expectedResult: string; maturity: string; cost: MoneyJSON; recurringCost: MoneyJSON; procurement: string; risks: string; approvalAuthority: string; legalFundSource: string; status: string; progressPct?: string; funding?: { decisionReference: string }; example?: boolean }
+interface Project { id: string; code: string; title: string; domain: string; communes: string[]; beneficiaries: string; expectedResult: string; maturity: string; cost: MoneyJSON; recurringCost: MoneyJSON; procurement: string; risks: string; approvalAuthority: string; legalFundSource: string; status: string; progressPct?: string; funding?: { decisionReference: string }; example?: boolean; areas?: string; costToConfirm?: boolean; announcement?: { source: string; status: string; figures: { label: string; value: string }[] } }
 interface FundScenario { id: string; label: string; variant: string; period: string; available: MoneyJSON; availableBasis: string; unallocated: MoneyJSON; status: string; notice: string; items: { projectId: string; code: string; title: string; communes: string[]; proposedAmount: MoneyJSON; rank: number; maturity: string; recurringCost: MoneyJSON; procurement: string; beneficiaries: string; approvalAuthority: string; factors: { label: string; value: string }[] }[]; decision?: { by: string; motif: string } }
 interface ListResponse { domains: Record<string, string>; maturity: Record<string, number>; procurement: Record<string, string>; items: Project[]; scenarios: FundScenario[]; envelopes?: Envelope[]; indicators?: Indicator[] }
 
@@ -70,12 +69,11 @@ export default function Projets() {
   const [motif, setMotif] = useState('');
   const [rec, setRec] = useState({ period: currentQuarter(), currency: 'USD', legalFundSource: '' });
   const [p, setP] = useState({ code: '', title: '', domain: 'VOIRIE', communes: '', beneficiaries: '', expectedResult: '', maturity: 'IDEE', cost: '', recurringCost: '', currency: 'USD', procurement: 'A_DETERMINER', risks: '', approvalAuthority: '', legalFundSource: '' });
-  const [fund, setFund] = useState({ reference: '', progress: '' });
+  const [fund, setFund] = useState({ reference: '', progress: '', cost: '', recurring: '' });
   const decide = hasRole(user?.roles, 'R01', 'R05');
   return (
     <div className="page page-wide">
       <PageHead eyebrow="Pilotage · § 27.2–27.3" title="Projets publics et emploi des fonds" lead="Collecte → comptabilité → partage légal → Trésor → budget → autorisation → engagement → dépense. L’IA compare des scénarios ; aucun transfert ni engagement n’est automatique." />
-      <p className="small">Programme du Gouvernorat : <Link to="/pilotage/programme-routier">Programme routier (km livrés et en cours, recettes liées à la route)</Link>.</p>
       <Callout><strong>L’IA propose, l’autorité décide.</strong> Les montants disponibles sont les recettes rapprochées ; la disponibilité budgétaire (niveau 11) relève du budget voté.</Callout>
       <Notice msg={r.msg} />
       {q.loading && !q.data ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : q.data && (
@@ -84,12 +82,13 @@ export default function Projets() {
           <EnveloppesBudget envelopes={q.data.envelopes ?? []} indicators={q.data.indicators ?? []} roles={user?.roles} userId={user?.id} onDone={q.reload} />
           <Section title="Projets" sub="Fiches complètes du § 27.2 : bénéficiaires, impact géographique, résultat, maturité, coût récurrent, passation, risques, autorité">
             <DataTable caption="Projets" rows={q.data.items} rowKey={(x) => x.id} empty={<EmptyState title="Aucun projet" icon="building" />} columns={[
-              { key: 't', label: 'Projet', primary: true, render: (x) => <><strong>{x.title}</strong><span className="small muted" style={{ display: 'block' }}>{x.code} · {q.data!.domains[x.domain] ?? x.domain} · {x.communes.join(', ')}{x.example ? ' · donnée de démonstration non contractuelle' : ''}</span></> },
-              { key: 'c', label: 'Coût / récurrent', num: true, render: (x) => `${moneyText(x.cost)} / ${moneyText(x.recurringCost)}` },
+              { key: 't', label: 'Projet', primary: true, render: (x) => <><strong>{x.title}</strong><span className="small muted" style={{ display: 'block' }}>{x.code} · {q.data!.domains[x.domain] ?? x.domain} · {x.communes.join(', ') || x.areas}{x.example ? ' · donnée de démonstration non contractuelle' : ''}</span>{x.announcement && <span className="small" style={{ display: 'block' }}>{x.announcement.figures.map((f) => `${f.label} : ${f.value}`).join(' · ')} — {x.announcement.status} ({x.announcement.source})</span>}</> },
+              { key: 'c', label: 'Coût / récurrent', num: true, render: (x) => x.costToConfirm ? <StatusBadge tone="warning" label="Coût à confirmer — non classé par l’IA" /> : `${moneyText(x.cost)} / ${moneyText(x.recurringCost)}` },
               { key: 'm', label: 'Maturité', render: (x) => x.maturity },
               { key: 's', label: 'Statut', render: (x) => <><StatusBadge tone={PROJECT_STATUS[x.status]?.tone ?? 'neutral'} label={PROJECT_STATUS[x.status]?.label ?? x.status} />{x.progressPct && <span className="small"> {x.progressPct} %</span>}</> },
               { key: 'a', label: 'Actions', render: (x) => (
                 <div className="btn-row">
+                  {x.costToConfirm && hasRole(user?.roles, 'R03', 'R05', 'R06', 'R08', 'R15') && <button type="button" className="btn btn-secondary btn-sm" disabled={r.busy || !fund.cost || motif.trim().length < 10} onClick={() => void r.run(`/v1/pilotage/projets/${x.id}/cout`, { cost: { amount: fund.cost, currency: x.cost.currency }, recurringCost: { amount: fund.recurring || '0.00', currency: x.cost.currency }, motif }, 'Coût confirmé : le projet sera classé par l’IA.')}>Confirmer le coût</button>}
                   {decide && x.status === 'RETENU' && <button type="button" className="btn btn-primary btn-sm" disabled={r.busy || fund.reference.trim().length < 3 || motif.trim().length < 10} onClick={() => void r.run(`/v1/pilotage/projets/${x.id}/financement`, { decisionReference: fund.reference, amount: x.cost, motif }, 'Financement constaté sur acte.')}>Constater le financement</button>}
                   {hasRole(user?.roles, 'R05', 'R06', 'R07', 'R08') && ['FINANCE', 'EN_COURS'].includes(x.status) && <button type="button" className="btn btn-secondary btn-sm" disabled={r.busy || !fund.progress} onClick={() => void r.run(`/v1/pilotage/projets/${x.id}/avancement`, { progressPct: fund.progress, note: 'Avancement déclaré par le service porteur', ...(fund.progress === '100' ? { status: 'ACHEVE' } : {}) }, 'Avancement enregistré.')}>Avancement</button>}
                 </div>
@@ -98,6 +97,8 @@ export default function Projets() {
             <div className="form">
               <Field label="Référence de l’acte budgétaire (financement)" value={fund.reference} onChange={(v) => setFund({ ...fund, reference: v })} />
               <Field label="Avancement (%)" value={fund.progress} onChange={(v) => setFund({ ...fund, progress: v })} />
+              <Field label="Coût confirmé (projet « coût à confirmer »)" value={fund.cost} onChange={(v) => setFund({ ...fund, cost: v })} />
+              <Field label="Coût récurrent confirmé" value={fund.recurring} onChange={(v) => setFund({ ...fund, recurring: v })} />
               <Field label="Motif de décision (10 caractères minimum)" value={motif} onChange={setMotif} />
             </div>
           </Section>

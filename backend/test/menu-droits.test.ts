@@ -119,7 +119,6 @@ const LECTURES: Record<string, string[]> = {
   '/pilotage/base-reference': ['/v1/pilotage/base-reference', '/v1/pilotage/ranv'],
   '/pilotage/cent-jours': ['/v1/pilotage/programme/cent-jours'],
   '/pilotage/decisions-gouvernement': ['/v1/pilotage/programme/decisions'],
-  '/pilotage/programme-routier': ['/v1/pilotage/programme/routes'],
   // Console « Clés et raccordements » (29/09/2026) : R26 et R28 seulement.
   '/plateforme/cles': ['/v1/integrations/keys', '/v1/integrations/proposals', '/v1/integrations/webhooks'],
   '/pilotage/feuille-de-route': ['/v1/pilotage/feuille-de-route', '/v1/pilotage/modele-operationnel', '/v1/pilotage/gouvernance'],

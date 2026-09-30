@@ -1941,11 +1941,13 @@ provinciaux) et **DGTK** (droits, taxes et redevances de la Ville) ; 160 km de r
   Rien n'est supprimé : les lots, l'historique et leur provenance e-DGRK restent consultables.
 - **Compte de démonstration** `KIN-DGRK-MM-01` : alias et entité inchangés, libellé « Ancienne DGRK (historique, avant la
   réforme DGIPK / DGTK) — compte marchand public (démo) ».
-- **Programme routier du Gouvernorat** (`GET /v1/pilotage/programme/routes`, écran « Programme routier du Gouvernorat »,
-  lien depuis « Projets publics et emploi des fonds », résumé dans la synthèse du programme) : 160 km livrés, plus de
-  600 km en cours — **chiffres annoncés, à confirmer** (rapport technique ou acte) ; recettes liées à la route mises en
-  regard (péage provincial — module 25 ; droits de voirie ; taxe spéciale de circulation routière — module 11) :
-  liquidé, rapproché, régie proposée. Mise en regard indicative : **aucune affectation automatique** des recettes aux
-  travaux (budget et acte). Montants agrégés, lecture journalisée (`programme.routier.viewed`).
+- **Programme routier du Gouvernorat — un projet parmi les autres** (décision du maître d'ouvrage, 30/09/2026 : « la
+  plateforme est un système de recettes ; pas de section propre à ce programme ») : il figure dans « Projets publics et
+  emploi des fonds », dont l'agent d'allocation (IA) propose des scénarios, sous le code `GOUV-ROUTES` (domaine Voirie)
+  avec ses chiffres annoncés (160 km livrés, plus de 600 km en cours — à confirmer). Son coût n'ayant pas été communiqué,
+  il est marqué « coût à confirmer » : l'IA le cite (« non classés faute de coût confirmé ») sans le classer — un coût
+  nul fausserait le classement. Une personne habilitée saisit le coût confirmé (`POST /v1/pilotage/projets/:id/cout`,
+  motif, journalisé) ; le projet devient alors classable. Aucun chiffre inventé ; aucune dépense ni affectation
+  automatique. L'écran dédié proposé un moment n'a pas été retenu.
 - **En attente du Gouvernorat** : la liste officielle des recettes relevant de la DGIPK et de la DGTK (acte de
   répartition) ; elle remplacera la table par défaut et fixera l'entité administrante des fiches concernées.

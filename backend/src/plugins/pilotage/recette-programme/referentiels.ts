@@ -530,31 +530,3 @@ export const SYNTHESE_48_2: { objet: string; position: string }[] = [
 ];
 
 export const DEVISE_FR2 = 'KINSHASA MOSOLO — chaque contribuable identifié, chaque activité localisée, chaque obligation légalement calculée, chaque paiement vérifiable et chaque franc public traçable.';
-
-// ——————————————————————— Programme routier du Gouvernorat (30/09/2026, annonce du Cabinet du Gouverneur) ———————————————————————
-
-/**
- * Programme routier annoncé par le Gouvernorat le 30/09/2026 (communiqué transmis par le maître d'ouvrage) : 160 km de
- * routes livrés, plus de 600 km en cours. Chiffres ANNONCÉS, repris tels quels — à confirmer par le maître d'ouvrage
- * (rapport technique ou acte) ; aucune donnée inventée. Les recettes liées à la route (péage provincial, droits de voirie,
- * taxe de circulation) sont MISES EN REGARD du programme, à titre indicatif : aucune affectation automatique de
- * recettes aux travaux (l'affectation relève du budget et de l'acte).
- */
-export interface IndicateurRoutier { code: string; libelle: string; valeur: number; unite: 'km'; qualificatif: string }
-export interface LigneRecetteRoutiere { code: string; libelle: string; /** Mots du code ou du libellé de la fiche de règle (insensible à la casse). */ motsCles: string; /** Modules dont les titres (reçus, passages) sont rattachés à la ligne. */ modules: string[] }
-export const PROGRAMME_ROUTIER = {
-  code: 'GOUV-ROUTES',
-  intitule: 'Programme routier du Gouvernorat (construction et réhabilitation de routes)',
-  source: 'Annonce du Cabinet du Gouverneur, 30/09/2026 (transmise par le maître d’ouvrage)',
-  statut: 'Chiffres annoncés — à confirmer par le maître d’ouvrage (rapport technique ou acte)',
-  indicateurs: [
-    { code: 'KM_LIVRES', libelle: 'Routes livrées', valeur: 160, unite: 'km', qualificatif: 'annoncé' },
-    { code: 'KM_EN_COURS', libelle: 'Routes en cours de travaux', valeur: 600, unite: 'km', qualificatif: 'plus de 600 km (annoncé)' },
-  ] as IndicateurRoutier[],
-  lignesRecettes: [
-    { code: 'PEAGE', libelle: 'Péage provincial (module 25)', motsCles: 'péage|peage', modules: ['25'] },
-    { code: 'VOIRIE', libelle: 'Droits de voirie (réservations, chantiers, occupation)', motsCles: 'voirie', modules: [] },
-    { code: 'CIRCULATION', libelle: 'Taxe spéciale de circulation routière (module 11)', motsCles: 'circulation', modules: ['11'] },
-  ] as LigneRecetteRoutiere[],
-  avertissement: 'Mise en regard indicative : les recettes routières ne sont pas affectées automatiquement aux travaux ; l’affectation relève du budget provincial et de l’acte.',
-} as const;

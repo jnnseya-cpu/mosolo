@@ -209,7 +209,6 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/pilotage/recette', element: lazy(() => import('./pilotage/Recette')), nav: { label: 'Recette — critères d’acceptation', short: 'Recette', icon: 'check', group: 'pilotage', roles: PROGRAMME } },
   { path: '/pilotage/versions', element: lazy(() => import('./pilotage/Versions')), nav: { label: 'Plan de livraison par versions', short: 'Versions', icon: 'table', group: 'pilotage', roles: PROGRAMME } },
   { path: '/pilotage/cent-jours', element: lazy(() => import('./pilotage/CentJours')), nav: { label: 'Plan des 100 premiers jours', short: '100 jours', icon: 'clock', group: 'pilotage', roles: PROGRAMME } },
-  { path: '/pilotage/programme-routier', element: lazy(() => import('./pilotage/ProgrammeRoutier')), nav: { label: 'Programme routier du Gouvernorat', short: 'Routes', icon: 'car', group: 'pilotage', roles: PROGRAMME } },
   { path: '/pilotage/decisions-gouvernement', element: lazy(() => import('./pilotage/Decisions')), nav: { label: 'Décisions du Gouvernement provincial', short: 'Décisions', icon: 'scale', group: 'pilotage', roles: PROGRAMME } },
   { path: '/satisfaction', element: lazy(() => import('./pilotage/Satisfaction')), nav: { label: 'Donner mon avis', short: 'Avis', icon: 'check', group: 'public', roles: ['R30', 'R31'] } },
 

@@ -896,12 +896,12 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1611 routes** dans 5
 | GET | `/v1/pilotage/programme/risques` |
 | POST | `/v1/pilotage/programme/risques/:code/proprietaire` |
 | POST | `/v1/pilotage/programme/risques/:code/revues` |
-| GET | `/v1/pilotage/programme/routes` |
 | GET | `/v1/pilotage/programme/versions` |
 | POST | `/v1/pilotage/programme/versions/:code/etat` |
 | GET | `/v1/pilotage/projets` |
 | POST | `/v1/pilotage/projets` |
 | POST | `/v1/pilotage/projets/:id/avancement` |
+| POST | `/v1/pilotage/projets/:id/cout` |
 | POST | `/v1/pilotage/projets/:id/financement` |
 | POST | `/v1/pilotage/projets/enveloppes` |
 | POST | `/v1/pilotage/projets/enveloppes/:id/certification` |

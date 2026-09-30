@@ -870,7 +870,9 @@ export class PlanificationService implements PilotagePlanningHooks {
       if (cap < available) available = cap > 0n ? cap : 0n;
       budgetBasis = `Enveloppe du budget voté ${envelope.actReference} (${envelope.amount.amount} ${envelope.currency}) diminuée des financements constatés (${moneyOfMinor(funded, input.currency).amount}) ; capacité retenue = minimum avec le rapproché (${moneyOfMinor(reconciledAvailable, input.currency).amount}).`;
     }
-    const candidates = this.projects.find((p) => ['PROPOSE', 'RETENU'].includes(p.status) && p.cost.currency === input.currency);
+    const candidates = this.projects.find((p) => ['PROPOSE', 'RETENU'].includes(p.status) && p.cost.currency === input.currency && !p.costToConfirm);
+    // Projets sans coût confirmé : cités, jamais classés (voir PublicProject.costToConfirm).
+    const nonClasses = this.projects.find((p) => ['PROPOSE', 'RETENU'].includes(p.status) && !!p.costToConfirm).map((p) => p.code);
     if (candidates.length === 0) throw conflict('NO_CANDIDATE', `Aucun projet proposé ou retenu en ${input.currency}.`);
     const share = (p: PublicProject) => p.communes.reduce((a, c) => a + (byCommune.get(c) ?? 0n), 0n);
     const variants: { variant: string; label: string; sort: (a: PublicProject, b: PublicProject) => number; factors: (p: PublicProject) => { label: string; value: string }[] }[] = [
@@ -879,7 +881,8 @@ export class PlanificationService implements PilotagePlanningHooks {
       { variant: 'COUT_RECURRENT', label: 'Soutenabilité : coût récurrent le plus faible', sort: (a, b) => (minorOf(a.recurringCost) < minorOf(b.recurringCost) ? -1 : minorOf(a.recurringCost) > minorOf(b.recurringCost) ? 1 : 0), factors: (p) => [{ label: 'Coût récurrent', value: p.recurringCost.amount }] },
     ];
     const batchId = this.ids.next('LOT');
-    const notice = 'L’IA propose des scénarios classés ; elle n’approuve aucune dépense et ne déplace aucun franc. La décision appartient aux autorités budgétaires (collecte → comptabilité → partage légal → Trésor → budget → autorisation → engagement → dépense).';
+    const notice = 'L’IA propose des scénarios classés ; elle n’approuve aucune dépense et ne déplace aucun franc. La décision appartient aux autorités budgétaires (collecte → comptabilité → partage légal → Trésor → budget → autorisation → engagement → dépense).'
+      + (nonClasses.length ? ` Non classés faute de coût confirmé : ${nonClasses.join(', ')}.` : '');
     const out = variants.map((v) => {
       let left = available;
       const items: FundScenarioItem[] = [];
@@ -923,6 +926,18 @@ export class PlanificationService implements PilotagePlanningHooks {
   }
 
   /** Financement constaté sur acte budgétaire (référence obligatoire) : la plateforme enregistre, elle ne décaisse pas. */
+  /** Coût confirmé d'un projet (ex. programme annoncé) : le projet devient classable par l'agent d'allocation. */
+  confirmCost(user: User, id: string, input: { cost: MoneyJSON; recurringCost: MoneyJSON; motif: string }) {
+    this.gate(user, 'project.write');
+    const p = this.projects.get(id);
+    if (!p) throw notFound('PROJECT_NOT_FOUND', 'Projet inconnu.');
+    if (input.cost.currency !== input.recurringCost.currency) throw badRequest('CURRENCY_MISMATCH', 'Coût et coût récurrent dans la même devise.');
+    const cost = Money.parseStrict(input.cost).toJSON(); const recurringCost = Money.parseStrict(input.recurringCost).toJSON();
+    const out = this.projects.update({ ...p, cost, recurringCost, costToConfirm: false, history: [...p.history, { at: this.now(), by: user.id, action: 'COUT_CONFIRME', text: `${cost.amount} ${cost.currency} (récurrent ${recurringCost.amount}) — ${input.motif.trim()}` }] });
+    this.audit(user, 'pilotage.project.cost_confirmed', 'project', p.id, { code: p.code, avant: p.costToConfirm ? 'à confirmer' : p.cost, cost, recurringCost, motif: input.motif.trim() });
+    return out;
+  }
+
   recordFunding(user: User, id: string, input: { decisionReference: string; amount: MoneyJSON; motif: string }) {
     this.gate(user, 'project.decide');
     const p = this.projects.get(id);
@@ -978,6 +993,18 @@ export class PlanificationService implements PilotagePlanningHooks {
     mk('EX-DRAIN-KALAMU', 'Curage des collecteurs de Matonge', 'DRAINAGE', ['Kalamu'], 'ETUDE_DETAILLEE', 'APPEL_OFFRES_OUVERT', '120.00', '10.00');
     mk('EX-ECLAIR-LIMETE', 'Éclairage public du boulevard Lumumba', 'ECLAIRAGE', ['Limete'], 'PRET_A_LANCER', 'APPEL_OFFRES_RESTREINT', '90.00', '15.00');
     mk('EX-MARCHE-GOMBE', 'Modernisation d’un marché municipal', 'MARCHES', ['Gombe'], 'ETUDE_PREALABLE', 'A_DETERMINER', '300.00', '25.00');
-    this.ctx.audit.append({ actor: demo, action: 'pilotage.project.demo_seeded', resourceType: 'project', resourceId: 'EXEMPLE', details: { count: 3, note: '[EXEMPLE] non contractuel' } });
+    // Programme routier annoncé par le Gouvernorat (30/09/2026) : proposé à l'agent d'allocation comme un projet parmi
+    // d'autres, chiffres annoncés à confirmer ; coût non communiqué, donc non classé tant qu'il n'est pas saisi.
+    this.projects.insert({
+      id: this.ids.next('PROJ'), code: 'GOUV-ROUTES', title: 'Programme routier du Gouvernorat — poursuite des travaux (plus de 600 km en cours ; 160 km livrés)', domain: 'VOIRIE',
+      communes: [], areas: 'Axes à préciser par le Gouvernorat', beneficiaries: 'Usagers de la route et riverains des axes (description collective)',
+      expectedResult: 'Achèvement des plus de 600 km en cours', maturity: 'PRET_A_LANCER', cost: { amount: '0.00', currency: 'USD' }, recurringCost: { amount: '0.00', currency: 'USD' },
+      procurement: 'A_DETERMINER', risks: 'Coût, calendrier et axes à confirmer ; entretien des routes livrées', approvalAuthority: 'Autorité budgétaire provinciale',
+      legalFundSource: 'Recettes propres rapprochées — budget provincial voté', status: 'PROPOSE', createdBy: demo.id, createdAt: at,
+      history: [{ at, by: demo.id, action: 'PROPOSE', text: 'Annonce du Cabinet du Gouverneur (30/09/2026) — chiffres à confirmer ; coût à saisir' }],
+      costToConfirm: true,
+      announcement: { source: 'Annonce du Cabinet du Gouverneur, 30/09/2026 (transmise par le maître d’ouvrage)', status: 'Chiffres annoncés — à confirmer par le maître d’ouvrage', figures: [{ label: 'Routes livrées', value: '160 km' }, { label: 'Routes en cours', value: 'plus de 600 km' }] },
+    });
+    this.ctx.audit.append({ actor: demo, action: 'pilotage.project.demo_seeded', resourceType: 'project', resourceId: 'EXEMPLE', details: { count: 4, note: '[EXEMPLE] non contractuel ; GOUV-ROUTES : projet annoncé, chiffres à confirmer' } });
   }
 }
