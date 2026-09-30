@@ -172,5 +172,7 @@ export function registerVehiculesRoutes(app: FastifyInstance, s: VehiculesContro
   app.get<{ Querystring: { qr?: string; numero?: string } }>('/v1/public/vehicules/vignettes/verifier', async (req) => { limit(req); return s.ct.publicVerify(req.query.qr ?? req.query.numero ?? ''); });
   app.get<{ Params: { numero: string } }>('/v1/public/vehicules/vignettes/:numero', async (req) => { limit(req); return s.ct.publicVerify(req.params.numero); });
   app.get<{ Params: { code: string } }>('/v1/public/centres-agrees/:code', async (req) => { limit(req); return s.centres.publicVerify(req.params.code); });
+  // Annuaire public des centres agréés (30/09/2026) : choix du centre par l'usager (rendez-vous de contrôle technique).
+  app.get('/v1/public/centres-agrees', async (req) => { limit(req); return { items: s.centres.publicDirectory() }; });
   app.get('/v1/public/vehicules/domaine-officiel', async () => ({ host: s.domaine.domain.host, status: s.domaine.domain.status, ownedBy: s.domaine.domain.ownedBy }));
 }

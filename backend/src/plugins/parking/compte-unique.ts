@@ -15,7 +15,7 @@ export function contribuerCompteUnique(ctx: AppContext, svc: ParkingService): vo
         }),
         ...svc.reservations.find((r) => r.taxpayerId === tp).map((r) => ({ rubrique: 'DEMARCHE' as const, id: r.id, libelle: `Réservation de voirie ${r.reference} (${r.purpose})`, nature: 'RESERVATION', statut: r.status, date: r.startAt, echeance: r.endAt, ...(r.objectId ? { objectId: r.objectId } : {}), lien: '/stationnement' })),
         ...svc.vehicles.find((v) => v.taxpayerId === tp).map((v) => ({ rubrique: 'VEHICULE' as const, id: v.id, libelle: `Véhicule ${v.plate} (stationnement)`, nature: 'PLAQUE', statut: v.probativeStatus, date: v.declaredAt, lien: '/stationnement' })),
-        ...svc.violations.find((v) => v.holderTaxpayerId === tp).map((v) => ({ rubrique: 'ARRIERE' as const, id: v.id, libelle: `Constat de stationnement ${v.reference} (${v.nature})`, nature: 'CONSTAT', statut: v.status, date: v.createdAt, lien: '/stationnement' })),
+        ...svc.violations.find((v) => v.holderTaxpayerId === tp).map((v) => ({ rubrique: 'ARRIERE' as const, id: v.id, libelle: `Constat de stationnement ${v.reference} (${v.nature})`, nature: 'CONSTAT', statut: v.status, date: v.createdAt, lien: '/stationnement', ...(v.decision?.obligationId ? { obligationId: v.decision.obligationId } : {}) })),
       ];
     },
   });

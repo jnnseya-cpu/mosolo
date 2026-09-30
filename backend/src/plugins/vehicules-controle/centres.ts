@@ -179,6 +179,18 @@ export class CentresService {
   }
 
   /** Vérification publique d'un agrément : statut minimal, jamais les données du dossier. */
+  /**
+   * Annuaire public des centres agréés (30/09/2026) : pour que l'usager CHOISISSE son centre au lieu d'en saisir le
+   * numéro. Centres AGRÉÉS et dans leur période d'habilitation seulement ; aucune donnée interne (dossier, quotas,
+   * diligence, invitation) — les mêmes informations que la vérification publique d'un centre.
+   */
+  publicDirectory(activity?: CentreActivity) {
+    const today = this.d.today();
+    return this.centres.find((c) => c.status === 'AGREE' && !!c.habilitation && c.habilitation.from <= today && today <= c.habilitation.to && (!activity || c.activities.includes(activity)))
+      .map((c) => ({ id: c.id, publicCode: c.publicCode, name: c.name, kindLabel: CENTRE_KIND_LABELS[c.kind], commune: c.commune, categories: c.categories, hours: c.declaredHours }))
+      .sort((a, b) => a.commune.localeCompare(b.commune, 'fr') || a.name.localeCompare(b.name, 'fr'));
+  }
+
   publicVerify(code: string) {
     const c = this.centres.findOne((x) => x.publicCode === code.trim().toUpperCase() || x.id === code.trim().toUpperCase());
     if (!c) return { found: false, state: 'NON_AGREE', message: 'Aucun centre agréé ne porte ce numéro : ne confiez pas votre véhicule et signalez-le.', checkedAt: this.d.now() };

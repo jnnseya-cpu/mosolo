@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { isCurrencyCode, CURRENCIES, formatMoney, type CurrencyCode, type MapStatusColor } from '@mosolo/shared';
+import { isCurrencyCode, CURRENCIES, formatMoney, type CurrencyCode, type MapStatusColor, type MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../context';
 import { useApi } from '../hooks/useApi';
 import { useAutosave } from '../hooks/useAutosave';
@@ -137,6 +137,64 @@ function versPageDePaiement(url: string) {
     if (u.protocol !== 'https:') return; // jamais vers une adresse non chiffrée
     window.location.assign(u.toString());
   } catch { /* adresse invalide : le lien reste affiché */ }
+}
+
+/**
+ * Renouvellement d'un titre depuis « À faire » (30/09/2026) : choix du moyen de paiement → commande de prolongation
+ * (POST /v1/titres/:id/prolongations, montant fixé par MOSOLO) → référence de paiement et étapes du canal choisi.
+ */
+function RenewFlow({ titreId, libelle }: { titreId: string; libelle: string }) {
+  const { tr, fmtDate } = useApp();
+  const [channel, setChannel] = useState('MOBILE_MONEY');
+  const [idem] = useState(newIdempotencyKey);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [res, setRes] = useState<{ paymentReference: string; amount?: MoneyJSON; expiresAt?: string } | null>(null);
+  async function go(e: FormEvent) {
+    e.preventDefault(); setBusy(true); setErr(null);
+    try {
+      const r = await api<{ payments?: { paymentReference: string; amount?: MoneyJSON; expiresAt?: string }[] }>(`/v1/titres/${encodeURIComponent(titreId)}/prolongations`, { method: 'POST', idempotencyKey: idem, body: { channel } });
+      const p = r.payments?.[0];
+      if (p) setRes(p); else setErr('Commande enregistrée, mais aucune référence n’a été renvoyée.');
+    } catch (x) { setErr(describeError(x).message); } finally { setBusy(false); }
+  }
+  return (
+    <div className="stack">
+      <div className="callout callout-warn"><Icon name="cash" size={18} /><p><strong>{tr('pay.noCash')}</strong></p></div>
+      <p><strong>{libelle}</strong></p>
+      {!res ? (
+        <form onSubmit={(e) => void go(e)} className="form">
+          <fieldset className="field">
+            <legend className="label">{tr('pay.chooseChannel')}</legend>
+            <div className="choice-grid">
+              {CHANNELS.map((c) => (
+                <label key={c.id} className={`choice ${channel === c.id ? 'checked' : ''}`}>
+                  <input type="radio" name="renew-channel" value={c.id} checked={channel === c.id} onChange={() => setChannel(c.id)} />
+                  <Icon name={c.icon} size={20} /> <span>{tr(c.key)}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <p className="small muted">Le montant du renouvellement est fixé par MOSOLO selon le tarif du titre ; le nouveau titre prend la suite de l’actuel.</p>
+          {err && <p className="notice notice-err" role="alert">{err}</p>}
+          <button type="submit" className="btn btn-primary btn-block" disabled={busy}>{busy ? tr('common.sending') : 'Renouveler et obtenir ma référence'}</button>
+        </form>
+      ) : (
+        <div className="result-card" role="status" data-testid="renew-result">
+          <p className="label">{tr('payment.reference')}</p>
+          <p className="ref-big mono">{res.paymentReference}</p>
+          <dl className="kv">
+            {res.amount && <div><dt>{tr('explain.amount')}</dt><dd><MoneyText money={res.amount} /></dd></div>}
+            {res.expiresAt && <div><dt>{tr('pay.expires')}</dt><dd>{fmtDate(res.expiresAt, true)}</dd></div>}
+          </dl>
+          {CHANNEL_STEPS[channel] && (
+            <div><h3 className="h-sub">Comment payer</h3><ol className="steps">{CHANNEL_STEPS[channel]!.map((s2) => <li key={s2}>{s2.replace('{ref}', res.paymentReference)}</li>)}</ol></div>
+          )}
+          <p className="small"><Link className="btn-link" to={`/paiement/retour?ref=${encodeURIComponent(res.paymentReference)}`}>Suivre l’état réel de ce paiement</Link> — le nouveau titre est émis dès la confirmation du paiement.</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function PayFlow({ ob }: { ob: Obligation }) {
@@ -318,7 +376,7 @@ function ContestForm({ ob }: { ob: Obligation }) {
   );
 }
 
-type Panel = { kind: 'explain' | 'pay' | 'contest' | 'chaine'; ob: Obligation } | null;
+type Panel = { kind: 'explain' | 'pay' | 'contest' | 'chaine'; ob: Obligation } | { kind: 'renew'; titreId: string; libelle: string } | null;
 
 export default function TaxpayerSpace() {
   const { tr, user, users, setUserId, fmtDate, lang } = useApp();
@@ -334,6 +392,12 @@ export default function TaxpayerSpace() {
     return { ...(raw.taxpayer ?? {}), ...raw, id: raw.taxpayer?.id ?? raw.id } as TaxpayerProfile;
   } : null, [taxpayerId, user?.id]);
   const [panel, setPanel] = useState<Panel>(null);
+  /** Ouvre le paiement (ou la contestation) d'une obligation, même absente de la liste déjà chargée (jamais sans effet). */
+  const ouvrir = async (kind: 'pay' | 'contest', id: string) => {
+    const known = (q.data?.obligations ?? []).find((o) => o.id === id);
+    if (known) { setPanel({ kind, ob: known }); return; }
+    try { setPanel({ kind, ob: await api<Obligation>(`/v1/obligations/${encodeURIComponent(id)}`) }); } catch { /* erreur affichée par l'écran de l'obligation */ }
+  };
   const p = q.data;
   const obligations = useMemo(() => p?.obligations ?? [], [p]);
   // Lien direct vers une obligation (ex. depuis la page de retour de paiement) : « /espace?obligation=<id> ».
@@ -379,7 +443,9 @@ export default function TaxpayerSpace() {
             <Link to="/mes-preuves" className="btn btn-primary btn-lg" data-testid="espace-mes-preuves" style={{ marginBottom: 12 }}><Icon name="qr" size={20} /> Mes preuves — à montrer en cas de contrôle</Link>
           )}
           {/* « À faire » (30/09/2026) : tout ce qui concerne l'usager, en un seul endroit, avec une action par ligne. */}
-          <AFaire taxpayerId={p.id ?? taxpayerId!} onPay={(id) => { const ob = obligations.find((o) => o.id === id); if (ob) setPanel({ kind: 'pay', ob }); }} />
+          <AFaire taxpayerId={p.id ?? taxpayerId!}
+            onPay={(id) => void ouvrir('pay', id)} onContest={(id) => void ouvrir('contest', id)}
+            onRenew={(titreId, libelle) => setPanel({ kind: 'renew', titreId, libelle })} />
           {/* Visuel de synthèse (27/09/2026) : dérivé du profil déjà chargé, sans appel supplémentaire. */}
           <EspaceVisuel p={{ obligations, objects: p.objects, receipts: p.receipts }} example
             obligationEtats={Object.fromEntries(Object.entries(OBLIGATION_TONE).map(([k, tone]) => [k, { label: tr(obligationKey(k)), tone } as EtatDef]))}
@@ -488,7 +554,8 @@ export default function TaxpayerSpace() {
       )}
 
       <Drawer open={panel !== null} onClose={() => setPanel(null)}
-        title={panel ? (panel.kind === 'chaine' ? 'Sept questions et chaîne opératoire' : tr(panel.kind === 'explain' ? 'taxpayer.explain' : panel.kind === 'pay' ? 'taxpayer.pay' : 'taxpayer.contest')) : ''}>
+        title={panel ? (panel.kind === 'renew' ? 'Renouveler' : panel.kind === 'chaine' ? 'Sept questions et chaîne opératoire' : tr(panel.kind === 'explain' ? 'taxpayer.explain' : panel.kind === 'pay' ? 'taxpayer.pay' : 'taxpayer.contest')) : ''}>
+        {panel?.kind === 'renew' && <RenewFlow titreId={panel.titreId} libelle={panel.libelle} />}
         {panel?.kind === 'explain' && <Explanation id={panel.ob.id} />}
         {panel?.kind === 'pay' && <PayFlow ob={panel.ob} />}
         {panel?.kind === 'contest' && <ContestForm ob={panel.ob} />}

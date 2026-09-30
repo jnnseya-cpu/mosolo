@@ -10,7 +10,7 @@ export function contribuerCompteUnique(ctx: AppContext, svc: RecoveryService): v
       return [
         ...svc.cases.find((c) => c.taxpayerId === tp).map((c) => {
           const objectId = objectOf(c.obligationId);
-          return { rubrique: 'ARRIERE' as const, id: c.id, libelle: `Dossier de recouvrement — obligation ${c.obligationId}`, nature: 'RECOUVREMENT', statut: c.status, date: c.openedAt, ...(objectId ? { objectId } : {}), lien: '/recouvrement' };
+          return { rubrique: 'ARRIERE' as const, id: c.id, libelle: `Dossier de recouvrement — obligation ${c.obligationId}`, nature: 'RECOUVREMENT', statut: c.status, date: c.openedAt, ...(objectId ? { objectId } : {}), lien: '/recouvrement', obligationId: c.obligationId };
         }),
         ...svc.plans.find((p) => p.taxpayerId === tp).map((p) => {
           const objectId = objectOf(p.obligationId);

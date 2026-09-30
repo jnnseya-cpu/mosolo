@@ -14,7 +14,12 @@ export type GroupeAFaire = 'A_FAIRE' | 'EN_VERIFICATION' | 'A_JOUR';
 export interface LigneAFaire {
   id: string; groupe: GroupeAFaire; categorie: string; libelle: string; etat: string;
   echeance: string | null; montant: MoneyJSON | null; urgence: 'EN_RETARD' | 'BIENTOT' | 'NORMALE';
-  action: { libelle: string; lien: string; obligationId?: string } | null;
+  /**
+   * Action de la ligne. `obligationId` : ouvre le paiement de l'obligation dans l'espace (choix du canal et de la
+   * passerelle) ; `titreId` : renouvelle le titre (commande de prolongation, puis même choix du canal) ;
+   * `contesterObligationId` : action secondaire « Contester » ; `lien` : écran de l'usager (détail).
+   */
+  action: { libelle: string; lien: string; obligationId?: string; titreId?: string; contesterObligationId?: string } | null;
 }
 
 /** Délai avant échéance à partir duquel un titre est « à renouveler » — PAR DÉFAUT, à confirmer par le maître d'ouvrage. */
@@ -72,6 +77,11 @@ function ligne(e: CompteElement, now: Date, dejaCouverte: (obligationId: string)
     return { ...base, groupe: 'A_FAIRE', urgence: s === 'EN_RETARD' ? 'EN_RETARD' : urgence, action: { libelle: 'Payer', lien: '/espace', obligationId: e.id } };
   }
   if (e.rubrique === 'ARRIERE') {
+    // Constat retenu ou dossier de recouvrement lié à une obligation : payer (ou contester) directement ici.
+    if (e.obligationId) {
+      if (dejaCouverte(e.obligationId)) return { ...base, groupe: 'EN_VERIFICATION', urgence: 'NORMALE', etat: 'PAYEE_EN_RAPPROCHEMENT', action: { libelle: 'Voir la quittance', lien: '/espace#sec-rc' } };
+      return { ...base, groupe: 'A_FAIRE', urgence: 'EN_RETARD', action: { libelle: e.lien === '/stationnement' ? 'Payer l’amende' : 'Payer', lien: '/espace', obligationId: e.obligationId, contesterObligationId: e.obligationId } };
+    }
     return { ...base, groupe: 'A_FAIRE', urgence: 'EN_RETARD', action: { libelle: e.lien === '/stationnement' ? 'Régler ou contester le constat' : 'Régulariser (payer ou échéancier)', lien: e.lien === '/stationnement' ? '/stationnement' : '/mes-arrieres' } };
   }
   if (e.rubrique === 'SESSION') {
@@ -88,12 +98,12 @@ function ligne(e: CompteElement, now: Date, dejaCouverte: (obligationId: string)
   if (s === 'PROVISOIRE') return { ...base, groupe: 'EN_VERIFICATION', urgence: 'NORMALE', etat: 'ENREGISTRE_A_VERIFIER', action: { libelle: 'Voir', lien } };
   // Titres, contrôles et pièces : à renouveler, à passer, ou à jour.
   if (EXPIRE.includes(s)) {
-    const libelle = s === 'AUCUN_CONTROLE' || s === 'DEFAVORABLE' ? 'Passer le contrôle technique' : e.rubrique === 'DOCUMENT' ? 'Fournir à nouveau' : 'Renouveler';
-    return { ...base, groupe: 'A_FAIRE', urgence: 'EN_RETARD', action: { libelle, lien } };
+    const libelle = s === 'AUCUN_CONTROLE' || s === 'DEFAVORABLE' ? 'Prendre rendez-vous (contrôle technique)' : e.rubrique === 'DOCUMENT' ? 'Fournir à nouveau' : 'Renouveler';
+    return { ...base, groupe: 'A_FAIRE', urgence: 'EN_RETARD', action: { libelle, lien: s === 'AUCUN_CONTROLE' || s === 'DEFAVORABLE' ? '/vehicules/mes-vehicules#rendez-vous-ct' : lien } };
   }
   if (VALIDE.includes(s)) {
     if (e.echeance && urgence !== 'NORMALE' && ['TITRE', 'PASS', 'MANDAT_DONNE', 'DOCUMENT'].includes(e.rubrique)) {
-      return { ...base, groupe: 'A_FAIRE', urgence, action: { libelle: urgence === 'EN_RETARD' ? 'Renouveler (expiré)' : 'Renouveler', lien } };
+      return { ...base, groupe: 'A_FAIRE', urgence, action: e.id.startsWith('TIT-') ? { libelle: urgence === 'EN_RETARD' ? 'Renouveler (expiré)' : 'Renouveler', lien, titreId: e.id } : { libelle: 'Faire une nouvelle demande', lien } };
     }
     return { ...base, groupe: 'A_JOUR', urgence: 'NORMALE', action: { libelle: 'Voir', lien } };
   }
@@ -103,7 +113,10 @@ function ligne(e: CompteElement, now: Date, dejaCouverte: (obligationId: string)
 const RANG_URGENCE = { EN_RETARD: 0, BIENTOT: 1, NORMALE: 2 } as const;
 
 export function aFaire(sections: CompteSection[], now: Date, dejaCouverte: (obligationId: string) => boolean = () => false) {
-  const lignes = sections.flatMap((s) => s.elements).map((e) => ligne(e, now, dejaCouverte)).filter((l): l is LigneAFaire => !!l);
+  const elements = sections.flatMap((s) => s.elements);
+  // Une obligation déjà portée par un constat ou un dossier (paiement direct sur cette ligne) n'est pas répétée.
+  const portees = new Set(elements.filter((e) => e.rubrique === 'ARRIERE' && e.obligationId).map((e) => e.obligationId!));
+  const lignes = elements.filter((e) => !(e.rubrique === 'OBLIGATION' && portees.has(e.id))).map((e) => ligne(e, now, dejaCouverte)).filter((l): l is LigneAFaire => !!l);
   const tri = (a: LigneAFaire, b: LigneAFaire) => RANG_URGENCE[a.urgence] - RANG_URGENCE[b.urgence] || (a.echeance ?? '9999').localeCompare(b.echeance ?? '9999');
   const groupe = (g: GroupeAFaire) => lignes.filter((l) => l.groupe === g).sort(tri);
   return {

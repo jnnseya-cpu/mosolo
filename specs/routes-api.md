@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1598 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1599 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -33,7 +33,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1598 routes** dans 5
 | extension terrain | 64 |
 | extension titres | 22 |
 | extension tresor | 43 |
-| extension vehicules-controle | 84 |
+| extension vehicules-controle | 85 |
 | extension verticales | 194 |
 | module ai | 3 |
 | module alerts | 1 |
@@ -1455,6 +1455,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1598 routes** dans 5
 | GET | `/v1/fourrieres/rapprochement` |
 | GET | `/v1/fourrieres/sites` |
 | POST | `/v1/fourrieres/sites` |
+| GET | `/v1/public/centres-agrees` |
 | GET | `/v1/public/centres-agrees/:code` |
 | GET | `/v1/public/vehicules/domaine-officiel` |
 | GET | `/v1/public/vehicules/vignettes/:numero` |

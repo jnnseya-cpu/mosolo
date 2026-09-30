@@ -44,6 +44,8 @@ export interface CompteElement {
   objectId?: string;
   /** Écran du module (lien de l'interface). */
   lien?: string;
+  /** Obligation à payer liée (constat retenu, dossier de recouvrement) : « À faire » ouvre directement le paiement. */
+  obligationId?: string;
 }
 
 export interface CompteSection {

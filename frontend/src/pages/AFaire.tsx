@@ -20,7 +20,7 @@ import { ErrorState, Loading } from '../components/States';
 interface Ligne {
   id: string; groupe: 'A_FAIRE' | 'EN_VERIFICATION' | 'A_JOUR'; categorie: string; libelle: string; etat: string;
   echeance: string | null; montant: MoneyJSON | null; urgence: 'EN_RETARD' | 'BIENTOT' | 'NORMALE';
-  action: { libelle: string; lien: string; obligationId?: string } | null;
+  action: { libelle: string; lien: string; obligationId?: string; titreId?: string; contesterObligationId?: string } | null;
 }
 interface AFaireData { aFaire: Ligne[]; enVerification: Ligne[]; aJour: Ligne[]; regles: { principe: string; renouvellementJours: number; statut: string } }
 
@@ -43,10 +43,18 @@ const ETAT_LISIBLE: Record<string, string> = {
 };
 const lisible = (s: string) => ETAT_LISIBLE[s] ?? s.toLowerCase().replace(/_/g, ' ');
 
-export function AFaire({ taxpayerId, onPay }: { taxpayerId: string; onPay: (obligationId: string) => void }) {
+export function AFaire({ taxpayerId, onPay, onContest, onRenew }: {
+  taxpayerId: string;
+  /** Ouvre le paiement de l'obligation : choix du canal (monnaie mobile, QR, USSD, banque, carte, point agréé) et de la passerelle. */
+  onPay: (obligationId: string) => void;
+  onContest?: (obligationId: string) => void;
+  /** Renouvelle un titre : choix du canal, puis référence et étapes. */
+  onRenew?: (titreId: string, libelle: string) => void;
+}) {
   const { user, fmtDate } = useApp();
   const q = useApi(() => api<AFaireData>(`/v1/moi/a-faire${user?.taxpayerId === taxpayerId ? '' : `?taxpayerId=${encodeURIComponent(taxpayerId)}`}`), [taxpayerId, user?.id]);
   const [voirAJour, setVoirAJour] = useState(false);
+  const [voirVerif, setVoirVerif] = useState(false);
   if (q.loading && !q.data) return <Loading />;
   if (q.error) return <ErrorState error={q.error} onRetry={q.reload} />;
   const d = q.data;
@@ -54,7 +62,16 @@ export function AFaire({ taxpayerId, onPay }: { taxpayerId: string; onPay: (obli
 
   const action = (l: Ligne) => {
     if (!l.action) return null;
-    if (l.action.obligationId) return <button type="button" className="btn btn-primary btn-sm" onClick={() => onPay(l.action!.obligationId!)}>{l.action.libelle}</button>;
+    const a = l.action;
+    if (a.obligationId) {
+      return (
+        <>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => onPay(a.obligationId!)}>{a.libelle}</button>
+          {a.contesterObligationId && onContest && <button type="button" className="btn btn-secondary btn-sm" onClick={() => onContest(a.contesterObligationId!)}>Contester</button>}
+        </>
+      );
+    }
+    if (a.titreId && onRenew) return <button type="button" className="btn btn-primary btn-sm" onClick={() => onRenew(a.titreId!, l.libelle)}>{a.libelle}</button>;
     if (l.action.lien.startsWith('/espace#')) {
       const target = l.action.lien.slice('/espace#'.length);
       return <button type="button" className="btn btn-secondary btn-sm" onClick={() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth' })}>{l.action.libelle}</button>;
@@ -87,14 +104,19 @@ export function AFaire({ taxpayerId, onPay }: { taxpayerId: string; onPay: (obli
     <section className="section afaire" aria-labelledby="sec-afaire" id="a-faire">
       <div className="section-head"><h2 id="sec-afaire">À faire</h2><span className="count">{d.aFaire.length}</span></div>
       <p className="small muted">{d.regles.principe}</p>
+      <p className="small" data-testid="afaire-comment-payer"><Icon name="info" size={14} /> « Payer », « Payer l’amende » et « Renouveler » ouvrent ici même le choix de votre moyen de paiement — monnaie mobile, code QR, USSD, banque, carte ou point de paiement agréé (et, selon le canal, BitriPay ou KODA) — puis vous donnent votre référence et les étapes à suivre.</p>
       {d.aFaire.length === 0
         ? <div className="callout callout-info" role="status"><Icon name="check" size={18} /><span>Rien à faire pour le moment : vous êtes à jour.</span></div>
         : liste(d.aFaire, 'afaire-maintenant')}
       {d.enVerification.length > 0 && (
         <>
-          <h3 className="afaire-sub">En cours de vérification par l’administration <span className="count">{d.enVerification.length}</span></h3>
+          <h3 className="afaire-sub">
+            <button type="button" className="btn-link" aria-expanded={voirVerif} onClick={() => setVoirVerif(!voirVerif)}>
+              <Icon name="chevronDown" size={16} className={voirVerif ? 'side-rot' : undefined} /> En cours de vérification par l’administration <span className="count">{d.enVerification.length}</span>
+            </button>
+          </h3>
           <p className="small muted">Rien à faire de votre côté : vous êtes prévenu dès qu’une décision est prise.</p>
-          {liste(d.enVerification, 'afaire-verification')}
+          {voirVerif && liste(d.enVerification, 'afaire-verification')}
         </>
       )}
       {d.aJour.length > 0 && (

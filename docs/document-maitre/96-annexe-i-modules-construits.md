@@ -1719,3 +1719,21 @@ d'Africell à KODA ; présentations de KODA et de BitriPay (`docs/sources/KODA_p
   confirmation de KODA n'est pas requis ; il ne reste à fournir que les **clés API et les secrets de webhook** de
   BitriPay et de KODA, saisis dans « Clés et raccordements » (ou dans l'environnement du serveur).
 
+
+## I.44 « À faire » : chaque bouton mène au paiement de SON élément, dans le moyen choisi (30/09/2026)
+
+Remarque du maître d'ouvrage : « on ne voit pas comment un clic sur ces boutons fait payer la personne dans le moyen
+choisi ; c'est flou et inachevé ». Correction :
+
+- **Payer** (impôts et redevances) : ouvre sur place le choix du moyen — monnaie mobile, code QR, USSD, banque, carte,
+  point agréé, et selon le canal BitriPay ou KODA — puis la référence et les étapes (même flux que l'espace). Si
+  l'obligation n'est pas dans la liste déjà chargée, elle est lue au serveur : le bouton n'est jamais sans effet.
+- **Payer l'amende** (constat de stationnement retenu, dossier de recouvrement) : paiement direct de l'obligation liée
+  au constat, avec **Contester** à côté ; l'obligation n'est plus répétée sur une seconde ligne.
+- **Renouveler** (titres, pass, abonnements) : choix du moyen, puis commande de prolongation au tarif du titre
+  (`POST /v1/titres/:id/prolongations`) → référence et étapes ; le nouveau titre est émis à la confirmation du paiement.
+  Les autorisations délivrées par instruction (événement, chantier) affichent « Faire une nouvelle demande ».
+- **Contrôle technique** : « Prendre rendez-vous » mène au formulaire de « Mes véhicules », où l'usager choisit son
+  véhicule et son **centre agréé dans une liste** (annuaire public `GET /v1/public/centres-agrees` : centres agréés et
+  habilités seulement, sans donnée interne) au lieu d'en saisir le numéro.
+- Phrase d'aide en tête du bloc : ce que font « Payer », « Payer l'amende » et « Renouveler ».

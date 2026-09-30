@@ -3,7 +3,8 @@
  * sa taxe de circulation, son contrôle technique (deux vignettes distinctes), son dossier de fourrière (situation
  * fiscale payable depuis le téléphone), ses rendez-vous et son attestation. Aucun paiement en espèces.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
 import { PageHead } from '../../components/Shell';
@@ -27,6 +28,11 @@ export default function MesVehicules() {
   const data = useApi(() => api<{ vehicles: Vehicle[]; notice: string; situationFiscale?: { id: string; label: string; amount: { amount: string; currency: string }; dueDate: string }[] }>('/v1/vehicules/mes-vehicules'), [user?.id]);
   const r = useRunner(() => data.reload());
   const [rdv, setRdv] = useState({ plate: '', centreId: '', date: '' });
+  // Annuaire public des centres agréés (30/09/2026) : l'usager choisit son centre au lieu d'en saisir le numéro.
+  // Arrivée depuis « À faire » (#rendez-vous-ct) : défilement jusqu'au formulaire de rendez-vous.
+  const loc = useLocation();
+  useEffect(() => { if (loc.hash) setTimeout(() => document.getElementById(loc.hash.slice(1))?.scrollIntoView({ behavior: 'smooth' }), 300); }, [loc.hash, data.data]);
+  const centres = useApi(() => api<{ items: { id: string; publicCode: string; name: string; kindLabel: string; commune: string; hours?: { open: string; close: string } }[] }>('/v1/public/centres-agrees'), []);
 
   if (!user) return <div className="page"><PageHead title="Mes véhicules" /><p className="notice">Connectez-vous à votre espace.</p></div>;
   return (
@@ -60,9 +66,18 @@ export default function MesVehicules() {
         </section>
       )}
       <div className="vc-form">
-        <h3>Prendre rendez-vous pour un contrôle technique</h3>
-        <label><span>Plaque</span><input value={rdv.plate} onChange={(e) => setRdv({ ...rdv, plate: e.target.value })} /></label>
-        <label><span>Centre agréé (numéro)</span><input value={rdv.centreId} onChange={(e) => setRdv({ ...rdv, centreId: e.target.value })} /></label>
+        <h3 id="rendez-vous-ct">Prendre rendez-vous pour un contrôle technique</h3>
+        <p className="small muted">Choisissez votre véhicule, un centre agréé et une date : le centre effectue le contrôle et appose la vignette technique ; le résultat apparaît ensuite ici et dans « Mes preuves ».</p>
+        <label><span>Véhicule</span>
+          <select value={rdv.plate} onChange={(e) => setRdv({ ...rdv, plate: e.target.value })}>
+            <option value="">Choisir un véhicule</option>
+            {(data.data?.vehicles ?? []).map((v) => <option key={v.plate} value={v.plate}>{v.plate} — {v.controleTechnique.label}</option>)}
+          </select></label>
+        <label><span>Centre agréé</span>
+          <select value={rdv.centreId} onChange={(e) => setRdv({ ...rdv, centreId: e.target.value })}>
+            <option value="">{centres.data?.items.length ? 'Choisir un centre agréé' : 'Aucun centre agréé disponible'}</option>
+            {(centres.data?.items ?? []).map((c) => <option key={c.id} value={c.id}>{c.commune} — {c.name}{c.hours ? ` (${c.hours.open}–${c.hours.close})` : ''}</option>)}
+          </select></label>
         <label><span>Date</span><input type="date" value={rdv.date} onChange={(e) => setRdv({ ...rdv, date: e.target.value })} /></label>
         <button type="button" className="btn btn-primary btn-sm" disabled={r.busy || !rdv.plate || !rdv.centreId || !rdv.date} onClick={() => void r.run('/v1/vehicules/rendez-vous', rdv, 'Rendez-vous demandé.')}>Demander le rendez-vous</button>
       </div>

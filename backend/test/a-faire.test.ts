@@ -53,6 +53,29 @@ describe('« À faire » de l’usager', () => {
     }
   });
 
+  it('chaque ligne d’argent ouvre le paiement de SON élément : amende (payer ou contester), renouvellement de titre, sans doublon', async () => {
+    const env = await fullApp();
+    const d = (await env.req('GET', '/v1/moi/a-faire', 'u-contribuable')).json();
+    type L = { libelle: string; action: { libelle: string; obligationId?: string; titreId?: string; contesterObligationId?: string; lien: string } | null };
+    const amende = (d.aFaire as L[]).find((l) => l.libelle.startsWith('Constat de stationnement') && l.action?.obligationId);
+    expect(amende?.action).toMatchObject({ libelle: 'Payer l’amende' });
+    expect(amende!.action!.contesterObligationId).toBe(amende!.action!.obligationId);
+    // L'obligation de l'amende n'est pas répétée en ligne séparée.
+    expect((d.aFaire as L[]).filter((l) => l.action?.obligationId === amende!.action!.obligationId)).toHaveLength(1);
+    // Titre à renouveler : identifiant du titre, puis commande de prolongation avec le canal choisi → référence.
+    const titre = (d.aFaire as L[]).find((l) => l.action?.titreId);
+    expect(titre).toBeTruthy();
+    const r = await env.req('POST', `/v1/titres/${titre!.action!.titreId}/prolongations`, 'u-contribuable', { channel: 'USSD' }, { 'idempotency-key': 'renouv-test-1' });
+    expect(r.statusCode, JSON.stringify(r.json())).toBe(201);
+    expect(r.json().payments[0].paymentReference).toMatch(/^PR-/);
+    // Contrôle technique : rendez-vous, centre choisi dans l'annuaire public (aucune donnée interne).
+    const ct = (d.aFaire as L[]).find((l) => l.action?.libelle === 'Prendre rendez-vous (contrôle technique)');
+    expect(ct?.action?.lien).toBe('/vehicules/mes-vehicules#rendez-vous-ct');
+    const centres = (await env.req('GET', '/v1/public/centres-agrees')).json().items as Record<string, unknown>[];
+    expect(centres.length).toBeGreaterThan(0);
+    for (const c of centres) for (const k of ['dossier', 'diligence', 'invitation', 'quotas']) expect(c[k]).toBeUndefined();
+  });
+
   it('mêmes droits que le compte unique : titulaire, mandataire dans son mandat ; agent et tiers refusés', async () => {
     const env = await fullApp();
     expect((await env.req('GET', '/v1/moi/a-faire', 'u-controleur')).statusCode).toBe(403);
