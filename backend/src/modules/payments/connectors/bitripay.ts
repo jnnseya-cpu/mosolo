@@ -328,7 +328,8 @@ export class BitriPayConnector implements PaymentConnector {
   async createIntent(req: IntentRequest): Promise<CreatedIntent> {
     const amountMinor = toSafeJsonInteger(toMinorUnits(req.amount, this.exponents));
     if (!this.http) {
-      return { providerIntentId: `sbx_bitripay_${randomSecret(8)}`, checkoutUrl: null, qrPayload: null, sandbox: true };
+      // Bac à sable local (démonstration) : page de paiement SIMULÉE de MOSOLO (/demo/passerelle), jamais la vraie page.
+      return { providerIntentId: `sbx_bitripay_${randomSecret(8)}`, checkoutUrl: `/demo/passerelle/bitripay?ref=${encodeURIComponent(req.paymentReference)}`, qrPayload: null, sandbox: true };
     }
     const back = this.config.returnUrl;
     const withRef = (extra = '') => (back ? `${back}${back.includes('?') ? '&' : '?'}ref=${encodeURIComponent(req.paymentReference)}${extra}` : undefined);

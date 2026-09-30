@@ -118,4 +118,34 @@ describe('Canaux de paiement du contribuable, de bout en bout', () => {
     delete process.env.MOSOLO_DEMO_MODE;
     expect((await env.req('POST', '/v1/providers/mm-operator-a/demo-operator-confirmation', 'u-tresor', { paymentReference: o.paymentReference })).statusCode).not.toBe(200);
   });
+  it('page de paiement SIMULÉE BitriPay / KODA (démonstration) : MOSOLO → page → paiement → webhook signé sur la route réelle → retour → quittance provisoire', async () => {
+    const env = await setup('demo-secret-mm-operator-a', true);
+    const obls = env.app.ctx.assessment.byTaxpayer(DEMO.taxpayerId)
+      .filter((o) => ['EMISE', 'EXIGIBLE', 'EN_RETARD'].includes(o.status) && env.app.ctx.payments.paidOn(o.id).isZero() && !env.app.ctx.payments.byObligation(o.id).some((p) => p.status === 'INITIE'))
+      .map((o) => o.id);
+    for (const [i, channel, provider, operateur] of [[0, 'MOBILE_MONEY', 'bitripay', 'mpesa_cd'], [1, 'USSD', 'koda', 'africell_cd']] as const) {
+      const c = await env.req('POST', `/v1/obligations/${obls[i]}/payment-orders`, 'u-contribuable', { channel, provider }, { 'idempotency-key': randomUUID() });
+      expect(c.statusCode, JSON.stringify(c.json())).toBe(201);
+      const o = c.json() as { paymentReference: string; checkoutUrl: string; sandbox: boolean };
+      expect(o.sandbox).toBe(true);
+      expect(o.checkoutUrl).toBe(`/demo/passerelle/${provider}?ref=${encodeURIComponent(o.paymentReference)}`);
+      const page = await env.req('GET', `/v1/demo/passerelle/${provider}?ref=${encodeURIComponent(o.paymentReference)}`, 'u-contribuable');
+      expect(page.statusCode, JSON.stringify(page.json())).toBe(200);
+      expect(page.json().operateurs).toContain(operateur);
+      // Un autre usager ne voit ni ne paie la référence d'autrui.
+      expect((await env.req('GET', `/v1/demo/passerelle/${provider}?ref=${encodeURIComponent(o.paymentReference)}`, 'u-locataire')).statusCode).toBe(403);
+      expect((await env.req('POST', `/v1/demo/passerelle/${provider}/payer`, 'u-locataire', { paymentReference: o.paymentReference, operateur })).statusCode).toBe(403);
+      const p = await env.req('POST', `/v1/demo/passerelle/${provider}/payer`, 'u-contribuable', { paymentReference: o.paymentReference, operateur });
+      expect(p.statusCode, JSON.stringify(p.json())).toBe(200);
+      expect(p.json().retour).toBe(`/paiement/retour?ref=${encodeURIComponent(o.paymentReference)}`);
+      const r = receiptOf(env, o.paymentReference);
+      expect(r.order.status).toBe('CONFIRME');
+      expect(r.receipt?.status).toBe('PROVISOIRE');
+      const st = await env.req('GET', `/v1/payment-orders/${encodeURIComponent(o.paymentReference)}/status`, 'u-contribuable');
+      expect(st.json()).toMatchObject({ state: 'CONFIRME' });
+    }
+    // Hors mode démonstration : page refusée.
+    delete process.env.MOSOLO_DEMO_MODE;
+    expect((await env.req('GET', '/v1/demo/passerelle/koda?ref=X-1', 'u-contribuable')).statusCode).not.toBe(200);
+  });
 });

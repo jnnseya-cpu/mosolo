@@ -129,6 +129,59 @@ export function registerPaymentRoutes(app: FastifyInstance, ctx: AppContext): vo
     return ctx.payments.testProviderConnection(user, req.params.provider);
   });
 
+  /** Webhook SIGNÉ (secret de démonstration) tel que le prestataire l'enverrait, pour un ordre du bac à sable local. */
+  const simulatedWebhook = (
+    connector: { id: string; exponents: Parameters<typeof toMinorUnits>[1] },
+    order: { paymentReference: string; providerIntentId?: string; amount: { amount: string; currency: string } },
+    event: 'succeeded' | 'settled' | 'ambiguous' | 'canceled',
+  ): { raw: string; headers: Record<string, string> } => {
+    const minor = Number(toMinorUnits(order.amount as Parameters<typeof toMinorUnits>[0], connector.exponents));
+    if (connector.id === 'koda') {
+      if (event !== 'succeeded') throw conflict('EVENT_NOT_SUPPORTED', 'KODA n’émet que payment.verified (paiement vérifié).');
+      const raw = JSON.stringify({ id: `evt_sim_${randomUUID()}`, type: 'payment.verified', data: { intent_id: order.providerIntentId, amount: minor, currency: order.amount.currency, receipt_id: `KR-SIM-${order.paymentReference}`, metadata: { payment_reference: order.paymentReference } } });
+      return { raw, headers: { 'x-koda-signature': signKodaWebhook(KODA_DEMO_WEBHOOK_SECRET, raw) } };
+    }
+    const type = { succeeded: 'payment_intent.succeeded', settled: 'payment_intent.settled', ambiguous: 'payment_intent.ambiguous_hold', canceled: 'payment_intent.canceled' }[event];
+    const t = Math.floor(ctx.clock.now().getTime() / 1000);
+    const raw = JSON.stringify({ id: `evt_sim_${randomUUID()}`, type, created: t, data: { object: { id: order.providerIntentId, amount_minor: minor, currency: order.amount.currency.toLowerCase(), metadata: { payment_reference: order.paymentReference }, ...(event === 'settled' ? { settlement_id: `st_sim_${order.paymentReference}` } : {}) } } });
+    return { raw, headers: { 'bitripay-signature': signBitriPayWebhook(BITRIPAY_DEMO_WEBHOOK_SECRET, raw, t) } };
+  };
+
+  /**
+   * Démonstration (30/09/2026) : PAGE DE PAIEMENT SIMULÉE de BitriPay / KODA (/demo/passerelle/:provider). Le
+   * contribuable « paie » sur cette page ; le prestataire simulé envoie alors son webhook SIGNÉ à la ROUTE RÉELLE des
+   * webhooks (mêmes contrôles qu'en production), puis le contribuable revient sur /paiement/retour. Réservé au bac à
+   * sable local en mode démonstration et au payeur de l'ordre ; refusé dès qu'une vraie clé est configurée.
+   */
+  app.get<{ Params: { provider: string }; Querystring: { ref?: string } }>('/v1/demo/passerelle/:provider', async (req) => {
+    const user = requireUser(req);
+    const connector = ctx.connectors.get(req.params.provider);
+    if (!connector || connector.mode !== 'SANDBOX_LOCAL' || !isDemoMode()) throw conflict('SIMULATION_FORBIDDEN', 'Page de paiement simulée : réservée au bac à sable local en mode démonstration.');
+    const order = ctx.payments.byReference(String(req.query.ref ?? ''));
+    if (!order || order.provider !== connector.id) throw notFound('PAYMENT_REFERENCE_NOT_FOUND', 'Référence inconnue pour ce prestataire.');
+    authorize(user, 'payment.create', { taxpayerId: order.taxpayerId });
+    const operateurs = connector.id === 'koda' ? (connector as unknown as { operators: readonly string[] }).operators
+      : [...((connector as unknown as { describe(): { allowedOperators?: string[] } }).describe().allowedOperators ?? []), ...(order.channel === 'CARD' ? ['card'] : [])];
+    return {
+      provider: connector.id, label: connector.label, paymentReference: order.paymentReference, amount: order.amount, status: order.status, channel: order.channel,
+      intentId: order.providerIntentId, operateurs: order.channel === 'CARD' ? ['card'] : operateurs, expiresAt: order.expiresAt, sandbox: true,
+    };
+  });
+  app.post<{ Params: { provider: string } }>('/v1/demo/passerelle/:provider/payer', async (req, reply) => {
+    const user = requireUser(req);
+    const connector = ctx.connectors.get(req.params.provider);
+    if (!connector || connector.mode !== 'SANDBOX_LOCAL' || !isDemoMode()) throw conflict('SIMULATION_FORBIDDEN', 'Page de paiement simulée : réservée au bac à sable local en mode démonstration.');
+    const body = parse(z.object({ paymentReference: z.string().min(3).max(64), operateur: z.string().max(32) }).strict(), req.body);
+    const order = ctx.payments.byReference(body.paymentReference);
+    if (!order || order.provider !== connector.id || !order.providerIntentId) throw notFound('PAYMENT_REFERENCE_NOT_FOUND', 'Référence inconnue pour ce prestataire.');
+    authorize(user, 'payment.create', { taxpayerId: order.taxpayerId });
+    const { raw, headers } = simulatedWebhook(connector, order, 'succeeded');
+    ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'provider.sandbox.checkout_paid', resourceType: 'payment_order', resourceId: order.id, details: { provider: connector.id, operateur: body.operateur } });
+    // Le webhook passe par la route RÉELLE (signature, anti-rejeu, montant, confirmation), comme en production.
+    const res = await app.inject({ method: 'POST', url: `/v1/providers/${connector.id}/webhooks`, headers: { 'content-type': 'application/json', ...headers }, payload: raw });
+    return reply.code(res.statusCode).send({ simulated: true, retour: `/paiement/retour?ref=${encodeURIComponent(order.paymentReference)}`, webhook: res.json() });
+  });
+
   // Démonstration : simule l'envoi, par le prestataire, d'un webhook SIGNÉ (secret de démonstration) vers la route réelle.
   // Refusé hors bac à sable local et hors mode démonstration : en production, seul le prestataire peut confirmer.
   const simSchema = z.object({ paymentReference: z.string().min(3).max(64), event: z.enum(['succeeded', 'settled', 'ambiguous', 'canceled']) }).strict();
@@ -141,18 +194,7 @@ export function registerPaymentRoutes(app: FastifyInstance, ctx: AppContext): vo
     const body = parse(simSchema, req.body);
     const order = ctx.payments.byReference(body.paymentReference);
     if (!order || order.provider !== connector.id || !order.providerIntentId) throw notFound('PAYMENT_REFERENCE_NOT_FOUND', 'Référence inconnue pour ce prestataire.');
-    const minor = Number(toMinorUnits(order.amount, connector.exponents));
-    let raw: string; let headers: Record<string, string>;
-    if (connector.id === 'koda') {
-      if (body.event !== 'succeeded') throw conflict('EVENT_NOT_SUPPORTED', 'KODA n’émet que payment.verified (paiement vérifié).');
-      raw = JSON.stringify({ id: `evt_sim_${randomUUID()}`, type: 'payment.verified', data: { intent_id: order.providerIntentId, amount: minor, currency: order.amount.currency, receipt_id: `KR-SIM-${order.paymentReference}`, metadata: { payment_reference: order.paymentReference } } });
-      headers = { 'x-koda-signature': signKodaWebhook(KODA_DEMO_WEBHOOK_SECRET, raw) };
-    } else {
-      const type = { succeeded: 'payment_intent.succeeded', settled: 'payment_intent.settled', ambiguous: 'payment_intent.ambiguous_hold', canceled: 'payment_intent.canceled' }[body.event];
-      const t = Math.floor(ctx.clock.now().getTime() / 1000);
-      raw = JSON.stringify({ id: `evt_sim_${randomUUID()}`, type, created: t, data: { object: { id: order.providerIntentId, amount_minor: minor, currency: order.amount.currency.toLowerCase(), metadata: { payment_reference: order.paymentReference }, ...(body.event === 'settled' ? { settlement_id: `st_sim_${order.paymentReference}` } : {}) } } });
-      headers = { 'bitripay-signature': signBitriPayWebhook(BITRIPAY_DEMO_WEBHOOK_SECRET, raw, t) };
-    }
+    const { raw, headers } = simulatedWebhook(connector, order, body.event);
     ctx.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'provider.sandbox.simulated', resourceType: 'payment_order', resourceId: order.id, details: { provider: connector.id, event: body.event } });
     return { simulated: true, sandbox: true, ...ctx.payments.handleConnectorWebhook(connector.id, headers, raw) };
   });

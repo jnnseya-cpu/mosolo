@@ -1737,3 +1737,32 @@ choisi ; c'est flou et inachevé ». Correction :
   véhicule et son **centre agréé dans une liste** (annuaire public `GET /v1/public/centres-agrees` : centres agréés et
   habilités seulement, sans donnée interne) au lieu d'en saisir le numéro.
 - Phrase d'aide en tête du bloc : ce que font « Payer », « Payer l'amende » et « Renouveler ».
+
+## I.45 BitriPay et KODA de bout en bout dans la démonstration ; mise en service avec les vraies clés (30/09/2026)
+
+Remarque du maître d'ouvrage : « je ne vois toujours pas BitriPay et KODA de bout en bout, et je doute qu'en ajoutant les
+clés et le webhook tout fonctionne ». Ajout (rien n'est retiré) :
+
+- **Page de paiement SIMULÉE** `/demo/passerelle/<bitripay|koda>?ref=<référence>` : en démonstration (bac à sable local,
+  aucune clé), l'intention de paiement renvoie cette adresse au lieu de rien ; « Payer » y conduit le navigateur, comme il
+  conduirait à la page hébergée du prestataire. La page porte le bandeau « Page de paiement SIMULÉE — démonstration,
+  aucune somme réelle », sans logo de prestataire ; elle montre le bénéficiaire (compte public de la Ville), le montant
+  exact, la référence, « aucun frais pour vous » (§ I.43 bis), le choix de l'opérateur (Orange Money, M-Pesa, Airtel
+  Money, Africell Money ; carte pour BitriPay carte) et les étapes propres à chaque passerelle (KODA : payer comme
+  d'habitude par *144#… puis KODA vérifie la confirmation de l'opérateur ; BitriPay : demande de paiement sur le
+  téléphone).
+- **Parcours complet** : MOSOLO → page simulée → « Payer » → le prestataire simulé envoie son webhook **signé** à la
+  **route réelle** `/v1/providers/<p>/webhooks` (mêmes contrôles de signature, d'anti-rejeu, de montant et de référence
+  qu'en production) → retour sur `/paiement/retour?ref=…` (état lu dans MOSOLO) → quittance **provisoire**, définitive au
+  rapprochement du relevé.
+- **Garde-fous** : API `GET /v1/demo/passerelle/:provider` et `POST /v1/demo/passerelle/:provider/payer` réservées au
+  mode démonstration, au bac à sable local (refus dès qu'une vraie clé est configurée) et au payeur de l'ordre (droit
+  `payment.create` sur le contribuable) ; chaque paiement simulé est journalisé (`provider.sandbox.checkout_paid`).
+- **Avec les vraies clés** : l'intention est créée chez le prestataire, qui renvoie l'adresse de SA page ; la page
+  simulée n'est plus accessible. Vérification de mise en service, dans l'ordre : (1) saisir clé d'API et secret de
+  webhook dans « Clés et raccordements » (ou l'environnement du serveur) et faire approuver par une seconde personne ;
+  (2) déclarer chez le prestataire l'adresse de webhook `https://<domaine>/v1/providers/bitripay/webhooks` ou
+  `…/koda/webhooks` ; (3) « Tester la connexion » ; (4) un paiement réel de faible montant avec les clés de test, puis
+  de production ; (5) contrôler la quittance provisoire, puis le rapprochement. Les noms de champs non encore confirmés
+  par les prestataires restent listés dans `connectors/a-confirmer.ts` : tout écart constaté au test (4) se corrige dans
+  le connecteur, jamais en assouplissant un contrôle.

@@ -120,7 +120,7 @@ describe('Connecteur KODA', () => {
     expect(card.json().code).toBe('PROVIDER_CHANNEL_UNSUPPORTED');
     const res = await createProviderOrder(env, 'koda');
     expect(res.statusCode).toBe(201);
-    expect(res.json()).toMatchObject({ provider: 'koda', checkoutUrl: null, qrPayload: null, sandbox: true, status: 'INITIE' });
+    expect(res.json()).toMatchObject({ provider: 'koda', checkoutUrl: expect.stringMatching(/^\/demo\/passerelle\/koda\?ref=/), qrPayload: null, sandbox: true, status: 'INITIE' });
     expect(res.json().providerIntentId).toMatch(/^sbx_koda_/);
     expect(calls).toHaveLength(0);
   });

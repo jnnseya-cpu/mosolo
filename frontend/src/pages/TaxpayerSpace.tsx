@@ -130,11 +130,14 @@ function Explanation({ id }: { id: string }) {
   );
 }
 
-/** Conduit le navigateur vers la page de paiement hébergée du prestataire (même onglet). */
+/**
+ * Conduit le navigateur vers la page de paiement hébergée du prestataire (même onglet). Une adresse relative (page de
+ * paiement SIMULÉE du bac à sable, /demo/passerelle/…) reste sur MOSOLO ; une adresse externe doit être en https.
+ */
 function versPageDePaiement(url: string) {
   try {
-    const u = new URL(url);
-    if (u.protocol !== 'https:') return; // jamais vers une adresse non chiffrée
+    const u = new URL(url, window.location.origin);
+    if (u.origin !== window.location.origin && u.protocol !== 'https:') return; // jamais vers une adresse externe non chiffrée
     window.location.assign(u.toString());
   } catch { /* adresse invalide : le lien reste affiché */ }
 }
@@ -291,13 +294,14 @@ function PayFlow({ ob }: { ob: Obligation }) {
             <div className="provider-box">
               <p className="label">Payer via {order.provider === 'bitripay' ? 'BitriPay' : 'KODA'} {order.sandbox && <StatusBadge tone="warning" label="Bac à sable" />}</p>
               <div className="provider-row">
-                {(order.qrPayload || order.checkoutUrl) && <QrCode value={order.qrPayload ?? order.checkoutUrl!} size={132} alt={`Code QR de paiement ${order.provider}`} />}
+                {(order.qrPayload || order.checkoutUrl) && <QrCode value={order.qrPayload ?? new URL(order.checkoutUrl!, window.location.origin).toString()} size={132} alt={`Code QR de paiement ${order.provider}`} />}
                 <div className="min0 stack-sm">
                   <p className="small">Intention <span className="mono">{order.providerIntentId}</span></p>
                   {order.checkoutUrl
                     ? <>
                         <button type="button" className="btn btn-primary btn-sm" onClick={() => versPageDePaiement(order.checkoutUrl!)}>Payer sur la page {order.provider === 'bitripay' ? 'BitriPay' : 'KODA'} <Icon name="external" size={14} /></button>
                         <a className="btn btn-ghost btn-sm" href={order.checkoutUrl} target="_blank" rel="noreferrer">Ouvrir la page de paiement dans un nouvel onglet <Icon name="external" size={14} /></a>
+                        {order.sandbox && <p className="small muted">Démonstration : la page ouverte est une page de paiement SIMULÉE (aucune somme réelle) ; avec les vraies clés, c’est la page du prestataire.</p>}
                       </>
                     : <p className="small muted">Bac à sable local : aucune page réelle n’est ouverte ; la confirmation signée est simulée par le Trésor.</p>}
                   <Link className="btn-link small" to={`/paiement/retour?ref=${encodeURIComponent(order.paymentReference)}`}>Suivre l’état réel de ce paiement</Link>

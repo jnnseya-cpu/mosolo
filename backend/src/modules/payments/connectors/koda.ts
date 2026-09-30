@@ -204,7 +204,8 @@ export class KodaConnector implements PaymentConnector {
     // Conversion exacte AVANT tout appel : un montant non représentable est refusé (422), jamais arrondi.
     const amount = toSafeJsonInteger(toMinorUnits(req.amount, this.exponents));
     if (!this.http) {
-      return { providerIntentId: `sbx_koda_${randomSecret(8)}`, checkoutUrl: null, qrPayload: null, sandbox: true };
+      // Bac à sable local (démonstration) : page de paiement SIMULÉE de MOSOLO (/demo/passerelle), jamais la vraie page.
+      return { providerIntentId: `sbx_koda_${randomSecret(8)}`, checkoutUrl: `/demo/passerelle/koda?ref=${encodeURIComponent(req.paymentReference)}`, qrPayload: null, sandbox: true };
     }
     const sep = this.config.successUrl.includes('?') ? '&' : '?';
     const res = await this.http.request<Record<string, unknown>>('POST', '/intents', {

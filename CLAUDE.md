@@ -117,3 +117,7 @@ données de démonstration.
   au rapprochement du relevé seulement. **Frais des passerelles à la charge de la Ville** (décision du 30/09/2026),
   facturés à part (coût « API de paiement » du Gouvernorat), jamais retenus sur la recette ; le contribuable paie le
   montant exact de son obligation (annexe I, § I.43 bis).
+- **Démonstration BitriPay / KODA (30/09/2026)** : sans clé, « Payer » ouvre une page de paiement SIMULÉE
+  (`/demo/passerelle/…`, bandeau explicite, aucun logo) dont le webhook signé passe par la route réelle ; refusée dès
+  qu'une vraie clé est configurée. Mise en service réelle : clés + adresse de webhook + « Tester la connexion » + un
+  paiement de test (annexe I, § I.45).

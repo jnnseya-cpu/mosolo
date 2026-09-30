@@ -223,6 +223,8 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/tresor/prestataires', element: lazy(() => import('./prestataires/Prestataires')), nav: { label: 'Prestataires connectés', short: 'Prestataires', icon: 'phone', group: 'operations', roles: ['R17', 'R18', 'R22', 'R26', 'R27', 'R28'] } },
   // Page de retour après la page de paiement hébergée du prestataire (29/09/2026) : état réel lu dans MOSOLO.
   { path: '/paiement/retour', element: lazy(() => import('./prestataires/RetourPaiement')) },
+  // Page de paiement SIMULÉE de BitriPay / KODA (démonstration, 30/09/2026) : bac à sable local seulement (refus serveur sinon).
+  { path: '/demo/passerelle/:provider', element: lazy(() => import('./prestataires/PasserelleDemo')) },
   // « Clés et raccordements » (29/09/2026) : super-administrateur (R26) et responsable sécurité (R28) seulement.
   { path: '/plateforme/cles', element: lazy(() => import('./plateforme/ClesRaccordements')), nav: { label: 'Clés et raccordements', short: 'Clés', icon: 'lock', group: 'operations', roles: ['R26', 'R28'] } },
 
