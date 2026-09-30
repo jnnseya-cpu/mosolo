@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1595 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1596 routes** dans 50 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -45,7 +45,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1595 routes** dans 5
 | module drafts | 3 |
 | module field | 1 |
 | module fx | 1 |
-| module identity | 5 |
+| module identity | 6 |
 | module integrations | 7 |
 | module objects | 2 |
 | module payments | 11 |
@@ -1794,6 +1794,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1595 routes** dans 5
 | GET | `/v1/compte-unique/:taxpayerId` |
 | GET | `/v1/compte-unique/fiches-metier` |
 | GET | `/v1/compte-unique/me` |
+| GET | `/v1/moi/a-faire` |
 | POST | `/v1/registrations` |
 | GET | `/v1/taxpayers/:id` |
 

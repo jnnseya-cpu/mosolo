@@ -13,6 +13,7 @@ import { Ecran, Indicateurs, montant, pct, useRunner, useVue, type Indicator } f
 import type { MoneyJSON } from '@mosolo/shared';
 import { DonutViz, fmtCompact, fmtNombre, HeatGrid, KpiTile, LadderFunnel, sixEtatsFromLadder, StackedBarViz, StatusDistribution, type LadderLevelLike } from '../../components/viz';
 import { EtatIndicateurs, nombre, Tuiles, TuilesIndicateurs, Visuels } from '../pilotage/visuels';
+import { LienEcran } from '../../components/LienEcran';
 
 interface Row { key: string; obligations: number; assessedCdf: MoneyJSON; reconciledCdf: MoneyJSON; overdueCdf: MoneyJSON; recoveryPct: string | null; overduePct: string | null; coveragePct: string | null; situations: Record<string, { count: number }> }
 interface Alert { family: string; severity: 'CRITIQUE' | 'ELEVEE' | 'MOYENNE'; code: string; title: string; detail: string; count: number; link: string }
@@ -114,7 +115,7 @@ export default function Commandement() {
           <DataTable caption="Alertes" rows={d.alerts.items} rowKey={(a) => a.code} empty={<p className="muted">Aucune alerte.</p>} columns={[
             { key: 's', label: 'Sévérité', render: (a) => <StatusBadge tone={SEV[a.severity]} label={a.severity} /> },
             { key: 't', label: 'Alerte', primary: true, render: (a) => <><strong>{a.title}</strong><br /><span className="small muted">{a.detail}</span></> },
-            { key: 'l', label: 'Lien', render: (a) => <a href={a.link}>Ouvrir</a> },
+            { key: 'l', label: 'Lien', render: (a) => (a.link?.startsWith('/') ? <LienEcran to={a.link}>Ouvrir</LienEcran> : <a href={a.link}>Ouvrir</a>) },
           ]} />
         </Section>
         <Section title="Décision tracée" sub="Demande d’explication ou de plan d’action, suivie par le circuit des instructions ; aucun effet financier.">

@@ -25,6 +25,7 @@ import { ParcoursPanel } from '../modules/verticales/Parcours';
 import { EtablissementObligations } from '../modules/verticales/Determination';
 import { VerticaleVisuel } from './visuels';
 import { EspaceVerticaleVisuels, VerticaleAgentVisuels } from '../modules/verticales/visuels';
+import { LienEcran } from '../components/LienEcran';
 
 export { OBLIGATION_TONE as DUE_TONE };
 
@@ -425,7 +426,7 @@ function VerticalSpaceInner({ slug }: { slug: string }) {
             <section className="panel">
               <EmptyState title="Espace personnel réservé aux contribuables" icon="user">
                 Choisissez un profil de contribuable dans l’en-tête pour voir vos objets, obligations et démarches.{' '}
-                {user && <Link to="/verticales/console">Agents : ouvrir la console d’instruction</Link>}
+                {user && <LienEcran masquer to="/verticales/console">Agents : ouvrir la console d’instruction</LienEcran>}
               </EmptyState>
             </section>
           )}

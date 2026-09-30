@@ -20,7 +20,10 @@ describe('navigation par rôle', () => {
   const routes = (roles: string[]) => visibleNav(roles).filter((n) => !n.label).map((n) => n.to);
   const modules = (roles: string[]) => visibleNav(roles).filter((n) => n.label).map((n) => n.to);
   it('contribuable : accueil, inscription, espace, services, vérification', () => {
-    expect(routes(['R30'])).toEqual(['/', '/inscription', '/espace', '/services', '/verifier']);
+    // 30/09/2026 : l'usager connecté n'a ni « Vérifier », ni inscription, ni doublon de l'accueil dans son menu (tout est
+    // dans « Mon espace ») ; les pages restent publiques pour le public non connecté.
+    expect(routes(['R30'])).toEqual(['/espace', '/services']);
+    expect(routes([])).toEqual(['/', '/verifier']);
   });
   it('gouverneur : pilotage uniquement', () => {
     // Pas de « Vérification publique » dans le compte des autorités (R01 à R05), décision du 27/09/2026.

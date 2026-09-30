@@ -124,6 +124,37 @@ export function ecranUsagerHorsMenu(path: string, roles: readonly string[]): boo
   return !!ECRANS_USAGERS_HORS_MENU[path]?.some((r) => roles.includes(r));
 }
 
+/**
+ * Menu des usagers (contribuable R30, mandataire R31) — 30/09/2026, demande du maître d'ouvrage : « l'usager n'a rien à
+ * vérifier ; il doit trouver en un seul endroit ce qui le concerne et pouvoir agir ». Ces écrans ne figurent plus dans
+ * le MENU d'un compte dont tous les rôles sont des rôles d'usager : outils de vérification (quittance, preuve, vignette,
+ * agent), pages de connexion et d'inscription (déjà connecté), référentiels et outils des agents, doublons. Présentation
+ * seulement : aucune route ni page n'est retirée (pages publiques inchangées pour le public non connecté) ; tout ce qui
+ * concerne l'usager est dans « Mon espace » (bloc « À faire ») et dans « Mes démarches » (services).
+ */
+export const ROLES_USAGERS: readonly string[] = ['R30', 'R31'];
+export const MENU_USAGER_HORS_MENU: readonly string[] = [
+  '/', '/connexion', '/inscription', '/recuperation-compte',
+  '/verifier', '/preuve', '/vehicules/verifier', '/verifier-agent',
+  '/canaux/ussd', '/canaux/whatsapp-sms', '/referentiel/recettes', '/fiscal/assiette-2026', '/fiscal/dependances',
+  '/verticales/secteurs', '/citoyen/pieces', '/fiscal/carte', '/apprentissage', '/apprentissage/procedures',
+  '/rakapay/operateurs', '/publicite/signaler', '/fiscal/biens',
+];
+/** Vrai si `path` est hors du menu d'un compte d'usager (tous ses rôles sont R30 ou R31). */
+export function horsMenuUsager(path: string, roles: readonly string[]): boolean {
+  return roles.length > 0 && roles.every((r) => ROLES_USAGERS.includes(r)) && MENU_USAGER_HORS_MENU.includes(path);
+}
+
+/**
+ * Écrans où le Gouverneur, le directeur de cabinet et le secrétaire exécutif ne lisent qu'un AGRÉGAT (le serveur leur
+ * refuse les dossiers détaillés ; l'écran affiche « Lecture agrégée »). Relevé par le parcours du 30/09/2026. Leurs
+ * MENUS restent inchangés (décision du 27/09/2026 : tous les modules) ; seuls les liens À L'INTÉRIEUR des écrans vers
+ * ces pages ne sont plus proposés (ils menaient à une page sans contenu). Présentation seulement.
+ */
+export const ECRANS_LECTURE_AGREGEE_AUTORITES: readonly string[] = [
+  '/apprentissage/certifications', '/integrite/enquetes', '/audit', '/recouvrement', '/recouvrement/campagnes', '/terrain/supervision', '/integrite/revue-acces',
+];
+
 /** Gouverneur, directeur de cabinet, secrétaire exécutif : tous les modules (décision du 27/09/2026), en lecture agrégée. */
 export const ROLES_TOUS_MODULES: readonly string[] = ['R01', 'R02', 'R03'];
 
@@ -164,7 +195,7 @@ export const TRAVAIL_DU_JOUR: Readonly<Record<string, readonly string[]>> = {
   R27: ['/plateforme/supervision', '/integrite/incidents', '/plateforme/administration', '/acces/elevations'],
   R28: ['/integrite/incidents', '/integrite/revue-acces', '/integrite/cles', '/acces/elevations', '/integrite/scellement'],
   R29: ['/ia/modeles', '/ia/journal', '/ia'],
-  R30: ['/espace', '/mes-arrieres', '/espace/biens-relations', '/fiscal/declarations', '/vehicules/mes-vehicules', '/points-de-paiement'],
+  R30: ['/espace', '/mes-arrieres', '/espace/biens-relations', '/vehicules/mes-vehicules', '/fiscal/declarations', '/services', '/mon-espace/situation'],
   R31: ['/acces/mandats', '/fiscal/declarations', '/mes-arrieres', '/fiscal/biens', '/points-de-paiement'],
   R32: ['/canaux/point-agree', '/verifier', '/preuve'],
   R33: ['/verifier', '/preuve', '/transparence'],

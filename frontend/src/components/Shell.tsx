@@ -8,7 +8,7 @@ import { CityLogo, MakerMark, Tricolour } from './Brand';
 import { Icon } from './Icon';
 import { CurrencySelector, DemoUserSelector, LanguageSelector } from './Selectors';
 import { MODULE_ROUTES } from '../modules/registry';
-import { menuMasque, ROLES_TOUS_MODULES, travailDuJour } from '@mosolo/shared';
+import { horsMenuUsager, menuMasque, ROLES_TOUS_MODULES, travailDuJour } from '@mosolo/shared';
 import { focusables, useFocusTrap } from '../hooks/useFocusTrap';
 import { ID_ANNONCES } from '../lib/annonce';
 import { sansMasques, useMenuRattachements } from '../hooks/useMenuRattachements';
@@ -82,7 +82,8 @@ export function visibleNav(roles: string[] | undefined, entity?: string): NavIte
   // Présentation seulement (27/09/2026) : pas d'entrée de menu dont la lecture principale est refusée au rôle ; la route
   // et la page restent accessibles par leur adresse (voir shared/src/menu.ts).
   // Parcours par rôle (29/09/2026) : l'entité de la personne complète le masque (écrans lus par une entité exploitante).
-  return [...core, ...extra].filter((n) => !menuMasque(n.to, roles, entity));
+  // Usagers (30/09/2026) : ni outils de vérification ni écrans des agents dans leur menu (shared/src/menu.ts).
+  return [...core, ...extra].filter((n) => !menuMasque(n.to, roles, entity) && !horsMenuUsager(n.to, roles));
 }
 
 /**

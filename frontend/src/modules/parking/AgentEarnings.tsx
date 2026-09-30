@@ -13,12 +13,13 @@ import { Icon } from '../../components/Icon';
 import { StatusBadge, type Tone } from '../../components/StatusBadge';
 import { DataTable } from '../../components/DataTable';
 import { useApi } from '../../hooks/useApi';
-import { api, describeError } from '../../lib/api';
+import { api, ApiError, describeError } from '../../lib/api';
 import { Kpis, Money } from './shared';
 import './parking.css';
 import { AttenteBaseLegale } from '../juridique/AttenteBaseLegale';
 import { MoneyList, ReserveShareCard, type ReserveView } from '../terrain/ReserveAgents';
 import { AgentsCommissionsVisuels, EarningsVisuels } from './visuels';
+import { LienEcran } from '../../components/LienEcran';
 
 type EarningState = 'EN_ATTENTE' | 'CONFIRMEE' | 'ACQUISE' | 'ANNULEE';
 export interface EarningTotals { acquise: MoneyJSON[]; confirmee: MoneyJSON[]; enAttente: MoneyJSON[]; annulee: MoneyJSON[]; base: MoneyJSON[]; ceMois: MoneyJSON[]; payable?: MoneyJSON[] }
@@ -139,7 +140,12 @@ export function AgentCommissions() {
     <section className="panel">
       <header className="panel-head"><div><h2 className="panel-title"><Icon name="cash" size={18} /> Commissions des agents ({rate} %)</h2><p className="panel-sub">Tous les agents, tous les modules. {data.data?.reserveNotice ?? 'Calculées sur la recette publique confirmée ou rapprochée et versées par le Trésor.'} Aucun encaissement par l’agent. Montants par devise, jamais additionnés entre devises.</p></div></header>
       {data.data && data.data.items.length > 0 && <AgentsCommissionsVisuels items={data.data.items} />}
-      {data.loading && !data.data ? <Loading /> : data.error ? <ErrorState error={data.error} onRetry={data.reload} /> : (
+      {data.loading && !data.data ? <Loading /> : data.error && data.error instanceof ApiError && data.error.status === 403 ? (
+        // Décision du 29/09/2026 : les gains des autres sont réservés à la direction et à Groupe Nseya ; les autres
+        // rôles les consultent sur autorisation préalable (30/09/2026 : message clair au lieu d'une page « réservée »).
+        <div className="callout callout-info" role="note" data-testid="gains-autrui-reserves"><Icon name="lock" size={18} />
+          <span>Les gains des agents ne sont visibles que du Gouverneur, du directeur de cabinet, du secrétaire exécutif, du ministre des Finances et de Groupe Nseya. <LienEcran masquer to="/pilotage/acces-montants">Demander un accès (autorisation préalable)</LienEcran></span></div>
+      ) : data.error ? <ErrorState error={data.error} onRetry={data.reload} /> : (
         <DataTable rows={data.data?.items ?? []} rowKey={(a) => a.agentId} caption="Commissions des agents" empty={<p className="muted small">Aucune commission.</p>}
           columns={[
             { key: 'name', label: 'Agent', primary: true, render: (a) => <>{a.agentName} <span className="mono small muted">{a.agentId}</span></> },

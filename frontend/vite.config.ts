@@ -68,7 +68,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,png,svg,ico,webmanifest,woff2}'],
         // Moteur OCR (~7 Mo) : hors du pré-cache d'installation, mis en cache à la première lecture de plaque.
         globIgnores: ['**/ocr/**', '**/tiles/**'],
-        navigateFallbackDenylist: [/^\/tiles\//, /^\/ocr\//],
+        navigateFallbackDenylist: [/^\/tiles\//, /^\/ocr\//, /^\/l(\/|$)/, /^\/v1\//, /^\/\.well-known\//],
         navigateFallback: '/index.html',
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         runtimeCaching: [

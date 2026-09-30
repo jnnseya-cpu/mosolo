@@ -104,3 +104,7 @@ données de démonstration.
   audit et anti-fraude voient les montants nécessaires à leur travail après **approbation préalable d'un membre de la
   direction** (R01, R02, R03, R05), distinct du demandeur, sur motif journalisé, pour une durée limitée (7 jours par
   défaut, 30 au plus — à confirmer) ; chaque utilisation est journalisée (annexe I, § I.40).
+- **Espace usager (30/09/2026)** : l'usager n'a rien à vérifier ; tout ce qui le concerne est en un seul endroit, bloc
+  « À faire » de « Mon espace » (à faire maintenant / en cours de vérification par l'administration / à jour), avec une
+  action par ligne. Le menu des usagers (R30, R31) ne contient ni outils de vérification ni écrans d'agents ; aucun lien
+  proposé ne mène à une page réservée (annexe I, § I.41).

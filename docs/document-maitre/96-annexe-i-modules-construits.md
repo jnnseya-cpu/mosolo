@@ -1633,3 +1633,31 @@ d'une part).
   avec le motif et l'approbateur). Lecture seulement : aucune écriture financière.
 - Auditeurs : accès aux montants pour une mission, motif journalisé (réponse du maître d'ouvrage). Trésor : accès aux
   montants de la réserve pour la paie des agents, sur la même autorisation.
+
+## I.41 Espace usager : « À faire » en un seul endroit, menu sans outils d'agents, liens morts corrigés (30/09/2026)
+
+Demande du maître d'ouvrage : « trop de liens mènent à des pages indisponibles ; des fonctions réservées aux agents de
+terrain apparaissent partout, en particulier dans l'accès des usagers. L'usager n'a rien à vérifier : il doit trouver en
+un seul endroit ce qui doit l'être, facilement, et pouvoir agir. »
+
+- **« À faire »** en tête de « Mon espace » (`/espace`), calculé sur le compte unique (`GET /v1/moi/a-faire`, mêmes
+  droits : titulaire ; mandataire dans son mandat ; agents et tiers refusés) :
+  - *À faire maintenant* : payer (ouvre le paiement dans l'espace), régulariser un arriéré ou un constat, renouveler un
+    titre ou un mandat (échu ou à moins de **30 jours — par défaut, à confirmer**), passer le contrôle technique,
+    répondre à un écart ou compléter une démarche ; trié par urgence (en retard, bientôt, le reste) ;
+  - *En cours de vérification par l'administration* : démarches déposées ou en instruction, biens enregistrés à titre
+    provisoire, quittances en attente de confirmation bancaire — rien à faire, l'usager suit l'état ;
+  - *À jour* : titres, autorisations, pièces, mandats et biens valides (replié).
+- **Liens de l'usager** : les liens du compte unique qui pointaient vers des écrans d'agents (recouvrement, identité,
+  chaîne des sept questions, fiches sectorielles, vérification) mènent désormais aux écrans de l'usager (arriérés,
+  profils, biens, démarches, quittances de l'espace).
+- **Menu des usagers** (R30, R31) : sans outils de vérification (quittance, preuve, vignette, agent), sans connexion ni
+  inscription (déjà connecté), sans référentiels ni écrans d'agents (contrôle des pièces, relevés sectoriels, carte des
+  agents, simulateur USSD, apprentissage des agents) ni doublon ; 48 → 29 entrées, dont 7 au « travail du jour »
+  (Mon espace, arriérés, biens, véhicules, déclarations, démarches, attestation). Présentation seulement : aucune page
+  ni route retirée (les pages publiques restent ouvertes au public non connecté).
+- **Liens morts corrigés** (parcours automatique de 7 comptes usagers et 34 profils d'agents) : « version légère » (`/l`,
+  interceptée par le cache hors ligne), « Autour de moi » et « console d'instruction » proposés aux usagers, fiches
+  sectorielles et grands redevables proposés hors de la DGTK, liens « Ouvrir » des autorités vers des pages en lecture
+  agrégée seulement (`ECRANS_LECTURE_AGREGEE_AUTORITES`), commissions des agents du tableau de stationnement pour
+  l'audit (message et lien « Accès aux montants » au lieu d'une page réservée). Résultat : 0 lien mort pour les usagers.

@@ -26,6 +26,7 @@ import '../modules/fiscal/fiscal.css';
 import { SeptQuestionsPanel } from '../modules/chaine/SeptQuestions';
 import { EspaceVisuel, type EtatDef } from './visuels';
 import { MonCompteUnique } from '../modules/compte-unique/MonCompteUnique';
+import { AFaire } from './AFaire';
 
 /** Accès aux démarches fiscales (module fiscal) depuis l'espace contribuable. */
 const FISCAL_LINKS: { to: string; icon: string; title: string; text: string }[] = [
@@ -346,6 +347,8 @@ export default function TaxpayerSpace() {
 
       {p && (
         <>
+          {/* « À faire » (30/09/2026) : tout ce qui concerne l'usager, en un seul endroit, avec une action par ligne. */}
+          <AFaire taxpayerId={p.id ?? taxpayerId!} onPay={(id) => { const ob = obligations.find((o) => o.id === id); if (ob) setPanel({ kind: 'pay', ob }); }} />
           {/* Visuel de synthèse (27/09/2026) : dérivé du profil déjà chargé, sans appel supplémentaire. */}
           <EspaceVisuel p={{ obligations, objects: p.objects, receipts: p.receipts }} example
             obligationEtats={Object.fromEntries(Object.entries(OBLIGATION_TONE).map(([k, tone]) => [k, { label: tr(obligationKey(k)), tone } as EtatDef]))}

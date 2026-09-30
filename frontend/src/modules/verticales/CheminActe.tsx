@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom';
 import { ROLES, type RoleCode } from '@mosolo/shared';
 import { Icon } from '../../components/Icon';
 import { StatusBadge, type Tone } from '../../components/StatusBadge';
+import { useEcranAccessible } from '../../components/LienEcran';
 
 export type EtapeStatut = 'FAIT' | 'EN_COURS' | 'A_FAIRE' | 'BLOQUE' | 'A_QUALIFIER';
 export interface EtapeAction { label: string; path: string; roles: string[]; qui: string }
@@ -140,7 +141,9 @@ export const TRAVAUX_AVANT_ACTE: Record<string, Travail[]> = {
 };
 
 export function TravauxAvantActe({ module, roles }: { module: string; roles: readonly string[] }) {
-  const items = (TRAVAUX_AVANT_ACTE[module] ?? []).filter((t) => t.roles.some((r) => roles.includes(r)));
+  // 30/09/2026 : un lien n'apparaît que si l'écran est lisible par la personne (rôle ET entité), jamais vers « accès réservé ».
+  const accessible = useEcranAccessible();
+  const items = (TRAVAUX_AVANT_ACTE[module] ?? []).filter((t) => t.roles.some((r) => roles.includes(r)) && (t.path.startsWith('#') || accessible(t.path)));
   if (!items.length) return null;
   return (
     <div className="sec-travaux">

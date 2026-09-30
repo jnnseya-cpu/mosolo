@@ -12,7 +12,7 @@
  */
 import type { ReactNode } from 'react';
 import { Link, useInRouterContext, type LinkProps } from 'react-router-dom';
-import { ecranUsagerHorsMenu, menuMasque, ROLES } from '@mosolo/shared';
+import { ecranUsagerHorsMenu, menuMasque, ROLES, ECRANS_LECTURE_AGREGEE_AUTORITES } from '@mosolo/shared';
 import { useApp } from '../context';
 import { rolesDeLEcran } from './DemoRoleSwitch';
 import { lectureAgregee } from './Shell';
@@ -33,7 +33,9 @@ export function ecranAccessible(path: string, roles: readonly string[] | undefin
   if (menuMasque(path, roles, entity)) return false;
   const declares = rolesDeLEcran(path);
   if (!declares.length) return true;
-  return roles.some((r) => declares.includes(r)) || lectureAgregee(roles);
+  if (roles.some((r) => declares.includes(r))) return true;
+  // Autorités (R01–R03) : lecture agrégée, sauf les écrans dont le détail leur est refusé (lien sans contenu).
+  return lectureAgregee(roles) && !ECRANS_LECTURE_AGREGEE_AUTORITES.includes(path);
 }
 
 /** Libellé des rôles qui utilisent un écran (trois au plus). */

@@ -1134,3 +1134,12 @@ input[type='file'] { font-size: 13.5px; max-width: 100%; }
   .viz-status-seg, .viz-heat-cell, .viz-ladder-bar, .viz-meter-fill, .viz-timeline-dot { forced-color-adjust: none; }
 }
 .viz-inline-title { margin: 0 auto 0 0; font-size: 12.5px; font-weight: 600; color: var(--ink-2); min-width: 0; overflow-wrap: anywhere; }
+
+/* « À faire » de l'usager (30/09/2026) : une ligne par chose à faire, action à droite, lisible sur téléphone. */
+.afaire-list { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: .5rem; }
+.afaire-item { display: flex; gap: .75rem; align-items: center; justify-content: space-between; padding: .75rem 1rem; border: 1px solid var(--border, #d9dde5); border-radius: 10px; background: var(--surface, #fff); }
+.afaire-main { display: grid; gap: .15rem; min-width: 0; }
+.afaire-title { overflow-wrap: anywhere; }
+.afaire-side { display: flex; gap: .5rem; align-items: center; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+.afaire-sub { font-size: 1rem; margin: 1rem 0 .25rem; display: flex; gap: .5rem; align-items: center; }
+@media (max-width: 640px) { .afaire-item { flex-direction: column; align-items: stretch; } .afaire-side { justify-content: flex-start; } }

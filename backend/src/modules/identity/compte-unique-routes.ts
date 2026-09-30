@@ -19,6 +19,7 @@ import { badRequest, forbidden } from '../../core/errors.js';
 import { evaluate } from '../../core/policy.js';
 import { RUBRIQUE_LABELS, type CompteElement, type CompteSection, type Rubrique } from './compte-unique.js';
 import { maskPhone } from './service.js';
+import { aFaire, lienUsager } from './a-faire.js';
 
 type Viewer = 'self' | 'mandataire' | 'agent';
 
@@ -120,6 +121,10 @@ export function registerCompteUniqueRoutes(app: FastifyInstance, ctx: AppContext
     }
     let sections = reg.collect(tp.id);
     if (viewer === 'mandataire') sections = restrictToMandate(sections, objectIds);
+    // Usager (titulaire, mandataire) : liens vers SES écrans, jamais vers un écran de travail des agents (30/09/2026).
+    if (viewer !== 'agent') {
+      sections = sections.map((s) => ({ ...s, lien: lienUsager(s.lien) ?? s.lien, elements: s.elements.map((e) => (e.lien ? { ...e, lien: lienUsager(e.lien) ?? e.lien } : e)) }));
+    }
     ctx.audit.append({
       actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'compte_unique.viewed', resourceType: 'taxpayer', resourceId: tp.id,
       details: { viewer, mandateId, consultationId: consultationId ?? null, sections: sections.length, ...motifConsultation(headers, user, viewer !== 'agent') },
@@ -151,6 +156,22 @@ export function registerCompteUniqueRoutes(app: FastifyInstance, ctx: AppContext
         : forbidden('FORBIDDEN', 'Espace réservé aux titulaires d’un compte contribuable.');
     }
     return view(user, user.taxpayerId, req.headers);
+  });
+
+  /**
+   * « À faire » de l'usager (30/09/2026) : ce qu'il doit faire, ce que l'administration vérifie, ce qui est à jour —
+   * en un seul endroit, sur le même compte unique (mêmes droits : titulaire ; mandataire dans son mandat).
+   */
+  app.get<{ Querystring: { taxpayerId?: string } }>('/v1/moi/a-faire', async (req) => {
+    const user = requireUser(req);
+    const target = req.query.taxpayerId ?? user.taxpayerId;
+    if (!target) {
+      throw user.roles.includes('R31')
+        ? badRequest('TAXPAYER_REQUIRED', 'Mandataire : indiquez le compte du mandant (?taxpayerId=).')
+        : forbidden('FORBIDDEN', 'Espace réservé aux titulaires d’un compte contribuable.');
+    }
+    const v = view(user, target, req.headers);
+    return { compte: { taxpayerId: v.compte.taxpayerId, nom: v.compte.nom }, viewer: v.viewer, ...aFaire(v.sections, ctx.clock.now()), genereLe: ctx.clock.now().toISOString() };
   });
 
   app.get<{ Params: { taxpayerId: string }; Querystring: { consultation?: string } }>('/v1/compte-unique/:taxpayerId', async (req) => {

@@ -81,8 +81,8 @@ describe('menus par rôle — nombre d’entrées et « Mon travail du jour » (
         "R27": "22 entrées · d’emblée 4 · jour /plateforme/supervision /integrite/incidents /plateforme/administration /acces/elevations · accueil /plateforme/supervision",
         "R28": "35 entrées · d’emblée 5 · jour /integrite/incidents /integrite/revue-acces /integrite/cles /acces/elevations /integrite/scellement · accueil /integrite/incidents",
         "R29": "5 entrées · d’emblée 5 · jour /ia/modeles /ia/journal /ia · accueil /ia/modeles",
-        "R30": "46 entrées · d’emblée 6 · jour /espace /mes-arrieres /espace/biens-relations /fiscal/declarations /vehicules/mes-vehicules /points-de-paiement · accueil /espace",
-        "R31": "41 entrées · d’emblée 5 · jour /acces/mandats /fiscal/declarations /mes-arrieres /fiscal/biens /points-de-paiement · accueil /acces/mandats",
+        "R30": "26 entrées · d’emblée 7 · jour /espace /mes-arrieres /espace/biens-relations /vehicules/mes-vehicules /fiscal/declarations /services /mon-espace/situation · accueil /espace",
+        "R31": "22 entrées · d’emblée 4 · jour /acces/mandats /fiscal/declarations /mes-arrieres /points-de-paiement · accueil /acces/mandats",
         "R32": "19 entrées · d’emblée 3 · jour /canaux/point-agree /verifier /preuve · accueil /canaux/point-agree",
         "R33": "18 entrées · d’emblée 3 · jour /verifier /preuve /transparence · accueil /verifier",
         "R34": "21 entrées · d’emblée 4 · jour /vehicules/controle-technique /vehicules/centres-agrees /opportunites/recoupement /verifier · accueil /vehicules/controle-technique",
@@ -150,7 +150,9 @@ describe('garde des comptes publics et liens adaptés au compte', () => {
     expect(ecranAccessible('/integrite/revue-acces', ['R08'], 'DGIPK')).toBe(true);
     expect(ecranAccessible('/publicite/regie', ['R07'], 'DGIPK')).toBe(false);
     expect(ecranAccessible('/publicite/regie', ['R07'], 'DGTK')).toBe(true);
-    expect(ecranAccessible('/integrite/revue-acces', ['R02'], 'GOUVERNORAT')).toBe(true);
+    // 30/09/2026 : lien intérieur retiré pour les autorités vers un écran où elles ne liraient qu'un agrégat (menu inchangé).
+    expect(ecranAccessible('/integrite/revue-acces', ['R02'], 'GOUVERNORAT')).toBe(false);
+    expect(ecranAccessible('/poste-de-decision', ['R02'], 'GOUVERNORAT')).toBe(true);
     expect(ecranAccessible('/transparence', ['R30'], 'PUBLIC')).toBe(true);
     expect(ecranAccessible('/fiscal/carte', ['R30'], 'PUBLIC')).toBe(true);
     expect(ecranAccessible('/tresor', ['R10'], 'DGIPK')).toBe(false);
