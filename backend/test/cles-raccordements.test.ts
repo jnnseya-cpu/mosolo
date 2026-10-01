@@ -47,6 +47,8 @@ async function boot(opts: { connectorEnv?: Record<string, string>; store?: Memor
   const clock = new ManualClock('2026-09-29T10:00:00.000Z');
   const rt = opts.store ? await PersistenceRuntime.open(opts.store) : undefined;
   const app = buildApp({
+    // Ancien circuit à deux personnes (réactivable) : ces tests le vérifient toujours.
+    clesDeuxPersonnes: true,
     clock,
     secrets: { auditHmacKey: 'test-audit-key', providerSecrets: { 'mm-operator-a': 'test-secret-mm-operator-a' }, commsProviderKeys: {} },
     // Avec stockage : tous les modules (passerelle SMS du module « preuves » comprise) et la persistance attachée.

@@ -62,7 +62,10 @@ describe('Rapprochement proposé sous le seuil d’appariement exact (§ 20.1)',
 
     const b = await pay(env, true);
     const ref: string = b.order.paymentReference;
-    const typo = `${ref.slice(0, -2)}${ref.at(-1)}${ref.at(-2)}`; // deux derniers caractères inversés
+    // Deux caractères voisins DIFFÉRENTS inversés (la référence est aléatoire : deux caractères égaux ne feraient aucune faute).
+    let k = ref.length - 2;
+    while (k > 0 && ref[k] === ref[k + 1]) k -= 1;
+    const typo = `${ref.slice(0, k)}${ref[k + 1]}${ref[k]}${ref.slice(k + 2)}`;
     const imp = (await statement(env, [{ accountAlias: b.order.beneficiaryAlias ?? DEMO.dgipkAlias, amount: b.order.amount, valueDate: '2026-09-26', paymentReference: typo }])).json();
     expect(imp.matched).toHaveLength(0);
     expect(imp.exceptions[0].type).toBe('ORPHAN_CREDIT');

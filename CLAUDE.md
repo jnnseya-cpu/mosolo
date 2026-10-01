@@ -161,3 +161,6 @@ données de démonstration.
   doléances envoyées seulement si `MOSOLO_IA_DOLEANCES` est activé ; **coûts maîtrisés** : usagers jamais,
   plafond global de 100 appels par jour (réglable), 10 par personne et par heure, réponses identiques réutilisées
   (annexe I, § I.56).
+- **Clés et raccordements (01/10/2026)** : toutes les clés (paiement compris) appliquées sur la seule décision du
+  super-administrateur (R26), sans seconde personne, journalisées ; ancien circuit à deux personnes conservé et
+  réactivable (`MOSOLO_CLES_DEUX_PERSONNES=true`) — annexe I, § I.57.

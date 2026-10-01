@@ -95,8 +95,14 @@ export interface InboundDelivery {
 export type ActiveSource = 'ENVIRONNEMENT' | 'CONSOLE' | 'ABSENTE';
 
 /** Groupes dont les valeurs s'appliquent sur la seule décision du super-administrateur (décision du 01/10/2026). */
+/**
+ * Décisions du maître d'ouvrage du 01/10/2026 : d'abord les clés d'IA, puis TOUTES les clés (paiement compris) sont
+ * appliquées sur la seule décision du super-administrateur (R26), sans seconde personne. Le circuit d'approbation
+ * reste disponible (routes conservées) pour les propositions antérieures encore en attente.
+ */
+export const APPROBATION_UNIQUE_TOUTES = true;
 export const APPROBATION_UNIQUE = new Set<string>(['ia']);
-export const APPROBATION_UNIQUE_MOTIF = 'Approbation unique du super-administrateur — clés d’IA (décision du maître d’ouvrage du 01/10/2026).';
+export const APPROBATION_UNIQUE_MOTIF = 'Approbation unique du super-administrateur (décisions du maître d’ouvrage du 01/10/2026 : clés d’IA, puis toutes les clés).';
 
 export const RESOLUTION_RULE = 'La variable d’environnement prévaut ; la valeur de la console ne s’applique qu’en son absence (par défaut — à confirmer par le maître d’ouvrage).';
 
@@ -174,6 +180,12 @@ export interface IntegrationConfigOptions {
   /** Environnement du processus (autres variables). */
   processEnv?: Record<string, string | undefined>;
   demo: boolean;
+  /**
+   * Ancien circuit à deux personnes (une propose, une autre approuve), conservé et réactivable : option de l'application
+   * ou variable d'environnement MOSOLO_CLES_DEUX_PERSONNES=true. Par défaut (décision du 01/10/2026) : désactivé — le
+   * super-administrateur applique seul. Les clés d'IA restent toujours en approbation unique.
+   */
+  deuxPersonnes?: boolean;
 }
 
 export class IntegrationConfigService {
@@ -333,7 +345,8 @@ export class IntegrationConfigService {
     // Décision du maître d'ouvrage (01/10/2026) : les clés des fournisseurs d'IA (groupe « ia ») sont appliquées sur la
     // seule décision du super-administrateur, sans seconde personne. Les autres groupes (paiement, SMS…) gardent la règle
     // des deux personnes.
-    if (APPROBATION_UNIQUE.has(meta.group)) return this.appliquer(user, proposal, APPROBATION_UNIQUE_MOTIF).proposal;
+    const deuxPersonnes = this.opts.deuxPersonnes ?? /^(true|1|oui)$/i.test((this.opts.processEnv ?? process.env).MOSOLO_CLES_DEUX_PERSONNES?.trim() ?? '');
+    if ((APPROBATION_UNIQUE_TOUTES && !deuxPersonnes) || APPROBATION_UNIQUE.has(meta.group)) return this.appliquer(user, proposal, APPROBATION_UNIQUE_MOTIF).proposal;
     return this.proposalView(proposal);
   }
 

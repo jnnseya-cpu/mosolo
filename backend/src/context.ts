@@ -172,6 +172,8 @@ export interface AppOptions {
   demoExamples?: boolean;
   /** Variables des connecteurs BitriPay / KODA (défaut : process.env). Sans clé API : bac à sable local. */
   connectorEnv?: Record<string, string | undefined>;
+  /** « Clés et raccordements » : réactive l'ancien circuit à deux personnes (désactivé par défaut depuis le 01/10/2026). */
+  clesDeuxPersonnes?: boolean;
   /** `fetch`, journal masqué et temporisation injectables (tests : jamais de réseau réel). */
   connectorRuntime?: ConnectorRuntime;
   /** Modules d'extension (défaut : `DEFAULT_PLUGINS`). */
@@ -198,7 +200,7 @@ export function createContext(opts: AppOptions = {}) {
   const connectors = buildConnectorRegistry(opts.connectorEnv ?? process.env, opts.connectorRuntime ?? {});
   // « Clés et raccordements » (29/09/2026) : valeurs approuvées à deux personnes, chiffrées au repos ; l'environnement
   // prévaut. Les connecteurs relisent la configuration résolue à chaud (aucun redéploiement).
-  const integrations = new IntegrationConfigService(clock, audit, { ...(opts.connectorEnv ? { connectorEnv: opts.connectorEnv } : {}), processEnv: process.env, demo: isDemoMode() });
+  const integrations = new IntegrationConfigService(clock, audit, { ...(opts.connectorEnv ? { connectorEnv: opts.connectorEnv } : {}), processEnv: process.env, demo: isDemoMode(), ...(opts.clesDeuxPersonnes !== undefined ? { deuxPersonnes: opts.clesDeuxPersonnes } : {}) });
   connectors.attachSource({
     // Empreinte limitée aux variables des connecteurs : une clé SMS approuvée ne reconstruit pas les connecteurs de paiement.
     env: () => integrations.connectorEnv(), fingerprint: () => integrations.fingerprint(CONNECTOR_BASE_VARS), runtime: opts.connectorRuntime ?? {},

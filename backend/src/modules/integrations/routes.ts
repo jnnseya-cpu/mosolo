@@ -71,7 +71,10 @@ export function registerIntegrationRoutes(app: FastifyInstance, ctx: AppContext)
     const user = requireUser(req);
     const body = parse(proposalSchema, req.body);
     reply.header('cache-control', 'no-store');
-    return reply.code(201).send(svc.propose(user, req.params.name, body));
+    const proposal = svc.propose(user, req.params.name, body);
+    // Approbation unique (01/10/2026) : la valeur est appliquée tout de suite ; les connecteurs la relisent.
+    if (proposal.status === 'APPROUVEE') ctx.connectors.refresh();
+    return reply.code(201).send({ ...proposal, ...(proposal.status === 'APPROUVEE' ? { configurationWarning: ctx.connectors.configError } : {}) });
   });
 
   app.post<{ Params: { id: string } }>('/v1/integrations/proposals/:id/approve', async (req, reply) => {

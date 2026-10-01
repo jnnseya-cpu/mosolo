@@ -2018,3 +2018,14 @@ n'étant ajoutées que si nécessaire** ; sinon la plateforme fonctionne telle q
   appel ; consommation du jour affichée dans le panneau IA (valeurs par défaut — à confirmer).
 - **Accès** : analyse et question réservées aux rôles qui lancent les agents (direction R01–R03, R05 ; régies R06–R08 ;
   R15, R17, R20, R22, R23) ; l'état des fournisseurs (sans clé) est visible des lecteurs du module.
+
+## I.57 « Clés et raccordements » : super-administrateur seul pour toutes les clés (01/10/2026)
+
+Décision du maître d'ouvrage : la seconde personne est supprimée **pour toutes les clés**, paiement compris (BitriPay,
+KODA, banques, SMS, WhatsApp, IA…). Le super-administrateur (R26) saisit la clé ; elle est appliquée immédiatement
+(connecteurs relus sans redémarrage), chiffrée au repos, jamais renvoyée, journalisée « approbation unique » (qui, quand,
+quelle variable — jamais la valeur). Personne d'autre ne peut saisir une clé (Gouverneur, ministres, sécurité : refusés).
+Conservé (règle n° 1) : l'ancien circuit à deux personnes reste dans le code et réactivable par la variable
+d'environnement `MOSOLO_CLES_DEUX_PERSONNES=true` ; ses tests continuent de le vérifier. Signalé au maître d'ouvrage : une
+clé de paiement erronée peut détourner ou bloquer des encaissements — d'où le journal et le bouton « Tester la connexion »
+à utiliser après chaque saisie.
