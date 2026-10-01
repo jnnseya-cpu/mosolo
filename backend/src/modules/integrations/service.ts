@@ -94,6 +94,10 @@ export interface InboundDelivery {
 
 export type ActiveSource = 'ENVIRONNEMENT' | 'CONSOLE' | 'ABSENTE';
 
+/** Groupes dont les valeurs s'appliquent sur la seule décision du super-administrateur (décision du 01/10/2026). */
+export const APPROBATION_UNIQUE = new Set<string>(['ia']);
+export const APPROBATION_UNIQUE_MOTIF = 'Approbation unique du super-administrateur — clés d’IA (décision du maître d’ouvrage du 01/10/2026).';
+
 export const RESOLUTION_RULE = 'La variable d’environnement prévaut ; la valeur de la console ne s’applique qu’en son absence (par défaut — à confirmer par le maître d’ouvrage).';
 
 const MIN_SECRET_LENGTH = 16; // règle existante des secrets de rappel (context.ts), reprise ici.
@@ -326,6 +330,10 @@ export class IntegrationConfigService {
       actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'integration.config.proposed', resourceType: 'integration_variable', resourceId: name,
       details: { proposalId: proposal.id, variable: name, kind: input.kind, secret: meta.secret, note: 'Valeur jamais journalisée.' },
     });
+    // Décision du maître d'ouvrage (01/10/2026) : les clés des fournisseurs d'IA (groupe « ia ») sont appliquées sur la
+    // seule décision du super-administrateur, sans seconde personne. Les autres groupes (paiement, SMS…) gardent la règle
+    // des deux personnes.
+    if (APPROBATION_UNIQUE.has(meta.group)) return this.appliquer(user, proposal, APPROBATION_UNIQUE_MOTIF).proposal;
     return this.proposalView(proposal);
   }
 
@@ -342,6 +350,11 @@ export class IntegrationConfigService {
       throw forbidden('SAME_PERSON', 'Règle des deux personnes : la personne qui a proposé ne peut pas approuver sa propre proposition.');
     }
     if (!this.masterKey) throw this.noMasterKey();
+    return this.appliquer(user, p, motif);
+  }
+
+  /** Rend effective une proposition (approbation par une seconde personne, ou approbation unique du groupe « ia »). */
+  private appliquer(user: User, p: ConfigProposal, motif?: string): { proposal: ProposalView; effective: boolean; activeSource: ActiveSource } {
     const now = this.clock.now().toISOString();
     const prev = this.values.get(p.variable);
     const next = {
@@ -354,7 +367,7 @@ export class IntegrationConfigService {
     const activeSource = this.sourceOf(p.variable);
     this.audit.append({
       actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'integration.config.approved', resourceType: 'integration_variable', resourceId: p.variable,
-      details: { proposalId: p.id, variable: p.variable, kind: p.kind, version: next.version, proposedBy: p.proposedBy, activeSource, note: 'Valeur jamais journalisée.' },
+      details: { proposalId: p.id, variable: p.variable, kind: p.kind, version: next.version, proposedBy: p.proposedBy, approbationUnique: p.proposedBy === user.id, activeSource, note: 'Valeur jamais journalisée.' },
     });
     this.applyLiveEffects();
     return { proposal: this.proposalView(decided), effective: activeSource === 'CONSOLE' || (p.kind === 'RETIRER' && activeSource !== 'ENVIRONNEMENT'), activeSource };

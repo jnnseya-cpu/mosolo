@@ -1996,8 +1996,10 @@ n'étant ajoutées que si nécessaire** ; sinon la plateforme fonctionne telle q
 
 - **Facultatif** : sans clé, aucun appel externe ; les agents de recettes (§ I.55) fonctionnent avec leurs règles
   internes (calculs déterministes, gratuits, vérifiables). Les fonctions IA affichent alors « Règles internes ».
-- **Clés** : saisies par le **super-administrateur seul (R26)** dans « Clés et raccordements », approuvées par une seconde
-  personne (R26 ou responsable sécurité R28), chiffrées au repos, jamais renvoyées ; la variable d'environnement prévaut.
+- **Clés** : saisies par le **super-administrateur seul (R26)** dans « Clés et raccordements », chiffrées au repos, jamais
+  renvoyées ; la variable d'environnement prévaut. **Décision du maître d'ouvrage (01/10/2026) : pas de seconde personne
+  pour les clés d'IA** — appliquées dès la saisie par le super-administrateur, journalisées (« approbation unique »). Les
+  autres clés (paiement, SMS, WhatsApp…) gardent la règle des deux personnes (R26 propose ; R26 distinct ou R28 approuve).
   Variables : `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` ; ordre `MOSOLO_IA_ORDRE` (par défaut
   claude,openai,gemini) ; modèles `MOSOLO_IA_MODELE_*` (par défaut claude-opus-5-5, gpt-4.1-mini, gemini-2.5-flash —
   à confirmer) ; `MOSOLO_IA_DOLEANCES` (désactivé par défaut).

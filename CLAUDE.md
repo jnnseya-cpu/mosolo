@@ -156,6 +156,6 @@ données de démonstration.
   importées sans nom et validées par deux personnes ; doléances sans représailles ; « Où va votre argent » public ;
   contrôle d'équité ; tous les paramètres « à confirmer » (annexe I, § I.55).
 - **Fournisseurs d'IA (01/10/2026)** : Claude, OpenAI et Gemini raccordés, **facultatifs** — sans clé, règles internes et
-  aucun appel externe ; clés saisies par le super-administrateur seul (R26) dans « Clés et raccordements », approuvées
-  par une seconde personne ; relais d'un fournisseur à l'autre ; agrégats ou textes caviardés, journal sans contenu ;
+  aucun appel externe ; clés saisies par le super-administrateur seul (R26) dans « Clés et raccordements », **sans
+  seconde personne** (décision du 01/10/2026 ; les clés de paiement et autres gardent les deux personnes) ; relais d'un fournisseur à l'autre ; agrégats ou textes caviardés, journal sans contenu ;
   doléances envoyées seulement si `MOSOLO_IA_DOLEANCES` est activé (annexe I, § I.56).

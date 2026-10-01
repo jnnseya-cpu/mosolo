@@ -89,7 +89,7 @@ describe('Fournisseurs d’IA externes', () => {
     expect(liste.items.find((x: { id: string }) => x.id === d.id).analyseIa).toMatchObject({ categorieSuggeree: 'PAIEMENT', urgence: 'MOYENNE', fournisseur: 'OpenAI' });
   });
 
-  it('caviardage et clés : téléphones, courriels, identifiants masqués ; seul le super-administrateur propose une clé d’IA', async () => {
+  it('caviardage et clés : téléphones, courriels, identifiants masqués ; seul le super-administrateur saisit une clé d’IA, appliquée sans seconde personne ; paiement : deux personnes', async () => {
     expect(caviarder('Appeler +243 99 123 4567 ou a.b@c.cd, IUC KIN-2026-000123')).toBe('Appeler [numéro] ou [courriel], IUC [identifiant]');
     const { req } = await env();
     const corps = { kind: 'DEFINIR', value: 'sk-ant-api03-0123456789abcdefghij', motif: 'Raccordement de Claude pour les agents' };
@@ -98,5 +98,11 @@ describe('Fournisseurs d’IA externes', () => {
     const p = await req('POST', '/v1/integrations/keys/ANTHROPIC_API_KEY/proposals', 'u-superadmin', corps);
     expect(p.statusCode, p.body).toBe(201);
     expect(p.body).not.toMatch(/sk-ant-api03/);
+    // Décision du 01/10/2026 : clé d'IA appliquée sur la seule décision du super-administrateur.
+    expect(p.json().status).toBe('APPROUVEE');
+    expect((await req('GET', '/v1/agents-recettes/ia', 'u-gouverneur')).json().fournisseurs.find((f: { id: string }) => f.id === 'claude').cleConfiguree).toBe(true);
+    // Les clés de paiement gardent la règle des deux personnes.
+    const pay = await req('POST', '/v1/integrations/keys/KODA_WEBHOOK_SECRET/proposals', 'u-superadmin', { kind: 'DEFINIR', value: 'secret-koda-0123456789abcdef', motif: 'Raccordement KODA (test)' });
+    expect(pay.json().status).toBe('EN_ATTENTE');
   });
 });

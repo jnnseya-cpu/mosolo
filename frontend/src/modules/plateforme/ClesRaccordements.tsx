@@ -68,8 +68,11 @@ export default function ClesRaccordements() {
     e.preventDefault();
     setBusy(true); setMsg(null);
     try {
-      await api(`/v1/integrations/keys/${encodeURIComponent(v.name)}/proposals`, { method: 'POST', body: { kind, ...(kind === 'DEFINIR' ? { value } : {}), motif } });
-      setMsg({ ok: true, text: `${v.name} : proposition enregistrée. Elle ne s’appliquera qu’après l’approbation d’une autre personne (R26 ou R28).` });
+      const res = await api<{ status: string }>(`/v1/integrations/keys/${encodeURIComponent(v.name)}/proposals`, { method: 'POST', body: { kind, ...(kind === 'DEFINIR' ? { value } : {}), motif } });
+      // Clés d'IA (décision du 01/10/2026) : appliquées sur la seule décision du super-administrateur.
+      setMsg({ ok: true, text: res.status === 'APPROUVEE'
+        ? `${v.name} : appliquée (clé d’IA — approbation unique du super-administrateur, journalisée).`
+        : `${v.name} : proposition enregistrée. Elle ne s’appliquera qu’après l’approbation d’une autre personne (R26 ou R28).` });
       setEdit(null); setMotif('');
       reloadAll();
     } catch (x) {
@@ -123,7 +126,7 @@ export default function ClesRaccordements() {
   return (
     <div className="page page-wide">
       <PageHead eyebrow="Plateforme · sécurité" title="Clés et raccordements"
-        lead="Toutes les clés et tous les webhooks des services externes (paiement, IA, SMS, e-mail, WhatsApp, cartes, MDM, identité). Écriture seule, chiffrement au repos, deux personnes.">
+        lead="Toutes les clés et tous les webhooks des services externes (paiement, IA, SMS, e-mail, WhatsApp, cartes, MDM, identité). Écriture seule, chiffrement au repos, deux personnes (sauf clés d’IA : super-administrateur seul).">
         <button type="button" className="btn btn-ghost btn-sm" onClick={reloadAll}><Icon name="refresh" size={16} /> Actualiser</button>
       </PageHead>
       <p className={`notice ${d.masterKey.writable ? 'notice-ok' : 'notice-err'}`} role="status"><Icon name="lock" size={16} /> {d.masterKey.label}</p>
