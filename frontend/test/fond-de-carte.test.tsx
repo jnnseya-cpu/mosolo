@@ -37,7 +37,8 @@ describe('Fond de carte OpenStreetMap de Kinshasa', () => {
     expect(OSM_ATTRIBUTION).toBe('© contributeurs OpenStreetMap');
     expect(fetchMock).toHaveBeenCalledWith(TILES_URL, expect.objectContaining({ headers: { Range: 'bytes=0-15' } }));
     expect(screen.queryByText(/non encore installé/)).toBeNull();
-    expect(cartes.at(-1)!.style.sources.protomaps!.attribution).toBe(OSM_ATTRIBUTION);
+    // La carte (double de MapLibre) peut être construite juste après l'affichage de l'attribution : on l'attend.
+    await waitFor(() => expect(cartes.at(-1)?.style.sources.protomaps?.attribution).toBe(OSM_ATTRIBUTION));
   });
 
   it('fichier absent (404) ou page HTML de repli : message « non encore installé », aucune source de tuiles', async () => {
@@ -49,6 +50,7 @@ describe('Fond de carte OpenStreetMap de Kinshasa', () => {
       await waitFor(() => expect(screen.getByText(/Fond OpenStreetMap de Kinshasa non encore installé/)).toBeTruthy());
       expect(screen.getByText(/fabrique automatiquement à la construction/)).toBeTruthy();
       expect(screen.queryByText(OSM_ATTRIBUTION)).toBeNull();
+      await waitFor(() => expect(cartes.length).toBeGreaterThan(0));
       expect(Object.keys(cartes.at(-1)!.style.sources)).toEqual([]);
     }
   });
