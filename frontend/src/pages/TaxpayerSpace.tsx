@@ -329,7 +329,10 @@ function PayFlow({ ob }: { ob: Obligation }) {
                         <a className="btn btn-ghost btn-sm" href={order.checkoutUrl} target="_blank" rel="noreferrer">Ouvrir la page de paiement dans un nouvel onglet <Icon name="external" size={14} /></a>
                         {order.sandbox && <p className="small muted">Démonstration : la page ouverte est une page de paiement SIMULÉE (aucune somme réelle) ; avec les vraies clés, c’est la page du prestataire.</p>}
                       </>
-                    : <p className="small muted">Bac à sable local : aucune page réelle n’est ouverte ; la confirmation signée est simulée par le Trésor.</p>}
+                    : order.sandbox
+                      ? <p className="small muted">Bac à sable local : aucune page réelle n’est ouverte ; la confirmation signée est simulée par le Trésor.</p>
+                      // Service réel sans page renvoyée (01/10/2026) : la demande de paiement arrive sur le téléphone ; on le dit.
+                      : <p className="small" data-testid="pay-sans-page">{order.provider === 'bitripay' ? 'BitriPay' : 'KODA'} n’a pas renvoyé de page de paiement : la demande de paiement arrive directement sur votre téléphone. Confirmez-la avec votre code secret, ou payez avec la référence ci-dessus.</p>}
                   <Link className="btn-link small" to={`/paiement/retour?ref=${encodeURIComponent(order.paymentReference)}`}>Suivre l’état réel de ce paiement</Link>
                   <p className="small muted">La quittance n’est émise qu’à réception de la confirmation signée du prestataire — jamais sur capture d’écran ou SMS.</p>
                 </div>

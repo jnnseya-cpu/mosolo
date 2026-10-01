@@ -2055,3 +2055,31 @@ supplémentaire) ; `GET /v1/traduction/etat` renvoie un **diagnostic** (cause en
 l'API, rôle, facturation, quota, langue refusée) ; le bandeau de langue affiche la cause à tous et le remède (commandes
 Cloud Shell) au super-administrateur et au responsable sécurité. Mise en service : infra/gcp/README.md, « Traduction
 automatique de l'interface ».
+
+## I.60 Page d'accueil persuasive et page de paiement BitriPay / KODA fiabilisée (01/10/2026)
+
+**Accueil.** Décision du maître d'ouvrage : la plateforme, nouvelle, doit gagner la confiance et l'adhésion de la
+population et de la classe politique. Le compteur « événements de communication » et le graphique du catalogue
+d'événements sont retirés de l'accueil public (le catalogue reste dans « Notifications et modèles » et à l'annexe G).
+Ajouts, uniquement fondés sur des garanties réellement appliquées (aucun chiffre de recette ni taux inventé) :
+la promesse (« Plus de recettes pour Kinshasa. Pas un impôt de plus. » — principe P2 : la plateforme ne crée aucune
+taxe) ; « Ce qui change » (avant / avec MOSOLO : quittance QR vérifiable, zéro espèce, « Où va votre argent », montant
+fixé par une règle publiée, preuves en un clic et doléances) ; « Nos engagements » (0 espèce entre les mains des agents,
+100 % des paiements vers le compte public, 1 code QR par quittance — les chiffres existants « 24 communes » et « IRL
+22 % » sont conservés) ; « Pour chacun » (Kinois, autorités, entreprises et commerçants) ; appel à l'action (créer un
+compte, « Où va votre argent », « Où payer ? »). À arbitrer : le maintien du chiffre « IRL 22 % » sur l'accueil public.
+
+**Page de paiement BitriPay / KODA qui ne s'ouvrait pas.** Parcours vérifié de bout en bout (référence → page →
+paiement → webhook signé → quittance provisoire). Causes possibles en ligne, toutes traitées :
+- démonstration en mémoire sur plusieurs instances Cloud Run : une référence créée sur l'une était inconnue sur
+  l'autre ⇒ déploiement de démonstration limité à **une instance** (`--max-instances=1`) ;
+- onglet ou application installée antérieurs à une mise en ligne : l'écran, chargé à la demande, n'existait plus ⇒ un
+  fichier `/assets/…` absent répond 404 (plus jamais la page d'accueil) et l'application se **recharge une fois** sur la
+  nouvelle version (`lib/nouvelleVersion.ts`, tous les écrans) ;
+- lien ouvert par un autre compte que le payeur (QR scanné sur un autre téléphone, utilisateur de démonstration par
+  défaut) : le serveur refuse à juste titre ; la page l'explique et propose « Se connecter », qui **ramène sur la page de
+  paiement** (`/connexion?retour=…`, adresse interne uniquement) ;
+- référence inconnue (démonstration réinitialisée) ou simulation refusée (vraie clé configurée) : explication et bouton
+  « Obtenir une nouvelle référence » (l'ancienne est fermée ; aucun paiement n'est perdu) ;
+- service réel sans page renvoyée par le prestataire : « Mon espace » indique que la demande arrive sur le téléphone, au
+  lieu du message du bac à sable.

@@ -1,14 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { EVENTS, EVENT_CATEGORIES } from '@mosolo/shared';
 import { useApp } from '../context';
 import { CityNight } from '../components/CityNight';
 import { Icon } from '../components/Icon';
 import { accueilDuRole, AUTORITES_POSTE, InstallButton, visibleNav } from '../components/Shell';
 import { MakerMark, Tricolour } from '../components/Brand';
 import { hasKey, type UIKey } from '../lib/i18n';
-import { ChartGrid } from '../components/viz';
-import { CatalogueEvenementsVisuel } from './visuels';
 
 const CHAIN = [
   'recenser', 'identifier', 'geolocaliser', 'qualifier', 'calculer', 'notifier', 'payer',
@@ -21,6 +18,45 @@ const CHAIN = [
  */
 const HERO_PHOTO = null as { base: string } | null;
 const PRINCIPLES = ['P1', 'P2', 'P5', 'P6', 'P9', 'P10'] as const;
+
+/**
+ * Accueil persuasif (01/10/2026, maître d'ouvrage : « une plateforme nouvelle a besoin d'informations percutantes et
+ * convaincantes pour gagner la confiance et l'adhésion de la population et de la classe politique »). Uniquement des
+ * garanties que la plateforme applique réellement (principes P2, P5, P6, P9, preuves QR, « Où va votre argent »,
+ * doléances) — aucun chiffre de recette ni taux inventé.
+ */
+const AVANT_APRES: readonly { avant: string; apres: string }[] = [
+  { avant: 'Des reçus papier faciles à falsifier.', apres: 'Une quittance avec code QR, vérifiable par n’importe qui, sans compte.' },
+  { avant: 'De l’argent liquide remis de la main à la main.', apres: 'Zéro espèce entre les mains des agents : paiement par téléphone ou au guichet agréé, directement au compte public.' },
+  { avant: 'Personne ne savait où allait l’argent.', apres: '« Où va votre argent » : chaque Kinois voit ce que la Ville encaisse et comment c’est réparti.' },
+  { avant: 'Des montants discutés au cas par cas.', apres: 'Un montant calculé par une règle publiée et approuvée : le même pour tous, expliqué ligne par ligne.' },
+  { avant: 'Des contrôles qui font peur.', apres: 'Vos preuves en un clic sur votre téléphone ; un agent n’agit que sur invitation de la plateforme ; vos doléances sans représailles.' },
+];
+const ENGAGEMENTS: readonly { num: string; unit?: string; label: string; text: string }[] = [
+  { num: '0', label: 'espèce entre les mains des agents', text: 'L’agent constate et notifie ; il ne touche jamais l’argent. Vous payez par monnaie mobile (Orange, M-Pesa, Airtel, Africell), QR, USSD, carte ou guichet agréé.' },
+  { num: '100', unit: '%', label: 'des paiements vers le compte public', text: 'Aucune recette ne transite par un compte privé de plateforme ou de prestataire. Chaque franc est rapproché du relevé bancaire.' },
+  { num: '1', label: 'code QR par quittance', text: 'Chaque quittance, carte, vignette ou titre porte un code QR que tout le monde peut vérifier. Les copies sont détectées.' },
+];
+const PUBLICS: readonly { titre: string; icon: string; points: readonly string[] }[] = [
+  { titre: 'Pour vous, Kinois', icon: 'user', points: [
+    'Payez en quelques minutes depuis votre téléphone, sans file d’attente ni intermédiaire.',
+    'Tout ce qui vous concerne au même endroit : ce qu’il faut faire, ce qui est en cours, ce qui est à jour.',
+    'Le montant exact de votre obligation, rien de plus : les frais de paiement sont à la charge de la Ville.',
+    'Votre voix compte : déposez une doléance depuis votre espace, sans crainte de représailles.',
+  ] },
+  { titre: 'Pour les autorités', icon: 'chart', points: [
+    'La recette du jour, commune par commune, rapprochée du relevé bancaire.',
+    'Les fuites rendues visibles : écart entre ce qui est dû et ce qui est réellement encaissé, par commune.',
+    'Des décisions éclairées : l’IA propose, une personne décide, et chaque décision est tracée.',
+    'Plus de recettes sans créer d’impôt : la plateforme collecte mieux ce qui est déjà dû.',
+  ] },
+  { titre: 'Pour les entreprises et commerçants', icon: 'store', points: [
+    'Les mêmes règles pour tous : les grands redevables d’abord, l’accompagnement avant la sanction.',
+    'Fini les demandes informelles : chaque montant renvoie à une règle publiée et à sa base légale.',
+    'Des quittances et un quitus vérifiables, opposables à tout contrôle.',
+    'Aucune sanction automatique : toute décision est prise par une personne, et contestable.',
+  ] },
+];
 
 /** Frise horizontale pilotée par le défilement (desktop) ; liste verticale numérotée (mobile). */
 function ChainTimeline() {
@@ -78,9 +114,7 @@ function ChainTimeline() {
 }
 
 export default function Home() {
-  const { tr, lang, user } = useApp();
-  const mandatory = EVENTS.filter((e) => e.obligatoire).length;
-  const nf = (n: number) => n.toLocaleString(lang === 'en' ? 'en-GB' : 'fr-FR');
+  const { tr, user } = useApp();
   // Visiteur sans compte : seulement les espaces publics ; compte connecté : ses propres écrans.
   const areas = visibleNav(user?.roles, user?.entity).filter((n) => n.to !== '/' && (user ? true : n.group === 'public'));
   // Page d'accueil (30/09/2026, consigne du maître d'ouvrage : « rester sur la page d'accueil, ne pas être emmené
@@ -128,6 +162,31 @@ export default function Home() {
         <p className="hero-caption">{tr('home.heroCaption')}</p>
       </section>
 
+      {/* 2 bis. La promesse (01/10/2026) : le message politique et citoyen en une phrase */}
+      <section className="promesse" aria-labelledby="promesse-title">
+        <div className="section-inner">
+          <p className="caps">Kinshasa se finance elle-même</p>
+          <h2 id="promesse-title" className="display-2">Plus de recettes pour Kinshasa. Pas un impôt de plus.</h2>
+          <p className="promesse-lead">KINSHASA MOSOLO ne crée aucune taxe. Il fait entrer dans les caisses publiques ce qui est déjà dû — payé par téléphone, versé directement au compte de la Ville, vérifiable par chacun. Chaque franc collecté devient un franc visible.</p>
+        </div>
+      </section>
+
+      {/* 2 ter. Avant / avec MOSOLO */}
+      <section className="avant-apres" aria-labelledby="aa-title">
+        <div className="section-inner">
+          <p className="caps">Ce qui change</p>
+          <h2 id="aa-title" className="display-2">Hier l’incertitude. Aujourd’hui la preuve.</h2>
+          <ul className="aa-list">
+            {AVANT_APRES.map((l) => (
+              <li key={l.avant} className="aa-row">
+                <p className="aa-avant"><span className="caps-sm">Avant</span>{l.avant}</p>
+                <p className="aa-apres"><span className="caps-sm">Avec MOSOLO</span>{l.apres}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
       {/* 3. La chaîne d'exploitation */}
       <ChainTimeline />
 
@@ -136,6 +195,17 @@ export default function Home() {
         <div className="section-inner">
           <p className="caps">{tr('home.figures.eyebrow')}</p>
           <h2 id="fig-title" className="display-2">{tr('home.figures.title')}</h2>
+          <div className="figure-grid">
+            {ENGAGEMENTS.map((e) => (
+              <figure key={e.label} className="big-figure">
+                <p className="big-num">{e.num}{e.unit && <> <span className="big-unit">{e.unit}</span></>}</p>
+                <figcaption>
+                  <p className="big-label">{e.label}</p>
+                  <p className="big-text">{e.text}</p>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
           <div className="figure-grid">
             <figure className="big-figure">
               <p className="big-num">24</p>
@@ -153,22 +223,25 @@ export default function Home() {
                 <p className="source">{tr('home.fig2.source')}</p>
               </figcaption>
             </figure>
-            <figure className="big-figure">
-              <p className="big-num">{nf(EVENTS.length)}</p>
-              <figcaption>
-                <p className="big-label">{tr('home.fig3.label')}</p>
-                <p className="big-text">{tr('home.fig3.text', { categories: EVENT_CATEGORIES.length, mandatory })}</p>
-                <p className="source">{tr('home.fig3.source')}</p>
-              </figcaption>
-            </figure>
           </div>
         </div>
       </section>
 
-      {/* 4 bis. Le catalogue d'événements en graphique (données réelles du paquet partagé) */}
-      <section className="home-viz" aria-label="Catalogue d’événements en graphique">
+      {/* 4 bis. Catalogue d'événements : retiré de l'accueil public (01/10/2026, maître d'ouvrage) ; conservé dans
+          « Notifications et modèles » (administration) et l'annexe G. */}
+      {/* 4 ter. Pour chacun (01/10/2026) : la population, les autorités, les entreprises */}
+      <section className="publics" aria-labelledby="publics-title">
         <div className="section-inner">
-          <ChartGrid min={320}><CatalogueEvenementsVisuel events={EVENTS} categories={EVENT_CATEGORIES} /></ChartGrid>
+          <p className="caps">Pour chacun</p>
+          <h2 id="publics-title" className="display-2">Une plateforme qui protège celui qui paie et celui qui gouverne.</h2>
+          <div className="publics-grid">
+            {PUBLICS.map((p) => (
+              <article key={p.titre} className="public-card">
+                <h3><Icon name={p.icon} size={22} /> {p.titre}</h3>
+                <ul>{p.points.map((x) => <li key={x}><Icon name="check" size={16} /> <span>{x}</span></li>)}</ul>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -191,6 +264,18 @@ export default function Home() {
               </li>
             ))}
           </ol>
+        </div>
+      </section>
+
+      {/* 5 bis. Appel à l'action (01/10/2026) */}
+      <section className="appel" aria-labelledby="appel-title">
+        <div className="section-inner">
+          <h2 id="appel-title" className="display-2">Kinshasa avance quand chacun paie sa juste part — et voit où va son argent.</h2>
+          <div className="appel-cta">
+            {!user && <Link to="/inscription" className="btn btn-light btn-lg">Créer mon compte <Icon name="arrowRight" size={18} /></Link>}
+            <Link to="/ou-va-votre-argent" className="btn btn-outline-light btn-lg">Où va votre argent</Link>
+            <Link to="/points-de-paiement" className="btn btn-outline-light btn-lg">Où payer ?</Link>
+          </div>
         </div>
       </section>
 

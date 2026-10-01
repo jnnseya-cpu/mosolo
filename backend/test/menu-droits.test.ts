@@ -264,7 +264,7 @@ function parseMenu() {
   for (const m of registry.matchAll(/^const (\w+) = \[([^\]]*)\];/gm)) consts.set(m[1]!, [...m[2]!.matchAll(/'(R\d{2})'/g)].map((x) => x[1]!));
   // 29/09/2026 : les entrées déclarées par `import(...).then((m) => ({ default: m.X }))` (postes de décision, plateforme)
   // sont désormais relevées aussi.
-  const modules: Entry[] = [...registry.matchAll(/\{ path: '([^']+)', element: lazy\(\(\) => import\('[^']+'\)(?:\.then\(\(m\) => \(\{ default: m\.\w+ \}\)\))?\), nav: \{[^}]*roles: (\[[^\]]*\]|[A-Z_]+)/g)].map((m) => ({
+  const modules: Entry[] = [...registry.matchAll(/\{ path: '([^']+)', element: (?:lazy|lazyPage)\(\(\) => import\('[^']+'\)(?:\.then\(\(m\) => \(\{ default: m\.\w+ \}\)\))?\), nav: \{[^}]*roles: (\[[^\]]*\]|[A-Z_]+)/g)].map((m) => ({
     path: m[1]!, roles: m[2]!.startsWith('[') ? [...m[2]!.matchAll(/'(R\d{2})'/g)].map((x) => x[1]!) : consts.get(m[2]!) ?? [],
   }));
   const core = [...shell.slice(shell.indexOf('export const NAV'), shell.indexOf('const GROUPS')).matchAll(/to: '([^']+)'/g)].map((m) => m[1]!);

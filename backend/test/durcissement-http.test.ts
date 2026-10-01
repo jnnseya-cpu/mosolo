@@ -91,6 +91,12 @@ describe('Service de l’application web : traversée de chemin et encodages inv
     expect(serve('/v1/audit')).toBeNull();
   });
 
+  it('fichier d’une ancienne version (« /assets/… » absent) : 404, jamais index.html — l’application se recharge', () => {
+    const serve = staticSiteFromEnv({ MOSOLO_STATIC_DIR: site() })!;
+    expect(serve('/assets/PasserelleDemo-ancienne.js')).toBeNull();
+    expect(serve('/demo/passerelle/bitripay?ref=PR-1')?.type).toMatch(/^text\/html/); // route de l'application : index.html
+  });
+
   it('encodage invalide : refus 4xx (routeur : 400), jamais 500', async () => {
     process.env.MOSOLO_STATIC_DIR = site();
     const app = buildApp({ clock: clock(), secrets: SECRETS, plugins: [] });

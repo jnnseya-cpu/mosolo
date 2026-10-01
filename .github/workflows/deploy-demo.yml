@@ -1,7 +1,7 @@
 # KINSHASA MOSOLO — mise à jour AUTOMATIQUE de la démonstration (30/09/2026, demande du maître d'ouvrage) :
 # à chaque envoi sur la branche de travail (ou sur main), contrôles (types, tests, construction), puis déploiement
 # Cloud Run du service de démonstration `mosolo-demo` — la même commande que le déploiement manuel :
-#   gcloud run deploy mosolo-demo --source . --project mosolo --region africa-south1
+#   gcloud run deploy mosolo-demo --source . --project mosolo --region africa-south1 --max-instances=1
 # Aucun secret dans le dépôt : l'accès à Google Cloud vient des secrets GitHub du dépôt (voir infra/gcp/README.md,
 # « Mise à jour automatique ») — fédération d'identité (recommandé) ou clé de compte de service. Sans secret
 # configuré, le déploiement est simplement sauté (les contrôles tournent quand même).
@@ -78,7 +78,10 @@ jobs:
         if: steps.acces.outputs.ok == 'true'
       - name: Déploiement
         if: steps.acces.outputs.ok == 'true'
-        run: gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" --quiet
+        # Une seule instance (01/10/2026) : la démonstration garde ses données EN MÉMOIRE ; avec plusieurs instances, une
+        # référence de paiement créée sur l'une était « inconnue » sur l'autre (page de paiement BitriPay / KODA qui ne
+        # s'ouvrait pas, sessions perdues).
+        run: gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" --max-instances=1 --quiet
       - name: Vérification de santé
         if: steps.acces.outputs.ok == 'true'
         run: |

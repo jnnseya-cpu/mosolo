@@ -78,6 +78,10 @@ export function staticSiteFromEnv(env: NodeJS.ProcessEnv = process.env): ((url: 
     }
     // Fond de carte absent : 404 (l'application affiche alors « Fond OpenStreetMap de Kinshasa non encore installé »).
     if (path.startsWith('/tiles/')) return null;
+    // Fichier de version absent (01/10/2026) : un onglet ouvert avant une mise en ligne demande d'anciens fichiers
+    // « /assets/… » ; répondre 404 (jamais index.html) laisse l'application se recharger sur la nouvelle version au lieu
+    // d'échouer en silence (page de paiement BitriPay / KODA qui ne s'ouvrait pas).
+    if (file.startsWith(join(root, 'assets') + sep)) return null;
     return { body: index, type: TYPES['.html']!, immutable: false };
   };
 }

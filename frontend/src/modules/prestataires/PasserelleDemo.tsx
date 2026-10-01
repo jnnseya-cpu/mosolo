@@ -7,11 +7,11 @@
  * Aucune somme réelle, aucun logo de prestataire ; le serveur refuse cette page dès qu'une vraie clé est configurée.
  */
 import { useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { MoneyJSON } from '@mosolo/shared';
 import { useApp } from '../../context';
 import { useApi } from '../../hooks/useApi';
-import { api, describeError } from '../../lib/api';
+import { api, ApiError, describeError } from '../../lib/api';
 import { PageHead } from '../../components/Shell';
 import { Icon } from '../../components/Icon';
 import { MoneyText } from '../../components/MoneyText';
@@ -37,6 +37,7 @@ export default function PasserelleDemo() {
   const [params] = useSearchParams();
   const ref = (params.get('ref') ?? '').trim();
   const navigate = useNavigate();
+  const location = useLocation();
   const q = useApi(user && ref ? () => api<PasserelleView>(`/v1/demo/passerelle/${encodeURIComponent(provider)}?ref=${encodeURIComponent(ref)}`) : null, [provider, ref, user?.id]);
   const [operateur, setOperateur] = useState('');
   const [etape, setEtape] = useState<'choix' | 'envoi' | 'erreur'>('choix');
@@ -44,6 +45,16 @@ export default function PasserelleDemo() {
   const nom = NOM[provider] ?? provider;
   const d = q.data;
   const choisi = operateur || (d?.operateurs.length === 1 ? d.operateurs[0]! : '');
+
+  // Page qui ne s'ouvre pas (01/10/2026) : référence inconnue (démonstration réinitialisée, autre instance) ou simulation
+  // refusée (une vraie clé est désormais configurée) ⇒ on le dit simplement et on propose une nouvelle référence.
+  const codeErreur = q.error instanceof ApiError ? q.error.code : undefined;
+  const [renouv, setRenouv] = useState(false);
+  async function nouvelleReference() {
+    setRenouv(true);
+    try { await api(`/v1/payment-orders/${encodeURIComponent(ref)}/changer-moyen`, { method: 'POST', body: {} }); } catch { /* référence déjà fermée ou inconnue : rien à fermer */ }
+    navigate('/espace');
+  }
 
   async function payer() {
     if (!d || !choisi) return;
@@ -65,10 +76,26 @@ export default function PasserelleDemo() {
           ? 'Payez comme d’habitude avec votre opérateur : KODA vérifie la confirmation de l’opérateur et l’envoie, signée, à MOSOLO. KODA ne touche jamais l’argent.'
           : 'BitriPay achemine votre paiement (monnaie mobile ou carte) vers le compte public de la Ville et envoie la confirmation, signée, à MOSOLO.'} />
       {!user ? (
-        <p className="callout callout-info"><Icon name="lock" size={18} /> Connectez-vous pour continuer. <Link className="btn btn-primary btn-sm" to="/connexion">Se connecter</Link></p>
+        <p className="callout callout-info"><Icon name="lock" size={18} /> Connectez-vous pour continuer. <Link className="btn btn-primary btn-sm" to={`/connexion?retour=${encodeURIComponent(location.pathname + location.search)}`} data-testid="passerelle-demo-connexion">Se connecter</Link></p>
       ) : !ref ? (
         <p className="notice notice-err" role="alert">Référence de paiement absente. Revenez à <Link to="/espace">Mon espace</Link>.</p>
-      ) : q.loading && !d ? <Loading /> : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : d && (
+      ) : q.loading && !d ? <Loading /> : q.error && (codeErreur === 'SIMULATION_FORBIDDEN' || codeErreur === 'PAYMENT_REFERENCE_NOT_FOUND') ? (
+        <div className="callout callout-info stack-sm" role="alert" data-testid="passerelle-demo-indisponible">
+          <p><strong>{codeErreur === 'SIMULATION_FORBIDDEN'
+            ? `Le paiement par ${nom} est désormais raccordé pour de vrai : cette référence de démonstration n’est plus utilisable.`
+            : 'Cette référence de paiement n’est plus connue (la démonstration a pu être réinitialisée).'}</strong></p>
+          <p className="small">Aucun paiement n’a été pris. Demandez une nouvelle référence : la page de paiement s’ouvrira normalement.</p>
+          <div><button type="button" className="btn btn-primary btn-sm" disabled={renouv} onClick={() => void nouvelleReference()} data-testid="passerelle-demo-nouvelle-ref">{renouv ? 'Un instant…' : 'Obtenir une nouvelle référence'}</button></div>
+        </div>
+      ) : q.error && codeErreur === 'FORBIDDEN' ? (
+        // Lien ouvert par un autre compte que celui du payeur (QR scanné sur un autre téléphone, utilisateur de démonstration
+        // par défaut…) : le serveur refuse à juste titre ; on explique et on propose de se connecter avec le bon compte.
+        <div className="callout callout-info stack-sm" role="alert" data-testid="passerelle-demo-autre-compte">
+          <p><strong>Cette page de paiement appartient au compte qui a demandé la référence.</strong></p>
+          <p className="small">Connectez-vous avec ce compte (le numéro de téléphone du payeur) : vous reviendrez directement ici.</p>
+          <div><Link className="btn btn-primary btn-sm" to={`/connexion?retour=${encodeURIComponent(location.pathname + location.search)}`}>Se connecter</Link></div>
+        </div>
+      ) : q.error ? <ErrorState error={q.error} onRetry={q.reload} /> : d && (
         <div className="card stack" data-testid="passerelle-demo">
           <dl className="kv">
             <div><dt>Bénéficiaire</dt><dd>Ville de Kinshasa — compte public</dd></div>

@@ -1,26 +1,27 @@
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
+import { lazyPage } from './lib/nouvelleVersion';
 import { Route, Routes } from 'react-router-dom';
 import { Shell } from './components/Shell';
 import { Splash } from './pages/Offline';
 import { MODULE_ROUTES } from './modules/registry';
 import { RouteGuard } from './components/RouteGuard';
 
-const Home = lazy(() => import('./pages/Home'));
-const Registration = lazy(() => import('./pages/Registration'));
-const TaxpayerSpace = lazy(() => import('./pages/TaxpayerSpace'));
-const Verify = lazy(() => import('./pages/Verify'));
-const Governor = lazy(() => import('./pages/Governor'));
-const Communications = lazy(() => import('./pages/Communications'));
-const LegalRegister = lazy(() => import('./pages/LegalRegister'));
-const Treasury = lazy(() => import('./pages/Treasury'));
-const Field = lazy(() => import('./pages/Field'));
-const Audit = lazy(() => import('./pages/Audit'));
-const AIInbox = lazy(() => import('./pages/AIInbox'));
-const Services = lazy(() => import('./pages/Services'));
-const VerticalSpace = lazy(() => import('./pages/VerticalSpace'));
-const NotFound = lazy(() => import('./pages/NotFound'));
-const OfflinePage = lazy(() => import('./pages/Offline'));
-const OuVaVotreArgent = lazy(() => import('./modules/agents-recettes/OuVaVotreArgent'));
+const Home = lazyPage(() => import('./pages/Home'));
+const Registration = lazyPage(() => import('./pages/Registration'));
+const TaxpayerSpace = lazyPage(() => import('./pages/TaxpayerSpace'));
+const Verify = lazyPage(() => import('./pages/Verify'));
+const Governor = lazyPage(() => import('./pages/Governor'));
+const Communications = lazyPage(() => import('./pages/Communications'));
+const LegalRegister = lazyPage(() => import('./pages/LegalRegister'));
+const Treasury = lazyPage(() => import('./pages/Treasury'));
+const Field = lazyPage(() => import('./pages/Field'));
+const Audit = lazyPage(() => import('./pages/Audit'));
+const AIInbox = lazyPage(() => import('./pages/AIInbox'));
+const Services = lazyPage(() => import('./pages/Services'));
+const VerticalSpace = lazyPage(() => import('./pages/VerticalSpace'));
+const NotFound = lazyPage(() => import('./pages/NotFound'));
+const OfflinePage = lazyPage(() => import('./pages/Offline'));
+const OuVaVotreArgent = lazyPage(() => import('./modules/agents-recettes/OuVaVotreArgent'));
 
 export function App() {
   return (

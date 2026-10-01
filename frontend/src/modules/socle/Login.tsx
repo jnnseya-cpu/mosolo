@@ -3,6 +3,7 @@
  * Le jeton de session (Bearer) est conservé sur l'appareil ; le sélecteur d'utilisateur de démonstration reste disponible.
  */
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHead } from '../../components/Shell';
 import { Icon } from '../../components/Icon';
 import { QrCode } from '../../components/QrCode';
@@ -99,6 +100,14 @@ export default function Login() {
   const { user: demoUser, setUserId, fmtDate } = useApp();
   const [mode, setMode] = useState<Mode>('contribuable');
   const [session, setSession] = useState<StoredSession | null>(loadSession);
+  // Retour après connexion (01/10/2026) : « /connexion?retour=/demo/passerelle/… » ramène la personne sur la page qu'elle
+  // voulait ouvrir (page de paiement, code QR scanné sur un autre téléphone…). Adresse interne uniquement (« /x », jamais « //x »).
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const retour = params.get('retour') ?? '';
+  const retourSur = /^\/(?![/\\])/.test(retour) && !retour.startsWith('/connexion') ? retour : null;
+  const [connecteIci, setConnecteIci] = useState(false);
+  useEffect(() => { if (connecteIci && session && retourSur) navigate(retourSur, { replace: true }); }, [connecteIci, session, retourSur, navigate]);
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [phone, setPhone] = useState('');
   const [login, setLogin] = useState('');
@@ -177,7 +186,7 @@ export default function Login() {
       const stored: StoredSession = { ...t, obtainedAt: new Date().toISOString() };
       // Appareil partagé : jeton gardé pour l'onglet seulement (sessionStorage), jamais dans localStorage.
       writeStoredSession(JSON.stringify(stored), sharedDevice || t.session.sharedDevice);
-      setSession(stored);
+      setSession(stored); setConnecteIci(true);
       setChallenge(null); setCode(''); setPassword('');
     } catch (err) {
       const d = describeError(err);
@@ -197,7 +206,7 @@ export default function Login() {
       const t = await api<TokenResponse>('/v1/auth/passkeys/authentication/verify', { method: 'POST', body: { challengeId: o.challengeId, response } });
       const stored: StoredSession = { ...t, obtainedAt: new Date().toISOString() };
       writeStoredSession(JSON.stringify(stored), t.session.sharedDevice);
-      setSession(stored);
+      setSession(stored); setConnecteIci(true);
       setPasskeyNeeded(false); setPassword(''); setFallbackReason('');
     } catch (err) {
       setError(err instanceof Error && err.name === 'NotAllowedError' ? 'Opération annulée ou clé d’accès indisponible.' : describeError(err).message);

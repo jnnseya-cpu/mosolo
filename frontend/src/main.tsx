@@ -14,6 +14,7 @@ import { AppProvider } from './context';
 import { App } from './App';
 import { captureInstallPrompt } from './hooks/useInstallPrompt';
 import { flushPendingDrafts, hydrateDrafts } from './lib/drafts';
+import { rechargerVersionNeuve } from './lib/nouvelleVersion';
 
 captureInstallPrompt();
 try {
@@ -32,6 +33,12 @@ try {
   // Service worker indisponible (contexte isolé, stockage bloqué) : l'application fonctionne en ligne, sans hors-ligne.
 }
 window.addEventListener('online', () => { void flushPendingDrafts(); });
+// Fichiers d'une ancienne version (01/10/2026) : rechargement unique sur la nouvelle version (lib/nouvelleVersion.ts).
+window.addEventListener('vite:preloadError', (e) => { if (rechargerVersionNeuve()) e.preventDefault(); });
+window.addEventListener('unhandledrejection', (e) => {
+  const m = String((e.reason as Error | undefined)?.message ?? e.reason ?? '');
+  if (/dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(m)) rechargerVersionNeuve();
+});
 
 function render() {
   createRoot(document.getElementById('root')!).render(

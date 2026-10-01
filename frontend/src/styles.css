@@ -1174,3 +1174,32 @@ input[type='file'] { font-size: 13.5px; max-width: 100%; }
 @media print {
   .print-letterhead, .print-footermark, .print-letterhead-tri { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* Accueil persuasif (01/10/2026) : promesse, avant / avec MOSOLO, publics, appel à l'action */
+.promesse { padding: 88px 0; background: var(--navy); color: #fff; }
+.promesse .caps { color: var(--flag-yellow); }
+.promesse .display-2 { max-width: 20ch; color: #fff; }
+.promesse-lead { margin-top: 24px; max-width: 60ch; font-size: clamp(17px, 1.6vw, 20px); line-height: 1.55; color: #DDE2F4; }
+.avant-apres { padding: 96px 0; background: var(--surface); }
+.aa-list { margin-top: 40px; display: grid; border-top: 1px solid var(--ink); }
+.aa-row { display: grid; gap: 8px 32px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+@media (min-width: 900px) { .aa-row { grid-template-columns: 1fr 1.4fr; } }
+.aa-row .caps-sm { display: block; margin-bottom: 4px; }
+.aa-avant { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--flag-red); text-decoration-thickness: 1px; }
+.aa-avant .caps-sm { text-decoration: none; display: block; }
+.aa-apres { color: var(--ink); font-weight: 500; }
+.aa-apres .caps-sm { color: var(--palm); }
+.figure-grid + .figure-grid { margin-top: 0; border-top: 1px solid var(--line); }
+.publics { padding: 96px 0; background: var(--bg); }
+.publics-grid { margin-top: 40px; display: grid; gap: 20px; }
+@media (min-width: 900px) { .publics-grid { grid-template-columns: repeat(3, 1fr); } }
+.public-card { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--flag-blue); border-radius: var(--r); padding: 24px; }
+.public-card:nth-child(2) { border-top-color: var(--flag-yellow); }
+.public-card:nth-child(3) { border-top-color: var(--flag-red); }
+.public-card h3 { display: flex; align-items: center; gap: 10px; font-family: var(--font-serif); font-weight: 400; font-size: 22px; line-height: 1.25; }
+.public-card ul { margin-top: 16px; display: grid; gap: 12px; }
+.public-card li { display: grid; grid-template-columns: 18px 1fr; gap: 8px; color: var(--ink-2); }
+.public-card li svg { color: var(--palm); margin-top: 3px; }
+.appel { padding: 88px 0; background: var(--navy-deep); color: #fff; }
+.appel .display-2 { color: #fff; max-width: 28ch; }
+.appel-cta { margin-top: 32px; display: flex; flex-wrap: wrap; gap: 12px; }

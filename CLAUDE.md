@@ -164,3 +164,8 @@ données de démonstration.
 - **Clés et raccordements (01/10/2026)** : toutes les clés (paiement compris) appliquées sur la seule décision du
   super-administrateur (R26), sans seconde personne, journalisées ; ancien circuit à deux personnes conservé et
   réactivable (`MOSOLO_CLES_DEUX_PERSONNES=true`) — annexe I, § I.57.
+- **Accueil et paiement (01/10/2026)** : accueil public persuasif (promesse « pas un impôt de plus », avant / avec
+  MOSOLO, engagements 0 espèce / 100 % compte public / 1 QR, publics, appel à l'action) — uniquement des garanties
+  réellement appliquées ; le catalogue d'événements n'est plus sur l'accueil (conservé en administration). Page de paiement
+  BitriPay / KODA fiabilisée : démonstration sur une instance, rechargement après mise en ligne, retour après connexion,
+  nouvelle référence en un clic (annexe I, § I.60).
