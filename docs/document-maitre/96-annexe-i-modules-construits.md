@@ -2065,9 +2065,8 @@ Ajouts, uniquement fondés sur des garanties réellement appliquées (aucun chif
 la promesse (« Plus de recettes pour Kinshasa. Pas un impôt de plus. » — principe P2 : la plateforme ne crée aucune
 taxe) ; « Ce qui change » (avant / avec MOSOLO : quittance QR vérifiable, zéro espèce, « Où va votre argent », montant
 fixé par une règle publiée, preuves en un clic et doléances) ; « Nos engagements » (0 espèce entre les mains des agents,
-100 % des paiements vers le compte public, 1 code QR par quittance — les chiffres existants « 24 communes » et « IRL
-22 % » sont conservés) ; « Pour chacun » (Kinois, autorités, entreprises et commerçants) ; appel à l'action (créer un
-compte, « Où va votre argent », « Où payer ? »). À arbitrer : le maintien du chiffre « IRL 22 % » sur l'accueil public.
+100 % des paiements vers le compte public, 1 code QR par quittance — le chiffre « 24 communes » est conservé) ; « Pour chacun » (Kinois, autorités, entreprises et commerçants) ; appel à l'action (créer un
+compte, « Où va votre argent », « Où payer ? »). Arbitrage du maître d'ouvrage (01/10/2026) : le chiffre « IRL 22 % » est retiré de l'accueil public ; la règle reste au registre (annexe B) et dans les écrans fiscaux.
 
 **Page de paiement BitriPay / KODA qui ne s'ouvrait pas.** Parcours vérifié de bout en bout (référence → page →
 paiement → webhook signé → quittance provisoire). Causes possibles en ligne, toutes traitées :

@@ -215,14 +215,8 @@ export default function Home() {
                 <p className="source">{tr('home.fig1.source')}</p>
               </figcaption>
             </figure>
-            <figure className="big-figure">
-              <p className="big-num">22 <span className="big-unit">%</span></p>
-              <figcaption>
-                <p className="big-label">{tr('home.fig2.label')}</p>
-                <p className="big-text">{tr('home.fig2.text')}</p>
-                <p className="source">{tr('home.fig2.source')}</p>
-              </figcaption>
-            </figure>
+            {/* Chiffre « IRL 22 % » retiré de l'accueil public (01/10/2026, maître d'ouvrage) : la règle reste au registre
+                (annexe B, statut À VÉRIFIER) et dans les écrans fiscaux. */}
           </div>
         </div>
       </section>
