@@ -36,3 +36,13 @@ describe('Traduction automatique de l’interface', () => {
     expect(traducteurGoogle({ GOOGLE_TRANSLATE_API_KEY: 'x' })).toBeTypeOf('function');
   });
 });
+
+describe('Traduction — diagnostic lisible (01/10/2026)', () => {
+  it('API non activée, droit manquant, quota : cause en français et remède exact ; aucune erreur : pas de diagnostic', async () => {
+    const { diagnostiquer } = await import('../src/modules/traduction/service.js');
+    expect(diagnostiquer(null)).toBeNull();
+    expect(diagnostiquer('Service de traduction : 403 {"error":{"status":"PERMISSION_DENIED","details":[{"reason":"SERVICE_DISABLED"}]}}')!.remede.join(' ')).toMatch(/services enable translate\.googleapis\.com/);
+    expect(diagnostiquer('Service de traduction : 403 {"error":{"status":"PERMISSION_DENIED","message":"Permission cloudtranslate.generalModels.predict denied"}}')!.remede.join(' ')).toMatch(/roles\/cloudtranslate\.user/);
+    expect(diagnostiquer('Service de traduction : 429 RESOURCE_EXHAUSTED')!.cause).toMatch(/Quota/);
+  });
+});

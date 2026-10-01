@@ -46,13 +46,44 @@ export function traducteurGoogle(env: NodeJS.ProcessEnv = process.env): Traducte
     else if (jeton) {
       const j = await jeton();
       headers.authorization = `Bearer ${j.token}`;
-      if (j.projet) headers['x-goog-user-project'] = j.projet;
+      // Pas d'en-tête « x-goog-user-project » (01/10/2026) : il exige un droit supplémentaire (serviceusage) et faisait
+      // refuser toutes les langues ; le jeton du compte de service suffit, dans son propre projet.
     }
     const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ q: textes, source: 'fr', target: cible, format: 'text' }) });
     if (!r.ok) throw new Error(`Service de traduction : ${r.status} ${(await r.text()).slice(0, 200)}`);
     const j = (await r.json()) as { data: { translations: { translatedText: string }[] } };
     return j.data.translations.map((t) => t.translatedText);
   };
+}
+
+/**
+ * Diagnostic lisible d'un échec (01/10/2026, « service momentanément indisponible » pour toutes les langues) : cause en
+ * français et remède exact (commandes Cloud Shell). Aucun secret : seule la réponse d'erreur de Google est analysée.
+ */
+export function diagnostiquer(erreur: string | null): { cause: string; remede: string[] } | null {
+  if (!erreur) return null;
+  const e = erreur;
+  const projet = 'PROJECT_ID=mosolo; REGION=africa-south1; SERVICE=mosolo-demo';
+  const compte = 'SA=$(gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT_ID" --format=\'value(spec.template.spec.serviceAccountName)\'); [ -z "$SA" ] && SA="$(gcloud projects describe "$PROJECT_ID" --format=\'value(projectNumber)\')-compute@developer.gserviceaccount.com"';
+  if (/SERVICE_DISABLED|has not been used|is disabled|accessNotConfigured/i.test(e)) {
+    return { cause: 'L’API « Cloud Translation » n’est pas activée sur le projet Google Cloud.', remede: [projet, 'gcloud services enable translate.googleapis.com --project "$PROJECT_ID"', 'Attendre 2 à 5 minutes, puis réessayer.'] };
+  }
+  if (/BILLING|billing/i.test(e)) {
+    return { cause: 'La facturation n’est pas activée sur le projet Google Cloud (exigée par Cloud Translation).', remede: ['Console Google Cloud → Facturation → associer un compte de facturation au projet « mosolo ».'] };
+  }
+  if (/PERMISSION_DENIED|cloudtranslate|403/i.test(e)) {
+    return { cause: 'Le compte de service du serveur n’a pas le droit d’utiliser Cloud Translation.', remede: [projet, compte, 'gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:$SA" --role roles/cloudtranslate.user --condition=None', 'Attendre 1 à 2 minutes, puis réessayer.'] };
+  }
+  if (/Jeton du compte de service/i.test(e)) {
+    return { cause: 'Le serveur n’obtient pas le jeton de son compte de service (hors Cloud Run ?).', remede: ['Hors Cloud Run : définir la variable GOOGLE_TRANSLATE_API_KEY (clé d’API restreinte à Cloud Translation).'] };
+  }
+  if (/429|RESOURCE_EXHAUSTED|quota/i.test(e)) {
+    return { cause: 'Quota de traduction atteint sur le projet Google Cloud.', remede: ['Console Google Cloud → API Cloud Translation → Quotas : relever la limite, ou réessayer plus tard.'] };
+  }
+  if (/400|Bad language|invalid.*target|not supported/i.test(e)) {
+    return { cause: 'Langue refusée par le fournisseur de traduction.', remede: ['Choisir une autre langue ; la langue concernée est signalée au maître d’ouvrage.'] };
+  }
+  return { cause: 'Le fournisseur de traduction ne répond pas correctement.', remede: ['Réessayer dans quelques minutes ; si cela persiste, consulter les journaux du service Cloud Run.'] };
 }
 
 export class TraductionService {
@@ -67,6 +98,7 @@ export class TraductionService {
     return {
       disponible: this.disponible, langues: LANGUES_TRADUITES, source: 'fr', fournisseur: this.disponible ? 'Google Cloud Translation' : null,
       mention: 'Traduction automatique — la version française fait foi.', derniereErreur: this.derniereErreur,
+      diagnostic: diagnostiquer(this.derniereErreur),
     };
   }
 

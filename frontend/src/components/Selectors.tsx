@@ -45,8 +45,10 @@ export function LanguageSelector({ id = 'lang-select' }: { id?: string }) {
  * reste en français et la langue choisie sert aux SMS et notifications.
  */
 export function AvisLangue() {
-  const { lang, setLang } = useApp();
+  const { lang, setLang, user } = useApp();
   const [etat, setEtat] = useState<'verif' | 'actif' | 'indisponible' | 'erreur'>('verif');
+  const [diag, setDiag] = useState<{ cause: string; remede: string[] } | null>(null);
+  const admin = !!user?.roles.some((r) => r === 'R26' || r === 'R28');
   useEffect(() => {
     if (lang === 'fr') return;
     let traducteur: TraducteurEcran | null = null;
@@ -56,7 +58,11 @@ export function AvisLangue() {
       if (annule) return;
       if (!e.disponible) { setEtat('indisponible'); return; }
       traducteur = new TraducteurEcran(lang);
-      traducteur.onErreur = () => setEtat('erreur');
+      traducteur.onErreur = () => {
+        setEtat('erreur');
+        // Diagnostic lisible (cause et remède) donné par le serveur — 01/10/2026.
+        void api<{ diagnostic: { cause: string; remede: string[] } | null }>('/v1/traduction/etat').then((x) => setDiag(x.diagnostic)).catch(() => undefined);
+      };
       traducteur.demarrer();
       setEtat('actif');
     }).catch(() => { if (!annule) setEtat('indisponible'); });
@@ -69,9 +75,15 @@ export function AvisLangue() {
         <strong translate="no">{LANGUAGES[lang].nativeName}</strong>{' '}
         {etat === 'actif' ? ': traduction automatique de l’écran — la version française fait foi.'
           : etat === 'verif' ? ': traduction en cours…'
-            : etat === 'erreur' ? ': service de traduction momentanément indisponible — certains textes restent en français.'
+            : etat === 'erreur' ? `: service de traduction indisponible — certains textes restent en français.${diag ? ` Cause : ${diag.cause}` : ''}`
               : ': traduction automatique non configurée sur ce serveur — l’interface reste en français ; vos SMS et notifications sont envoyés dans cette langue.'}
       </span>
+      {etat === 'erreur' && diag && admin && (
+        <details className="small" translate="no" data-no-translate>
+          <summary>Remède (administration)</summary>
+          <pre style={{ whiteSpace: 'pre-wrap' }}>{diag.remede.join('\n')}</pre>
+        </details>
+      )}
       <button type="button" className="btn btn-secondary btn-sm" translate="no" data-no-translate onClick={() => setLang('fr')}>Afficher en français</button>
     </div>
   );

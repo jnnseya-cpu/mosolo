@@ -2045,3 +2045,13 @@ Consigne du maître d'ouvrage : « que toutes les saisies fonctionnent ». Trois
    champ horaire. Le plantage relevé sur « Communications » venait du robot (aperçu de courriel isolé, sans script) :
    aucun effet pour les utilisateurs. Refus 403 relevés : conformes aux droits (Gouverneur et cabinet voient tous les
    modules sans pouvoir y agir partout ; séparation des tâches ; agents hors de leur module).
+
+## I.59 Traduction : diagnostic lisible (01/10/2026)
+
+Signalement : « Lingála : service de traduction momentanément indisponible — et toutes les langues ». Cause probable :
+API Cloud Translation non activée ou droit `roles/cloudtranslate.user` absent du compte de service Cloud Run (Google
+refuse alors toutes les langues). Corrections : en-tête `x-goog-user-project` retiré (il exigeait un droit
+supplémentaire) ; `GET /v1/traduction/etat` renvoie un **diagnostic** (cause en français et remède exact : activation de
+l'API, rôle, facturation, quota, langue refusée) ; le bandeau de langue affiche la cause à tous et le remède (commandes
+Cloud Shell) au super-administrateur et au responsable sécurité. Mise en service : infra/gcp/README.md, « Traduction
+automatique de l'interface ».
