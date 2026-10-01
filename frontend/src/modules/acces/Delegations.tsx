@@ -15,6 +15,7 @@ import { Choice, Field, hasRole } from '../pilotage/planif';
 import { Ecran, useRunner, useVue, type Indicator } from '../decision/commun';
 import { IndicateursVisuels } from '../plateforme/visuels';
 import { DELEGATION_STATUS, DelegationsVisuels } from './visuels';
+import { ChoixRoles } from '../../components/Choix';
 
 interface Delegation { id: string; delegatorId: string; delegateId: string; roles: string[]; from: string; to: string; motif: string; status: string }
 interface Vue {
@@ -28,7 +29,7 @@ export default function Delegations() {
   const q = useVue<Vue>('/v1/acces/delegations');
   const r = useRunner(q.reload);
   const [delegate, setDelegate] = useState('');
-  const [roles, setRoles] = useState('');
+  const [roles, setRoles] = useState<string[]>([]);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [motif, setMotif] = useState('');
@@ -51,11 +52,11 @@ export default function Delegations() {
         <Section title="Déléguer temporairement un de mes rôles" sub={`Durée maximale ${d.params.maxDays} jours ; rôles non délégables : ${d.params.nonDelegable.join(', ')} (${d.params.status}). Approbation par une autre personne.`}>
           <div className="form">
             <Field label="Délégataire (identifiant, même entité)" value={delegate} onChange={setDelegate} />
-            <Field label="Rôles délégués (ex. R11, séparés par des virgules)" value={roles} onChange={setRoles} hint={`Vos rôles : ${user?.roles.join(', ') ?? '—'}`} />
+            <ChoixRoles label="Rôles délégués (parmi les vôtres)" roles={(user?.roles ?? []).filter((x) => !d.params.nonDelegable.includes(x))} value={roles} onChange={setRoles} />
             <Field label="Du" type="date" value={from} onChange={setFrom} />
             <Field label="Au" type="date" value={to} onChange={setTo} />
             <Field label="Motif" value={motif} onChange={setMotif} />
-            <button type="button" className="btn btn-primary" disabled={r.busy || !delegate || !roles || motif.length < 10} onClick={() => void r.run('/v1/acces/delegations', { delegateId: delegate, roles: roles.split(',').map((x) => x.trim()).filter(Boolean), from, to, motif }, 'Délégation proposée : approbation attendue.')}>Proposer</button>
+            <button type="button" className="btn btn-primary" disabled={r.busy || !delegate || !roles.length || motif.length < 10} onClick={() => void r.run('/v1/acces/delegations', { delegateId: delegate, roles, from, to, motif }, 'Délégation proposée : approbation attendue.')}>Proposer</button>
           </div>
         </Section>
         <Section title="Délégations">

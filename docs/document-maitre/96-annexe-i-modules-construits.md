@@ -2029,3 +2029,19 @@ Conservé (règle n° 1) : l'ancien circuit à deux personnes reste dans le code
 d'environnement `MOSOLO_CLES_DEUX_PERSONNES=true` ; ses tests continuent de le vérifier. Signalé au maître d'ouvrage : une
 clé de paiement erronée peut détourner ou bloquer des encaissements — d'où le journal et le bouton « Tester la connexion »
 à utiliser après chaque saisie.
+
+## I.58 Audit des saisies de toute la plateforme (01/10/2026)
+
+Consigne du maître d'ouvrage : « que toutes les saisies fonctionnent ». Trois passes :
+1. **Adresses** : chaque appel des écrans (≈ 1 060 chemins, combinaisons d'actions comprises) confronté au serveur
+   réel — aucune adresse inconnue.
+2. **Saisies réelles** : un robot a ouvert les **188 écrans** des 103 comptes de démonstration, rempli tous les champs
+   et pressé les boutons d'action ; 10 refus de format et 1 plantage relevés, chacun examiné.
+3. **Corrections** : sélecteurs lisibles au lieu de codes tapés à la main (entité destinataire, rôle destinataire,
+   entités d'un accord de service, rôles délégués — composant commun `components/Choix.tsx`) ; **montants et nombres
+   saisis à la française** acceptés partout (« 12,5 », « 1 500,00 », ramenés à la forme canonique côté serveur) ;
+   calendrier du binôme contrôlé ligne par ligne avant envoi ; commune choisie dans la liste et communes autorisées
+   vérifiées contre les 24 communes ; longueurs maximales affichées (catégorie, numéro de pièce, IUC) ; heures en
+   champ horaire. Le plantage relevé sur « Communications » venait du robot (aperçu de courriel isolé, sans script) :
+   aucun effet pour les utilisateurs. Refus 403 relevés : conformes aux droits (Gouverneur et cabinet voient tous les
+   modules sans pouvoir y agir partout ; séparation des tâches ; agents hors de leur module).

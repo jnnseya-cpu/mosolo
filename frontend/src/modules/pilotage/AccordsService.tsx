@@ -15,6 +15,7 @@ import { Choice, Field, hasRole, Notice, useRunner } from './planif';
 import './pilotage.css';
 import { fmtNombre, KpiTile, ProgressMeter, StackedBarViz, StatusDistribution, VizFrame } from '../../components/viz';
 import { nombre, Tuiles, Visuels } from './visuels';
+import { ChoixEntite } from '../../components/Choix';
 
 /** Visuels des accords de service : respect des délais par accord, état des demandes, satisfaction (§ 39). */
 export function VisuelsAccords({ b, sat }: { b: Board; sat: Sat | null }) {
@@ -91,8 +92,8 @@ export default function AccordsService() {
           {hasRole(user?.roles, 'R02', 'R03', 'R05', 'R08') && (
             <Section title="Enregistrer un accord" sub="Sur la foi d’une convention signée (référence obligatoire)">
               <div className="form">
-                <Field label="Entité demandeuse" value={form.fromEntity} onChange={(v) => setForm({ ...form, fromEntity: v })} />
-                <Field label="Entité qui s’engage" value={form.toEntity} onChange={(v) => setForm({ ...form, toEntity: v })} />
+                <ChoixEntite label="Entité demandeuse" value={form.fromEntity} onChange={(v) => setForm({ ...form, fromEntity: v })} />
+                <ChoixEntite label="Entité qui s’engage" value={form.toEntity} onChange={(v) => setForm({ ...form, toEntity: v })} />
                 <Choice label="Nature" value={form.kind} onChange={(v) => setForm({ ...form, kind: v })} options={Object.entries(q.data.kinds)} />
                 <Field label="Délai (heures)" value={form.delayHours} onChange={(v) => setForm({ ...form, delayHours: v })} />
                 <Field label="Référence de la convention" value={form.reference} onChange={(v) => setForm({ ...form, reference: v })} />

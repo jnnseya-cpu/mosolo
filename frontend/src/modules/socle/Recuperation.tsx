@@ -26,7 +26,7 @@ function RequestForm() {
   if (msg) return <p className="notice" role="status">{msg}</p>;
   return (
     <form className="panel stack-sm" onSubmit={(e) => void go(e)}>
-      <div className="field"><label className="label" htmlFor="rc-iuc">Identifiant du compte (IUC, ex. KIN-XXXXXXXX-X)</label><input id="rc-iuc" required value={f.iuc} onChange={(e) => setF({ ...f, iuc: e.target.value })} /></div>
+      <div className="field"><label className="label" htmlFor="rc-iuc">Identifiant du compte (IUC, ex. KIN-XXXXXXXX-X)</label><input id="rc-iuc" required maxLength={30} value={f.iuc} onChange={(e) => setF({ ...f, iuc: e.target.value })} /></div>
       <div className="field"><label className="label" htmlFor="rc-ph">Nouveau numéro de téléphone</label><input id="rc-ph" required inputMode="tel" value={f.newPhone} onChange={(e) => setF({ ...f, newPhone: e.target.value })} /></div>
       <div className="field"><label className="label" htmlFor="rc-id">Numéro de la pièce d’identité que vous présenterez au guichet</label><input id="rc-id" required value={f.idDocumentRef} onChange={(e) => setF({ ...f, idDocumentRef: e.target.value })} /></div>
       {err && <p className="notice notice-err" role="alert">{err}</p>}

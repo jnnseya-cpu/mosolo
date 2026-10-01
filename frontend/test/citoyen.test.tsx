@@ -80,7 +80,7 @@ describe('Module 4 — fonctions de l’appareil (niveau web)', () => {
     expect(back).toEqual(p);
     // Contenu altéré : refusé (authentification AES-GCM).
     const o = JSON.parse(raw) as { ct: string };
-    localStorage.setItem('mosolo.portefeuille.v1', JSON.stringify({ ...JSON.parse(raw), ct: `A${o.ct.slice(1)}` }));
+    localStorage.setItem('mosolo.portefeuille.v1', JSON.stringify({ ...JSON.parse(raw), ct: `${o.ct[0] === 'A' ? 'B' : 'A'}${o.ct.slice(1)}` })); // toujours un caractère différent
     expect(await ouvrirPortefeuille('1357')).toBeNull();
   });
 

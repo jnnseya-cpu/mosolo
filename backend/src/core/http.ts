@@ -21,12 +21,24 @@ const currencyEnum = z.enum(CURRENCY_CODES as [string, ...string[]]);
 export const currencySchema = currencyEnum as unknown as z.ZodType<(typeof CURRENCY_CODES)[number]>;
 
 /** MoneyJSON : montant décimal en chaîne (jamais de nombre flottant). */
+/**
+ * Saisie d'un nombre telle qu'une personne la tape (audit des saisies, 01/10/2026) : virgule décimale française
+ * (« 12,5 »), espaces de milliers (« 1 500 », espace insécable compris) acceptés et ramenés à la forme canonique
+ * (« 12.5 », « 1500 ») avant contrôle. Une valeur déjà canonique est inchangée.
+ */
+export const normaliserNombre = (v: unknown): unknown => {
+  // Un nombre JSON (flottant) reste refusé : jamais de montant en virgule flottante (règle du socle).
+  if (typeof v !== 'string') return v;
+  const t = v.trim().replace(/[\s\u00a0\u202f]/g, '');
+  return /^-?\d+,\d+$/.test(t) ? t.replace(',', '.') : t;
+};
+
 export const moneySchema = z.object({
-  amount: z.string().regex(/^\d{1,18}(\.\d{1,6})?$/, 'montant décimal positif en chaîne attendu, ex. "150.00"'),
+  amount: z.preprocess(normaliserNombre, z.string().regex(/^\d{1,18}(\.\d{1,6})?$/, 'montant décimal positif attendu, ex. « 150 », « 150,00 » ou « 1 500 »')),
   currency: currencySchema,
 }).strict();
 
-export const decimalString = z.string().regex(/^-?\d{1,18}(\.\d{1,18})?$/, 'nombre décimal en chaîne attendu');
+export const decimalString = z.preprocess(normaliserNombre, z.string().regex(/^-?\d{1,18}(\.\d{1,18})?$/, 'nombre décimal attendu, ex. « 12,5 »'));
 /**
  * Date civile AAAA-MM-JJ RÉELLE (deuxième passe adverse, 27/09/2026) : « 2026-02-30 » était acceptée puis décalée au
  * 2 mars par le moteur de dates, « 2026-13-01 » devenait une date invalide. Le jour doit exister au calendrier.

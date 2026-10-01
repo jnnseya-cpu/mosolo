@@ -17,6 +17,7 @@ import { BarChartViz, DonutViz, fmtNombre, KpiTile, StatusDistribution, Timeline
 import { etatsDe, lignesCompte, Tuiles, Visuels } from './visuels';
 // Parcours par rôle (29/09/2026) : un écran vide propose la prochaine action utile du travail du jour.
 import { SuiteDuTravail } from '../../components/SuiteDuTravail';
+import { ChoixEntite, ChoixRole } from '../../components/Choix';
 
 export interface InstructionRow {
   id: string; number: string; authority: string; origin: string; originLabel: string; subject: string; body: string; deadline: string; status: string; overdue: boolean; daysLeft: number;
@@ -103,8 +104,8 @@ export default function Instructions() {
               <Choice label="Bloc d’origine" value={form.origin} onChange={(v) => setForm({ ...form, origin: v })} options={Object.entries(q.data?.origins ?? { COMMUNE: 'Par commune' })} />
               <Field label="Objet" value={form.subject} onChange={(v) => setForm({ ...form, subject: v })} />
               <Area label="Instruction" value={form.body} onChange={(v) => setForm({ ...form, body: v })} />
-              <Field label="Entité destinataire (code)" value={form.entity} onChange={(v) => setForm({ ...form, entity: v })} />
-              <Field label="Rôle destinataire (facultatif, ex. R06)" value={form.role} onChange={(v) => setForm({ ...form, role: v })} />
+              <ChoixEntite label="Entité destinataire" value={form.entity} onChange={(v) => setForm({ ...form, entity: v })} />
+              <ChoixRole label="Rôle destinataire (facultatif)" facultatif value={form.role} onChange={(v) => setForm({ ...form, role: v })} />
               <Field label="Échéance" type="date" value={form.deadline} onChange={(v) => setForm({ ...form, deadline: v })} />
               <div className="btn-row"><button type="button" className="btn btn-primary btn-sm" disabled={r.busy} onClick={() => void r.run('/v1/pilotage/instructions', { origin: form.origin, subject: form.subject, body: form.body, assignee: { entity: form.entity, ...(form.role ? { role: form.role } : {}) }, deadline: form.deadline }, 'Instruction émise.')}>Émettre</button></div>
             </div>

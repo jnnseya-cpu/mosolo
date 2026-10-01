@@ -90,7 +90,7 @@ export default function Vehicules() {
           <form className="panel stack-sm" onSubmit={(e) => void liquider(e)} aria-label="Liquidation par catégorie">
             <p className="panel-title">Liquider par catégorie et exercice (règle ACTIVE « VIG-catégorie » requise)</p>
             <div className="cit-inline">
-              <input aria-label="Catégorie" placeholder="Catégorie (ex. MINIBUS)" value={liq.categorie} onChange={(e) => setLiq({ ...liq, categorie: e.target.value })} />
+              <input aria-label="Catégorie" placeholder="Catégorie (ex. MINIBUS)" value={liq.categorie} maxLength={30} onChange={(e) => setLiq({ ...liq, categorie: e.target.value })} />
               <input aria-label="Exercice" value={liq.exercice} onChange={(e) => setLiq({ ...liq, exercice: e.target.value })} />
               <button type="submit" className="btn btn-primary btn-sm">Liquider</button>
             </div>

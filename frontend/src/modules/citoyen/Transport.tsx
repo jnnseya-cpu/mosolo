@@ -16,6 +16,7 @@ import { api, describeError } from '../../lib/api';
 import { ActionMotivee, BlocIndicateurs, Tableau } from './common';
 import './citoyen.css';
 import { TransportVisuels } from './visuels';
+import { COMMUNES } from '../../verticals/catalogue';
 
 interface Autorisation { id: string; certificatCode: string; categorieLibelle: string; plaque: string; zones: string[]; corridor?: string; horaires: { debut: string; fin: string }; statut: string; opposable: boolean; mention: string | null; validite: { text: string }; cartes: { numero: string; statut: string }[]; suspension?: { proposee: { par: string; motif: string; action: string }; approuvee?: unknown }; taxeJournaliere: string }
 interface Controle { couleur: string; resultat: string; heureKinshasa: string; vignette: { texte: string }; notice: string }
@@ -39,8 +40,11 @@ export default function Transport() {
   }
   async function enregistrer(e: FormEvent) {
     e.preventDefault(); setMsg(null);
+    // Audit des saisies : chaque commune autorisée doit être l'une des 24 communes de Kinshasa.
+    const inconnues = n.zones.split(',').map((z) => z.trim()).filter(Boolean).filter((z) => !COMMUNES.some((c) => c.toLowerCase() === z.toLowerCase()));
+    if (inconnues.length) { setMsg(`Commune(s) inconnue(s) : ${inconnues.join(', ')}. Choisissez parmi les 24 communes de Kinshasa (liste proposée à la saisie).`); return; }
     try {
-      await api('/v1/citoyen/transport/autorisations', { method: 'POST', body: { certificatCode: n.certificatCode, categorie: n.categorie, plaque: n.plaque, zones: n.zones.split(',').map((z) => z.trim()).filter(Boolean), ...(n.corridor ? { corridor: n.corridor } : {}), horaires: { debut: n.debut, fin: n.fin } } });
+      await api('/v1/citoyen/transport/autorisations', { method: 'POST', body: { certificatCode: n.certificatCode, categorie: n.categorie, plaque: n.plaque, zones: n.zones.split(',').map((z) => z.trim()).filter(Boolean).map((z) => COMMUNES.find((c) => c.toLowerCase() === z.toLowerCase()) ?? z), ...(n.corridor ? { corridor: n.corridor } : {}), horaires: { debut: n.debut, fin: n.fin } } });
       list.reload();
     } catch (x) { setMsg(describeError(x).message); }
   }
@@ -56,7 +60,7 @@ export default function Transport() {
           <div className="cit-inline">
             <input aria-label="Plaque" placeholder="Plaque" value={c.plaque} onChange={(e) => setC({ ...c, plaque: e.target.value })} />
             <input aria-label="QR de carte conducteur" placeholder="ou QR de la carte conducteur" value={c.qr} onChange={(e) => setC({ ...c, qr: e.target.value })} />
-            <input aria-label="Commune du contrôle" placeholder="Commune" value={c.commune} onChange={(e) => setC({ ...c, commune: e.target.value })} />
+            <select aria-label="Commune du contrôle" value={c.commune} onChange={(e) => setC({ ...c, commune: e.target.value })}><option value="">Commune du contrôle</option>{COMMUNES.map((x) => <option key={x} value={x}>{x}</option>)}</select>
             <button type="submit" className="btn btn-primary btn-sm">Contrôler</button>
           </div>
           {ctl && <div role="status" className="stack-sm"><StatusBadge tone={TONE[ctl.couleur] ?? 'neutral'} label={`${ctl.couleur} — ${ctl.resultat}`} /><p className="small">Heure de Kinshasa (serveur) : {ctl.heureKinshasa} · {ctl.vignette.texte}</p><p className="small muted">{ctl.notice}</p></div>}
@@ -93,10 +97,10 @@ export default function Transport() {
             <div className="field"><label className="label" htmlFor="tr-p">Plaque</label><input id="tr-p" value={n.plaque} onChange={(e) => setN({ ...n, plaque: e.target.value })} /></div>
           </div>
           <div className="field-row">
-            <div className="field"><label className="label" htmlFor="tr-z">Communes autorisées (virgules ; vide = toutes)</label><input id="tr-z" value={n.zones} onChange={(e) => setN({ ...n, zones: e.target.value })} /></div>
+            <div className="field"><label className="label" htmlFor="tr-z">Communes autorisées (virgules ; vide = toutes)</label><input id="tr-z" value={n.zones} onChange={(e) => setN({ ...n, zones: e.target.value })} list="tr-z-communes" placeholder="ex. Gombe, Limete" /><datalist id="tr-z-communes">{COMMUNES.map((x) => <option key={x} value={x} />)}</datalist></div>
             <div className="field"><label className="label" htmlFor="tr-co">Corridor</label><input id="tr-co" value={n.corridor} onChange={(e) => setN({ ...n, corridor: e.target.value })} /></div>
-            <div className="field"><label className="label" htmlFor="tr-d">Début</label><input id="tr-d" value={n.debut} onChange={(e) => setN({ ...n, debut: e.target.value })} /></div>
-            <div className="field"><label className="label" htmlFor="tr-f">Fin</label><input id="tr-f" value={n.fin} onChange={(e) => setN({ ...n, fin: e.target.value })} /></div>
+            <div className="field"><label className="label" htmlFor="tr-d">Début</label><input id="tr-d" type="time" value={n.debut} onChange={(e) => setN({ ...n, debut: e.target.value })} /></div>
+            <div className="field"><label className="label" htmlFor="tr-f">Fin</label><input id="tr-f" type="time" value={n.fin} onChange={(e) => setN({ ...n, fin: e.target.value })} /></div>
           </div>
           <button type="submit" className="btn btn-primary btn-sm">Enregistrer</button>
         </form>

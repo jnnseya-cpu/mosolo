@@ -66,7 +66,7 @@ export default function Pieces() {
           <div className="field"><label className="label" htmlFor="pc-photo">Photo de la pièce</label><input id="pc-photo" type="file" accept="image/*" capture="environment" onChange={(e) => void onPhoto(e)} /></div>
         </div>
         <div className="field-row">
-          <div className="field"><label className="label" htmlFor="pc-num">Numéro</label><input id="pc-num" value={f.numero} onChange={(e) => setF({ ...f, numero: e.target.value })} /></div>
+          <div className="field"><label className="label" htmlFor="pc-num">Numéro</label><input id="pc-num" maxLength={40} value={f.numero} onChange={(e) => setF({ ...f, numero: e.target.value })} /></div>
           <div className="field"><label className="label" htmlFor="pc-nom">Nom déclaré</label><input id="pc-nom" value={f.nomDeclare} onChange={(e) => setF({ ...f, nomDeclare: e.target.value })} /></div>
           <div className="field"><label className="label" htmlFor="pc-exp">Date d’expiration</label><input id="pc-exp" type="date" value={f.dateExpiration} onChange={(e) => setF({ ...f, dateExpiration: e.target.value })} /></div>
         </div>

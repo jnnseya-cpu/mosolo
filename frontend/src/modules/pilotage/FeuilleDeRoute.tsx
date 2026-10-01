@@ -247,8 +247,9 @@ export function OperatingModelPanel({ m, onDone }: { m: OperatingModel; onDone: 
           <Choice label="Poste externe" value={pair.postId} onChange={(v) => setPair({ ...pair, postId: v })} options={[['', '— choisir —'], ...posts.filter((p) => p.external).map((p) => [p.id, p.roleLabel] as [string, string])]} />
           <Field label="Agent provincial désigné (fonction ou poste)" value={pair.agentLabel} onChange={(v) => setPair({ ...pair, agentLabel: v })} />
           <Area label="Calendrier de transfert écrit (une ligne « AAAA-MM-JJ;jalon »)" value={pair.calendar} onChange={(v) => setPair({ ...pair, calendar: v })} rows={3} />
+          {pair.calendar.trim() && calendarProblem(pair.calendar) && <p className="notice notice-err" role="alert">{calendarProblem(pair.calendar)}</p>}
           <Field label="Motif" value={pair.motif} onChange={(v) => setPair({ ...pair, motif: v })} />
-          <div className="btn-row"><button type="button" className="btn btn-secondary btn-sm" disabled={run.busy || !pair.postId} onClick={() => void run.run(`/v1/pilotage/modele-operationnel/postes/${pair.postId}/binome`, {
+          <div className="btn-row"><button type="button" className="btn btn-secondary btn-sm" disabled={run.busy || !pair.postId || !!calendarProblem(pair.calendar)} onClick={() => void run.run(`/v1/pilotage/modele-operationnel/postes/${pair.postId}/binome`, {
             agentLabel: pair.agentLabel, motif: pair.motif, calendar: parseCalendar(pair.calendar),
           }, 'Binôme désigné.')}>Désigner le binôme</button></div>
           {open.length > 0 && <>
@@ -263,6 +264,19 @@ export function OperatingModelPanel({ m, onDone }: { m: OperatingModel; onDone: 
 }
 
 /** Calendrier de transfert : lignes « AAAA-MM-JJ;libellé du jalon ». */
+/** Contrôle local du calendrier (audit des saisies) : message par ligne, avant tout envoi. */
+export function calendarProblem(text: string): string | null {
+  const lignes = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  for (const [i, l] of lignes.entries()) {
+    const [d, ...rest] = l.split(';');
+    const date = (d ?? '').trim(); const jalon = rest.join(';').trim();
+    const ok = /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(`${date}T00:00:00Z`)) && new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
+    if (!ok) return `Ligne ${i + 1} : date attendue au format AAAA-MM-JJ avant le point-virgule (ex. 2026-11-15;Remise des dossiers).`;
+    if (jalon.length < 3) return `Ligne ${i + 1} : nom du jalon après le point-virgule (3 caractères au moins).`;
+  }
+  return null;
+}
+
 export function parseCalendar(text: string): { dueDate: string; label: string }[] {
   return text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [d, ...rest] = l.split(';'); return { dueDate: (d ?? '').trim(), label: rest.join(';').trim() }; });
 }
