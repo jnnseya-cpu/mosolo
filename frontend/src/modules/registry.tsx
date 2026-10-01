@@ -210,6 +210,10 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/pilotage/versions', element: lazy(() => import('./pilotage/Versions')), nav: { label: 'Plan de livraison par versions', short: 'Versions', icon: 'table', group: 'pilotage', roles: PROGRAMME } },
   { path: '/pilotage/cent-jours', element: lazy(() => import('./pilotage/CentJours')), nav: { label: 'Plan des 100 premiers jours', short: '100 jours', icon: 'clock', group: 'pilotage', roles: PROGRAMME } },
   { path: '/pilotage/decisions-gouvernement', element: lazy(() => import('./pilotage/Decisions')), nav: { label: 'Décisions du Gouvernement provincial', short: 'Décisions', icon: 'scale', group: 'pilotage', roles: PROGRAMME } },
+  // Agents IA de recettes (01/10/2026) : hub de direction, tournée de l'agent de terrain, doléances des usagers.
+  { path: '/agents-recettes', element: lazy(() => import('./agents-recettes/AgentsRecettes')), nav: { label: 'Agents IA de recettes', short: 'Agents IA', icon: 'analysis', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R08', 'R13', 'R14', 'R15', 'R16', 'R17', 'R18', 'R20', 'R21', 'R22', 'R23', 'R24', 'R26', 'R27', 'R28'] } },
+  { path: '/agents-recettes/tournee', element: lazy(() => import('./agents-recettes/Tournee')), nav: { label: 'Ma tournée du jour (copilote)', short: 'Tournée', icon: 'pin', group: 'operations', roles: ['R09', 'R10', 'R11'] } },
+  { path: '/mes-doleances', element: lazy(() => import('./agents-recettes/MesDoleances')), nav: { label: 'Mes doléances', short: 'Doléances', icon: 'message', group: 'public', roles: ['R30', 'R31'] } },
   { path: '/satisfaction', element: lazy(() => import('./pilotage/Satisfaction')), nav: { label: 'Donner mon avis', short: 'Avis', icon: 'check', group: 'public', roles: ['R30', 'R31'] } },
 
   // Vision : sept questions par objet et par obligation, chaîne opératoire en treize maillons, maillons sautés (audit)

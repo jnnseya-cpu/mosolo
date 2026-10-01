@@ -1961,3 +1961,30 @@ provinciaux) et **DGTK** (droits, taxes et redevances de la Ville) ; 160 km de r
   (besoins) » ; aucune donnée individuelle.
 - **En attente du Gouvernorat** : la liste officielle des recettes relevant de la DGIPK et de la DGTK (acte de
   répartition) ; elle remplacera la table par défaut et fixera l'entité administrante des fiches concernées.
+
+## I.55 Agents IA de recettes (01/10/2026)
+
+Décision du maître d'ouvrage (« tous les construire ») sur les suggestions du 30/09/2026 : faire de MOSOLO une machine à
+recettes sans heurter la population. Module `plugins/agents-recettes/` ; écran « Agents IA de recettes »
+(`/agents-recettes`) ; copilote de terrain (`/agents-recettes/tournee`) ; « Mes doléances » (`/mes-doleances`, R30/R31) ;
+page publique « Où va votre argent » (`/ou-va-votre-argent`, lien depuis l'accueil).
+
+**Doctrine** (rappelée à l'écran) : plus de recettes de ceux qui devraient déjà payer et des fuites — jamais en alourdissant
+ceux qui paient ; aucune nouvelle charge sans acte signé ; les grands d'abord ; aider avant de punir (rappel → échéancier →
+pénalité, sanctions par une personne, recours en un clic) ; l'IA propose, une personne décide (acceptation ou refus motivé,
+journalisé) ; données agrégées ; contrôle d'équité.
+
+| Famille | Agent | Mode |
+|---|---|---|
+| 1. Élargir l'assiette | Découverte croisée (imagerie, SNEL, REGIDESO, marchands de monnaie mobile, plaques relevées ↔ registre ; rayon 30 m par défaut) ; surveillance des grands contrats (observé ↔ déclaré par opérateur) | Lots importés, validés par une seconde personne ; jamais de nom ni de téléphone (refusés par le schéma) |
+| 2. Paiement facile | Rappels personnalisés (langue, moment après la paie, préférences et consentements respectés ; envoi sur décision) ; assistant vocal et USSD (existant, `/canaux/ussd`) ; propositions d'échéanciers avant pénalité (décision dans le circuit du recouvrement) | Calculé / existant |
+| 3. Fuites | Écarts par zone (taux de recouvrement < 50 % de la médiane) et par agent (activité < 50 % des pairs) ; paiements confirmés non rapprochés après 10 jours ; vérification publique des quittances (existant) | Calculé / existant |
+| 4. Arriérés | Priorisation (les grands débiteurs d'abord, capacité apparente) ; simulateur de fenêtre de régularisation (borne basse au taux observé ; toute remise exige un acte) | Calculé / simulation |
+| 5. Tarifs | Simulateur d'impact avant changement de tarif (par commune et rang de localité ; alerte rangs 3–4) ; prix du stationnement (existant) ; prévision des recettes (moyenne mobile 3 mois) | Simulation / existant / calculé |
+| 6. Confiance | Gardien de la légalité (règle sans texte valide, obligation sur règle non active, double imposition) ; « Où va votre argent » (seuil de 5 contribuables) ; doléances (orientation, délai 15 jours, alerte ×2 la médiane, auteur jamais révélé, l'agent mis en cause ne traite pas) ; baromètre du mécontentement (signaux agrégés par commune) ; contrôle d'équité (part des propositions / part du registre > 1,5) | Calculé |
+| 7. Terrain | Copilote : tournée du jour (gros enjeux puis plus proche voisin), sans montant, jamais d'espèces | Calculé |
+
+Tous les paramètres (rayon, délais, seuils, mensualités, méthode de prévision) sont « par défaut — à confirmer par le
+maître d'ouvrage ». Données de démonstration : lots et doléances « [EXEMPLE] » non contractuels, jamais chargés en
+production. Chaque agent est rattaché à un agent du catalogue IA (§ 23.2). Routes : `/v1/agents-recettes*`,
+`/v1/doleances*`, `/v1/public/ou-va-votre-argent`.

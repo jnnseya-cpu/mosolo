@@ -150,3 +150,8 @@ données de démonstration.
   qu'à partir des besoins de Kinshasa recensés par les services, des **écarts de collecte par commune** (liquidé −
   rapproché, besoins de recouvrement sans dépense) et des recettes réellement générées. Répartition officielle DGIPK / DGTK attendue du
   Gouvernorat (annexe I, § I.54).
+- **Agents IA de recettes (01/10/2026)** : écran « Agents IA de recettes » — sept familles (assiette, paiement, fuites,
+  arriérés, tarifs, confiance, terrain) ; l'IA propose, une personne décide (motif journalisé) ; aucune charge sans acte,
+  les grands d'abord, aider avant de punir ; sources externes (imagerie, SNEL, REGIDESO, marchands, plaques, opérateurs)
+  importées sans nom et validées par deux personnes ; doléances sans représailles ; « Où va votre argent » public ;
+  contrôle d'équité ; tous les paramètres « à confirmer » (annexe I, § I.55).

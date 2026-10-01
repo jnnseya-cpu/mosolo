@@ -123,7 +123,7 @@ export default function Home() {
               : <Link to="/espace" className="btn btn-light btn-lg">{tr('home.cta.space')} <Icon name="arrowRight" size={18} /></Link>}
             <Link to="/verifier" className="btn btn-outline-light btn-lg"><Icon name="shieldCheck" size={18} /> {tr('home.cta.verify')}</Link>
           </div>
-          <div className="hero-install"><InstallButton variant="link" /></div>
+          <div className="hero-install"><InstallButton variant="link" /> · <Link to="/ou-va-votre-argent" style={{ color: "inherit" }}>Où va votre argent</Link></div>
         </div>
         <p className="hero-caption">{tr('home.heroCaption')}</p>
       </section>

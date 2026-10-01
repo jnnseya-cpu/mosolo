@@ -1,10 +1,11 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1610 routes** dans 51 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1627 routes** dans 52 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
 | extension acces | 90 |
+| extension agents-recettes | 17 |
 | extension apprentissage | 17 |
 | extension canaux | 46 |
 | extension catalogue-api | 20 |
@@ -150,6 +151,28 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1610 routes** dans 5
 | GET | `/v1/acces/validations` |
 | POST | `/v1/acces/validations/:id/decision` |
 | GET | `/v1/acces/validations/mine` |
+
+## Extension agents-recettes
+
+| Méthode | Chemin |
+|---|---|
+| GET | `/v1/agents-recettes` |
+| GET | `/v1/agents-recettes/:code` |
+| POST | `/v1/agents-recettes/:code/lancer` |
+| GET | `/v1/agents-recettes/doleances` |
+| POST | `/v1/agents-recettes/doleances/:id/reponse` |
+| GET | `/v1/agents-recettes/equite` |
+| GET | `/v1/agents-recettes/humeur` |
+| POST | `/v1/agents-recettes/propositions/:id/decision` |
+| POST | `/v1/agents-recettes/simulations/impact-tarif` |
+| POST | `/v1/agents-recettes/simulations/regularisation` |
+| GET | `/v1/agents-recettes/sources` |
+| POST | `/v1/agents-recettes/sources` |
+| POST | `/v1/agents-recettes/sources/:id/validation` |
+| GET | `/v1/agents-recettes/tournee` |
+| POST | `/v1/doleances` |
+| GET | `/v1/doleances/miennes` |
+| GET | `/v1/public/ou-va-votre-argent` |
 
 ## Extension apprentissage
 

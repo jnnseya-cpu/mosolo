@@ -49,6 +49,7 @@ import { accesDepartementsPlugin } from './acces/departements-plugin.js';
 import { equipementsPlugin } from './equipements/plugin.js';
 import { grandsRedevablesPlugin } from './verticales/grands-redevables-plugin.js';
 import { integriteEnquetesPlugin } from './integrite/enquetes/plugin.js';
+import { agentsRecettesPlugin } from './agents-recettes/plugin.js';
 
 /**
  * Ordre : `acces` en tête (garde des revendications, mandats), puis `fiscal` (il branche les exonérations sur la liquidation), `titres` avant `rakapay`,
@@ -125,4 +126,6 @@ export const DEFAULT_PLUGINS: MosoloPlugin<unknown>[] = [
   soclePlugin,
   // Indicateurs des modules 27 à 40 (spécification fonctionnelle) : lecture seule, après tous les modules.
   indicateursModules2740Plugin,
+  // Agents IA de recettes (01/10/2026) : après pilotage, planification, titres et recouvrement (services lus).
+  agentsRecettesPlugin as MosoloPlugin<unknown>,
 ];
