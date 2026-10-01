@@ -1,11 +1,11 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1627 routes** dans 52 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1630 routes** dans 52 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
 | extension acces | 90 |
-| extension agents-recettes | 17 |
+| extension agents-recettes | 20 |
 | extension apprentissage | 17 |
 | extension canaux | 46 |
 | extension catalogue-api | 20 |
@@ -158,12 +158,15 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1627 routes** dans 5
 |---|---|
 | GET | `/v1/agents-recettes` |
 | GET | `/v1/agents-recettes/:code` |
+| POST | `/v1/agents-recettes/:code/analyse` |
 | POST | `/v1/agents-recettes/:code/lancer` |
 | GET | `/v1/agents-recettes/doleances` |
 | POST | `/v1/agents-recettes/doleances/:id/reponse` |
 | GET | `/v1/agents-recettes/equite` |
 | GET | `/v1/agents-recettes/humeur` |
+| GET | `/v1/agents-recettes/ia` |
 | POST | `/v1/agents-recettes/propositions/:id/decision` |
+| POST | `/v1/agents-recettes/question` |
 | POST | `/v1/agents-recettes/simulations/impact-tarif` |
 | POST | `/v1/agents-recettes/simulations/regularisation` |
 | GET | `/v1/agents-recettes/sources` |

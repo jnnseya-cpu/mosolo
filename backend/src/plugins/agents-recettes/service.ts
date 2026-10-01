@@ -14,6 +14,7 @@ import { badRequest, conflict, forbidden, notFound } from '../../core/errors.js'
 import { assertDistinctPerson, authorize } from '../../core/policy.js';
 import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
 import { taxpayerRecipient } from '../../modules/identity/recipients.js';
+import { FournisseursIA } from '../../modules/ia-fournisseurs/service.js';
 import { COMMUNES } from '../../reference/kinshasa.js';
 import type { Facts } from '../pilotage/facts.js';
 import { isReconciled } from '../pilotage/ladder.js';
@@ -60,6 +61,8 @@ export interface Doleance {
   /** Agent mis en cause (identifiant interne) : jamais informé de l'auteur. */
   agentId?: string;
   service: string; echeance: string; statut: 'OUVERTE' | 'REPONDUE'; reponse?: { by: string; at: string; texte: string };
+  /** Suggestion de tri par l'IA externe (si autorisée) : jamais une décision. */
+  analyseIa?: { categorieSuggeree: DoleanceCategorie | null; resume: string; urgence: 'FAIBLE' | 'MOYENNE' | 'HAUTE' | null; fournisseur: string; modele: string; at: string };
 }
 
 const UNPAID = new Set(['EMISE', 'EXIGIBLE', 'PARTIELLEMENT_PAYEE', 'EN_RETARD']);
@@ -84,7 +87,13 @@ export class AgentsRecettesService {
   readonly doleances = new InMemoryRepository<Doleance>();
   private readonly ids = new IdGenerator();
 
-  constructor(private readonly ctx: AppContext) {}
+  /** Fournisseurs d'IA externes (Claude, OpenAI, Gemini) — facultatifs ; remplaçable en test. */
+  ia: FournisseursIA;
+  private readonly analysesEnCours = new Set<Promise<void>>();
+
+  constructor(private readonly ctx: AppContext) {
+    this.ia = new FournisseursIA((name) => ctx.integrations.value(name), ctx.audit, ctx.clock);
+  }
 
   private now() { return this.ctx.clock.now().toISOString(); }
   private today() { return kinshasaDay(this.now()); }
@@ -516,6 +525,10 @@ export class AgentsRecettesService {
       echeance: kinshasaDay(new Date(Date.parse(this.now()) + P.doleanceDelaiJours * DAY_MS).toISOString()), statut: 'OUVERTE',
     });
     this.audit(user, 'agents_recettes.doleance.deposee', 'doleance', d.id, { categorie: d.categorie, commune: d.commune, service: d.service });
+    if (this.ia.actif() && this.ia.doleancesAutorisees()) {
+      const t = this.analyserDoleance(d.id).finally(() => this.analysesEnCours.delete(t));
+      this.analysesEnCours.add(t);
+    }
     return { ...this.vueAuteur(d), circuit: cat.circuit ?? null };
   }
   private vueAuteur(d: Doleance) { return { id: d.id, reference: d.reference, at: d.at, commune: d.commune, categorie: d.categorie, libelle: DOLEANCE_CATEGORIES[d.categorie].libelle, service: d.service, echeance: d.echeance, statut: d.statut, reponse: d.reponse ? { at: d.reponse.at, texte: d.reponse.texte } : null }; }
@@ -527,7 +540,7 @@ export class AgentsRecettesService {
     authorize(user, 'agents-recettes:doleance.traiter');
     const today = this.today();
     // L'auteur n'est jamais montré (protection contre les représailles) ; l'agent mis en cause ne voit pas ses doléances.
-    const items = this.doleances.all().filter((d) => d.agentId !== user.id).map((d) => ({ ...this.vueAuteur(d), agentId: d.agentId ?? null, texte: d.texte, enRetard: d.statut === 'OUVERTE' && d.echeance < today }));
+    const items = this.doleances.all().filter((d) => d.agentId !== user.id).map((d) => ({ ...this.vueAuteur(d), agentId: d.agentId ?? null, texte: d.texte, enRetard: d.statut === 'OUVERTE' && d.echeance < today, analyseIa: d.analyseIa ?? null }));
     return { items, alertes: this.alertesDoleances() };
   }
   repondreDoleance(user: User, id: string, texte: string) {
@@ -560,6 +573,63 @@ export class AgentsRecettesService {
       ...(a.type === 'COMMUNE' ? { commune: a.id } : {}), cible: { type: a.type, id: a.id },
       effet: a.type === 'AGENT' ? 'Signale à l’intégrité ; l’auteur des doléances n’est jamais révélé ; aucune sanction automatique.' : 'Signale à la direction pour réponse dans la commune.', lien: '/agents-recettes',
     }));
+  }
+
+  /** Suggestion de tri d'une doléance par l'IA externe (texte caviardé ; jamais l'auteur ni l'agent mis en cause). */
+  private async analyserDoleance(id: string): Promise<void> {
+    const d = this.doleances.get(id);
+    if (!d) return;
+    try {
+      const r = await this.ia.generer({ id: 'agent:DOLEANCES', roles: [] }, {
+        tache: 'doleance.tri', maxTokens: 400,
+        consigne: `Tu aides le service des doléances de la Ville de Kinshasa. Réponds en JSON strict, sans texte autour : {"categorie": un de ${Object.keys(DOLEANCE_CATEGORIES).join('|')}, "resume": une phrase en français, neutre, sans nom ni numéro, "urgence": FAIBLE|MOYENNE|HAUTE}. Tu proposes seulement : une personne décide.`,
+        contenu: `Commune : ${d.commune}\nCatégorie choisie par l’usager : ${DOLEANCE_CATEGORIES[d.categorie].libelle}\nTexte : ${d.texte}`,
+      });
+      if (!r) return;
+      const m = /\{[\s\S]*\}/.exec(r.texte);
+      const j = m ? JSON.parse(m[0]) as { categorie?: string; resume?: string; urgence?: string } : {};
+      const cat = j.categorie && j.categorie in DOLEANCE_CATEGORIES ? j.categorie as DoleanceCategorie : null;
+      const urg = j.urgence && ['FAIBLE', 'MOYENNE', 'HAUTE'].includes(j.urgence) ? j.urgence as 'FAIBLE' | 'MOYENNE' | 'HAUTE' : null;
+      const cur = this.doleances.get(id);
+      if (cur) this.doleances.update({ ...cur, analyseIa: { categorieSuggeree: cat, resume: String(j.resume ?? r.texte).slice(0, 400), urgence: urg, fournisseur: r.nom, modele: r.modele, at: this.now() } });
+    } catch { /* indisponible : la doléance suit son circuit sans suggestion */ }
+  }
+  /** Tests : attendre les suggestions en cours. */
+  async attendreAnalyses() { await Promise.all([...this.analysesEnCours]); }
+
+  // ———————————————————————————————————— IA externe : état, analyse, question ————————————————————————————————————
+
+  etatIa(user: User) {
+    authorize(user, 'agents-recettes:read');
+    return this.ia.etat();
+  }
+
+  private static readonly CONSIGNE = 'Tu es l’analyste des recettes de la Ville-Province de Kinshasa (plateforme KINSHASA MOSOLO). Réponds en français, clairement, en 250 mots au plus. Doctrine : plus de recettes de ceux qui devraient déjà payer et des fuites, jamais en alourdissant ceux qui paient ; aucune charge sans acte signé ; les grands d’abord ; aider avant de punir ; éviter tout ce qui peut provoquer des tensions avec la population. N’invente aucun chiffre : utilise seulement les données fournies et dis quand elles manquent. Tu proposes ; une personne décide.';
+
+  /** Analyse par l'IA externe des propositions en attente d'un agent (agrégats, sans identifiant). */
+  async analyser(user: User, code: string) {
+    authorize(user, 'agents-recettes:run');
+    const a = this.agent(code);
+    const items = this.propositions.find((p) => p.agent === a.code && p.statut === 'PROPOSEE').sort((x, y) => (x.rang ?? 1e9) - (y.rang ?? 1e9)).slice(0, 40);
+    const lignes = items.map((p, i) => `${p.rang ?? i + 1}. ${p.titre} — ${p.detail}${p.commune ? ` — commune ${p.commune}` : ''}${p.montant ? ` — ${p.montant.amount} ${p.montant.currency}` : ''}`);
+    const regles = items.length ? `${items.length} proposition(s) en attente pour « ${a.nom} ». Les règles internes les classent déjà (rang) ; une personne décide de chacune.` : `Aucune proposition en attente pour « ${a.nom} » : lancez l’agent d’abord.`;
+    if (!items.length) return { mode: 'REGLES_INTERNES', texte: regles, fournisseur: null };
+    const r = await this.ia.generer(user, { tache: `agent.analyse.${a.code}`, consigne: AgentsRecettesService.CONSIGNE, contenu: `Agent : ${a.nom}\nMission : ${a.mission}\nPropositions en attente :\n${lignes.join('\n')}\n\nDonne : 1) les 3 à 5 priorités et pourquoi ; 2) les risques de tension avec la population ; 3) ce qu’il faut vérifier avant de décider.` });
+    return r ? { mode: 'FOURNISSEUR_EXTERNE', texte: r.texte, fournisseur: r.nom, modele: r.modele } : { mode: 'REGLES_INTERNES', texte: `${regles} Aucun fournisseur d’IA externe n’est configuré : un super-administrateur peut ajouter une clé Claude, OpenAI ou Gemini dans « Clés et raccordements ».`, fournisseur: null };
+  }
+
+  /** Question libre de la direction, avec le contexte agrégé des agents (aucune donnée personnelle). */
+  async question(user: User, question: string) {
+    authorize(user, 'agents-recettes:run');
+    const resume = AGENTS_RECETTES.map((a) => {
+      const ps = this.propositions.find((p) => p.agent === a.code && p.statut === 'PROPOSEE');
+      return `- ${a.nom} : ${ps.length} en attente${ps.length ? ` (ex. ${ps.slice(0, 3).map((p) => p.titre).join(' ; ')})` : ''}`;
+    });
+    const h = this.humeur(user).communes.filter((c) => c.niveau !== 'CALME').slice(0, 5).map((c) => `${c.commune} : ${c.niveau} (${c.doleances} doléances, ${c.recours} recours)`);
+    const contexte = `Agents et propositions :\n${resume.join('\n')}\nBaromètre (30 jours) : ${h.join(' ; ') || 'calme partout'}`;
+    const r = await this.ia.generer(user, { tache: 'agents.question', consigne: AgentsRecettesService.CONSIGNE, contenu: `${contexte}\n\nQuestion : ${question}` });
+    return r ? { mode: 'FOURNISSEUR_EXTERNE', texte: r.texte, fournisseur: r.nom, modele: r.modele }
+      : { mode: 'REGLES_INTERNES', texte: `Aucun fournisseur d’IA externe n’est configuré. Voici l’état calculé par les règles internes :\n${contexte}`, fournisseur: null };
   }
 
   // ———————————————————————————————————— baromètre du mécontentement ————————————————————————————————————

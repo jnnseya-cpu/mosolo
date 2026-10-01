@@ -1988,3 +1988,26 @@ Tous les paramètres (rayon, délais, seuils, mensualités, méthode de prévisi
 maître d'ouvrage ». Données de démonstration : lots et doléances « [EXEMPLE] » non contractuels, jamais chargés en
 production. Chaque agent est rattaché à un agent du catalogue IA (§ 23.2). Routes : `/v1/agents-recettes*`,
 `/v1/doleances*`, `/v1/public/ou-va-votre-argent`.
+
+## I.56 Fournisseurs d'IA raccordés : Claude, OpenAI, Gemini (01/10/2026)
+
+Décision du maître d'ouvrage : raccorder Claude (Anthropic), OpenAI et Gemini (Google) comme fournisseurs d'IA, **les clés
+n'étant ajoutées que si nécessaire** ; sinon la plateforme fonctionne telle quelle.
+
+- **Facultatif** : sans clé, aucun appel externe ; les agents de recettes (§ I.55) fonctionnent avec leurs règles
+  internes (calculs déterministes, gratuits, vérifiables). Les fonctions IA affichent alors « Règles internes ».
+- **Clés** : saisies par le **super-administrateur seul (R26)** dans « Clés et raccordements », approuvées par une seconde
+  personne (R26 ou responsable sécurité R28), chiffrées au repos, jamais renvoyées ; la variable d'environnement prévaut.
+  Variables : `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` ; ordre `MOSOLO_IA_ORDRE` (par défaut
+  claude,openai,gemini) ; modèles `MOSOLO_IA_MODELE_*` (par défaut claude-opus-5-5, gpt-4.1-mini, gemini-2.5-flash —
+  à confirmer) ; `MOSOLO_IA_DOLEANCES` (désactivé par défaut).
+- **Relais** : en cas d'échec ou de refus d'un fournisseur, le suivant prend le relais ; pour Claude, relais côté serveur
+  vers un autre modèle Claude en cas de refus.
+- **Usages** : « Analyse de l'IA » des propositions d'un agent (priorités, risques de tension, vérifications) ; question
+  libre de la direction sur le contexte agrégé des agents ; suggestion de tri des doléances (catégorie, résumé, urgence)
+  **seulement si `MOSOLO_IA_DOLEANCES` est activé**, texte caviardé.
+- **Protection** : agrégats ou textes caviardés (téléphones, courriels, identifiants fiscaux masqués) ; jamais de nom ni
+  de numéro du registre ; journal `ia.fournisseur.appel` sans contenu (tâche, fournisseur, modèle, taille, durée,
+  résultat) ; 30 appels par personne et par heure (par défaut — à confirmer) ; l'IA propose, une personne décide.
+- **Accès** : analyse et question réservées aux rôles qui lancent les agents (direction R01–R03, R05 ; régies R06–R08 ;
+  R15, R17, R20, R22, R23) ; l'état des fournisseurs (sans clé) est visible des lecteurs du module.

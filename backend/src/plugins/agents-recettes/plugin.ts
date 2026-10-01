@@ -35,6 +35,7 @@ const validationSchema = z.object({ approuver: z.boolean(), motif }).strict();
 const regulSchema = z.object({ fenetreJours: z.number().int().min(1).max(365), remisePenalitesPct: z.number().min(0).max(100), devise: z.enum(['CDF', 'USD']) }).strict();
 const impactSchema = z.object({ ruleCode: z.string().trim().min(2).max(60), variationPct: z.number().min(-90).max(300) }).strict();
 const doleanceSchema = z.object({ commune: z.string().trim().min(2).max(60), categorie: z.enum(Object.keys(DOLEANCE_CATEGORIES) as [DoleanceCategorie, ...DoleanceCategorie[]]), texte: z.string().trim().min(10).max(2000), agentId: z.string().trim().max(80).optional() }).strict();
+const questionSchema = z.object({ question: z.string().trim().min(5).max(1000) }).strict();
 const reponseSchema = z.object({ texte: z.string().trim().min(10).max(2000) }).strict();
 
 export const agentsRecettesPlugin = definePlugin<AgentsRecettesService>({
@@ -44,6 +45,10 @@ export const agentsRecettesPlugin = definePlugin<AgentsRecettesService>({
   routes: (app, _ctx, svc) => {
     app.get('/v1/agents-recettes', async (req) => svc.catalogue(requireUser(req)));
     app.get('/v1/agents-recettes/equite', async (req) => svc.equite(requireUser(req)));
+    // IA externe facultative (Claude, OpenAI, Gemini) : état sans clé, analyse d'un agent, question libre.
+    app.get('/v1/agents-recettes/ia', async (req) => svc.etatIa(requireUser(req)));
+    app.post('/v1/agents-recettes/question', async (req) => svc.question(requireUser(req), parse(questionSchema, req.body).question));
+    app.post<{ Params: { code: string } }>('/v1/agents-recettes/:code/analyse', async (req) => svc.analyser(requireUser(req), req.params.code.toUpperCase()));
     app.get('/v1/agents-recettes/humeur', async (req) => svc.humeur(requireUser(req)));
     app.get('/v1/agents-recettes/sources', async (req) => svc.listeSources(requireUser(req)));
     app.post('/v1/agents-recettes/sources', async (req, reply) => reply.code(201).send(svc.deposerSource(requireUser(req), parse(sourceSchema, req.body))));

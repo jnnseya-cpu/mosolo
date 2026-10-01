@@ -97,6 +97,20 @@ export const INVENTORY: IntegrationVariable[] = [
   env('MOSOLO_CORS_ORIGINS', 'plateforme', 'Origines autorisées (navigateur)', false, ['Socle']),
   reserved('MOSOLO_AI_PROVIDER_URL', 'ia', 'Adresse du fournisseur de modèle d’IA (l’IA propose, une personne décide) — nom proposé, à confirmer', false),
   reserved('MOSOLO_AI_PROVIDER_KEY', 'ia', 'Clé du fournisseur de modèle d’IA — nom proposé, à confirmer ; aujourd’hui : moteur déterministe interne, sans clé', true),
+  // Fournisseurs d'IA raccordés (01/10/2026) : Claude, OpenAI, Gemini — FACULTATIFS. Sans clé, les agents fonctionnent
+  // avec leurs règles internes. Clés saisies par le super-administrateur seul (R26), approuvées par une seconde personne.
+  ...([
+    ['ANTHROPIC_API_KEY', 'Clé de l’API Claude (Anthropic) — analyses et réponses des agents IA de recettes'],
+    ['OPENAI_API_KEY', 'Clé de l’API OpenAI — analyses et réponses des agents IA de recettes'],
+    ['GEMINI_API_KEY', 'Clé de l’API Gemini (Google) — analyses et réponses des agents IA de recettes'],
+  ] as const).map(([name, purpose]): IntegrationVariable => ({ name, group: 'ia', purpose, secret: true, required: 'FACULTATIVE', effect: 'IMMEDIAT', format: 'SECRET', readBy: ['Agents IA de recettes'] })),
+  ...([
+    ['MOSOLO_IA_ORDRE', 'Ordre d’essai des fournisseurs d’IA (ex. claude,openai,gemini) : le suivant prend le relais en cas d’échec — par défaut claude,openai,gemini, à confirmer'],
+    ['MOSOLO_IA_MODELE_CLAUDE', 'Modèle Claude utilisé — par défaut claude-opus-5-5, à confirmer'],
+    ['MOSOLO_IA_MODELE_OPENAI', 'Modèle OpenAI utilisé — par défaut gpt-4.1-mini, à confirmer'],
+    ['MOSOLO_IA_MODELE_GEMINI', 'Modèle Gemini utilisé — par défaut gemini-2.5-flash, à confirmer'],
+  ] as const).map(([name, purpose]): IntegrationVariable => ({ name, group: 'ia', purpose, secret: false, required: 'FACULTATIVE', effect: 'IMMEDIAT', format: 'TEXTE', readBy: ['Agents IA de recettes'] })),
+  { name: 'MOSOLO_IA_DOLEANCES', group: 'ia', purpose: 'Autoriser l’envoi du TEXTE des doléances (numéros et courriels masqués) au fournisseur d’IA pour une suggestion de tri — désactivé par défaut (protection des données)', secret: false, required: 'FACULTATIVE', effect: 'IMMEDIAT', format: 'BOOLEEN', readBy: ['Agents IA de recettes'] },
   ...comms,
   { name: 'SMS_GATEWAY_SECRET', group: 'sms-ussd', purpose: 'Secret HMAC de la passerelle SMS entrante (en-tête x-mosolo-signature) : /v1/sms/inbound, signalements par SMS', secret: true, required: 'OBLIGATOIRE_EN_REEL', effect: 'IMMEDIAT', format: 'SECRET', readBy: ['Preuves (SMS entrant)', 'Intégrité (signalements SMS)'] },
   { name: 'SVI_GATEWAY_SECRET', group: 'sms-ussd', purpose: 'Secret HMAC de la passerelle du serveur vocal (signalements SVI)', secret: true, required: 'OBLIGATOIRE_EN_REEL', effect: 'IMMEDIAT', format: 'SECRET', readBy: ['Intégrité (signalements SVI)'] },

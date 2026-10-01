@@ -22,7 +22,9 @@ interface Agent { code: string; nom: string; famille: string; agentIa: string; m
 interface Catalogue { doctrine: string[]; familles: { code: string; ordre: number; libelle: string; but: string }[]; agents: Agent[]; parametres: { valeurs: Record<string, number>; statut: string }; sources: { kind: string; libelle: string; agent: string; lots: number; valides: number }[] }
 interface Proposition { id: string; agent: string; titre: string; detail: string; commune?: string; montant?: MoneyJSON; rang?: number; effet: string; lien?: string; statut: string; at: string; decision?: { by: string; motif: string; resultat?: string } }
 interface Lot { id: string; kind: string; libelle: string; reference: string; lignes: number; statut: string; deposePar: string; deposeLe: string }
-interface Doleance { id: string; reference: string; at: string; commune: string; libelle: string; service: string; echeance: string; statut: string; texte: string; agentId: string | null; enRetard: boolean; reponse: { texte: string } | null }
+interface Doleance { id: string; reference: string; at: string; commune: string; libelle: string; service: string; echeance: string; statut: string; texte: string; agentId: string | null; enRetard: boolean; reponse: { texte: string } | null; analyseIa: { categorieSuggeree: string | null; resume: string; urgence: string | null; fournisseur: string } | null }
+interface EtatIa { actif: boolean; mode: string; fournisseurs: { id: string; nom: string; cleConfiguree: boolean; modele: string }[]; doleances: boolean; statut: string; regle: string }
+interface ReponseIa { mode: string; texte: string; fournisseur: string | null; modele?: string }
 interface Humeur { communes: { commune: string; doleances: number; recours: number; niveau: string }[]; satisfaction: { reponses: number; noteMoyenne: number | null }; note: string; seuils: { statut: string } }
 interface Equite { propositions: number; seuilRatio: number; lignes: { commune: string; propositions: number; partPropositionsPct: number; partRegistrePct: number; ratio: number | null; signale: boolean }[]; note: string; statut: string }
 
@@ -69,6 +71,10 @@ export default function AgentsRecettes() {
   const [impactRes, setImpactRes] = useState<{ contribuables: number; devise: string; alerte: string | null; note: string; parCommune: { cle: string; contribuables: number; avant: MoneyJSON; apres: MoneyJSON }[]; parRang: { cle: string | number; contribuables: number; hausseMoyenne: MoneyJSON }[] } | null>(null);
   const [src, setSrc] = useState({ kind: 'SNEL', reference: '', csv: '' });
   const [reponse, setReponse] = useState('');
+  const ia = useApi(() => api<EtatIa>('/v1/agents-recettes/ia'), [user?.id]);
+  const [analyse, setAnalyse] = useState<ReponseIa | null>(null);
+  const [questionIa, setQuestionIa] = useState('');
+  const [reponseIa, setReponseIa] = useState<ReponseIa | null>(null);
   const peutLancer = hasRole(roles, ...LANCEURS);
   const peutDecider = hasRole(roles, ...DECIDEURS);
   const d = q.data;
@@ -84,6 +90,22 @@ export default function AgentsRecettes() {
           <section className="callout callout-info" role="note">
             <ul className="small" style={{ margin: 0 }}>{d.doctrine.map((x) => <li key={x}>{x}</li>)}</ul>
           </section>
+          {ia.data && (
+            <section className="panel" style={{ marginTop: 16 }} data-testid="ia-etat">
+              <div className="btn-row" style={{ justifyContent: 'space-between' }}>
+                <h2 className="panel-title" style={{ margin: 0 }}>Fournisseurs d’IA</h2>
+                <StatusBadge tone={ia.data.actif ? 'good' : 'neutral'} label={ia.data.actif ? `Actif : ${ia.data.fournisseurs.filter((f) => f.cleConfiguree).map((f) => f.nom).join(', ')}` : 'Règles internes (aucune clé)'} />
+              </div>
+              <p className="small muted">{ia.data.fournisseurs.map((f) => `${f.nom} — ${f.cleConfiguree ? `clé configurée (${f.modele})` : 'sans clé'}`).join(' · ')}. {ia.data.regle} {ia.data.statut}.</p>
+              {peutLancer && (
+                <div className="form">
+                  <Area label="Poser une question à l’IA (données agrégées seulement)" rows={2} value={questionIa} onChange={setQuestionIa} />
+                  <div className="btn-row"><button type="button" className="btn btn-secondary btn-sm" disabled={r.busy || questionIa.trim().length < 5} onClick={() => void r.run<ReponseIa>('/v1/agents-recettes/question', { question: questionIa.trim() }, 'Réponse reçue.').then(setReponseIa)}>Demander</button></div>
+                  {reponseIa && <div className="callout callout-info" style={{ whiteSpace: 'pre-wrap' }} data-testid="ia-reponse"><strong>{reponseIa.fournisseur ? `${reponseIa.fournisseur} (${reponseIa.modele})` : 'Règles internes'} :</strong> {reponseIa.texte}</div>}
+                </div>
+              )}
+            </section>
+          )}
           <div className="btn-row" role="tablist" style={{ margin: '16px 0' }}>
             {([['agents', 'Agents et propositions'], ['simulateurs', 'Simulateurs'], ['sources', 'Sources externes'], ['confiance', 'Confiance et équité']] as const).map(([k, l]) => (
               <button key={k} type="button" role="tab" aria-selected={onglet === k} className={`btn btn-sm ${onglet === k ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setOnglet(k)}>{l}</button>
@@ -118,7 +140,11 @@ export default function AgentsRecettes() {
               ))}
               {sel && agentSel && (
                 <section className="panel" data-testid="propositions">
-                  <h2 className="panel-title">Propositions — {agentSel.nom}</h2>
+                  <div className="btn-row" style={{ justifyContent: 'space-between' }}>
+                    <h2 className="panel-title" style={{ margin: 0 }}>Propositions — {agentSel.nom}</h2>
+                    {peutLancer && <button type="button" className="btn btn-secondary btn-sm" disabled={r.busy} onClick={() => { setAnalyse(null); void r.run<ReponseIa>(`/v1/agents-recettes/${agentSel.code}/analyse`, {}, 'Analyse reçue.').then(setAnalyse); }}>Analyse de l’IA</button>}
+                  </div>
+                  {analyse && <div className="callout callout-info" style={{ whiteSpace: 'pre-wrap', margin: '8px 0' }}><strong>{analyse.fournisseur ? `${analyse.fournisseur} (${analyse.modele})` : 'Règles internes'} :</strong> {analyse.texte}<span className="small muted" style={{ display: 'block' }}>L’IA propose ; une personne décide de chaque proposition.</span></div>}
                   {liste.loading && !liste.data ? <Loading /> : liste.error ? <ErrorState error={liste.error} onRetry={liste.reload} /> : (
                     <DataTable caption={`Propositions — ${agentSel.nom}`} rows={liste.data?.items ?? []} rowKey={(p) => p.id}
                       empty={<EmptyState title="Aucune proposition" icon="analysis">Lancez l’agent : il calcule ses propositions sur les données disponibles.</EmptyState>} columns={[
@@ -243,7 +269,7 @@ export default function AgentsRecettes() {
                   <>
                     {doleances.data.alertes.length > 0 && <p className="callout callout-warn" role="alert">Alertes : {doleances.data.alertes.map((a) => `${a.type === 'COMMUNE' ? 'commune' : 'agent'} ${a.id} (${a.doleances})`).join(' · ')}</p>}
                     <DataTable caption="Doléances" rows={doleances.data.items} rowKey={(x) => x.id} empty={<EmptyState title="Aucune doléance" icon="message" />} columns={[
-                      { key: 'd', label: 'Doléance', primary: true, render: (x) => <><strong>{x.reference} — {x.libelle}</strong><span className="small" style={{ display: 'block' }}>{x.texte}</span><span className="small muted" style={{ display: 'block' }}>{x.commune} · {x.service}{x.agentId ? ` · agent mis en cause ${x.agentId}` : ''} · réponse attendue le {x.echeance}</span></> },
+                      { key: 'd', label: 'Doléance', primary: true, render: (x) => <><strong>{x.reference} — {x.libelle}</strong><span className="small" style={{ display: 'block' }}>{x.texte}</span><span className="small muted" style={{ display: 'block' }}>{x.commune} · {x.service}{x.agentId ? ` · agent mis en cause ${x.agentId}` : ''} · réponse attendue le {x.echeance}</span>{x.analyseIa && <span className="small" style={{ display: 'block' }}>Suggestion de l’IA ({x.analyseIa.fournisseur}) : {x.analyseIa.resume}{x.analyseIa.categorieSuggeree ? ` · catégorie ${x.analyseIa.categorieSuggeree}` : ''}{x.analyseIa.urgence ? ` · urgence ${x.analyseIa.urgence}` : ''}</span>}</> },
                       { key: 's', label: 'État', render: (x) => <StatusBadge tone={x.statut === 'REPONDUE' ? 'good' : x.enRetard ? 'critical' : 'warning'} label={x.statut === 'REPONDUE' ? 'Répondue' : x.enRetard ? 'En retard' : 'Ouverte'} /> },
                       { key: 'a', label: '', render: (x) => x.statut === 'OUVERTE' ? <button type="button" className="btn btn-secondary btn-sm" disabled={r.busy || reponse.trim().length < 10} onClick={() => void r.run(`/v1/agents-recettes/doleances/${x.id}/reponse`, { texte: reponse }, 'Réponse envoyée.')}>Répondre</button> : <span className="small muted">{x.reponse?.texte}</span> },
                     ]} />
