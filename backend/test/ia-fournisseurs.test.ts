@@ -105,4 +105,25 @@ describe('Fournisseurs d’IA externes', () => {
     const pay = await req('POST', '/v1/integrations/keys/KODA_WEBHOOK_SECRET/proposals', 'u-superadmin', { kind: 'DEFINIR', value: 'secret-koda-0123456789abcdef', motif: 'Raccordement KODA (test)' });
     expect(pay.json().status).toBe('EN_ATTENTE');
   });
+
+  it('coûts maîtrisés : réponse identique réutilisée sans nouvel appel ; plafond global du jour ; usagers jamais', async () => {
+    const { app, req, svc } = await env();
+    const cles: Record<string, string> = { ANTHROPIC_API_KEY: 'sk-ant-test-0123456789abcdef', MOSOLO_IA_PLAFOND_JOUR: '2' };
+    const r = fauxReseau();
+    svc.ia = new FournisseursIA((n) => cles[n], app.ctx.audit, app.ctx.clock, r.f);
+    await req('POST', '/v1/agents-recettes/PRIORITE_ARRIERES/lancer', 'u-ministre-finances');
+    await req('POST', '/v1/agents-recettes/PRIORITE_ARRIERES/analyse', 'u-ministre-finances');
+    await req('POST', '/v1/agents-recettes/PRIORITE_ARRIERES/analyse', 'u-gouverneur'); // même analyse : réutilisée
+    expect(r.envois).toHaveLength(1);
+    await req('POST', '/v1/agents-recettes/question', 'u-ministre-finances', { question: 'Première question payante ?' });
+    expect(r.envois).toHaveLength(2);
+    const plafond = (await req('POST', '/v1/agents-recettes/question', 'u-ministre-finances', { question: 'Troisième appel, au-delà du plafond ?' })).json();
+    expect(plafond.mode).toBe('REGLES_INTERNES');
+    expect(plafond.texte).toMatch(/Plafond journalier/);
+    expect(r.envois).toHaveLength(2); // aucun appel au-delà du plafond
+    expect((await req('GET', '/v1/agents-recettes/ia', 'u-gouverneur')).json()).toMatchObject({ plafondJour: 2, appelsAujourdhui: 2, reste: 0 });
+    // Les usagers n'appellent jamais l'IA.
+    expect((await req('POST', '/v1/agents-recettes/question', 'u-contribuable', { question: 'Puis-je utiliser l’IA ?' })).statusCode).toBe(403);
+    expect((await req('POST', '/v1/agents-recettes/PRIORITE_ARRIERES/analyse', 'u-contribuable')).statusCode).toBe(403);
+  });
 });

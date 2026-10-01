@@ -109,6 +109,7 @@ export const INVENTORY: IntegrationVariable[] = [
     ['MOSOLO_IA_MODELE_CLAUDE', 'Modèle Claude utilisé — par défaut claude-opus-5-5, à confirmer'],
     ['MOSOLO_IA_MODELE_OPENAI', 'Modèle OpenAI utilisé — par défaut gpt-4.1-mini, à confirmer'],
     ['MOSOLO_IA_MODELE_GEMINI', 'Modèle Gemini utilisé — par défaut gemini-2.5-flash, à confirmer'],
+    ['MOSOLO_IA_PLAFOND_JOUR', 'Plafond d’appels payants à l’IA par jour pour toute la plateforme — par défaut 100, à confirmer ; 0 = IA externe coupée'],
   ] as const).map(([name, purpose]): IntegrationVariable => ({ name, group: 'ia', purpose, secret: false, required: 'FACULTATIVE', effect: 'IMMEDIAT', format: 'TEXTE', readBy: ['Agents IA de recettes'] })),
   { name: 'MOSOLO_IA_DOLEANCES', group: 'ia', purpose: 'Autoriser l’envoi du TEXTE des doléances (numéros et courriels masqués) au fournisseur d’IA pour une suggestion de tri — désactivé par défaut (protection des données)', secret: false, required: 'FACULTATIVE', effect: 'IMMEDIAT', format: 'BOOLEEN', readBy: ['Agents IA de recettes'] },
   ...comms,

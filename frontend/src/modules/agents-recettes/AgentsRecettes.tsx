@@ -23,7 +23,7 @@ interface Catalogue { doctrine: string[]; familles: { code: string; ordre: numbe
 interface Proposition { id: string; agent: string; titre: string; detail: string; commune?: string; montant?: MoneyJSON; rang?: number; effet: string; lien?: string; statut: string; at: string; decision?: { by: string; motif: string; resultat?: string } }
 interface Lot { id: string; kind: string; libelle: string; reference: string; lignes: number; statut: string; deposePar: string; deposeLe: string }
 interface Doleance { id: string; reference: string; at: string; commune: string; libelle: string; service: string; echeance: string; statut: string; texte: string; agentId: string | null; enRetard: boolean; reponse: { texte: string } | null; analyseIa: { categorieSuggeree: string | null; resume: string; urgence: string | null; fournisseur: string } | null }
-interface EtatIa { actif: boolean; mode: string; fournisseurs: { id: string; nom: string; cleConfiguree: boolean; modele: string }[]; doleances: boolean; statut: string; regle: string }
+interface EtatIa { actif: boolean; mode: string; fournisseurs: { id: string; nom: string; cleConfiguree: boolean; modele: string }[]; doleances: boolean; statut: string; regle: string; plafondJour: number; appelsAujourdhui: number; reste: number; limiteAppelsHeure: number; economies: string }
 interface ReponseIa { mode: string; texte: string; fournisseur: string | null; modele?: string }
 interface Humeur { communes: { commune: string; doleances: number; recours: number; niveau: string }[]; satisfaction: { reponses: number; noteMoyenne: number | null }; note: string; seuils: { statut: string } }
 interface Equite { propositions: number; seuilRatio: number; lignes: { commune: string; propositions: number; partPropositionsPct: number; partRegistrePct: number; ratio: number | null; signale: boolean }[]; note: string; statut: string }
@@ -97,6 +97,7 @@ export default function AgentsRecettes() {
                 <StatusBadge tone={ia.data.actif ? 'good' : 'neutral'} label={ia.data.actif ? `Actif : ${ia.data.fournisseurs.filter((f) => f.cleConfiguree).map((f) => f.nom).join(', ')}` : 'Règles internes (aucune clé)'} />
               </div>
               <p className="small muted">{ia.data.fournisseurs.map((f) => `${f.nom} — ${f.cleConfiguree ? `clé configurée (${f.modele})` : 'sans clé'}`).join(' · ')}. {ia.data.regle} {ia.data.statut}.</p>
+              <p className="small" data-testid="ia-plafond"><strong>Coûts :</strong> {ia.data.appelsAujourdhui} appel(s) payant(s) aujourd’hui sur un plafond de {ia.data.plafondJour} pour toute la plateforme ; {ia.data.limiteAppelsHeure} par personne et par heure. {ia.data.economies}</p>
               {peutLancer && (
                 <div className="form">
                   <Area label="Poser une question à l’IA (données agrégées seulement)" rows={2} value={questionIa} onChange={setQuestionIa} />

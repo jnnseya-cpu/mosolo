@@ -615,7 +615,7 @@ export class AgentsRecettesService {
     const regles = items.length ? `${items.length} proposition(s) en attente pour « ${a.nom} ». Les règles internes les classent déjà (rang) ; une personne décide de chacune.` : `Aucune proposition en attente pour « ${a.nom} » : lancez l’agent d’abord.`;
     if (!items.length) return { mode: 'REGLES_INTERNES', texte: regles, fournisseur: null };
     const r = await this.ia.generer(user, { tache: `agent.analyse.${a.code}`, consigne: AgentsRecettesService.CONSIGNE, contenu: `Agent : ${a.nom}\nMission : ${a.mission}\nPropositions en attente :\n${lignes.join('\n')}\n\nDonne : 1) les 3 à 5 priorités et pourquoi ; 2) les risques de tension avec la population ; 3) ce qu’il faut vérifier avant de décider.` });
-    return r ? { mode: 'FOURNISSEUR_EXTERNE', texte: r.texte, fournisseur: r.nom, modele: r.modele } : { mode: 'REGLES_INTERNES', texte: `${regles} Aucun fournisseur d’IA externe n’est configuré : un super-administrateur peut ajouter une clé Claude, OpenAI ou Gemini dans « Clés et raccordements ».`, fournisseur: null };
+    return r ? { mode: 'FOURNISSEUR_EXTERNE', texte: r.texte, fournisseur: r.nom, modele: r.modele } : { mode: 'REGLES_INTERNES', texte: `${regles} ${this.ia.motifReglesInternes()}`, fournisseur: null };
   }
 
   /** Question libre de la direction, avec le contexte agrégé des agents (aucune donnée personnelle). */
@@ -629,7 +629,7 @@ export class AgentsRecettesService {
     const contexte = `Agents et propositions :\n${resume.join('\n')}\nBaromètre (30 jours) : ${h.join(' ; ') || 'calme partout'}`;
     const r = await this.ia.generer(user, { tache: 'agents.question', consigne: AgentsRecettesService.CONSIGNE, contenu: `${contexte}\n\nQuestion : ${question}` });
     return r ? { mode: 'FOURNISSEUR_EXTERNE', texte: r.texte, fournisseur: r.nom, modele: r.modele }
-      : { mode: 'REGLES_INTERNES', texte: `Aucun fournisseur d’IA externe n’est configuré. Voici l’état calculé par les règles internes :\n${contexte}`, fournisseur: null };
+      : { mode: 'REGLES_INTERNES', texte: `${this.ia.motifReglesInternes()} Voici l’état calculé par les règles internes :\n${contexte}`, fournisseur: null };
   }
 
   // ———————————————————————————————————— baromètre du mécontentement ————————————————————————————————————

@@ -158,4 +158,6 @@ données de démonstration.
 - **Fournisseurs d'IA (01/10/2026)** : Claude, OpenAI et Gemini raccordés, **facultatifs** — sans clé, règles internes et
   aucun appel externe ; clés saisies par le super-administrateur seul (R26) dans « Clés et raccordements », **sans
   seconde personne** (décision du 01/10/2026 ; les clés de paiement et autres gardent les deux personnes) ; relais d'un fournisseur à l'autre ; agrégats ou textes caviardés, journal sans contenu ;
-  doléances envoyées seulement si `MOSOLO_IA_DOLEANCES` est activé (annexe I, § I.56).
+  doléances envoyées seulement si `MOSOLO_IA_DOLEANCES` est activé ; **coûts maîtrisés** : usagers jamais,
+  plafond global de 100 appels par jour (réglable), 10 par personne et par heure, réponses identiques réutilisées
+  (annexe I, § I.56).

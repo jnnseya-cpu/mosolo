@@ -15,6 +15,8 @@ import type { AuditLog } from '../../core/audit.js';
 import type { User } from '../../core/auth.js';
 import type { Clock } from '../../core/clock.js';
 import { ApiError } from '../../core/errors.js';
+import { kinshasaDay } from '../../core/clock.js';
+import { sha256Hex } from '../../core/crypto.js';
 
 export type FournisseurId = 'claude' | 'openai' | 'gemini';
 
@@ -26,7 +28,13 @@ export const FOURNISSEURS: Record<FournisseurId, { nom: string; cle: string; mod
 export const ORDRE_DEFAUT: FournisseurId[] = ['claude', 'openai', 'gemini'];
 export const STATUT_DEFAUTS = 'Modèles et ordre par défaut — à confirmer par le maître d’ouvrage';
 /** Appels par personne et par heure (maîtrise des coûts) — par défaut, à confirmer. */
-export const LIMITE_APPELS_HEURE = 30;
+export const LIMITE_APPELS_HEURE = 10;
+/**
+ * PLAFOND GLOBAL d'appels payants par jour pour TOUTE la plateforme (01/10/2026 : « la plateforme doit rapporter de
+ * l'argent, pas en gaspiller ») — par défaut 100, à confirmer ; réglable par le super-administrateur
+ * (MOSOLO_IA_PLAFOND_JOUR). Plafond atteint : règles internes jusqu'au lendemain (jour de Kinshasa).
+ */
+export const PLAFOND_JOUR_DEFAUT = 100;
 const DELAI_MS = 45_000;
 /** Modèles Claude qui acceptent le relais côté serveur en cas de refus (« fallbacks: default »). */
 const CLAUDE_RELAIS = new Set(['claude-fable-5-1', 'claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5-5']);
@@ -45,6 +53,10 @@ type FetchFn = typeof fetch;
 
 export class FournisseursIA {
   private readonly appels = new Map<string, number[]>();
+  /** Compteur global du jour (jour de Kinshasa) et réponses déjà payées du jour (réutilisées sans nouvel appel). */
+  private jour = { date: '', appels: 0 };
+  private readonly cache = new Map<string, Reponse>();
+  private raisonDerniere: 'AUCUNE_CLE' | 'PLAFOND' | null = null;
 
   constructor(
     private readonly resolve: (name: string) => string | undefined,
@@ -73,9 +85,29 @@ export class FournisseursIA {
       fournisseurs: this.ordre().map((id) => ({ id, nom: FOURNISSEURS[id].nom, cleConfiguree: !!this.cle(id), modele: this.modele(id), variableCle: FOURNISSEURS[id].cle })),
       doleances: this.doleancesAutorisees(),
       limiteAppelsHeure: LIMITE_APPELS_HEURE,
+      plafondJour: this.plafond(), appelsAujourdhui: this.compteur().appels, reste: Math.max(0, this.plafond() - this.compteur().appels),
+      economies: 'Réponses identiques du jour réutilisées sans nouvel appel ; usagers et public n’appellent jamais l’IA.',
       statut: STATUT_DEFAUTS,
       regle: 'Sans clé : règles internes, aucun envoi externe. Clés saisies par le super-administrateur dans « Clés et raccordements », approuvées par une seconde personne.',
     };
+  }
+
+  plafond(): number {
+    const v = Number.parseInt(this.resolve('MOSOLO_IA_PLAFOND_JOUR')?.trim() ?? '', 10);
+    return Number.isFinite(v) && v >= 0 ? v : PLAFOND_JOUR_DEFAUT;
+  }
+  private compteur() {
+    const d = kinshasaDay(this.clock.now().toISOString());
+    if (this.jour.date !== d) { this.jour = { date: d, appels: 0 }; this.cache.clear(); }
+    return this.jour;
+  }
+  /** Pourquoi la dernière demande n'est pas allée à un fournisseur externe (null : elle y est allée ou a été réutilisée). */
+  raison() { return this.raisonDerniere; }
+  /** Texte à afficher quand les règles internes répondent à la place de l'IA externe. */
+  motifReglesInternes(): string {
+    return this.raisonDerniere === 'PLAFOND'
+      ? `Plafond journalier d’appels à l’IA atteint (${this.plafond()} par jour pour toute la plateforme) : règles internes jusqu’à demain.`
+      : 'Aucun fournisseur d’IA externe n’est configuré : un super-administrateur peut ajouter une clé Claude, OpenAI ou Gemini dans « Clés et raccordements ».';
   }
 
   private limiter(user: User) {
@@ -89,9 +121,16 @@ export class FournisseursIA {
   /** Appelle le premier fournisseur configuré qui répond ; `null` si aucun n'est configuré (les règles internes s'appliquent). */
   async generer(user: User | { id: string; roles?: string[] }, d: Demande): Promise<Reponse | null> {
     const ordre = this.configures();
-    if (!ordre.length) return null;
-    if ('kind' in user) this.limiter(user as User);
+    this.raisonDerniere = null;
+    if (!ordre.length) { this.raisonDerniere = 'AUCUNE_CLE'; return null; }
     const contenu = caviarder(d.contenu).slice(0, 60_000);
+    const cle = sha256Hex(`${d.tache}\n${d.consigne}\n${contenu}`);
+    const deja = (this.compteur(), this.cache.get(cle));
+    if (deja) return deja; // déjà payée aujourd'hui : aucun nouvel appel
+    const j = this.compteur();
+    if (j.appels >= this.plafond()) { this.raisonDerniere = 'PLAFOND'; return null; }
+    if ('kind' in user) this.limiter(user as User);
+    j.appels += 1;
     const erreurs: string[] = [];
     for (const id of ordre) {
       const modele = this.modele(id);
@@ -100,7 +139,9 @@ export class FournisseursIA {
         const texte = (await this.appeler(id, this.cle(id)!, modele, d.consigne, contenu, d.maxTokens ?? 2000)).trim();
         if (!texte) throw new Error('réponse vide');
         this.trace(user, d.tache, id, modele, contenu.length, Date.now() - debut, 'OK');
-        return { texte, fournisseur: id, nom: FOURNISSEURS[id].nom, modele };
+        const rep = { texte, fournisseur: id, nom: FOURNISSEURS[id].nom, modele };
+        this.cache.set(cle, rep);
+        return rep;
       } catch (e) {
         const motif = e instanceof Error ? e.message.slice(0, 200) : 'erreur';
         erreurs.push(`${FOURNISSEURS[id].nom} : ${motif}`);

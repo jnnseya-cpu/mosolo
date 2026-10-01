@@ -2010,6 +2010,11 @@ n'étant ajoutées que si nécessaire** ; sinon la plateforme fonctionne telle q
   **seulement si `MOSOLO_IA_DOLEANCES` est activé**, texte caviardé.
 - **Protection** : agrégats ou textes caviardés (téléphones, courriels, identifiants fiscaux masqués) ; jamais de nom ni
   de numéro du registre ; journal `ia.fournisseur.appel` sans contenu (tâche, fournisseur, modèle, taille, durée,
-  résultat) ; 30 appels par personne et par heure (par défaut — à confirmer) ; l'IA propose, une personne décide.
+  résultat) ; l'IA propose, une personne décide.
+- **Coûts maîtrisés (01/10/2026, « la plateforme doit rapporter, pas gaspiller »)** : usagers et public n'appellent
+  jamais l'IA ; **plafond global** de 100 appels payants par jour pour toute la plateforme (`MOSOLO_IA_PLAFOND_JOUR`,
+  réglable par le super-administrateur ; 0 = IA externe coupée) — au-delà, règles internes jusqu'au lendemain ;
+  10 appels par personne et par heure ; une réponse identique déjà obtenue dans la journée est réutilisée sans nouvel
+  appel ; consommation du jour affichée dans le panneau IA (valeurs par défaut — à confirmer).
 - **Accès** : analyse et question réservées aux rôles qui lancent les agents (direction R01–R03, R05 ; régies R06–R08 ;
   R15, R17, R20, R22, R23) ; l'état des fournisseurs (sans clé) est visible des lecteurs du module.
