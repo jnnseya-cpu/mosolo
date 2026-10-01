@@ -329,7 +329,7 @@ export class BitriPayConnector implements PaymentConnector {
     const amountMinor = toSafeJsonInteger(toMinorUnits(req.amount, this.exponents));
     if (!this.http) {
       // Bac à sable local (démonstration) : page de paiement SIMULÉE de MOSOLO (/demo/passerelle), jamais la vraie page.
-      return { providerIntentId: `sbx_bitripay_${randomSecret(8)}`, checkoutUrl: `/demo/passerelle/bitripay?ref=${encodeURIComponent(req.paymentReference)}`, qrPayload: null, sandbox: true };
+      return { providerIntentId: `sbx_bitripay_${randomSecret(8)}`, checkoutUrl: `/demo/passerelle/bitripay?ref=${encodeURIComponent(req.paymentReference)}${req.channel === 'CARD' ? '&op=card' : req.operator ? `&op=${encodeURIComponent(req.operator)}` : ''}`, qrPayload: null, sandbox: true };
     }
     const back = this.config.returnUrl;
     const withRef = (extra = '') => (back ? `${back}${back.includes('?') ? '&' : '?'}ref=${encodeURIComponent(req.paymentReference)}${extra}` : undefined);
@@ -345,7 +345,8 @@ export class BitriPayConnector implements PaymentConnector {
         currency: req.amount.currency,
         // Rails de paiement (OpenAPI : rails[] ; anciennement « allowed_operators » sur la page publique) — identifiants à confirmer.
         // Carte (30/09/2026, BitriPay accepte la carte) : rail « card » — identifiant à confirmer auprès de BitriPay.
-        rails: req.channel === 'CARD' ? ['card'] : this.config.allowedOperators,
+        // Opérateur choisi par le payeur (01/10/2026) : la page BitriPay s'ouvre directement sur lui.
+        rails: req.channel === 'CARD' ? ['card'] : req.operator ? [req.operator] : this.config.allowedOperators,
         capture_method: 'automatic',
         reference: req.paymentReference,
         description: `KINSHASA MOSOLO ${req.paymentReference}`,

@@ -2082,3 +2082,16 @@ paiement → webhook signé → quittance provisoire). Causes possibles en ligne
   « Obtenir une nouvelle référence » (l'ancienne est fermée ; aucun paiement n'est perdu) ;
 - service réel sans page renvoyée par le prestataire : « Mon espace » indique que la demande arrive sur le téléphone, au
   lieu du message du bac à sable.
+
+## I.61 Moyens de paiement visibles sur BitriPay et KODA (01/10/2026)
+
+Constat du maître d'ouvrage : « BitriPay, c'est la carte, le QR BitriPay, Airtel Money, Orange Money, Africell Money et
+M-Pesa », mais seul « monnaie mobile » apparaissait. Désormais, dans « Payer » (« Mon espace »), le choix de BitriPay
+affiche les six moyens : Orange Money, M-Pesa, Airtel Money, Africell Money, carte bancaire (Visa, Mastercard) et QR
+BitriPay ; KODA affiche les quatre opérateurs. L'opérateur choisi est transmis à la passerelle (`operateur` de
+`POST /v1/obligations/:id/payment-orders` → `rails` BitriPay / `operators` KODA réduits à cet opérateur) et la page de
+paiement s'ouvre directement sur lui (`&op=` ; en démonstration, opérateur présélectionné sur la page simulée). Refus
+explicites : opérateur sans passerelle (`OPERATOR_WITHOUT_PROVIDER`), hors monnaie mobile (`OPERATOR_CHANNEL_MISMATCH`),
+opérateur non ouvert sur la passerelle (`OPERATOR_NOT_ENABLED`). Sans choix, la passerelle propose tous ses opérateurs
+(comportement antérieur conservé). Identifiants d'opérateurs (`orange_cd`, `mpesa_cd`, `airtel_cd`, `africell_cd`) à
+confirmer avec BitriPay et KODA lors de la mise en service réelle.

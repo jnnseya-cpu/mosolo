@@ -169,3 +169,6 @@ données de démonstration.
   réellement appliquées ; le catalogue d'événements n'est plus sur l'accueil (conservé en administration). Page de paiement
   BitriPay / KODA fiabilisée : démonstration sur une instance, rechargement après mise en ligne, retour après connexion,
   nouvelle référence en un clic (annexe I, § I.60).
+- **Moyens BitriPay / KODA visibles (01/10/2026)** : BitriPay = Orange Money, M-Pesa, Airtel Money, Africell Money, carte
+  et QR BitriPay, chacun choisi en un clic ; KODA = les quatre opérateurs ; l'opérateur choisi est transmis à la
+  passerelle et la page s'ouvre dessus (annexe I, § I.61).

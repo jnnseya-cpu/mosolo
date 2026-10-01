@@ -37,6 +37,9 @@ export type PaymentChannel = (typeof PAYMENT_CHANNELS)[number];
 export const CALLBACK_WINDOW_MS = 5 * 60 * 1000;
 export const REFERENCE_VALIDITY_HOURS = 48;
 /** Canaux proposés par passerelle (30/09/2026). */
+/** Opérateurs de monnaie mobile qu'un payeur peut choisir sur la passerelle (01/10/2026) — identifiants BitriPay / KODA. */
+export const OPERATEURS_PASSERELLE = ['orange_cd', 'mpesa_cd', 'airtel_cd', 'africell_cd'] as const;
+
 export const CANAUX_PAR_PASSERELLE: Record<string, readonly PaymentChannel[]> = { bitripay: ['MOBILE_MONEY', 'QR', 'CARD'], koda: ['MOBILE_MONEY', 'QR', 'USSD'] };
 
 export interface PaymentOrder {
@@ -555,9 +558,12 @@ export class PaymentService {
   async createOrderWithProvider(
     user: User,
     obligationId: string,
-    input: { channel: PaymentChannel; displayCurrency?: CurrencyCode; provider?: ConnectorId; installmentPlanId?: string },
+    input: { channel: PaymentChannel; displayCurrency?: CurrencyCode; provider?: ConnectorId; installmentPlanId?: string; operateur?: string },
   ): Promise<PaymentOrder> {
-    if (!input.provider) return this.createOrder(user, obligationId, input);
+    if (!input.provider) {
+      if (input.operateur) throw unprocessable('OPERATOR_WITHOUT_PROVIDER', 'Le choix de l’opérateur ne s’applique qu’à une passerelle (BitriPay ou KODA).');
+      return this.createOrder(user, obligationId, input);
+    }
     const connector = this.connectors.get(input.provider);
     if (!connector) throw unprocessable('UNKNOWN_PROVIDER', `Prestataire non connecté : ${input.provider}`);
     // Hors démonstration, un connecteur sans clé API (configuration partielle) ne crée jamais d'intention simulée.
@@ -570,6 +576,12 @@ export class PaymentService {
     const canaux = CANAUX_PAR_PASSERELLE[connector.id] ?? ['MOBILE_MONEY', 'QR'];
     if (!canaux.includes(input.channel)) {
       throw unprocessable('PROVIDER_CHANNEL_UNSUPPORTED', `Le prestataire ${connector.label} n'est proposé que pour les canaux ${canaux.join(', ')}.`);
+    }
+    // Opérateur choisi (01/10/2026) : monnaie mobile seulement, et parmi les opérateurs ouverts sur la passerelle.
+    if (input.operateur) {
+      if (input.channel !== 'MOBILE_MONEY') throw unprocessable('OPERATOR_CHANNEL_MISMATCH', 'Le choix de l’opérateur ne s’applique qu’à la monnaie mobile.');
+      const ouverts = connector.operators ?? [];
+      if (ouverts.length && !ouverts.includes(input.operateur)) throw unprocessable('OPERATOR_NOT_ENABLED', `${connector.label} n'accepte pas cet opérateur pour l'instant : ${ouverts.join(', ')}.`);
     }
     const { obligation, draft } = this.prepareOrder(user, obligationId, input);
     // Doctrine : le règlement du prestataire va au compte public du coffre qui est aussi le bénéficiaire de l'ordre.
@@ -588,7 +600,7 @@ export class PaymentService {
       try {
         intent = await connector.createIntent({
           paymentOrderId: id, paymentReference: draft.paymentReference, obligationId, amount: draft.amount, channel: draft.channel,
-          expiresAt: draft.expiresAt, revenueCategory: obligation.revenueCategory,
+          expiresAt: draft.expiresAt, revenueCategory: obligation.revenueCategory, ...(input.operateur ? { operator: input.operateur } : {}),
         });
       } catch (e) {
         const code = e instanceof ApiError ? e.code : 'PROVIDER_UNAVAILABLE';

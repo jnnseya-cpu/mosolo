@@ -50,6 +50,24 @@ const PROVIDERS: { id: '' | 'bitripay' | 'koda'; label: string; hint: string; ca
   { id: 'koda', label: 'KODA', hint: 'Vous payez comme d’habitude (application ou USSD de votre opérateur : Orange Money, M-Pesa, Airtel Money, Africell Money) ; KODA vérifie la confirmation de l’opérateur', canaux: ['MOBILE_MONEY', 'QR', 'USSD'] },
 ];
 
+/**
+ * Moyens proposés sur la passerelle (01/10/2026, maître d'ouvrage : « BitriPay, c'est la carte, le QR BitriPay, Airtel
+ * Money, Orange Money, Africell Money et M-Pesa ») : chaque moyen est visible et choisi en un clic ; l'opérateur choisi
+ * est transmis à la passerelle, dont la page s'ouvre directement sur lui.
+ */
+const OPERATEURS: { id: string; label: string }[] = [
+  { id: 'orange_cd', label: 'Orange Money' }, { id: 'mpesa_cd', label: 'M-Pesa (Vodacom)' },
+  { id: 'airtel_cd', label: 'Airtel Money' }, { id: 'africell_cd', label: 'Africell Money' },
+];
+const MOYENS_PASSERELLE: Record<'bitripay' | 'koda', { id: string; label: string; channel: string; icon: string }[]> = {
+  bitripay: [
+    ...OPERATEURS.map((o) => ({ ...o, channel: 'MOBILE_MONEY', icon: 'phone' })),
+    { id: 'card', label: 'Carte bancaire (Visa, Mastercard)', channel: 'CARD', icon: 'card' },
+    { id: 'qr', label: 'QR BitriPay', channel: 'QR', icon: 'qr' },
+  ],
+  koda: OPERATEURS.map((o) => ({ ...o, channel: 'MOBILE_MONEY', icon: 'phone' })),
+};
+
 /** Étapes par canal (opérateur direct, sans passerelle) — 30/09/2026. */
 const CHANNEL_STEPS: Record<string, string[]> = {
   MOBILE_MONEY: ['Ouvrez votre application de monnaie mobile (Orange Money, M-Pesa, Airtel Money, Africell Money).', 'Choisissez « Payer une facture » → MOSOLO, puis saisissez la référence {ref}.', 'Validez avec votre code secret : vous recevez un SMS, puis la quittance provisoire apparaît dans « Mon espace ».'],
@@ -204,6 +222,11 @@ function PayFlow({ ob }: { ob: Obligation }) {
   const { tr, currency, fmtDate } = useApp();
   const [channel, setChannel] = useState('MOBILE_MONEY');
   const [provider, setProvider] = useState<'' | 'bitripay' | 'koda'>('');
+  const [operateur, setOperateur] = useState('');
+  // L'opérateur ne vaut que pour la monnaie mobile sur une passerelle.
+  useEffect(() => { if (!provider || channel !== 'MOBILE_MONEY') setOperateur(''); }, [provider, channel]);
+  const moyens = provider ? MOYENS_PASSERELLE[provider].filter((m) => provider === 'bitripay' || m.channel === channel) : [];
+  const moyenChoisi = channel === 'CARD' ? 'card' : channel === 'QR' && provider === 'bitripay' ? 'qr' : operateur;
   const passerelles = PROVIDERS.filter((p) => p.id !== '' && p.canaux.includes(channel));
   const providerAllowed = passerelles.length > 0;
   // Passerelle non proposée pour ce canal : retour à l'opérateur direct.
@@ -233,7 +256,7 @@ function PayFlow({ ob }: { ob: Obligation }) {
     setBusy(true); setErr(null);
     try {
       const r = await api<PaymentOrder>(`/v1/obligations/${encodeURIComponent(ob.id)}/payment-orders`, {
-        method: 'POST', idempotencyKey: idem, body: { channel, ...(display ? { displayCurrency: display } : {}), ...(providerAllowed && provider ? { provider } : {}) },
+        method: 'POST', idempotencyKey: idem, body: { channel, ...(display ? { displayCurrency: display } : {}), ...(providerAllowed && provider ? { provider } : {}), ...(providerAllowed && provider && operateur && channel === 'MOBILE_MONEY' ? { operateur } : {}) },
       });
       setOrder({ createdAt: new Date(serverNow()).toISOString(), ...r });
       // Page de paiement hébergée du prestataire (29/09/2026) : « Payer » y conduit directement le navigateur ; la clé
@@ -287,6 +310,21 @@ function PayFlow({ ob }: { ob: Obligation }) {
                   </label>
                 ))}
               </div>
+              {moyens.length > 0 && (
+                <div className="field" data-testid="pay-moyens-passerelle">
+                  <p className="label">{provider === 'bitripay' ? 'Votre moyen de paiement BitriPay' : 'Votre opérateur'}</p>
+                  <div className="choice-grid">
+                    {moyens.map((m) => (
+                      <label key={m.id} className={`choice ${moyenChoisi === m.id ? 'checked' : ''}`}>
+                        <input type="radio" name="moyen-passerelle" value={m.id} checked={moyenChoisi === m.id}
+                          onChange={() => { setChannel(m.channel); setOperateur(m.channel === 'MOBILE_MONEY' ? m.id : ''); }} />
+                        <Icon name={m.icon} size={18} /> <span>{m.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {provider === 'bitripay' && !moyenChoisi && <span className="hint">Sans choix, la page BitriPay propose tous les opérateurs.</span>}
+                </div>
+              )}
               <span className="hint">BitriPay et KODA sont des prestataires candidats. Votre paiement va toujours au compte public de la Ville : BitriPay l’achemine, KODA ne touche jamais l’argent et vérifie seulement la confirmation de l’opérateur. Vous payez exactement le montant de votre obligation : les frais de la passerelle sont à la charge de la Ville.</span>
             </fieldset>
           )}

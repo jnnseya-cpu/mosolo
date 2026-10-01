@@ -148,6 +148,31 @@ describe('Canaux de paiement du contribuable, de bout en bout', () => {
     delete process.env.MOSOLO_DEMO_MODE;
     expect((await env.req('GET', '/v1/demo/passerelle/koda?ref=X-1', 'u-contribuable')).statusCode).not.toBe(200);
   });
+  it('moyen choisi sur la passerelle (01/10/2026) : opérateur ou carte transmis, page ouverte dessus ; combinaisons invalides refusées', async () => {
+    const env = await setup('demo-secret-mm-operator-a', true);
+    const obls = env.app.ctx.assessment.byTaxpayer(DEMO.taxpayerId)
+      .filter((o) => ['EMISE', 'EXIGIBLE', 'EN_RETARD'].includes(o.status) && env.app.ctx.payments.paidOn(o.id).isZero() && !env.app.ctx.payments.byObligation(o.id).some((p) => p.status === 'INITIE'))
+      .map((o) => o.id);
+    const pay = (ob: string, body: unknown) => env.req('POST', `/v1/obligations/${ob}/payment-orders`, 'u-contribuable', body, { 'idempotency-key': randomUUID() });
+    // Refus : opérateur sans passerelle, hors monnaie mobile, inconnu.
+    expect((await pay(obls[0]!, { channel: 'MOBILE_MONEY', operateur: 'airtel_cd' })).json().code).toBe('OPERATOR_WITHOUT_PROVIDER');
+    expect((await pay(obls[0]!, { channel: 'CARD', provider: 'bitripay', operateur: 'airtel_cd' })).json().code).toBe('OPERATOR_CHANNEL_MISMATCH');
+    expect((await pay(obls[0]!, { channel: 'MOBILE_MONEY', provider: 'bitripay', operateur: 'inconnu' })).statusCode).toBe(400);
+    // Airtel Money via BitriPay : la page simulée s'ouvre sur Airtel.
+    const a = await pay(obls[0]!, { channel: 'MOBILE_MONEY', provider: 'bitripay', operateur: 'airtel_cd' });
+    expect(a.statusCode, a.body).toBe(201);
+    expect(a.json().checkoutUrl).toBe(`/demo/passerelle/bitripay?ref=${encodeURIComponent(a.json().paymentReference)}&op=airtel_cd`);
+    // Carte via BitriPay : la page s'ouvre sur la carte.
+    const c = await pay(obls[1]!, { channel: 'CARD', provider: 'bitripay' });
+    expect(c.statusCode, c.body).toBe(201);
+    expect(c.json().checkoutUrl).toContain('&op=card');
+    const page = await env.req('GET', `/v1/demo/passerelle/bitripay?ref=${encodeURIComponent(c.json().paymentReference)}`, 'u-contribuable');
+    expect(page.json().operateurs).toEqual(['card']);
+    // Orange Money via KODA.
+    const k = await pay(obls[2]!, { channel: 'MOBILE_MONEY', provider: 'koda', operateur: 'orange_cd' });
+    expect(k.statusCode, k.body).toBe(201);
+    expect(k.json().checkoutUrl).toContain('&op=orange_cd');
+  });
   it('changer de moyen de paiement : la référence existante indique son moyen ; le payeur la ferme et obtient une nouvelle référence (BitriPay)', async () => {
     const env = await setup('demo-secret-mm-operator-a', true);
     const ob = obligation(env);

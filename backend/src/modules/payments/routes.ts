@@ -7,13 +7,13 @@ import { currencySchema, header, parse } from '../../core/http.js';
 import { CONNECTOR_IDS } from './connectors/types.js';
 import { authorize } from '../../core/policy.js';
 import { isDemoMode } from '../../core/auth.js';
-import { ApiError, conflict, notFound } from '../../core/errors.js';
+import { ApiError, conflict, notFound, unprocessable } from '../../core/errors.js';
 import { INBOUND_WEBHOOKS } from '../integrations/inventory.js';
 import { signBitriPayWebhook, BITRIPAY_DEMO_WEBHOOK_SECRET } from './connectors/bitripay.js';
 import { signKodaWebhook, KODA_DEMO_WEBHOOK_SECRET } from './connectors/koda.js';
 import { toMinorUnits } from './connectors/minor-units.js';
 import { randomUUID } from 'node:crypto';
-import { orderView, PAYMENT_CHANNELS } from './service.js';
+import { OPERATEURS_PASSERELLE, orderView, PAYMENT_CHANNELS } from './service.js';
 import { buildReadiness } from './readiness.js';
 
 // `.strict()` : le client ne peut fournir ni montant ni compte bénéficiaire.
@@ -22,6 +22,8 @@ const orderSchema = z.object({
   displayCurrency: currencySchema.optional(),
   /** Prestataire connecté (canaux MOBILE_MONEY et QR uniquement). */
   provider: z.enum(CONNECTOR_IDS).optional(),
+  /** Opérateur choisi sur la passerelle (01/10/2026) : la page de paiement s'ouvre directement sur lui. */
+  operateur: z.enum(OPERATEURS_PASSERELLE).optional(),
   /** Échéancier accordé : l'ordre porte le montant de la prochaine échéance (lu dans le plan, jamais saisi). */
   installmentPlanId: z.string().min(1).max(64).optional(),
 }).strict();
@@ -38,6 +40,7 @@ export function registerPaymentRoutes(app: FastifyInstance, ctx: AppContext): vo
     const user = requireUser(req);
     const key = IdempotencyStore.requireKey(req.headers['idempotency-key']);
     const body = parse(orderSchema, req.body);
+    if (body.operateur && !body.provider) throw unprocessable('OPERATOR_WITHOUT_PROVIDER', 'Le choix de l’opérateur ne s’applique qu’à une passerelle (BitriPay ou KODA).');
     const res = body.provider
       ? await ctx.idempotency.executeAsync(`payment-order:${user.id}`, key, { obligationId: req.params.id, body }, async () => ({
           statusCode: 201,

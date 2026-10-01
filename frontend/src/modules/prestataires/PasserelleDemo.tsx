@@ -39,12 +39,13 @@ export default function PasserelleDemo() {
   const navigate = useNavigate();
   const location = useLocation();
   const q = useApi(user && ref ? () => api<PasserelleView>(`/v1/demo/passerelle/${encodeURIComponent(provider)}?ref=${encodeURIComponent(ref)}`) : null, [provider, ref, user?.id]);
-  const [operateur, setOperateur] = useState('');
+  // Moyen choisi dans « Mon espace » (01/10/2026) : la page s'ouvre directement dessus.
+  const [operateur, setOperateur] = useState(() => params.get('op') ?? '');
   const [etape, setEtape] = useState<'choix' | 'envoi' | 'erreur'>('choix');
   const [err, setErr] = useState<string | null>(null);
   const nom = NOM[provider] ?? provider;
   const d = q.data;
-  const choisi = operateur || (d?.operateurs.length === 1 ? d.operateurs[0]! : '');
+  const choisi = (operateur && d?.operateurs.includes(operateur) ? operateur : '') || (d?.operateurs.length === 1 ? d.operateurs[0]! : '');
 
   // Page qui ne s'ouvre pas (01/10/2026) : référence inconnue (démonstration réinitialisée, autre instance) ou simulation
   // refusée (une vraie clé est désormais configurée) ⇒ on le dit simplement et on propose une nouvelle référence.

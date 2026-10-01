@@ -205,7 +205,7 @@ export class KodaConnector implements PaymentConnector {
     const amount = toSafeJsonInteger(toMinorUnits(req.amount, this.exponents));
     if (!this.http) {
       // Bac à sable local (démonstration) : page de paiement SIMULÉE de MOSOLO (/demo/passerelle), jamais la vraie page.
-      return { providerIntentId: `sbx_koda_${randomSecret(8)}`, checkoutUrl: `/demo/passerelle/koda?ref=${encodeURIComponent(req.paymentReference)}`, qrPayload: null, sandbox: true };
+      return { providerIntentId: `sbx_koda_${randomSecret(8)}`, checkoutUrl: `/demo/passerelle/koda?ref=${encodeURIComponent(req.paymentReference)}${req.operator ? `&op=${encodeURIComponent(req.operator)}` : ''}`, qrPayload: null, sandbox: true };
     }
     const sep = this.config.successUrl.includes('?') ? '&' : '?';
     const res = await this.http.request<Record<string, unknown>>('POST', '/intents', {
@@ -214,7 +214,8 @@ export class KodaConnector implements PaymentConnector {
       body: {
         amount,
         currency: req.amount.currency,
-        operators: this.config.operators,
+        // Opérateur choisi par le payeur (01/10/2026), sinon tous les opérateurs ouverts.
+        operators: req.operator ? [req.operator] : this.config.operators,
         // Métadonnées minimales : aucune donnée personnelle du contribuable.
         metadata: {
           payment_reference: req.paymentReference, order_id: req.paymentOrderId, obligation_id: req.obligationId,

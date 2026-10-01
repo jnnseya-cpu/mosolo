@@ -28,6 +28,8 @@ export interface IntentRequest {
   expiresAt?: string;
   /** Catégorie de recette de l'obligation (BitriPay : purpose_code TAX / GOVERNMENT_FEE en découle, à confirmer). */
   revenueCategory?: string;
+  /** Moyen choisi par le payeur (01/10/2026) : opérateur de monnaie mobile (orange_cd, mpesa_cd, airtel_cd, africell_cd). */
+  operator?: string;
 }
 
 export interface CreatedIntent {
