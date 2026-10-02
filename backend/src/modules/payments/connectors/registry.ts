@@ -185,12 +185,20 @@ export class ConnectorRegistry {
     this.builtFingerprint = fp;
     try {
       const env = this.source.env();
-      const next = buildConnectorRegistry(env, this.source.runtime, this.demoMode);
+      // Chaque prestataire est reconstruit séparément (02/10/2026) : celui dont la configuration est invalide garde
+      // son connecteur en service, l'autre est raccordé quand même.
+      const errors = new Map<ConnectorId, string>();
+      const next = buildConnectorRegistry(env, this.source.runtime, this.demoMode, errors);
+      for (const id of errors.keys()) {
+        const prev = this.connectors.get(id);
+        if (prev) next.connectors.set(id, prev);
+        else next.connectors.delete(id);
+      }
       if (this.aliasCheck) next.validate(this.aliasCheck);
       this.connectors = next.connectors;
       this.extraSettlementAliases = next.extraSettlementAliases;
       this.setupState = this.withSources(next.setupState);
-      this.configError = null;
+      this.configError = errors.size ? [...errors.values()].join(' — ').replace(/\(reçu [^)]*\)/g, '(valeur non affichée)') : null;
       this.reloads += 1;
       this.lastReloadAt = new Date(this.source.runtime.now ? this.source.runtime.now() : Date.now()).toISOString();
     } catch (e) {
@@ -252,26 +260,36 @@ export class ConnectorRegistry {
   }
 }
 
-export function buildConnectorRegistry(env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env, runtime: ConnectorRuntime = {}, demoMode = isDemoMode()): ConnectorRegistry {
+/**
+ * `errors` (reconstruction à chaud depuis la console, 02/10/2026) : une configuration invalide d'UN prestataire est
+ * consignée pour lui seul, sans bloquer l'autre ; sans `errors` (démarrage), elle lève comme avant.
+ */
+export function buildConnectorRegistry(env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env, runtime: ConnectorRuntime = {}, demoMode = isDemoMode(), errors?: Map<ConnectorId, string>): ConnectorRegistry {
+  const guard = <T>(id: ConnectorId, fn: () => T): T | null => {
+    if (!errors) return fn();
+    try {
+      return fn();
+    } catch (e) {
+      if (!(e instanceof ConnectorConfigError)) throw e;
+      errors.set(id, e.message);
+      return null;
+    }
+  };
   // Retour navigateur : KODA_SUCCESS_URL explicite, sinon la page MOSOLO « /paiement/retour » (MOSOLO_PUBLIC_URL).
   const returnUrl = returnUrlFrom(env);
+  const kodaLive = /^sk_live_/.test(env.KODA_API_KEY ?? '');
+  const bitriLive = /^(sk|rk)_live_/.test(env.BITRIPAY_API_KEY ?? '');
+  const koda = guard('koda', () => {
   if (env.KODA_API_KEY && !env.KODA_SUCCESS_URL && !returnUrl) {
     throw new ConnectorConfigError('KODA_SUCCESS_URL est obligatoire en mode réel (URL de retour du portail officiel, à fournir par la Ville) — ou MOSOLO_PUBLIC_URL, qui donne la page de retour /paiement/retour.');
   }
-  // Configurations partielles refusées au démarrage, avec un message nommant la variable manquante.
-  if (env.BITRIPAY_ACCOUNT_ID && !env.BITRIPAY_API_KEY && !demoMode) {
-    throw new ConnectorConfigError('BITRIPAY_ACCOUNT_ID fourni sans BITRIPAY_API_KEY : configuration partielle (le compte connecté n’a de sens qu’avec la clé de l’intégrateur).');
-  }
-  const kodaLive = /^sk_live_/.test(env.KODA_API_KEY ?? '');
-  const bitriLive = /^(sk|rk)_live_/.test(env.BITRIPAY_API_KEY ?? '');
   if (env.KODA_API_KEY) {
     checkUrl('KODA', 'KODA_BASE_URL', env.KODA_BASE_URL || KODA_DEFAULT_BASE_URL, kodaLive);
     if (env.KODA_SUCCESS_URL) checkUrl('KODA', 'KODA_SUCCESS_URL', env.KODA_SUCCESS_URL, kodaLive);
     else checkUrl('KODA', 'MOSOLO_PUBLIC_URL', returnUrl!, kodaLive);
   }
-  if (env.BITRIPAY_API_KEY) checkUrl('BitriPay', 'BITRIPAY_BASE_URL', env.BITRIPAY_BASE_URL || BITRIPAY_DEFAULT_BASE_URL, bitriLive);
   const kodaSecret = webhookSecret('KODA', env.KODA_API_KEY, env.KODA_WEBHOOK_SECRET, KODA_DEMO_WEBHOOK_SECRET, demoMode);
-  const koda = kodaSecret === undefined ? null : new KodaConnector(
+  return kodaSecret === undefined ? null : new KodaConnector(
     {
       ...(env.KODA_API_KEY ? { apiKey: env.KODA_API_KEY } : {}),
       webhookSecret: kodaSecret,
@@ -284,6 +302,13 @@ export function buildConnectorRegistry(env: NodeJS.ProcessEnv | Record<string, s
     },
     runtime,
   );
+  });
+  const bitripay = guard('bitripay', () => {
+  // Configurations partielles refusées au démarrage, avec un message nommant la variable manquante.
+  if (env.BITRIPAY_ACCOUNT_ID && !env.BITRIPAY_API_KEY && !demoMode) {
+    throw new ConnectorConfigError('BITRIPAY_ACCOUNT_ID fourni sans BITRIPAY_API_KEY : configuration partielle (le compte connecté n’a de sens qu’avec la clé de l’intégrateur).');
+  }
+  if (env.BITRIPAY_API_KEY) checkUrl('BitriPay', 'BITRIPAY_BASE_URL', env.BITRIPAY_BASE_URL || BITRIPAY_DEFAULT_BASE_URL, bitriLive);
   const cdf = env.BITRIPAY_CDF_EXPONENT === undefined || env.BITRIPAY_CDF_EXPONENT === '' ? 2 : Number(env.BITRIPAY_CDF_EXPONENT);
   if (cdf !== 0 && cdf !== 2) throw new ConnectorConfigError('BITRIPAY_CDF_EXPONENT doit valoir 0 ou 2.');
   const bitripaySecret = webhookSecret('BitriPay', env.BITRIPAY_API_KEY, env.BITRIPAY_WEBHOOK_SECRET, BITRIPAY_DEMO_WEBHOOK_SECRET, demoMode);
@@ -293,7 +318,7 @@ export function buildConnectorRegistry(env: NodeJS.ProcessEnv | Record<string, s
   // dispensée. L'ancienne règle (production + clé réelle) reste couverte ; BITRIPAY_ED25519_REQUIRED=false l'écarte
   // explicitement (à justifier).
   const bitriEdDefault = (isProduction(process.env) && bitriLive) || !!env.BITRIPAY_API_KEY;
-  const bitripay = bitripaySecret === undefined ? null : new BitriPayConnector(
+  return bitripaySecret === undefined ? null : new BitriPayConnector(
     {
       ...(env.BITRIPAY_API_KEY ? { apiKey: env.BITRIPAY_API_KEY } : {}),
       webhookSecret: bitripaySecret,
@@ -312,6 +337,7 @@ export function buildConnectorRegistry(env: NodeJS.ProcessEnv | Record<string, s
     },
     runtime,
   );
+  });
   const registry = new ConnectorRegistry([bitripay, koda].filter((c): c is BitriPayConnector | KodaConnector => c !== null));
   registry.demoMode = demoMode;
   for (const [id, v] of [['bitripay', env.BITRIPAY_SETTLEMENT_ACCOUNT_ALIASES], ['koda', env.KODA_SETTLEMENT_ACCOUNT_ALIASES]] as const) {

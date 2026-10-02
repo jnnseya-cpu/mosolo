@@ -112,7 +112,8 @@ const isDemoValue = (v: string) => /^demo-/i.test(v.trim());
 /** Contrôle de format ; message sans jamais citer la valeur. */
 export function checkFormat(v: IntegrationVariable, value: string, opts: { production: boolean }): string | null {
   const name = v.name;
-  if (value !== value.trim() || /[\r\n\t]/.test(value)) return `${name} : espaces ou retours à la ligne en début, en fin ou à l’intérieur refusés.`;
+  // Clé publique PEM : retours à la ligne admis (format standard) ; partout ailleurs, refusés.
+  if (value !== value.trim() || (v.format !== 'CLE_PUBLIQUE_ED25519' && /[\r\n\t]/.test(value))) return `${name} : espaces ou retours à la ligne en début, en fin ou à l’intérieur refusés.`;
   if (value.length === 0) return `${name} : valeur vide.`;
   if (value.length > 4096) return `${name} : valeur trop longue.`;
   if (v.secret && isDemoValue(value)) return `${name} : valeur de démonstration publique refusée.`;
@@ -317,7 +318,10 @@ export class IntegrationConfigService {
     let blob: EncryptedBlob | null = null;
     if (input.kind === 'DEFINIR') {
       if (typeof input.value !== 'string') throw unprocessable('VALUE_REQUIRED', `${name} : valeur requise.`);
-      const problem = checkFormat(meta, input.value, { production: isProduction(this.opts.processEnv ?? process.env) });
+      // Copier-coller (02/10/2026) : espaces et retours à la ligne en début et en fin retirés avant contrôle ; ceux de
+      // l'intérieur restent refusés (sauf clé PEM).
+      const value = input.value.trim();
+      const problem = checkFormat(meta, value, { production: isProduction(this.opts.processEnv ?? process.env) });
       if (problem) {
         this.audit.append({
           actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'integration.config.refused', resourceType: 'integration_variable', resourceId: name,
@@ -325,7 +329,7 @@ export class IntegrationConfigService {
         });
         throw unprocessable('INVALID_VALUE_FORMAT', problem, { variable: name, rule: meta.format });
       }
-      blob = this.encrypt(name, input.value);
+      blob = this.encrypt(name, value);
     } else if (!this.values.get(name)?.blob) {
       throw conflict('NOTHING_TO_REMOVE', `${name} : aucune valeur de la console à retirer.`);
     }

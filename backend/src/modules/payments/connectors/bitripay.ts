@@ -154,10 +154,17 @@ const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
 
 export function parseEd25519PublicKey(value: string): KeyObject {
   try {
-    if (value.includes('BEGIN PUBLIC KEY')) return createPublicKey(value);
-    const raw = Buffer.from(value, 'base64');
-    if (raw.length !== 32) throw new Error('32 octets attendus');
-    return createPublicKey({ key: Buffer.concat([ED25519_SPKI_PREFIX, raw]), format: 'der', type: 'spki' });
+    // Formes admises (02/10/2026) : PEM avec ou sans retours à la ligne (un champ d'une ligne les retire), DER SPKI en
+    // base64, 32 octets bruts en base64 / base64url ou en hexadécimal.
+    const v = value.trim();
+    const pem = /-----BEGIN PUBLIC KEY-----([\s\S]*?)-----END PUBLIC KEY-----/.exec(v);
+    const body = (pem ? pem[1]! : v).replace(/\s+/g, '');
+    const raw = /^[0-9a-fA-F]{64}$/.test(body) ? Buffer.from(body, 'hex') : Buffer.from(body.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+    if (raw.length === 32 && !pem) return createPublicKey({ key: Buffer.concat([ED25519_SPKI_PREFIX, raw]), format: 'der', type: 'spki' });
+    if (raw.length === ED25519_SPKI_PREFIX.length + 32 && raw.subarray(0, ED25519_SPKI_PREFIX.length).equals(ED25519_SPKI_PREFIX)) {
+      return createPublicKey({ key: raw, format: 'der', type: 'spki' });
+    }
+    throw new Error(pem ? 'PEM Ed25519 attendu' : '32 octets attendus');
   } catch (e) {
     throw new ConnectorConfigError(`BITRIPAY_ED25519_PUBLIC_KEY invalide (${(e as Error).message}).`);
   }

@@ -68,10 +68,11 @@ export default function ClesRaccordements() {
     e.preventDefault();
     setBusy(true); setMsg(null);
     try {
-      const res = await api<{ status: string }>(`/v1/integrations/keys/${encodeURIComponent(v.name)}/proposals`, { method: 'POST', body: { kind, ...(kind === 'DEFINIR' ? { value } : {}), motif } });
+      const res = await api<{ status: string; configurationWarning?: string | null }>(`/v1/integrations/keys/${encodeURIComponent(v.name)}/proposals`, { method: 'POST', body: { kind, ...(kind === 'DEFINIR' ? { value: value.trim() } : {}), motif } });
       // Clés d'IA (décision du 01/10/2026) : appliquées sur la seule décision du super-administrateur.
+      // Valeur enregistrée mais raccordement encore incomplet (02/10/2026) : on dit ce qui manque, sans valeur.
       setMsg({ ok: true, text: res.status === 'APPROUVEE'
-        ? `${v.name} : appliquée (approbation unique du super-administrateur, journalisée).`
+        ? `${v.name} : enregistrée et appliquée (approbation unique du super-administrateur, journalisée).${res.configurationWarning ? ` Raccordement pas encore actif : ${res.configurationWarning}` : ''}`
         : `${v.name} : proposition enregistrée. Elle ne s’appliquera qu’après l’approbation d’une autre personne (R26 ou R28).` });
       setEdit(null); setMotif('');
       reloadAll();
@@ -211,8 +212,12 @@ export default function ClesRaccordements() {
                     <form className="form" onSubmit={(e) => void proposer(e, v, 'DEFINIR')} autoComplete="off">
                       <div className="field">
                         <label className="label" htmlFor={`val-${v.name}`}>Nouvelle valeur de {v.name} (écriture seule — jamais réaffichée)</label>
-                        <input id={`val-${v.name}`} className="input mono" type={v.secret ? 'password' : 'text'} autoComplete="new-password" spellCheck={false}
-                          value={value} onChange={(e) => setValue(e.target.value)} required />
+                        {v.format === 'CLE_PUBLIQUE_ED25519'
+                          // Clé publique PEM sur plusieurs lignes : zone de texte (un champ d'une ligne retire les retours).
+                          ? <textarea id={`val-${v.name}`} className="input mono" rows={5} spellCheck={false}
+                            value={value} onChange={(e) => setValue(e.target.value)} required />
+                          : <input id={`val-${v.name}`} className="input mono" type={v.secret ? 'password' : 'text'} autoComplete="new-password" spellCheck={false}
+                            value={value} onChange={(e) => setValue(e.target.value)} required />}
                       </div>
                       <div className="field">
                         <label className="label" htmlFor={`mot-${v.name}`}>Motif (obligatoire)</label>

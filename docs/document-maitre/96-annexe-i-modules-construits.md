@@ -2095,3 +2095,23 @@ explicites : opérateur sans passerelle (`OPERATOR_WITHOUT_PROVIDER`), hors monn
 opérateur non ouvert sur la passerelle (`OPERATOR_NOT_ENABLED`). Sans choix, la passerelle propose tous ses opérateurs
 (comportement antérieur conservé). Identifiants d'opérateurs (`orange_cd`, `mpesa_cd`, `airtel_cd`, `africell_cd`) à
 confirmer avec BitriPay et KODA lors de la mise en service réelle.
+
+## I.62 Saisie des clés : copier-coller réel et prestataires indépendants (02/10/2026)
+
+Constat du maître d'ouvrage : lors de la saisie des clés BitriPay, KODA et IA dans « Clés et raccordements », les essais
+étaient refusés. Causes établies et corrections (aucun contrôle retiré) :
+
+- **Clé publique Ed25519 de BitriPay** : la console refusait tout retour à la ligne, alors qu'une clé PEM en contient,
+  et le champ d'une ligne les retirait. Désormais : zone de texte multiligne pour cette clé, et formes admises — PEM
+  avec ou sans retours à la ligne, DER SPKI en base64, 32 octets en base64, base64url ou hexadécimal. Toute autre
+  valeur reste refusée.
+- **Copier-coller** : espaces et retours à la ligne en début et en fin de valeur sont retirés avant contrôle ; un espace
+  à l'intérieur d'une clé reste refusé.
+- **Prestataires indépendants** : une configuration BitriPay incomplète (par exemple sans clé Ed25519, exigée par la
+  décision du 29/09/2026) bloquait aussi KODA. Chaque prestataire est désormais reconstruit séparément : celui qui est
+  incomplet garde son connecteur en service, l'autre est raccordé. Au démarrage par l'environnement, une configuration
+  invalide continue d'empêcher le démarrage (comportement antérieur conservé).
+- **Message clair** : après enregistrement, la console indique « Raccordement pas encore actif : … » en nommant la
+  variable manquante (jamais une valeur), au lieu d'un simple « appliquée ».
+
+Tests : `backend/test/cles-collage.test.ts`.
