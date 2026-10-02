@@ -1,0 +1,18 @@
+# Démonstration hébergée de KINSHASA MOSOLO en un seul service (API + application web).
+# Données de DÉMONSTRATION uniquement, non contractuelles : mode démonstration explicite (bandeau, rôles de démonstration,
+# secrets publics). Ne jamais y saisir de données réelles. Déploiement : https://render.com/deploy?repo=<URL du dépôt>
+services:
+  - type: web
+    name: kinshasa-mosolo-demo
+    runtime: node
+    plan: free
+    buildCommand: npm ci --no-audit --no-fund && VITE_API_URL= npm run build -w frontend
+    startCommand: node node_modules/.bin/tsx backend/src/server.ts --demo
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: MOSOLO_DEMO_MODE
+        value: "true"
+      - key: MOSOLO_STATIC_DIR
+        value: frontend/dist

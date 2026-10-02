@@ -1,0 +1,40 @@
+/* Écran de connexion (module « socle ») — téléphone 390 px et ordinateur 1440 px, sans défilement horizontal. */
+.socle-page { max-width: 1040px; }
+.socle-grid { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 900px) { .socle-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); } }
+
+.socle-form .seg { width: 100%; }
+.socle-form .seg button { flex: 1 1 0; justify-content: center; min-height: 44px; }
+
+.socle-code-input { font-size: 22px; letter-spacing: 0.4em; text-align: center; max-width: 240px; }
+.socle-demo-code { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13.5px; color: var(--ink-2); }
+.socle-demo-code strong { font-size: 16px; letter-spacing: 0.12em; color: var(--ink); }
+
+.socle-aside { display: grid; gap: 14px; }
+.socle-demo-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.socle-demo-list .btn { width: 100%; max-width: 100%; min-width: 0; justify-content: flex-start; flex-wrap: wrap; text-align: left; gap: 8px; white-space: normal; overflow-wrap: anywhere; }
+.socle-demo-list, .socle-demo-list li { min-width: 0; max-width: 100%; }
+.socle-totp { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; padding: 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.socle-totp > :last-child { flex: 1 1 180px; min-width: 0; }
+.socle-current { font-size: 26px; letter-spacing: 0.18em; color: var(--navy); margin: 4px 0; }
+:root[data-theme='dark'] .socle-current { color: var(--ink); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .socle-current { color: var(--ink); } }
+
+.socle-sessions { list-style: none; margin: 0; padding: 0; display: grid; }
+.socle-sessions li { display: flex; flex-wrap: wrap; gap: 8px 12px; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.socle-sessions li:last-child { border-bottom: 0; }
+.socle-sessions li > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+.socle-session-side { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.socle-page .row-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.socle-page .kv dd { overflow-wrap: anywhere; }
+
+/* Dérogations à la base (liquidation) : file de seconde approbation. */
+.socle-seg { margin-bottom: 12px; }
+.socle-override-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1100px) { .socle-override-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.socle-override { display: grid; gap: 8px; min-width: 0; }
+.socle-override .rtable-wrap { margin: 4px 0; }
+
+/* Clés d’accès (FIDO2) et extractions massives */
+.socle-passkeys { margin-top: var(--space-4, 16px); display: grid; gap: 8px; }
+.socle-steps { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

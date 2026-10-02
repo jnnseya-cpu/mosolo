@@ -1,0 +1,139 @@
+/* ParkSmart et KIN PUB CONTROL — styles propres (jetons de styles.css). 390 px → 1440 px, sans défilement horizontal. */
+
+.pk-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1024px) {
+  .pk-grid-2 { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+  .pk-grid-even { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.pk-tabs { margin-bottom: 16px; max-width: 100%; overflow-x: auto; }
+.pk-tabs button { white-space: nowrap; }
+
+.pk-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); margin: 0 0 20px; }
+.pk-kpis > div { padding: 14px 16px; border-bottom: 1px solid var(--line-soft); min-width: 0; }
+.pk-kpis > div:nth-child(odd) { border-right: 1px solid var(--line-soft); }
+.pk-kpis dt { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-3); font-weight: 600; }
+.pk-kpis dd { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin-top: 4px; overflow-wrap: anywhere; }
+/* Tuile étroite (360 px) : un montant long peut passer à la ligne plutôt que déborder de l’écran. */
+.pk-kpis dd .nowrap { white-space: normal; }
+.pk-kpis dd small { display: block; font-size: 12px; font-weight: 400; letter-spacing: 0; color: var(--ink-3); margin-top: 2px; }
+@media (min-width: 1000px) {
+  .pk-kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .pk-kpis > div { border-bottom: 0; border-right: 1px solid var(--line-soft) !important; padding: 18px 20px; }
+  .pk-kpis > div:last-child { border-right: 0 !important; }
+}
+
+.pk-row-title { font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.pk-sub { font-size: 12.5px; color: var(--ink-3); overflow-wrap: anywhere; }
+.pk-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12.5px; color: var(--ink-3); margin-top: 4px; }
+.pk-cards { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 720px) { .pk-cards-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pk-card { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 14px 16px; min-width: 0; display: grid; gap: 10px; }
+.pk-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.pk-card-foot { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; border-top: 1px solid var(--line-soft); padding-top: 10px; }
+
+/* Titre de stationnement (session) */
+.pk-ticket { border-left: 4px solid var(--line); }
+.pk-ticket-VERT { border-left-color: var(--good); }
+.pk-ticket-AMBRE { border-left-color: var(--gold); }
+.pk-ticket-ROUGE { border-left-color: var(--flag-red); }
+.pk-countdown { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.pk-plate { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-weight: 600; letter-spacing: 0.08em; border: 2px solid var(--ink); border-radius: 6px; padding: 2px 8px; background: var(--surface); color: var(--ink); font-size: 14px; }
+.pk-plate-input { font-family: var(--font-mono) !important; text-transform: uppercase; letter-spacing: 0.08em; font-size: 20px !important; font-weight: 600; }
+
+/* Résultat du contrôle (feu) */
+.pk-light { display: grid; justify-items: center; gap: 6px; text-align: center; padding: 24px 16px; border-radius: var(--r); border: 1px solid var(--line); }
+.pk-light-icon { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
+.pk-light-title { font-family: var(--font-serif); font-size: 24px; line-height: 1.2; }
+.pk-light-VERT { background: var(--good-bg); } .pk-light-VERT .pk-light-icon { background: var(--good); }
+.pk-light-AMBRE { background: var(--warning-bg); } .pk-light-AMBRE .pk-light-icon { background: #c98700; }
+.pk-light-ROUGE { background: var(--critical-bg); } .pk-light-ROUGE .pk-light-icon { background: var(--critical); }
+
+.pk-payref { border: 1px dashed var(--line); border-radius: var(--r); padding: 12px 14px; background: var(--surface-2); display: grid; gap: 4px; }
+.pk-ref { font-size: 20px; font-weight: 600; letter-spacing: 0.04em; overflow-wrap: anywhere; }
+
+.pk-gps { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.pk-gps .btn { grid-column: 1 / -1; justify-self: start; }
+@media (min-width: 560px) { .pk-gps { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; } .pk-gps .btn { grid-column: auto; } }
+.pk-file { justify-self: start; cursor: pointer; }
+.pk-hashes { display: grid; gap: 4px; list-style: none; padding: 0; margin: 0; }
+.pk-hashes li { display: flex; align-items: center; gap: 6px; font-size: 12.5px; flex-wrap: wrap; }
+.pk-reason { gap: 10px; }
+.pk-reason textarea { min-height: 64px; }
+
+.pk-map { margin: 0; width: 100%; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--surface-2); }
+.pk-map svg { width: 100%; height: 100%; display: block; }
+.pk-map-bg { fill: var(--surface-2); }
+.pk-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 12.5px; color: var(--ink-2); }
+.pk-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.pk-legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+.pk-guard { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--ink-2); }
+.pk-guard .icon { flex: none; margin-top: 2px; color: var(--palm, var(--good)); }
+.pk-guards { display: grid; gap: 8px; }
+
+.pk-bar { height: 8px; border-radius: 999px; background: var(--pale); overflow: hidden; min-width: 80px; }
+.pk-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--flag-blue); }
+.pk-bar-warn > span { background: var(--gold); }
+.pk-bar-crit > span { background: var(--flag-red); }
+
+.pk-evidence { display: grid; gap: 4px; font-size: 12.5px; background: var(--surface-2); border-radius: 6px; padding: 8px 10px; }
+.pk-steps { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--ink-3); }
+.pk-steps b { color: var(--ink); font-weight: 600; }
+.pk-steps .on { color: var(--ink); }
+
+/* ── Photos de preuve (caméra géolocalisée) ── */
+.ev-photos { display: grid; gap: 8px; }
+.ev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.ev-thumb { margin: 0; display: grid; gap: 4px; font-size: 11.5px; min-width: 0; }
+.ev-thumb-btn { padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--pale); aspect-ratio: 4 / 3; cursor: zoom-in; }
+.ev-thumb-btn img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ev-thumb-ph { display: grid; place-items: center; height: 100%; color: var(--ink-3); }
+.ev-thumb figcaption { display: grid; gap: 1px; overflow-wrap: anywhere; }
+.ev-warn { color: var(--warning-ink); display: inline-flex; gap: 4px; align-items: center; }
+.ev-sha { color: var(--ink-3); }
+.ev-lightbox { position: fixed; inset: 0; z-index: 1000; background: rgba(0, 0, 0, 0.85); display: grid; place-items: center; gap: 12px; padding: 16px; }
+.ev-lightbox img { max-width: 100%; max-height: 80vh; border-radius: 8px; }
+
+/* ── Caméra de preuve géolocalisée ── */
+.evc { display: grid; gap: 12px; }
+.evc-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; align-items: center; }
+.evc-meta > span { display: inline-flex; gap: 5px; align-items: center; }
+.evc-ok { color: var(--good-ink); font-weight: 600; }
+.evc-wait { color: var(--warning-ink); }
+.evc-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.evc-slot { position: relative; display: grid; justify-items: center; gap: 4px; padding: 8px; min-height: 84px; border: 1.5px dashed var(--line); border-radius: 10px; background: var(--surface); color: var(--ink-2); font-size: 12.5px; cursor: pointer; text-align: center; overflow: hidden; }
+.evc-slot img { width: 100%; height: 48px; object-fit: cover; border-radius: 6px; }
+.evc-slot.is-on { border-style: solid; border-color: var(--navy); box-shadow: 0 0 0 2px color-mix(in srgb, var(--navy) 25%, transparent); }
+.evc-slot.is-done { border-style: solid; border-color: var(--good); }
+.evc-slot.is-done > .icon:last-child { position: absolute; top: 4px; right: 4px; color: var(--good); }
+.evc-view { position: relative; border-radius: 12px; overflow: hidden; background: #0b0f1d; max-width: 640px; width: 100%; justify-self: center; aspect-ratio: 4 / 3; }
+.evc-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.evc-overlay { position: absolute; left: 8px; right: 8px; bottom: 8px; color: #fff; font-weight: 600; font-size: 13px; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
+.evc-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* ── Lecture de plaque ── */
+.plq { display: grid; gap: 10px; }
+.plq-view { position: relative; border-radius: 12px; overflow: hidden; background: #0b0f1d; aspect-ratio: 16 / 9; max-width: 560px; width: 100%; }
+.plq-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.plq-guide { position: absolute; left: 10%; top: 38%; width: 80%; height: 24%; border: 3px solid #F7D618; border-radius: 8px; box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.35); }
+.plq-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.plq-confirm { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.pk-pen { display: grid; gap: 6px; }
+.pk-pen-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+.pk-pen-row.is-unpaid { border-color: color-mix(in srgb, var(--critical) 50%, transparent); background: var(--critical-bg); }
+
+.earn-modules { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin: 12px 0; }
+.earn-module { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+
+/* Surveillance des constats par agent */
+.mon-table tr.mon-flag > th, .mon-table tr.mon-flag > td { background: var(--warning-bg); }
+.mon-detail > td { background: var(--surface-2, #f6f7fa); }
+.mon-signals { margin: 4px 0 10px; padding-left: 0; list-style: none; display: grid; gap: 6px; font-size: 13.5px; }
+.mon-sub { font-size: 13px; }
+.mon-table > tbody > tr > th[scope='row'] { min-width: 210px; }
+.mon-table .btn-link { text-align: left; }
+
+/* ParkSmart § 11A — occupation par heure (cible 15–25 % de places libres) */
+.pk-hours th, .pk-hours td { padding: 4px 6px; font-size: 12px; white-space: nowrap; }
+.pk-hours .pk-cell-sature { background: var(--warning-bg); }
+.pk-hours .pk-cell-dans_la_cible { background: color-mix(in srgb, var(--good, #2e7d32) 14%, transparent); }
+.pk-hours .pk-cell-sous_utilise { background: var(--surface-2, #f6f7fa); }

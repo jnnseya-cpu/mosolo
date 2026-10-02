@@ -1,0 +1,70 @@
+/* Module terrain — styles propres (jetons globaux de styles.css). Aucune largeur fixe : 390 px → 1440 px. */
+
+.tr-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); margin: 0 0 20px; }
+.tr-kpis > div { padding: 14px 16px; border-bottom: 1px solid var(--line-soft); min-width: 0; }
+.tr-kpis > div:nth-child(odd) { border-right: 1px solid var(--line-soft); }
+.tr-kpis dt { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-3); font-weight: 600; }
+.tr-kpis dd { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.tr-kpis dd small { display: block; font-size: 12px; font-weight: 400; letter-spacing: 0; color: var(--ink-3); }
+@media (min-width: 900px) {
+  .tr-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .tr-kpis > div { border-bottom: 0; border-right: 1px solid var(--line-soft) !important; padding: 18px 20px; }
+  .tr-kpis > div:last-child { border-right: 0 !important; }
+}
+
+.tr-tabs { margin-bottom: 16px; max-width: 100%; overflow-x: auto; }
+.tr-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1024px) { .tr-grid-2 { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); } .tr-grid-even { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.tr-row-title { font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.tr-sub { font-size: 12.5px; color: var(--ink-3); overflow-wrap: anywhere; }
+.tr-mono { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.tr-flag { display: flex; gap: 6px; align-items: flex-start; font-size: 13px; color: var(--serious-ink, var(--ink)); background: var(--serious-bg); border-radius: 6px; padding: 6px 10px; margin-top: 6px; }
+.tr-flag .icon { flex: none; margin-top: 1px; }
+.tr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+
+.tr-progress { display: grid; gap: 4px; min-width: 110px; }
+.tr-bar { height: 6px; border-radius: 999px; background: var(--pale); overflow: hidden; }
+.tr-bar > span { display: block; height: 100%; background: var(--palm, var(--good)); border-radius: inherit; }
+
+.tr-cards { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 720px) { .tr-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1200px) { .tr-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.tr-card { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 16px; display: grid; gap: 8px; min-width: 0; text-align: left; color: inherit; font: inherit; }
+button.tr-card { cursor: pointer; }
+button.tr-card:hover { border-color: var(--flag-blue); }
+button.tr-card[aria-pressed='true'] { border-color: var(--navy); box-shadow: inset 0 0 0 1px var(--navy); }
+.tr-card-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+
+.tr-checks { display: grid; gap: 8px; }
+.tr-checks label { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; }
+.tr-checks input { margin-top: 3px; width: 18px; height: 18px; flex: none; }
+
+.tr-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.tr-steps li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; padding: 6px 0; font-size: 13.5px; }
+.tr-step-dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; margin-top: 1px; }
+.tr-step-done .tr-step-dot { background: var(--good); border-color: var(--good); color: #fff; }
+.tr-step-now .tr-step-dot { border-color: var(--flag-blue); }
+
+/* Badge d'agent — format carte, lisible au soleil. */
+.tr-badge { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); max-width: 420px; width: 100%; }
+.tr-badge-head { background: var(--navy); color: #fff; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tr-badge-head p { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600; }
+.tr-badge-strip { display: flex; height: 4px; }
+.tr-badge-strip span { flex: 1; }
+.tr-badge-body { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px 14px; padding: 16px; align-items: start; }
+.tr-avatar { width: 64px; height: 76px; border-radius: 8px; background: var(--pale); color: var(--ink-2); display: grid; place-items: center; font-size: 22px; font-weight: 600; border: 1px solid var(--line); }
+.tr-badge-name { font-size: 18px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.tr-badge-foot { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; padding: 0 16px 16px; }
+.tr-code { font-family: var(--font-mono); font-size: 17px; letter-spacing: 0.08em; font-weight: 600; overflow-wrap: anywhere; }
+.tr-badge-off { filter: grayscale(1); opacity: 0.75; }
+
+.tr-verdict-kv { width: 100%; text-align: left; margin-top: 8px; }
+.tr-report { margin-top: 16px; border-top: 1px solid var(--line-soft); padding-top: 16px; }
+
+.tr-capture-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 12px; }
+.tr-object-list { display: grid; gap: 0; }
+.tr-inline-form { display: grid; gap: 10px; margin-top: 10px; padding: 12px; border: 1px dashed var(--line); border-radius: var(--r); }
+.tr-actions-end { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.tr-table-note { margin-top: 8px; }
+.tr-section { margin-top: 24px; }

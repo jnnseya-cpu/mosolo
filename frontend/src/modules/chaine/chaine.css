@@ -1,0 +1,57 @@
+/* Sept questions et chaîne opératoire : réutilise les jetons du thème (clair/sombre) et les pastilles d'état. */
+.ch-panel { min-width: 0; }
+.ch-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.ch-head .tag { margin-left: 8px; }
+
+.ch-questions { display: grid; gap: 0; margin: 0; }
+.ch-q { display: grid; grid-template-columns: minmax(140px, 32%) 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+.ch-q dt { font-weight: 600; color: var(--ink); display: flex; gap: 8px; align-items: baseline; }
+.ch-q dd { margin: 0; min-width: 0; display: grid; gap: 4px; justify-items: start; }
+.ch-q-num { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--pale); color: var(--ink-2); font-size: 12px; flex: none; }
+.ch-q-answer { margin: 0; overflow-wrap: anywhere; }
+.ch-q-src { margin: 0; overflow-wrap: anywhere; display: flex; gap: 4px; align-items: baseline; }
+@media (max-width: 599px) { .ch-q { grid-template-columns: 1fr; gap: 6px; } }
+
+/* Stepper horizontal : défile dans son cadre (jamais la page) ; accroche par maillon. */
+.ch-chain { display: grid; gap: 12px; min-width: 0; }
+.ch-stepper-wrap { overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; padding-bottom: 4px; max-width: 100%; }
+.ch-stepper { list-style: none; margin: 0; padding: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(84px, 1fr); min-width: min-content; }
+.ch-step { position: relative; scroll-snap-align: start; }
+.ch-step::before { content: ''; position: absolute; top: 19px; left: -50%; width: 100%; height: 2px; background: var(--line); z-index: 0; }
+.ch-step:first-child::before { display: none; }
+.ch-step.ch-fait::before { background: var(--good); }
+.ch-step-btn { position: relative; z-index: 1; display: grid; justify-items: center; gap: 2px; width: 100%; min-height: 44px; padding: 4px 2px 6px; background: none; border: 0; border-radius: var(--r); color: var(--ink); cursor: pointer; font: inherit; text-align: center; }
+.ch-step-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+.ch-active .ch-step-btn { background: var(--pale); }
+.ch-dot { display: grid; place-items: center; width: 28px; height: 28px; margin-top: 5px; border-radius: 50%; border: 2px solid var(--line); background: var(--surface); color: var(--ink-3); }
+.ch-fait .ch-dot { border-color: var(--good); background: var(--good-bg); color: var(--good-ink); }
+.ch-en_attente .ch-dot { border-color: var(--info-c); background: var(--info-bg); color: var(--info-ink); }
+.ch-bloque .ch-dot { border-color: var(--critical); background: var(--critical-bg); color: var(--critical-ink); }
+.ch-sans_objet .ch-dot { border-style: dashed; }
+.ch-num { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.ch-lbl { font-size: 12.5px; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+.ch-st { font-size: 11px; color: var(--ink-2); }
+.ch-bloque .ch-st { color: var(--critical-ink); font-weight: 600; }
+
+.ch-detail { display: grid; gap: 8px; border-left: 4px solid var(--line); }
+.ch-detail.ch-fait { border-left-color: var(--good); }
+.ch-detail.ch-en_attente { border-left-color: var(--info-c); }
+.ch-detail.ch-bloque { border-left-color: var(--critical); }
+.ch-detail p { margin: 0; overflow-wrap: anywhere; }
+.ch-detail-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ch-tag-rupture { border-color: var(--critical); color: var(--critical-ink); background: var(--critical-bg); }
+.ch-pick { max-width: 480px; }
+
+.ch-ruptures { display: grid; gap: 8px; }
+.ch-search { display: flex; flex-wrap: wrap; gap: 8px; }
+.ch-search input { flex: 1 1 200px; min-width: 0; }
+
+/* Visuels (trousse de visualisation, 27/09/2026) */
+.ch-visuel { margin-bottom: 0; }
+.ch-meter { padding: 16px; display: grid; align-content: center; }
+
+/* Qui doit agir, où (29/09/2026) et « Comment ça marche ». */
+.ch-aagir { display: grid; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); min-width: 0; overflow-wrap: anywhere; }
+.ch-aagir .btn-row { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.ch-comment summary { cursor: pointer; }
+.ch-comment ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; }

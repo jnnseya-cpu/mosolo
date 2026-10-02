@@ -6,3 +6,35 @@ coverage/
 .env.*
 !.env.example
 backend/data/
+
+# Moteur OCR copié depuis node_modules au build
+frontend/public/ocr/
+
+# Fond de carte OSM fabriqué par tools/maps (volumineux)
+frontend/public/tiles/
+data/osm/
+
+# Arbres de travail temporaires des agents (jamais versionnés)
+.claude/worktrees/
+*.tsbuildinfo
+.vite/
+__pycache__/
+*.pyc
+.DS_Store
+.idea/
+.vscode/
+# Fichiers intermédiaires des outils de documentation et de captures
+docs/document-maitre/_build.md
+presentation-ecrans.html
+gallery/
+liste.json
+
+# Kits de déploiement (infra/) : état local, sauvegardes, amorçage et fichiers rendus — jamais versionnés
+infra/vps/.etat/
+infra/vps/sauvegardes/
+infra/vps/amorcage/
+infra/gcp/.rendu/
+infra/static/.rendu/
+infra/.validation/
+# Variables non secrètes des prestataires de paiement (propres au déploiement ; modèle : prestataires.env.example)
+infra/gcp/prestataires.env

@@ -119,6 +119,53 @@ Règles :
 - Un mode diaspora : paiement par carte, mandataire local aux droits limités, quittances à distance.
 - Un quitus fiscal numérique téléchargeable et vérifiable par tout service habilité.
 
+## 9.9 Le compte unique appliqué à toute la plateforme (ajout du 28/09/2026)
+
+*Demande du maître d'ouvrage : « s'assurer que le compte unique s'applique et qu'une inscription partage l'information
+dans toute la plateforme ». Audit complet module par module : `compte-unique-audit.md`.*
+
+**Une inscription, tous les modules.** Chaque module déclare ce qu'il détient pour un compte dans un registre commun
+(`backend/src/modules/identity/compte-unique.ts`) : le socle (objets, baux, obligations, paiements, quittances, recours,
+notifications) et les modules accès (mandats, organisations, rôles, pièces), fiscal (déclarations, exonérations, quitus,
+rôles, NIF, relations aux biens), titres (titres, pass, tickets), RakaPay (fiche de conducteur, motos, coopérative),
+stationnement (sessions, réservations, véhicules, constats), publicité (enseignes, autorisations), verticales (démarches,
+certificats, étals, AVIA, secteurs, grands redevables), chaîne véhicule (contrôle technique, rendez-vous, fourrière),
+recouvrement (arriérés, échéanciers), canaux (cartes MOSOLO), communication (préférences, consentements) et documents.
+La vue « Mon compte unique » (`GET /v1/compte-unique/me`, section de l'espace `/espace`) les agrège sans copier de donnée
+et sans seconde fiche « personne » : objets par nature, obligations par statut ET par devise (jamais additionnées entre
+devises), titres et validité, quittances, recours, mandats donnés et reçus, organisations et rôles, documents,
+consentements, niveau de vérification avec ce que chaque niveau ouvre, graphiques de la trousse partagée et lien vers
+l'écran de chaque module.
+
+**Qui lit un compte (contrôle côté serveur).** Le titulaire ; un mandataire seulement dans le périmètre d'un mandat
+ACTIF comportant « CONSULTER » (objets du mandat ; ni consentements, ni documents, ni notifications) ; un agent habilité
+dans son périmètre seulement avec une consultation motivée active (circuit existant `POST /v1/acces/consultations`) ;
+toute autre personne reçoit 403. Chaque lecture est journalisée avec son motif.
+
+**Ne jamais redemander.** Les modules reprennent l'identité vérifiée du compte : fiche de conducteur wewa et moto
+(nom et téléphone repris), contrôle des pièces (nom et téléphone repris), organisation déclarée par une personne
+connectée (elle se désigne représentante sans ressaisir son identité), raison sociale d'une démarche, enrôlement en
+centre agréé (le numéro retrouve le compte). Une correction passe par la contestation ou la rectification (preuves),
+jamais par une nouvelle saisie.
+
+**Anti-doublon étendu.** Même téléphone ⇒ refus et lien de récupération ; même NIF (inscription ou organisation) ou même
+RCCM ⇒ refus et récupération ; les canaux (USSD, SVI, texte du stationnement, centres agréés) retrouvent le compte
+CONSERVÉ après une fusion. Une fiche de métier saisie par un tiers (conducteur wewa) est rattachée au compte quand la
+personne vérifie par code le téléphone qu'elle porte — jamais sur la ressemblance d'un nom ; les autres cas passent par
+la fusion contrôlée (preuve, deux personnes, réversible).
+
+**Organisations.** Un compte d'entreprise (NIF, RCCM) et ses représentants nommés partagent les données des modules
+entreprises, patentes, publicité, AVIA, télécom et grands redevables par le même compte ; le représentant rattaché voit
+son rôle dans son propre compte, sans accès aux données de l'organisation hors mandat.
+
+## 9.10 Biens, unités et occupations : des relations vérifiées (ajout du 28/09/2026)
+
+Une personne = un compte ; les biens (parcelle → bâtiment → unité, « MAIN » pour une maison individuelle) et les
+occupations restent des enregistrements distincts, reliés par des RELATIONS datées (propriétaire, copropriétaire,
+locataire, sous-locataire, occupant, gestionnaire, exploitant). Le rôle choisi à l'inscription ouvre une revendication
+BROUILLON — il ne définit pas la personne et ne la relie à personne. Détail : § 16.10 et
+`couverture-liaison-biens-occupations.md` (spécification « Liaison des biens et occupations » v1.0 du 28/09/2026).
+
 # 10. Architecture fonctionnelle
 
 ## 10.1 Sept domaines, une responsabilité chacun
@@ -232,10 +279,10 @@ La numérotation 1 à 55 est commune au présent document, au Cahier des exigenc
 | 38 | Gestion documentaire | T | T | R1 |
 | 39 | Notifications et communication | T | T | R1 |
 | 40 | Renseignement anti-fraude | D7 | T | R2 |
-| 41 | Centre de commandement exécutif | D7 | T | R1 |
-| 42 | Tableau de bord DGIPK | D7 | T | R1 |
-| 43 | Tableau de bord DGRK | D7 | T | R1 |
-| 44 | Tableaux de bord ministériels | D7 | T | R2 |
+| 41 | Postes de décision des autorités (ancien « Centre de commandement exécutif ») — corbeille de décisions, seuils de remontée, délégations, note hebdomadaire | D7 | T | R1 |
+| 42 | Poste de travail — régie fiscale (ancien « Tableau de bord régie fiscale », DGIPK) — assiette, liquidation, recouvrement, contentieux | D7 | T | R1 |
+| 43 | Poste de travail — régie des taxes (ancien « Tableau de bord régie des taxes », DGRK/DGTK) — droits, taxes et redevances urbaines | D7 | T | R1 |
+| 44 | Postes ministériels (ancien « Tableaux de bord ministériels ») — périmètre légal de chaque ministère, décisions et exécution | D7 | T | R2 |
 | 45 | Salle de contrôle finances et trésorerie | D7 | T | R1 |
 | 46 | Audit et investigation | D7 | T | R1 |
 | 47 | Prévision des recettes | D7 | T | R2 |
@@ -274,12 +321,12 @@ L'analyse des processus, des risques et des documents de travail fait apparaîtr
 | 73 | Répartition légale des recettes | Calcul des parts légalement dues aux entités (province, ETD, etc.) sur recettes rapprochées ; aucun partage non fondé sur un texte | R3 |
 | 74 | Invitations et gestion des accès | Accès des agents publics uniquement sur invitation en cascade ; inscription publique réservée aux contribuables | R1 |
 | 75 | Stationnement intelligent | Zones, sessions, tarification réglementée, contrôle par plaque | R2 |
-| 76 | Billetterie urbaine multi-opérateurs | Droits d'accès à durée pour usages payants | R3 |
+| 76 | Billetterie urbaine multi-opérateurs (RakaPay) | Droits d'accès à durée pour usages payants ; inclut le pass des moto-taxis (module 81) | R3 |
 | 77 | Publicité extérieure augmentée | Registre et carte des supports, lecture optique, dossiers de constat | R2 |
 | 78 | Hub de réconciliation aérienne | Connecteurs de données aériennes, sous validation juridique | R4 |
 | 79 | Plaque fiscale immobilière | Plaque et QR par bâtiment, statut minimal au scan public | R2 |
 | 80 | Contrôle de la dépense publique | Registre des comptes publics, justificatifs, correspondance ; pour l'organe de contrôle compétent | R4 |
-| 81 | Pass professionnel des moto-taxis | Identification des motos et conducteurs, pass légal, fin des prélèvements informels | R3 |
+| 81 | Pass professionnel des moto-taxis (wewa) — **extension de la billetterie RakaPay** (module 76) | Registre des motos, conducteurs, stations et coopératives ; pass wewa vendu, payé et contrôlé comme un ticket RakaPay ; fin des prélèvements informels | R3 |
 | **82** | **Quitus fiscal numérique** | Délivrance instantanée, vérification par QR et API, révocation ; conditionnalité des services selon les textes | R1 |
 | **83** | **Échéanciers et plans de paiement** | Paiement fractionné lorsque la loi le permet ; suivi des défauts | R2 |
 | **84** | **Remboursements et restitutions** | Circuit distinct, quatre yeux, plafonds, rapprochement ; seule voie de sortie de fonds autorisée | R1 |
@@ -304,7 +351,8 @@ Les modules sectoriels sont regroupés en verticales qui partagent toutes le mê
 | MOSOLO Property | 7, 8, 9, 79 | Distinguer propriété déclarée, observée, vérifiée, contestée |
 | MOSOLO Rental | 9 | Distinguer taux de l'impôt et taux de retenue ; preuve avant liquidation |
 | MOSOLO Business | 10, 17, 56 | L'existence d'une activité ne vaut pas assujettissement |
-| MOSOLO Mobility | 11, 12, 13, 25, 81 | Coordination avec le pouvoir central (immatriculation) |
+| MOSOLO Mobility | 11, 12, 13, 25 | Coordination avec le pouvoir central (immatriculation) |
+| MOSOLO Billetterie RakaPay | 76, 70, 71, **81 (pass wewa)** | Le pass des moto-taxis fait partie de RakaPay : même moteur de tickets, mêmes paiements, mêmes contrôles ; tarif fixé par acte |
 | MOSOLO Parking | 14, 75 | Acte de zonage et barème requis |
 | MOSOLO Advertising | 15, 77 | Constat humain, pas de sanction automatique |
 | MOSOLO Telecom | 16 | Contentieux possible sur l'assiette ; dialogue avec les opérateurs |

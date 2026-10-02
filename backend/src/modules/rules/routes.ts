@@ -1,0 +1,237 @@
+import { ficheTechnique, REQUIRED_APPROVALS, RULE_TECHNICAL_ATTRIBUTES, TAXABLE_EVENT_KINDS, TAXABLE_EVENT_LABELS } from '@mosolo/shared';
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import type { AppContext } from '../../context.js';
+import { requireUser, requireAcr, ACR } from '../../core/auth.js';
+import { currencySchema, decimalString, isoDateString, parse } from '../../core/http.js';
+import { authorize } from '../../core/policy.js';
+import { recalculationsFor } from './recalculation.js';
+import type { RuleInput } from './service.js';
+import { kinshasaDay } from '../../core/clock.js';
+import { completude } from './textes.js';
+import { ruleWatchFor } from './veille.js';
+
+const REVENUE_CATEGORIES = [
+  'IMPOT_PROVINCIAL', 'INTERET_COMMUN', 'PROVINCIAL_SPECIFIQUE', 'RECETTE_ETD', 'RECETTE_CENTRALE', 'PARTAGEE',
+  'DROIT_ADMINISTRATIF', 'REDEVANCE_SERVICE', 'PENALITE', 'CONCESSION_DOMANIALE', 'RECETTE_COMMERCIALE', 'ACTE_REQUIS',
+] as const;
+
+const ruleSchema = z.object({
+  code: z.string().regex(/^[A-Z0-9-]{2,40}$/),
+  revenueCategory: z.enum(REVENUE_CATEGORIES),
+  label: z.string().min(3).max(200),
+  legalInstrumentIds: z.array(z.string()).min(1),
+  articles: z.array(z.string()).min(1),
+  competentAuthority: z.string().min(1),
+  administeringEntity: z.string().min(1),
+  taxableEvent: z.string().min(1),
+  /** Fait générateur typé (§ 6.2) — facultatif, en plus du libellé. */
+  taxableEventKind: z.enum(TAXABLE_EVENT_KINDS).optional(),
+  liableParty: z.string().min(1),
+  withholdingAgent: z.string().optional(),
+  baseDefinition: z.string().min(1),
+  formula: z.string().min(1).max(1000),
+  rateTable: z.record(decimalString),
+  currency: currencySchema,
+  rounding: z.enum(['HALF_UP', 'HALF_EVEN', 'DOWN', 'UP']),
+  periodicity: z.enum(['ANNUELLE', 'MENSUELLE', 'PONCTUELLE']),
+  dueRule: z.string().min(1),
+  exemptions: z.array(z.object({ basis: z.string(), proof: z.string() })).default([]),
+  penalties: z.array(z.object({ basis: z.string(), description: z.string() })).default([]),
+  effectiveFrom: isoDateString,
+  effectiveTo: isoDateString.optional(),
+  beneficiaryAccountAlias: z.string().min(1),
+  appealPath: z.string().min(1),
+  sourceVerification: z.enum(['OFFICIEL_CERTIFIE', 'PRESSE', 'DOCUMENT_DE_TRAVAIL', 'AUCUNE']),
+  changeReason: z.string().optional(),
+  /** Acte autorisant expressément la rétroactivité (exigé pour une nouvelle version à effet antérieur à sa publication). */
+  retroactivity: z.object({
+    instrumentId: z.string().min(1),
+    article: z.string().trim().min(1).max(200),
+    justification: z.string().trim().min(10).max(2000),
+  }).strict().optional(),
+}).strict();
+
+const motive = z.string().trim().min(10, 'motif d’au moins 10 caractères').max(2000);
+const suspendSchema = z.object({ reason: motive, authority: z.string().trim().min(3).max(200), instrumentRef: z.string().optional() }).strict();
+const liftSchema = z.object({ reason: motive }).strict();
+const suspensionDecisionSchema = z.object({ approve: z.boolean(), reason: motive }).strict();
+const abrogateSchema = z.object({ date: isoDateString, instrumentId: z.string().min(1), reason: motive }).strict();
+const instrumentAbrogateSchema = z.object({ date: isoDateString, abrogatedBy: z.string().min(1), reason: motive }).strict();
+const recalcDecisionSchema = z.object({ decision: z.enum(['APPLIQUER', 'REJETER']), reason: motive }).strict();
+
+const inputsSchema = z.record(z.string().regex(/^[a-z_][a-z0-9_]{0,63}$/), decimalString);
+const testCaseSchema = z.object({
+  label: z.string().trim().min(3).max(300),
+  inputs: inputsSchema.default({}),
+  localityRank: z.number().int().min(1).max(4).default(1),
+  expected: z.union([z.object({ amount: decimalString }).strict(), z.object({ errorCode: z.string().regex(/^[A-Z_]{3,64}$/) }).strict()]),
+}).strict();
+const sampleSchema = z.object({
+  source: z.string().trim().min(10, 'décrire la provenance de l’échantillon (dossiers réels anonymisés, campagne…)').max(500),
+  rows: z.array(z.object({ ref: z.string().trim().min(1).max(80), inputs: inputsSchema, localityRank: z.number().int().min(1).max(4), previousAmount: decimalString.optional() }).strict()).max(5000).optional(),
+}).strict();
+
+const approveSchema = z.object({ role: z.enum(REQUIRED_APPROVALS as [string, ...string[]]) }).strict();
+
+export function registerRuleRoutes(app: FastifyInstance, ctx: AppContext): void {
+  // Alertes du registre (suspension brève, décisions pendant une suspension) : service d'alertes du socle.
+  ctx.rules.attachAlerts(ctx.alerts);
+
+  app.get('/v1/legal-rules', async (req) => {
+    authorize(requireUser(req), 'rule.read');
+    return ctx.rules.list();
+  });
+
+  app.get<{ Params: { id: string } }>('/v1/legal-rules/:id', async (req) => {
+    authorize(requireUser(req), 'rule.read');
+    const rule = ctx.rules.get(req.params.id);
+    return { ...rule, requiredInputs: ctx.rules.requiredInputs(rule), testGate: ctx.rules.tests.status(rule) };
+  });
+
+  // ── Registre : attributs techniques du Cahier (§ 6.2) — table de correspondance et fiche en snake_case ──
+  app.get('/v1/legal-rules/attributs-techniques', async (req) => {
+    authorize(requireUser(req), 'rule.read');
+    return { correspondance: RULE_TECHNICAL_ATTRIBUTES, faitsGenerateurs: TAXABLE_EVENT_KINDS.map((k) => ({ code: k, label: TAXABLE_EVENT_LABELS[k] })) };
+  });
+
+  app.get<{ Params: { id: string } }>('/v1/legal-rules/:id/fiche-technique', async (req) => {
+    authorize(requireUser(req), 'rule.read');
+    const rule = ctx.rules.get(req.params.id);
+    return { format: 'snake_case', correspondance: RULE_TECHNICAL_ATTRIBUTES, fiche: ficheTechnique(rule) };
+  });
+
+  // ── Cas de tests juridiques et simulation sur échantillon réel (§ 11.2, § 44, § 6.2) ──
+  app.get<{ Params: { id: string } }>('/v1/legal-rules/:id/test-cases', async (req) => {
+    authorize(requireUser(req), 'rule.read');
+    const rule = ctx.rules.get(req.params.id);
+    return {
+      ruleId: rule.id, version: rule.version, gate: ctx.rules.tests.status(rule), cases: rule.legalTestCases ?? [],
+      runs: rule.legalTestRuns ?? [], sampleSimulations: rule.sampleSimulations ?? [],
+    };
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/test-cases', async (req, reply) => {
+    const user = requireUser(req);
+    return reply.code(201).send(ctx.rules.tests.addCase(user, req.params.id, parse(testCaseSchema, req.body)));
+  });
+
+  app.post<{ Params: { id: string; caseId: string } }>('/v1/legal-rules/:id/test-cases/:caseId/validate', async (req) => {
+    const user = requireUser(req);
+    requireAcr(user, ACR.MFA); // validation juridique : acte sensible
+    return ctx.rules.tests.validateCase(user, req.params.id, req.params.caseId);
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/test-cases/run', async (req) => ctx.rules.tests.runAs(requireUser(req), req.params.id));
+
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/sample-simulations', async (req, reply) => {
+    const user = requireUser(req);
+    const body = parse(sampleSchema, req.body);
+    const rule = ctx.rules.get(req.params.id);
+    // Échantillon réel : traces figées des liquidations antérieures du même code (entrées, rang, montant).
+    const prior = ctx.assessment.obligations
+      .find((o) => o.ruleCode === rule.code && o.ruleId !== rule.id && !o.trace.simulate)
+      .map((o) => ({ ref: o.id, inputs: o.trace.inputs, localityRank: o.trace.localityRank, ...(o.amount.currency === rule.currency ? { previousAmount: o.amount.amount } : {}) }));
+    return reply.code(201).send(ctx.rules.tests.simulateSample(user, req.params.id, body, prior));
+  });
+
+  // Complétude du registre des textes (tableau du § 6.1).
+  app.get('/v1/legal-instruments/completude', async (req) => {
+    authorize(requireUser(req), 'rule.read');
+    return completude((id) => ctx.rules.instrument(id));
+  });
+
+  app.get('/v1/legal-instruments', async (req) => {
+    authorize(requireUser(req), 'rule.read');
+    return ctx.rules.instruments.all();
+  });
+
+  app.post('/v1/legal-rules', async (req, reply) => {
+    const user = requireUser(req);
+    authorize(user, 'rule.create');
+    const body = parse(ruleSchema, req.body) as RuleInput;
+    return reply.code(201).send(ctx.rules.create(user, body));
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/approve', async (req) => {
+    const user = requireUser(req);
+    const { role } = parse(approveSchema, req.body);
+    requireAcr(user, ACR.MFA); // DG-09 : visa d'une règle = acte sensible
+    return ctx.rules.approve(user, req.params.id, role as (typeof REQUIRED_APPROVALS)[number]);
+  });
+
+  // ── Cycle de vie complémentaire : suspension, abrogation, versions ──
+  // Quatre yeux : suspension et levée sont PROPOSÉES (202), puis approuvées par une seconde personne distincte.
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/suspend', async (req, reply) => {
+    const user = requireUser(req);
+    authorize(user, 'rules:suspend');
+    return reply.code(202).send(ctx.rules.suspend(user, req.params.id, parse(suspendSchema, req.body)));
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/lift-suspension', async (req, reply) => {
+    const user = requireUser(req);
+    authorize(user, 'rules:suspend');
+    return reply.code(202).send(ctx.rules.liftSuspension(user, req.params.id, parse(liftSchema, req.body)));
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/suspension-change/decide', async (req) => {
+    const user = requireUser(req);
+    authorize(user, 'rules:suspend.approve');
+    requireAcr(user, ACR.MFA); // acte sensible : effet immédiat sur la production d'obligations
+    return ctx.rules.decideSuspensionChange(user, req.params.id, parse(suspensionDecisionSchema, req.body));
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/abrogate', async (req) => {
+    const user = requireUser(req);
+    authorize(user, 'rules:abrogate');
+    const input = parse(abrogateSchema, req.body);
+    const rule = ctx.rules.abrogate(user, req.params.id, input);
+    // Abrogation à date passée : les obligations émises depuis (jour d'émission à Kinshasa) sont signalées pour examen
+    // (jamais annulées d'office).
+    const obligationsToReview = ctx.assessment.obligations
+      .find((o) => o.ruleId === rule.id && kinshasaDay(o.createdAt) >= input.date && o.status !== 'ANNULEE')
+      .map((o) => ({ id: o.id, status: o.status, issuedOn: kinshasaDay(o.createdAt), amount: o.amount }));
+    return { rule, obligationsToReview };
+  });
+
+  app.get<{ Params: { id: string } }>('/v1/legal-rules/:id/versions', async (req) => {
+    authorize(requireUser(req), 'rule.read');
+    const versions = ctx.rules.versions(req.params.id);
+    return { code: versions[0]?.code, versions };
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/legal-instruments/:id/abrogate', async (req) => {
+    const user = requireUser(req);
+    authorize(user, 'rules:instrument.abrogate');
+    return ctx.rules.abrogateInstrument(user, req.params.id, parse(instrumentAbrogateSchema, req.body));
+  });
+
+  // ── Recalcul contrôlé : simulation d'impact → décision motivée → obligations rectificatives ──
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/impact-simulations', async (req, reply) => {
+    const user = requireUser(req);
+    return reply.code(201).send(recalculationsFor(ctx).simulate(user, req.params.id));
+  });
+
+  app.get<{ Querystring: { ruleId?: string } }>('/v1/recalculations', async (req) => {
+    authorize(requireUser(req), 'rules:recalc.simulate');
+    return recalculationsFor(ctx).list(req.query.ruleId);
+  });
+
+  app.get<{ Params: { id: string } }>('/v1/recalculations/:id', async (req) => {
+    authorize(requireUser(req), 'rules:recalc.simulate');
+    return recalculationsFor(ctx).get(req.params.id);
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/recalculations/:id/decide', async (req) => {
+    const user = requireUser(req);
+    return recalculationsFor(ctx).decide(user, req.params.id, parse(recalcDecisionSchema, req.body));
+  });
+
+  // Module 26 : veille (règles expirantes, conflits de normes), indicateurs, archivage à quatre yeux.
+  app.get<{ Querystring: { jours?: string } }>('/v1/legal-rules/veille', async (req) =>
+    ruleWatchFor(ctx).view(requireUser(req), req.query.jours ? Number.parseInt(req.query.jours, 10) : undefined));
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/:id/archive-requests', async (req, reply) =>
+    reply.code(201).send(ruleWatchFor(ctx).requestArchive(requireUser(req), req.params.id, parse(z.object({ motif: motive }).strict(), req.body).motif)));
+  app.post<{ Params: { id: string } }>('/v1/legal-rules/archives/:id/decide', async (req) =>
+    ruleWatchFor(ctx).decideArchive(requireUser(req), req.params.id, parse(z.object({ approve: z.boolean(), motif: motive }).strict(), req.body)));
+}

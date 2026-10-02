@@ -1812,6 +1812,57 @@
    ]
   },
   {
+   "code": "receipt.reversed",
+   "categorie": "quittances",
+   "libelle": "Quittance contrepassée",
+   "objet": "Votre quittance {{reference}} n'est plus valable — paiement contrepassé",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "receipt.refunded",
+   "categorie": "quittances",
+   "libelle": "Quittance remboursée",
+   "objet": "Remboursement effectué — quittance {{reference}} clôturée",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "receipt.duplicate_issued",
+   "categorie": "quittances",
+   "libelle": "Duplicata délivré",
+   "objet": "Duplicata de la quittance {{reference}} délivré",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
+   "public": [
+    "C"
+   ]
+  },
+  {
    "code": "permit.application.received",
    "categorie": "titres",
    "libelle": "Demande d'autorisation reçue",
@@ -2004,6 +2055,59 @@
    ]
   },
   {
+   "code": "credential.suspended",
+   "categorie": "titres",
+   "libelle": "Titre suspendu",
+   "objet": "Votre titre {{reference}} est suspendu — motif et recours",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "credential.revoked",
+   "categorie": "titres",
+   "libelle": "Titre révoqué",
+   "objet": "Votre titre {{reference}} est révoqué — motif et recours",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms",
+    "courrier"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "control.finding.opened",
+   "categorie": "titres",
+   "libelle": "Constat établi",
+   "objet": "Constat {{reference}} établi — aucune somme n’est due à ce stade",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "sms"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
    "code": "recovery.reminder.1",
    "categorie": "recouvrement",
    "libelle": "Première relance",
@@ -2149,6 +2253,21 @@
    "obligatoire": false,
    "public": [
     "C"
+   ]
+  },
+  {
+   "code": "recovery.notice.read",
+   "categorie": "recouvrement",
+   "libelle": "Avis consulté",
+   "objet": "Accusé de lecture de l'avis {{reference}}",
+   "gravite": "info",
+   "canaux_defaut": [
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
    ]
   },
   {
@@ -2770,6 +2889,22 @@
    ]
   },
   {
+   "code": "rule.abrogated",
+   "categorie": "juridique",
+   "libelle": "Règle abrogée",
+   "objet": "La règle {{reference}} est abrogée à compter du {{date}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
    "code": "settlement.received",
    "categorie": "tresor",
    "libelle": "Règlement reçu",
@@ -2910,6 +3045,38 @@
    ],
    "whatsapp_optin": false,
    "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "ledger.month_closed",
+   "categorie": "tresor",
+   "libelle": "Clôture mensuelle",
+   "objet": "Clôture mensuelle signée du grand livre",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "suspense.opened",
+   "categorie": "tresor",
+   "libelle": "Suspens ouvert",
+   "objet": "Suspens {{reference}} ouvert — justification requise",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
    "public": [
     "G"
    ]
@@ -3092,6 +3259,39 @@
    ],
    "whatsapp_optin": false,
    "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
+   "code": "incident.declared",
+   "categorie": "fraude",
+   "libelle": "Incident de sécurité déclaré",
+   "objet": "Incident {{reference}} déclaré — gravité {{gravite}}",
+   "gravite": "critical",
+   "canaux_defaut": [
+    "email",
+    "in-app",
+    "push"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "whistleblower.report.updated",
+   "categorie": "fraude",
+   "libelle": "Signalement mis à jour",
+   "objet": "Votre signalement a évolué — consultez-le avec votre code de suivi",
+   "gravite": "info",
+   "canaux_defaut": [
+    "sms",
+    "in-app"
+   ],
+   "whatsapp_optin": true,
+   "obligatoire": false,
    "public": [
     "C"
    ]
@@ -3955,6 +4155,22 @@
    ]
   },
   {
+   "code": "privacy.rectification.received",
+   "categorie": "donnees",
+   "libelle": "Demande de rectification reçue",
+   "objet": "Votre demande de rectification est enregistrée",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "C"
+   ]
+  },
+  {
    "code": "partner.api_key.expiring",
    "categorie": "partenaires",
    "libelle": "Clé d'API bientôt expirée",
@@ -4100,6 +4316,54 @@
    "obligatoire": true,
    "public": [
     "X"
+   ]
+  },
+  {
+   "code": "subcontractor.accredited",
+   "categorie": "partenaires",
+   "libelle": "Sous-traitant accrédité",
+   "objet": "Accréditation de {{nom}} décidée",
+   "gravite": "info",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "subcontractor.suspended",
+   "categorie": "partenaires",
+   "libelle": "Sous-traitant suspendu",
+   "objet": "Accréditation de {{nom}} suspendue — motif et recours",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": true,
+   "public": [
+    "G"
+   ]
+  },
+  {
+   "code": "payment_point.exception.opened",
+   "categorie": "partenaires",
+   "libelle": "Exception de point de paiement",
+   "objet": "Écart de caisse ou versement en retard — {{reference}}",
+   "gravite": "warning",
+   "canaux_defaut": [
+    "email",
+    "in-app"
+   ],
+   "whatsapp_optin": false,
+   "obligatoire": false,
+   "public": [
+    "G"
    ]
   }
  ]
