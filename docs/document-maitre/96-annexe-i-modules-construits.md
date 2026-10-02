@@ -2115,3 +2115,17 @@ Constat du maître d'ouvrage : lors de la saisie des clés BitriPay, KODA et IA 
   variable manquante (jamais une valeur), au lieu d'un simple « appliquée ».
 
 Tests : `backend/test/cles-collage.test.ts`.
+
+## I.63 Console des clés simplifiée : « Pour tester : 9 clés seulement » (02/10/2026)
+
+Constat du maître d'ouvrage : trop de clés et de liens à saisir. En tête de « Clés et raccordements », un bloc « Pour
+tester » ne présente que les clés nécessaires : `MOSOLO_PUBLIC_URL`, BitriPay (`BITRIPAY_API_KEY`,
+`BITRIPAY_WEBHOOK_SECRET`, `BITRIPAY_ED25519_PUBLIC_KEY`), KODA (`KODA_API_KEY`, `KODA_WEBHOOK_SECRET`) et l'IA
+(`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` — une suffit), avec les boutons « Tester » de BitriPay, KODA et
+de l'IA. Tout le reste (autres groupes, webhooks à communiquer, historique) est conservé dans une section repliée « Autres
+paramètres, webhooks et historique » — rien n'est retiré ; chaque clé n'a qu'un formulaire. Les comptes de règlement et
+les autres réglages gardent leurs valeurs par défaut.
+
+Démonstration : la console garde ses valeurs en mémoire (clé maîtresse éphémère) ; elles sont perdues à chaque
+redémarrage ou déploiement de Cloud Run. Pour des clés durables, elles sont placées dans Google Secret Manager et lues
+par Cloud Run comme variables d'environnement (qui priment sur la console).

@@ -35,6 +35,10 @@ interface Webhook {
 }
 interface TestResult { kind: 'APPEL_REEL' | 'VALIDATION_A_BLANC'; ok: boolean; endpoint?: string; proves: string; detail: string; checks: { label: string; ok: boolean; detail?: string }[] }
 
+/** Clés à saisir pour tester (02/10/2026) : l'adresse publique, BitriPay (3), KODA (2), IA (3, une suffit). */
+const ESSENTIELLES = ['MOSOLO_PUBLIC_URL', 'BITRIPAY_API_KEY', 'BITRIPAY_WEBHOOK_SECRET', 'BITRIPAY_ED25519_PUBLIC_KEY', 'KODA_API_KEY', 'KODA_WEBHOOK_SECRET', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY'];
+const ESSENTIELLES_GROUPES = ['bitripay', 'koda', 'ia'];
+
 const SOURCE: Record<Source, { tone: 'good' | 'info' | 'neutral'; label: string }> = {
   ENVIRONNEMENT: { tone: 'good', label: 'Active : environnement' }, CONSOLE: { tone: 'info', label: 'Active : console' }, ABSENTE: { tone: 'neutral', label: 'Absente' },
 };
@@ -123,6 +127,49 @@ export default function ClesRaccordements() {
   const d = q.data;
   if (!d) return null;
   const pending = (props.data ?? []).filter((p) => p.status === 'EN_ATTENTE');
+  const variables = d.groups.flatMap((g) => g.variables);
+  // Ligne d'une variable (présentation commune au bloc « Pour tester » et aux groupes complets).
+  const ligne = (v: Variable) => (
+    <li key={v.name} className="list-row">
+      <div className="min0">
+        <p className="row-title mono small">{v.name}{v.secret ? ' (secret)' : ''}{v.required === 'OBLIGATOIRE_EN_REEL' ? ' — requise en réel' : ''}</p>
+        <p className="small muted">{v.purpose}</p>
+        <p className="small muted">{EFFECT[v.effect]}{v.readBy.length ? ` · lue par : ${v.readBy.join(', ')}` : ''}</p>
+        {v.consolePresent && <p className="small muted">Console : version {v.consoleVersion} du {v.consoleEffectiveAt ? fmtDate(v.consoleEffectiveAt, true) : '—'} (proposée par {v.consoleProposedBy}, approuvée par {v.consoleApprovedBy}){v.consoleUnreadable ? ' — ILLISIBLE (clé maîtresse changée) : à ressaisir' : ''}{v.envPresent ? ' — inactive : l’environnement prévaut' : ''}</p>}
+        {v.pending && <p className="small"><StatusBadge tone="warning" label={`Proposition en attente (${v.pending.kind === 'DEFINIR' ? 'définir' : 'retirer'}) par ${v.pending.proposedBy}`} /></p>}
+        {edit === v.name && (
+          <form className="form" onSubmit={(e) => void proposer(e, v, 'DEFINIR')} autoComplete="off">
+            <div className="field">
+              <label className="label" htmlFor={`val-${v.name}`}>Nouvelle valeur de {v.name} (écriture seule — jamais réaffichée)</label>
+              {v.format === 'CLE_PUBLIQUE_ED25519'
+                // Clé publique PEM sur plusieurs lignes : zone de texte (un champ d'une ligne retire les retours).
+                ? <textarea id={`val-${v.name}`} className="input mono" rows={5} spellCheck={false}
+                  value={value} onChange={(e) => setValue(e.target.value)} required />
+                : <input id={`val-${v.name}`} className="input mono" type={v.secret ? 'password' : 'text'} autoComplete="new-password" spellCheck={false}
+                  value={value} onChange={(e) => setValue(e.target.value)} required />}
+            </div>
+            <div className="field">
+              <label className="label" htmlFor={`mot-${v.name}`}>Motif (obligatoire)</label>
+              <input id={`mot-${v.name}`} className="input" value={motif} onChange={(e) => setMotif(e.target.value)} minLength={3} maxLength={500} required />
+            </div>
+            <div className="row-actions">
+              <button type="submit" className="btn btn-primary btn-sm" disabled={busy || !d.masterKey.writable}>Proposer</button>
+              {v.consolePresent && <button type="button" className="btn btn-ghost btn-sm" disabled={busy || motif.trim().length < 3} onClick={(e) => void proposer(e as unknown as FormEvent, v, 'RETIRER')}>Proposer le retrait</button>}
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setEdit(null); setValue(''); }}>Annuler</button>
+            </div>
+          </form>
+        )}
+      </div>
+      <div className="row-actions">
+        <StatusBadge tone={SOURCE[v.activeSource].tone} label={SOURCE[v.activeSource].label} />
+        {canPropose && v.settable && edit !== v.name && (
+          <button type="button" className="btn btn-ghost btn-sm" disabled={!d.masterKey.writable} onClick={() => { setEdit(v.name); setValue(''); setMotif(''); }}>
+            {v.consolePresent ? 'Faire tourner' : 'Définir'}
+          </button>
+        )}
+      </div>
+    </li>
+  );
 
   return (
     <div className="page page-wide">
@@ -134,6 +181,35 @@ export default function ClesRaccordements() {
       <p className="notice" role="note"><Icon name="info" size={16} /> {d.resolutionRule}</p>
       {d.connectors.configError && <p className="notice notice-err" role="alert">Connecteurs de paiement : la dernière configuration n’a pas été appliquée — {d.connectors.configError} Les connecteurs précédents restent en service.</p>}
       {msg && <p className={`notice ${msg.ok ? 'notice-ok' : 'notice-err'}`} role="status">{msg.text}</p>}
+
+      {/* Les seules clés à saisir pour tester (02/10/2026) : tout le reste est facultatif ou pour la mise en production,
+          replié plus bas — rien n'est retiré. */}
+      <section className="panel" aria-labelledby="cles-essentielles">
+        <div className="panel-head">
+          <div className="min0">
+            <h2 className="panel-title" id="cles-essentielles">Pour tester : {ESSENTIELLES.length} clés seulement</h2>
+            <p className="panel-sub">Paiement BitriPay et KODA, et au moins une clé d’IA. Comptes de règlement et autres réglages : valeurs par défaut déjà en place.</p>
+          </div>
+          <div className="row-actions">
+            {ESSENTIELLES_GROUPES.map((id) => {
+              const g = d.groups.find((x) => x.id === id);
+              return g && <button key={id} type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => void tester(g)}><Icon name="refresh" size={16} /> Tester {g.label.replace(/^Paiement — /, '')}</button>;
+            })}
+          </div>
+        </div>
+        {ESSENTIELLES_GROUPES.map((id) => tests[id] && (
+          <div key={id} className="pr-test-res">
+            <StatusBadge tone={tests[id]!.ok ? 'good' : 'critical'} label={`${d.groups.find((x) => x.id === id)?.label ?? id} — ${tests[id]!.ok ? 'réussi' : 'échec'}`} />
+            <ul className="small">{tests[id]!.checks.map((c) => <li key={c.label}>{c.ok ? '✓' : '✗'} {c.label}{c.detail ? ` — ${c.detail}` : ''}</li>)}</ul>
+          </div>
+        ))}
+        <ul className="list-rows compact-rows">
+          {ESSENTIELLES.map((n) => variables.find((v) => v.name === n)).filter((v): v is Variable => !!v).map(ligne)}
+        </ul>
+      </section>
+
+      <details className="panel">
+        <summary>Autres paramètres, webhooks et historique (facultatifs ou pour la mise en production)</summary>
 
       <section className="panel" aria-labelledby="cles-attente">
         <div className="panel-head"><h2 className="panel-title" id="cles-attente">Propositions en attente d’approbation ({pending.length})</h2></div>
@@ -200,47 +276,8 @@ export default function ClesRaccordements() {
             </div>
           )}
           <ul className="list-rows compact-rows">
-            {g.variables.map((v) => (
-              <li key={v.name} className="list-row">
-                <div className="min0">
-                  <p className="row-title mono small">{v.name}{v.secret ? ' (secret)' : ''}{v.required === 'OBLIGATOIRE_EN_REEL' ? ' — requise en réel' : ''}</p>
-                  <p className="small muted">{v.purpose}</p>
-                  <p className="small muted">{EFFECT[v.effect]}{v.readBy.length ? ` · lue par : ${v.readBy.join(', ')}` : ''}</p>
-                  {v.consolePresent && <p className="small muted">Console : version {v.consoleVersion} du {v.consoleEffectiveAt ? fmtDate(v.consoleEffectiveAt, true) : '—'} (proposée par {v.consoleProposedBy}, approuvée par {v.consoleApprovedBy}){v.consoleUnreadable ? ' — ILLISIBLE (clé maîtresse changée) : à ressaisir' : ''}{v.envPresent ? ' — inactive : l’environnement prévaut' : ''}</p>}
-                  {v.pending && <p className="small"><StatusBadge tone="warning" label={`Proposition en attente (${v.pending.kind === 'DEFINIR' ? 'définir' : 'retirer'}) par ${v.pending.proposedBy}`} /></p>}
-                  {edit === v.name && (
-                    <form className="form" onSubmit={(e) => void proposer(e, v, 'DEFINIR')} autoComplete="off">
-                      <div className="field">
-                        <label className="label" htmlFor={`val-${v.name}`}>Nouvelle valeur de {v.name} (écriture seule — jamais réaffichée)</label>
-                        {v.format === 'CLE_PUBLIQUE_ED25519'
-                          // Clé publique PEM sur plusieurs lignes : zone de texte (un champ d'une ligne retire les retours).
-                          ? <textarea id={`val-${v.name}`} className="input mono" rows={5} spellCheck={false}
-                            value={value} onChange={(e) => setValue(e.target.value)} required />
-                          : <input id={`val-${v.name}`} className="input mono" type={v.secret ? 'password' : 'text'} autoComplete="new-password" spellCheck={false}
-                            value={value} onChange={(e) => setValue(e.target.value)} required />}
-                      </div>
-                      <div className="field">
-                        <label className="label" htmlFor={`mot-${v.name}`}>Motif (obligatoire)</label>
-                        <input id={`mot-${v.name}`} className="input" value={motif} onChange={(e) => setMotif(e.target.value)} minLength={3} maxLength={500} required />
-                      </div>
-                      <div className="row-actions">
-                        <button type="submit" className="btn btn-primary btn-sm" disabled={busy || !d.masterKey.writable}>Proposer</button>
-                        {v.consolePresent && <button type="button" className="btn btn-ghost btn-sm" disabled={busy || motif.trim().length < 3} onClick={(e) => void proposer(e as unknown as FormEvent, v, 'RETIRER')}>Proposer le retrait</button>}
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setEdit(null); setValue(''); }}>Annuler</button>
-                      </div>
-                    </form>
-                  )}
-                </div>
-                <div className="row-actions">
-                  <StatusBadge tone={SOURCE[v.activeSource].tone} label={SOURCE[v.activeSource].label} />
-                  {canPropose && v.settable && edit !== v.name && (
-                    <button type="button" className="btn btn-ghost btn-sm" disabled={!d.masterKey.writable} onClick={() => { setEdit(v.name); setValue(''); setMotif(''); }}>
-                      {v.consolePresent ? 'Faire tourner' : 'Définir'}
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
+            {/* Les clés « Pour tester » sont saisies dans le bloc du haut (un seul formulaire par clé). */}
+            {g.variables.filter((v) => !ESSENTIELLES.includes(v.name)).map(ligne)}
           </ul>
         </section>
       ))}
@@ -261,6 +298,7 @@ export default function ClesRaccordements() {
           </ul>
         </details>
       </section>
+      </details>
       <ul className="pr-doctrine">{d.doctrine.map((x) => <li key={x}><Icon name="shieldCheck" size={16} /> {x}</li>)}</ul>
     </div>
   );

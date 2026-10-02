@@ -174,3 +174,5 @@ données de démonstration.
   passerelle et la page s'ouvre dessus (annexe I, § I.61).
 - **Saisie des clés (02/10/2026)** : clé Ed25519 BitriPay admise en PEM (multiligne ou aplati) ou base64 ; espaces de
   début et de fin retirés ; BitriPay incomplet ne bloque plus KODA ; la console dit ce qui manque (annexe I, § I.62).
+- **Console des clés simplifiée (02/10/2026)** : bloc « Pour tester : 9 clés » en tête, le reste replié (rien retiré) ;
+  clés durables du site de démonstration via Google Secret Manager (annexe I, § I.63).
