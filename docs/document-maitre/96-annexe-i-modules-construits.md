@@ -2129,3 +2129,21 @@ les autres réglages gardent leurs valeurs par défaut.
 Démonstration : la console garde ses valeurs en mémoire (clé maîtresse éphémère) ; elles sont perdues à chaque
 redémarrage ou déploiement de Cloud Run. Pour des clés durables, elles sont placées dans Google Secret Manager et lues
 par Cloud Run comme variables d'environnement (qui priment sur la console).
+
+## I.64 Démonstration sur VPS et maîtrise des coûts d'hébergement (05/10/2026)
+
+Constat du maître d'ouvrage : environ 20 £ facturés par Google Cloud en cinq jours sans activité, inacceptable avant
+l'adoption du système. Cause : la pile de **production** (Cloud SQL `mosolo-pg` 24 h/24, service Cloud Run `mosolo`
+toujours actif avec CPU alloué, règles de l'équilibreur), facturée à l'heure même sans visite ; la démonstration
+`mosolo-demo` (0 instance hors visite) n'en représente qu'une faible part. Décision : la démonstration passe sur le VPS
+Hostinger du maître d'ouvrage ; la production Google Cloud est arrêtée (sans suppression) jusqu'à la signature.
+
+Kit ajouté (rien n'est retiré : kit de production VPS `infra/vps/`, Cloud Run et Cloud SQL `infra/gcp/` conservés) :
+`infra/vps/demo/` — `docker-compose.yml` (projet Docker distinct `mosolo-demo` : application en mode démonstration,
+lecture seule, sans privilège ; Caddy et le même `Caddyfile` que la production pour le HTTPS automatique),
+`.env.example` et `demo.sh` (configuration, `git pull`, construction, démarrage, contrôle de santé, journal en cas
+d'échec). Sans nom de domaine : adresse `https://<IP>.sslip.io` avec certificat valide. Les clés BitriPay, KODA et IA
+sont placées dans `.env` (droits 600, jamais versionné, jamais affichées) : elles survivent aux redémarrages et priment
+sur la console ; un jeu incomplet est signalé avant le démarrage (noms seulement). Validation : fichier Compose validé,
+contrôle des jeux de clés essayé ; la construction de l'image et le premier démarrage sur le VPS restent à faire par le
+maître d'ouvrage (EXTERNE / NON TESTÉ sur un VPS réel).

@@ -1,5 +1,8 @@
 # KINSHASA MOSOLO — déploiement sur un VPS (Docker Compose)
 
+> **Démonstration seule** (données fictives, sans base de données, coût fixe et faible — Hostinger ou tout Ubuntu) :
+> voir [`demo/README.md`](demo/README.md) et `demo/demo.sh` (05/10/2026). Ce qui suit concerne la **production**.
+
 Pour un serveur **Ubuntu 22.04 ou 24.04** (VPS ou centre de données **national**, solution préférée par le Cahier).
 Kit **répété localement** avec Docker Compose et PostgreSQL 16 réels (voir « Ce qui a été vérifié ») ; il n'a pas été
 exécuté sur un vrai VPS avec un vrai nom de domaine : cette exécution reste **EXTERNE / NON TESTÉE**.

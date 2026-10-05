@@ -176,3 +176,6 @@ données de démonstration.
   début et de fin retirés ; BitriPay incomplet ne bloque plus KODA ; la console dit ce qui manque (annexe I, § I.62).
 - **Console des clés simplifiée (02/10/2026)** : bloc « Pour tester : 9 clés » en tête, le reste replié (rien retiré) ;
   clés durables du site de démonstration via Google Secret Manager (annexe I, § I.63).
+- **Démonstration sur VPS (05/10/2026)** : coûts Google Cloud jugés inacceptables avant contrat ; démonstration sur le
+  VPS Hostinger du maître d'ouvrage (`infra/vps/demo/`, `./demo.sh` : mode démonstration + Caddy HTTPS, clés dans `.env`
+  durables) ; production Google Cloud (Cloud SQL, service toujours actif) à arrêter jusqu'à la signature (annexe I, § I.64).
