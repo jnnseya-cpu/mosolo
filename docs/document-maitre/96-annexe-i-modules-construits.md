@@ -2147,3 +2147,19 @@ sont placées dans `.env` (droits 600, jamais versionné, jamais affichées) : e
 sur la console ; un jeu incomplet est signalé avant le démarrage (noms seulement). Validation : fichier Compose validé,
 contrôle des jeux de clés essayé ; la construction de l'image et le premier démarrage sur le VPS restent à faire par le
 maître d'ouvrage (EXTERNE / NON TESTÉ sur un VPS réel).
+
+## I.65 Le blog MOSOLO : un article par fonctionnalité (22/10/2026)
+
+Demande du maître d'ouvrage : un blog qui présente et « vend » chaque fonctionnalité avec son atout distinctif.
+Pages publiques, sans connexion : `/blog` (index par thème : contribuables ; paiement et argent public ; terrain et
+contrôle ; recettes par secteur ; pilotage et décision ; confiance, sécurité et transparence) et `/blog/:slug` (un
+article). Chaque article suit le même plan : accroche, « Ce qui la rend unique », le problème, la réponse de MOSOLO, les
+atouts, pour qui, réserve éventuelle (« à confirmer », éléments simulés ou en attente d'acte) et un bouton vers l'écran
+public correspondant. Liens depuis l'accueil (« Le blog MOSOLO », « Découvrir chaque fonctionnalité »).
+
+Règles du contenu (`frontend/src/pages/blog/articles.ts`) : uniquement des garanties réellement appliquées, relues
+contre une fiche des faits établie à partir de la présente annexe ; aucun tarif fictif présenté comme réel ; aucun
+paiement réel, versement de commission, publication en magasin d'applications ou raccordement d'opérateur annoncé comme
+fait ; le chiffre de l'IRL n'est pas repris (retiré de la communication publique). Test `frontend/test/blog.test.tsx` :
+articles complets, adresses uniques, liens vers des pages publiques seulement, absence de l'IRL, rendu de l'index et
+d'un article, adresse inconnue → page introuvable. Rien n'est retiré de l'existant.

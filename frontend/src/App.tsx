@@ -22,6 +22,9 @@ const VerticalSpace = lazyPage(() => import('./pages/VerticalSpace'));
 const NotFound = lazyPage(() => import('./pages/NotFound'));
 const OfflinePage = lazyPage(() => import('./pages/Offline'));
 const OuVaVotreArgent = lazyPage(() => import('./modules/agents-recettes/OuVaVotreArgent'));
+// Blog public (22/10/2026) : un article par fonctionnalité.
+const BlogIndex = lazyPage(() => import('./pages/Blog'));
+const BlogArticle = lazyPage(() => import('./pages/Blog').then((m) => ({ default: m.BlogArticle })));
 
 export function App() {
   return (
@@ -45,6 +48,8 @@ export function App() {
           <Route path="/ia" element={<AIInbox />} />
           {MODULE_ROUTES.map((m) => <Route key={m.path} path={m.path} element={<RouteGuard roles={m.nav?.roles}><m.element /></RouteGuard>} />)}
           <Route path="/ou-va-votre-argent" element={<OuVaVotreArgent />} />
+          <Route path="/blog" element={<BlogIndex />} />
+          <Route path="/blog/:slug" element={<BlogArticle />} />
           <Route path="/hors-ligne" element={<OfflinePage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -179,3 +179,6 @@ données de démonstration.
 - **Démonstration sur VPS (05/10/2026)** : coûts Google Cloud jugés inacceptables avant contrat ; démonstration sur le
   VPS Hostinger du maître d'ouvrage (`infra/vps/demo/`, `./demo.sh` : mode démonstration + Caddy HTTPS, clés dans `.env`
   durables) ; production Google Cloud (Cloud SQL, service toujours actif) à arrêter jusqu'à la signature (annexe I, § I.64).
+- **Blog public (22/10/2026)** : « Le blog MOSOLO » (`/blog`, `/blog/:slug`), un article par fonctionnalité pour
+  convaincre (atout distinctif, problème, réponse, atouts, publics) ; uniquement des garanties réellement appliquées,
+  réserves « à confirmer » affichées, liens vers des pages publiques seulement ; IRL non cité (annexe I, § I.65).

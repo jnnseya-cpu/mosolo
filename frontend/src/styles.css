@@ -1203,3 +1203,24 @@ input[type='file'] { font-size: 13.5px; max-width: 100%; }
 .appel { padding: 88px 0; background: var(--navy-deep); color: #fff; }
 .appel .display-2 { color: #fff; max-width: 28ch; }
 .appel-cta { margin-top: 32px; display: flex; flex-wrap: wrap; gap: 12px; }
+
+/* Blog public (22/10/2026) : cartes d'articles et page d'article lisible. */
+.blog-section { margin-top: 28px; }
+.blog-section-titre { font-family: var(--font-serif); font-weight: 400; font-size: 24px; margin: 0 0 12px; }
+.blog-grille { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }
+.blog-carte-lien { display: flex; flex-direction: column; gap: 8px; height: 100%; padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); color: inherit; text-decoration: none; transition: border-color .15s, transform .15s; }
+.blog-carte-lien:hover, .blog-carte-lien:focus-visible { border-color: var(--primary); transform: translateY(-2px); }
+.blog-carte-titre { font-family: var(--font-serif); font-size: 20px; line-height: 1.2; }
+.blog-carte-accroche { font-size: 14.5px; color: var(--ink-2); flex: 1; }
+.blog-carte-lire { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 14px; color: var(--primary); }
+.blog-article { max-width: 760px; }
+.blog-article h2 { font-family: var(--font-serif); font-weight: 400; font-size: 24px; margin: 28px 0 8px; }
+.blog-article p, .blog-article li { font-size: 16.5px; line-height: 1.65; }
+.blog-usp { margin: 20px 0 8px; padding: 18px 20px; border-radius: var(--r); background: var(--navy-deep); color: #fff; }
+.blog-usp .caps { color: #fff; opacity: .8; }
+.blog-usp-texte { font-family: var(--font-serif); font-size: 21px; line-height: 1.35; margin: 6px 0 0; }
+.blog-atouts { list-style: none; padding: 0; }
+.blog-atouts li { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; }
+.blog-atouts li svg { flex: none; margin-top: 5px; color: var(--primary); }
+.blog-cta { display: flex; flex-wrap: wrap; gap: 12px; margin: 32px 0 8px; }
+.blog-cta .btn { white-space: normal; max-width: 100%; height: auto; text-align: left; }
