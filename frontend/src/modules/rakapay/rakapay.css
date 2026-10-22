@@ -1,0 +1,28 @@
+/* RakaPay — compléments aux styles rk-* existants. */
+.rk-pass.rkx-pass-vert { background: linear-gradient(135deg, #0f3d22 0%, #14532d 55%, #1E8C3A 100%); }
+.rk-pass.rkx-pass-ambre { background: linear-gradient(135deg, #3d2c05 0%, #6b4a00 60%, #9a6c00 100%); }
+.rk-pass.rkx-pass-rouge { background: linear-gradient(135deg, #3a0c0e 0%, #7a1418 60%, #9a1c1c 100%); }
+.rk-pass .tt-status { font-size: 12.5px; }
+.rkx-qr-light { background: #fff; color: var(--ink); border-radius: 12px; padding: 10px 8px; flex: none; max-width: 200px; }
+.rkx-qr-light .tt-qr figcaption .muted { display: block; }
+@media (max-width: 480px) { .rkx-qr-light { align-self: center; } }
+.rkx-ticket { cursor: pointer; }
+.rkx-ticket.checked { border-color: var(--navy); box-shadow: 0 0 0 2px color-mix(in srgb, var(--navy) 25%, transparent); }
+.rkx-ticket-row { align-items: flex-start; }
+
+/* Coopérative et pilotage */
+.rkx-meter { display: grid; gap: 4px; }
+.rkx-meter-track { height: 8px; border-radius: 4px; background: var(--line-soft); overflow: hidden; }
+.rkx-meter-fill { height: 100%; border-radius: 4px; background: var(--navy); }
+.rkx-meter-row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.rkx-grid { display: grid; gap: 16px; }
+@media (min-width: 1000px) { .rkx-grid { grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); align-items: start; } }
+.rkx-members { list-style: none; margin: 0; padding: 0; }
+.rkx-member { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+.rkx-member input { width: 20px; height: 20px; }
+.rkx-member .row-side { justify-content: flex-end; }
+@media (max-width: 560px) { .rkx-member { grid-template-columns: auto minmax(0, 1fr); } .rkx-member .row-side { grid-column: 2; justify-content: flex-start; } }
+.rkx-member select { min-width: 110px; }
+.rkx-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 900px) { .rkx-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } .rkx-kpis .kpi { border-right: 1px solid var(--line-soft); border-bottom: 0; } .rkx-kpis .kpi:last-child { grid-column: auto; border-right: 0; } }
+.rkx-kpis .kpi:last-child { grid-column: auto; }

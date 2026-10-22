@@ -1,0 +1,6 @@
+/* Visuels des écrans généraux (27/09/2026) — mise en page seulement ; couleurs et marques : trousse components/viz. */
+.viz-section { margin: 0 0 20px; min-width: 0; }
+.viz-section > .viz-kpi-grid { margin-bottom: 16px; }
+.viz-meter-card { padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.home-viz { padding: 0 0 72px; background: var(--bg); }
+.home-viz .viz-grid { margin-bottom: 0; }

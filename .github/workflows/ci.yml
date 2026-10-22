@@ -1,0 +1,188 @@
+# KINSHASA MOSOLO — intégration continue : installation reproductible, contrôle de types et tests des trois paquets,
+# construction du frontend, et tests de persistance sur un vrai PostgreSQL (service éphémère).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verification:
+    name: Types, tests et construction (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # Node 22 (LTS de référence : .nvmrc, Dockerfile, Render) ; Node 24 (LTS suivante) pour anticiper. Node 20 : fin de vie avril 2026.
+        node: [22, 24]
+    env:
+      # Identifiants de démonstration uniquement ; aucun secret réel n'est utilisé en CI.
+      MOSOLO_DEMO_MODE: 'true'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Installation (npm ci)
+        run: npm ci --no-audit --no-fund
+
+      # Le catalogue des routes est généré depuis le code : il doit être à jour.
+      - name: Catalogue des routes à jour
+        run: python3 tools/gen_routes.py && git diff --exit-code specs/routes-api.md
+
+      - name: Contrôle de types — shared
+        run: npm run typecheck -w shared
+      - name: Contrôle de types — backend
+        run: npm run typecheck -w backend
+      - name: Contrôle de types — frontend
+        run: npm run typecheck -w frontend
+
+      # Bloquant sur les erreurs ESLint (les avertissements, p. ex. `any` explicite, sont affichés sans bloquer).
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests — shared
+        run: npm test -w shared
+      - name: Tests — backend
+        run: npm test -w backend
+      - name: Tests — frontend
+        run: npm test -w frontend
+
+      - name: Construction — frontend
+        run: npm run build -w frontend
+
+      # Bloquant : une vulnérabilité élevée ou critique dans une dépendance de production arrête l'intégration.
+      - name: Audit des dépendances (production, niveau élevé)
+        run: npm audit --omit=dev --audit-level=high
+
+  persistance-postgresql:
+    name: Persistance sur PostgreSQL réel (migrations, sauvegarde, restauration)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: verification
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mosolo
+          POSTGRES_PASSWORD: mosolo-ci
+          POSTGRES_DB: mosolo
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U mosolo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Données et identifiants de démonstration (le serveur semé) : mode démonstration explicite, jamais implicite.
+      MOSOLO_DEMO_MODE: 'true'
+      DATABASE_URL: postgres://mosolo:mosolo-ci@localhost:5432/mosolo
+      MOSOLO_AUDIT_HMAC_KEY: cle-audit-ci-non-secrete-0123456789
+      MOSOLO_BACKUP_KEY: cle-sauvegarde-ci-non-secrete-0123456789
+      # Ancre externe de la tête du journal d'audit (hors base) : contrôlée au redémarrage et à la restauration.
+      MOSOLO_AUDIT_ANCHOR_PATH: /tmp/mosolo-ancre-audit.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Démarrage persistant (migrations + instantané initial), arrêt propre
+        working-directory: backend
+        run: |
+          PORT=8081 timeout 60 npx tsx src/persistence/server.ts > /tmp/mosolo-1.log 2>&1 &
+          for i in $(seq 1 40); do curl -sf http://localhost:8081/health && break; sleep 1; done
+          curl -sf http://localhost:8081/.well-known/openid-configuration > /dev/null
+          kill -TERM %1 || true; wait || true
+          cat /tmp/mosolo-1.log | tail -n 20
+      - name: Sauvegarde signée puis vérification (chaîne d'audit incluse)
+        working-directory: backend
+        run: |
+          npx tsx src/persistence/backup-cli.ts backup /tmp/sauvegarde.json
+          npx tsx src/persistence/backup-cli.ts verify /tmp/sauvegarde.json
+      - name: Journal en ajout seul — UPDATE refusé par la base
+        run: |
+          if psql "$DATABASE_URL" -c "UPDATE append_only_journal SET doc = '{}'::jsonb WHERE seq = 1"; then
+            echo "UPDATE accepté : le déclencheur d'ajout seul est absent" && exit 1
+          fi
+      - name: Journal en ajout seul — contournement par set_config refusé à un rôle applicatif (migration 003)
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE ROLE mosolo_app_ci LOGIN PASSWORD 'app-ci'" -c "GRANT SELECT, INSERT, UPDATE, DELETE ON append_only_journal, repository_snapshot TO mosolo_app_ci"
+          APP_URL=postgres://mosolo_app_ci:app-ci@localhost:5432/mosolo
+          if psql "$APP_URL" -v ON_ERROR_STOP=1 -c "BEGIN; SELECT set_config('mosolo.restore_in_progress', 'on', true); DELETE FROM append_only_journal; COMMIT;"; then
+            echo "DELETE accepté via set_config : contournement encore possible" && exit 1
+          fi
+          if psql "$APP_URL" -v ON_ERROR_STOP=1 -c "SELECT mosolo_restore_purge()"; then
+            echo "Purge de restauration accessible au rôle applicatif" && exit 1
+          fi
+          test "$(psql "$DATABASE_URL" -tAc "SELECT count(*) > 0 FROM append_only_journal")" = "t"
+      - name: Restauration puis redémarrage sur la base restaurée
+        working-directory: backend
+        run: |
+          npx tsx src/persistence/backup-cli.ts restore /tmp/sauvegarde.json --confirm
+          PORT=8082 timeout 60 npx tsx src/persistence/server.ts > /tmp/mosolo-2.log 2>&1 &
+          for i in $(seq 1 40); do curl -sf http://localhost:8082/health && break; sleep 1; done
+          kill -TERM %1 || true; wait || true
+          grep -q "restaurés" /tmp/mosolo-2.log
+          ! grep -q "NON VÉRIFIÉE" /tmp/mosolo-2.log
+          ! grep -q "NON CONFORME" /tmp/mosolo-2.log
+          grep -q "conforme à l'ancre externe" /tmp/mosolo-2.log
+          test "$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM append_only_journal WHERE doc->>'action' = 'audit.restored'")" = "1"
+      - name: Retour à une sauvegarde plus ancienne refusé sans --confirm-rollback
+        working-directory: backend
+        run: |
+          if npx tsx src/persistence/backup-cli.ts restore /tmp/sauvegarde.json --confirm; then
+            echo "Retour arrière accepté sans confirmation" && exit 1
+          fi
+      # Kit de déploiement (infra/) : migrations rejouables sur PostgreSQL réel, rôle applicatif à droits minimaux,
+      # bail de l'instance active (chevauchement de révisions Cloud Run).
+      - name: Migrations rejouables et rôle applicatif (tâche de migration, deux exécutions)
+        working-directory: backend
+        env:
+          MOSOLO_DB_APP_ROLE: mosolo_app_kit
+          MOSOLO_DB_APP_PASSWORD: mot-de-passe-ci-non-secret-0123456789
+        run: |
+          npm run db:migrate
+          npm run db:migrate | grep -q "Aucune migration en attente"
+          npm run db:migrate -- --check
+          APP_URL=postgres://mosolo_app_kit:mot-de-passe-ci-non-secret-0123456789@localhost:5432/mosolo
+          if psql "$APP_URL" -v ON_ERROR_STOP=1 -c "UPDATE append_only_journal SET doc = '{}'::jsonb"; then
+            echo "UPDATE du journal accepté pour le rôle applicatif" && exit 1
+          fi
+          psql "$APP_URL" -v ON_ERROR_STOP=1 -tAc "SELECT count(*) FROM instance_lease" > /dev/null
+      - name: Kit de déploiement — tests sur PostgreSQL réel (migrations concurrentes, fichiers rejoués, bail)
+        working-directory: backend
+        env:
+          MOSOLO_TEST_PG_URL: postgres://mosolo:mosolo-ci@localhost:5432/mosolo
+        run: npx vitest run test/deploiement.test.ts
+
+  kit-deploiement:
+    name: Kit de déploiement (scripts, simulations DRY_RUN, YAML/JSON, Compose)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      # Aucun compte cloud : uniquement syntaxe, shellcheck, hadolint, simulations et chargement des fichiers.
+      - name: Hadolint
+        run: |
+          mkdir -p "$HOME/bin"
+          curl -fsSL -o "$HOME/bin/hadolint" https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
+          chmod +x "$HOME/bin/hadolint"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Validation hors ligne (infra/valider.sh)
+        run: ./infra/valider.sh

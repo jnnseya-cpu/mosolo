@@ -10,12 +10,15 @@ from matplotlib.patches import FancyBboxPatch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "docs/document-maitre/figures"); os.makedirs(OUT, exist_ok=True)
-# Palette de marque : teal Groupe Nseya en tête, ordre validé (validateur CVD : toutes portes franchies)
-CAT = ["#1BA996","#eb6834","#2a78d6","#eda100","#e87ba4","#008300","#4a3aa7","#e34948"]
-BRAND_DARK = "#0E5E55"
-LOGO = os.path.join(ROOT, "docs/assets/logo-groupe-nseya.png")
+# Charte Ville de Kinshasa : bleu drapeau, or, marine de l'écu en tête ; ordre validé
+# (validateur daltonisme : aucune paire bloquante ; seule la paire 7–8 vert/rouge est en zone d'avertissement)
+CAT = ["#1E9BD7","#E0A526","#4453b5","#eb6834","#8a5cc2","#e87ba4","#1E8C3A","#e34948"]
+BRAND_DARK = "#232C6B"
+TRICOLORE = ["#1E9BD7","#F7D618","#D7141A"]
+_LOGO_VILLE = os.path.join(ROOT, "docs/assets/logo-ville-de-kinshasa.png")
+LOGO = _LOGO_VILLE if os.path.exists(_LOGO_VILLE) else None  # logo officiel, utilisé sans modification
 STATUS = {"good":"#0ca30c","warning":"#fab219","serious":"#ec835a","critical":"#d03b3b"}
-SURF, INK, INK2, MUTED, GRID, BASE = "#fcfcfb","#222B2A","#5F6B6A","#898781","#e1e0d9","#c3c2b7"
+SURF, INK, INK2, MUTED, GRID, BASE = "#fcfcfb","#111111","#4A4F5C","#898781","#e1e0d9","#c3c2b7"
 plt.rcParams.update({"font.family":"DejaVu Sans","font.size":10,"axes.edgecolor":BASE,"axes.labelcolor":INK2,
   "xtick.color":MUTED,"ytick.color":MUTED,"axes.facecolor":SURF,"figure.facecolor":SURF,"axes.grid":True,
   "grid.color":GRID,"grid.linewidth":0.6,"axes.spines.top":False,"axes.spines.right":False,"axes.axisbelow":True})
@@ -28,9 +31,11 @@ def exemple(fig):
 def source(fig, s):
     fig.text(0.01, 0.01, "Source : "+s, ha="left", fontsize=7.5, color=MUTED)
 def brand(fig):
-    fig.add_artist(matplotlib.lines.Line2D([0,1],[0.999,0.999],transform=fig.transFigure,color=CAT[0],lw=4))
-    img=plt.imread(LOGO); h=0.075; w=h*img.shape[1]/img.shape[0]*fig.get_figheight()/fig.get_figwidth()
-    a=fig.add_axes([1-w-0.005,0.905,w,h]); a.imshow(img); a.axis("off")
+    for i,c in enumerate(TRICOLORE):
+        fig.add_artist(matplotlib.lines.Line2D([i/3,(i+1)/3],[0.999,0.999],transform=fig.transFigure,color=c,lw=4,solid_capstyle="butt"))
+    if LOGO:
+        img=plt.imread(LOGO); h=0.075; w=h*img.shape[1]/img.shape[0]*fig.get_figheight()/fig.get_figwidth()
+        a=fig.add_axes([1-w-0.005,0.905,w,h]); a.imshow(img); a.axis("off")
 def save(fig, name):
     brand(fig)
     fig.savefig(os.path.join(OUT, name), dpi=170, bbox_inches="tight"); plt.close(fig)
@@ -117,8 +122,8 @@ save(fig,"fig-matrice-gisements.png")
 
 # 8 Echelle de la recette
 fig, ax = plt.subplots(figsize=(9,5))
-lv=["1 Potentiel estimé","2 Assiette vérifiée","3 Liquidé","4 Exigible","5 En retard","6 Contesté","7 Paiement initié","8 Paiement confirmé","9 Réglé compte public","10 Rapproché","11 Disponible budget"]
-vv=[100,62,55,50,21,4,30,28,27.5,27,26]; cols=[CAT[0]]*2+[CAT[1]]*4+[CAT[2]]*2+[CAT[5]]*2+[CAT[6]]
+lv=["1 Potentiel estimé","2 Assiette vérifiée","3 Liquidé","4 Exigible","5 En retard","6 Paiement initié","7 Paiement confirmé","8 Réglé compte public","9 Rapproché","10 Comptabilisé","11 Disponible budget"]
+vv=[100,62,55,50,21,30,28,27.5,27,26.6,26]; cols=[CAT[0]]*2+[CAT[1]]*3+[CAT[2]]*2+[CAT[5]]*3+[CAT[6]]
 b=ax.barh(lv[::-1],vv[::-1],color=cols[::-1]); bar_labels(ax,b,"{:g}",True); ax.set_xlim(0,112); ax.set_xlabel("Indice (potentiel estimé = 100)")
 title(ax,"Échelle unifiée de la recette","Chaque niveau est mesuré séparément ; jamais additionnés entre eux"); exemple(fig); save(fig,"fig-echelle-recette.png")
 

@@ -76,6 +76,20 @@ flowchart TB
 
 **Standard minimal de chaque module critique** (définition de « terminé ») : responsable métier nommé ; règles certifiées ; séparation des tâches testée ; événements d'audit complets ; tests automatisés ; test de sécurité ; documentation utilisateur et d'exploitation ; indicateurs ; plan de reprise.
 
+## 36.1 Suivi dans la plateforme (Cahier nouvelle version, ch. 35 à 37) — ajout du 27/09/2026
+
+La plateforme suit la conduite du programme selon le **Cahier nouvelle version** (écran « Feuille de route et modèle opérationnel », `/pilotage/feuille-de-route` ; module d'extension `programme`). Les tableaux ci-dessus (§ 34.2 à 36) sont conservés ; le Cahier nouvelle version en diffère sur plusieurs points signalés au maître d'ouvrage pour arbitrage (voir la fin de cette section).
+
+- **Phases 0 à 6 (§ 35.1)** — Mandat et mobilisation juridique ; Cadrage et architecture ; Socle ; Pilote ; Extension ; Généralisation ; Optimisation, avec objectifs, livrables et porte de sortie repris mot pour mot. État de chaque phase : à venir, en cours, porte demandée, porte franchie, porte refusée. **Garde de séquence** : une phase ne démarre pas tant que la porte de la phase précédente n'est pas franchie. Chaque livrable porte ses **preuves** (référence du document et empreinte SHA-256, déposées par une personne).
+- **Porte de sortie** — demandée par une personne qui liste les preuves ; **refusée** si un livrable n'a pas de preuve ; **bloquée sans dérogation** si un poste externe n'a pas de binôme provincial ou si un jalon de transfert est en retard. Décidée par une **autre personne** du comité de pilotage (Gouverneur, Cabinet, ministre des Finances — mêmes rôles que l'activation des modules), motivée, et rattachée à une **réunion consignée du comité de pilotage** tenue après la demande. Jamais automatique. Circuit à deux personnes `PILOTAGE_PORTE_PHASE`.
+- **Plans d'action datés (§ 35.2)** — horizons de 30 jours, 90 jours, 180 jours, 12 mois et 24 mois, actions reprises mot pour mot ; échéances calculées à partir d'une **date de démarrage saisie par une personne** (aucune date par défaut) ; chaque action a un responsable, un statut et une preuve de réalisation (obligatoire pour « réalisée ») ; les actions en retard sont signalées (jour calendaire de Kinshasa).
+- **Modèle opérationnel (ch. 36)** — huit fonctions avec effectif **indicatif au pilote** (texte, non contractuel) et rattachement ; registre des postes (libellés de rôles, « Poste à pourvoir », aucun nom) ; chaque **poste externe** est doublé d'un **agent provincial désigné** avec un **calendrier de transfert écrit** ; indicateur d'**autonomie** = part des postes externes dont tous les jalons de transfert sont réalisés avec preuve.
+- **Gouvernance du programme (ch. 37)** — comité de pilotage (mensuelle), comité technique (hebdomadaire), comité juridique et tarifaire (à chaque évolution), contrôle indépendant (trimestrielle), comité des données (mensuelle) ; composition en libellés de rôles seulement. **Journal des réunions** : date, participants par rôle, ordre du jour, procès-verbal (référence et SHA-256), décisions. **Réunion en retard** au-delà de 7, 31 ou 92 jours selon la fréquence (valeurs « PAR_DÉFAUT — à confirmer par le maître d'ouvrage ») ; pour le comité juridique et tarifaire, chaque version de règle en revue juridique ou financière doit être rattachée à une de ses réunions. Liens vers l'existant sans duplication : comité des données → décision `socle:export.committee` et circuit `SOCLE_EXTRACTION_MASSIVE` ; comité juridique et tarifaire → avis et décision d'arbitrage (`acces:arbitration.*`) ; comité de pilotage → `acces:module.activate`.
+
+Routes : `GET /v1/pilotage/feuille-de-route` ; `POST /v1/pilotage/feuille-de-route/demarrage` ; `POST …/phases/{code}/demarrage|preuves|porte` ; `POST …/portes/{id}/decision` ; `POST …/actions/{code}` ; `GET /v1/pilotage/modele-operationnel` ; `POST …/postes`, `…/postes/{id}/binome`, `…/postes/{id}/jalons/{jalon}` ; `GET /v1/pilotage/gouvernance` ; `POST /v1/pilotage/gouvernance/reunions`. Politiques refusées par défaut ; chaque écriture est journalisée.
+
+**Écarts signalés pour arbitrage (rien n'est supprimé).** (1) Intitulés et contenu des phases : « Découverte et architecture » (§ 34.2) / « Cadrage et architecture » (Cahier nouvelle version) ; portes G0–G5 à autorités diverses / porte unique décidée par le comité de pilotage. (2) Actions des plans datés différentes (§ 34.3). (3) Fonctions du modèle opérationnel différentes (§ 35 : dix fonctions ; Cahier : huit fonctions avec effectifs). (4) Instances : le § 36 compte un comité de sécurité et protection des données, un comité de contrôle des changements, un comité des modèles d'IA et un comité d'audit ; le Cahier nouvelle version compte un comité technique, un contrôle indépendant et un comité des données. La plateforme suit le Cahier nouvelle version et conserve les tableaux antérieurs du présent document.
+
 # 37. Passation des marchés et modèle commercial
 
 ## 37.1 Comparaison des modèles
@@ -104,6 +118,37 @@ Le Cahier des exigences v2.9 retient une proposition du promoteur : financement 
 | Base juridique | Aucun texte identifié ne l'autorise ni ne l'interdit expressément (J11) | Avis juridique certifié indispensable avant toute signature |
 
 **Recommandation.** Ne pas retenir le modèle 10/10/10/70 sous sa forme actuelle. Lui substituer le modèle hybride du § 37.3, qui préserve l'intérêt du partenaire à la réussite **sans prélèvement à la source**, avec une rémunération bornée et mesurée sur la seule valeur ajoutée. Si le Gouvernement souhaite néanmoins examiner une formule de partage, elle doit au minimum : (1) porter sur la **recette additionnelle nette vérifiée** et non sur la recette brute ; (2) être **plafonnée** en montant annuel et cumulé ; (3) avoir une **durée fixe courte** (5 à 7 ans) ; (4) être **payée sur crédit budgétaire** après certification, jamais par prélèvement automatique ; (5) être attribuée après **mise en concurrence** (marchés publics ou PPP) ; (6) être validée par un avis juridique certifié et, si nécessaire, par un acte de l'Assemblée provinciale.
+
+**Position du promoteur, réintégrée (décision du maître d'ouvrage du 27/09/2026 : rien de l'existant n'est omis, tout est harmonisé).** La décision demandée au Gouverneur dans la note exécutive est conservée telle quelle : *Groupe Nseya finance intégralement le système d'exploitation numérique (hors moyens physiques) ; en contrepartie, 10 % des recettes générées par le système pendant 30 ans, selon la clé de répartition du § 37A (10 % Groupe Nseya, 10 % ministères de tutelle, 10 % agents et sous-traitants, 70 % Gouvernement provincial), sous réserve de l'acte juridique qui l'autorise.* Les deux lectures coexistent : la clé du promoteur est la **position retenue par le promoteur** ; l'analyse ci-dessus et le modèle du § 37.3 sont les **garde-fous proposés** à l'autorité. Dans la plateforme, la clé 10/10/10/70 est un **paramètre gouverné au statut « acte requis »** : elle produit une simulation à partir des recettes rapprochées, mais aucun décaissement n'a lieu sans acte juridique enregistré et double validation, et tout décaissement passe alors par une opération du Trésor à quatre yeux, jamais par un prélèvement automatique. La commission des agents (10 %, § I.15) est rattachée à la tranche « agents et sous-traitants » de cette clé (§ H.31).
+
+### 37.2 bis Moteur de paiement, de règlement et de répartition (spécifications du 29/09/2026) — ajout
+
+Le maître d'ouvrage a transmis le 29/09/2026 la spécification « Payment, Settlement & Revenue Allocation Engine » puis sa
+version 1.0 (« … Commission & Settlement Engine », `docs/sources/`). Elles sont construites **par-dessus** la clé du
+§ 37A décrite ci-dessus, sans rien en retirer : la clé reste au statut « acte requis », ses deux flux (Flux 1 Groupe
+Nseya, Flux 2 Gouvernement provincial au Trésor), son exécution automatique après acte et convention (décision du
+27/09/2026) et ses simulations en comptes d'ordre demeurent le **seul chemin des fonds**. Le moteur ajoute :
+
+- une **matrice versionnée** KIN-DEFAULT (alias KIN-REV-001) dont la V1 reprend telles quelles les constantes du § 37A
+  (70 / 10 / 10 / 10, effet au 01/10/2026, pool de terrain par recette générée : agent direct 10 %, agent de
+  sous-traitant 7 % + sous-traitant 3 %) au statut **proposé, acte requis** ; activation par quatre personnes
+  distinctes (rédaction, vérification, approbation, activation) et seulement si la somme vaut 100,000 %, que la clé du
+  § 37A est active (acte et conditions du § 37A.8) et qu'une règle CLE-REPARTITION-37A certifiée porte les mêmes taux ;
+- un **sous-grand-livre des droits** en partie double (constats sur recettes rapprochées, contre-écritures négatives,
+  règlements constatés par les deux flux ou par demande de règlement, recouvrements) ;
+- le **compte de règlement principal** désigné par le Gouverneur (alias verrouillé du coffre, circuit du coffre pour
+  tout changement de numéro) ;
+- les tableaux « Recettes et droits » par autorité, entité, Groupe Nseya, sous-traitant et agent, avec « Expliquer ce
+  chiffre » sur chaque montant.
+
+Le détail figure à l'annexe I, § I.37. **Contradictions à arbitrer** (harmonisées, rien n'est retiré) : (a) pool des
+agents par recette générée (spécification) ou par points × qualité (décision du 27/09/2026) — tranché le 29/09/2026
+pour la recette générée dans la V1, les deux modes restant disponibles ; (b) fractionnement en temps réel chez le
+prestataire = troisième flux contraire au § 37A.4 — tranché : admis pour les deux flux du § 37A seulement, sur
+infrastructure approuvée ; (c) encaissement d'espèces par l'agent (§ 13) contre « aucune espèce pour les agents » —
+tranché : aucune espèce pour les agents, points agréés et guichets bancaires seulement ; (d) visibilité complète de
+Groupe Nseya — rôle dédié R38 en lecture, données personnelles par consultation motivée ; (e) lecture des 7 % —
+tranché : 7 points de la transaction ; (f) visibilité complète du ministre des Finances limitée à ce moteur financier.
 
 ## 37.3 Structure commerciale recommandée
 
@@ -205,6 +250,8 @@ Référence de comparaison : le système de gestion des recettes de la ville de 
 | Référence empirique | Kananga (RDC) | Kampala | Freetown |
 
 **Exemple illustratif** [EXEMPLE — hypothèses de travail à remplacer par le recensement pilote et les tarifs certifiés] : si 200 000 unités louées nouvellement identifiées dans le périmètre pilote avaient un loyer moyen de 60 USD par mois, l'IRL théorique au taux de 17 % (hors 1er rang) serait de 200 000 × 60 × 12 × 17 % ≈ 24,5 millions USD par an ; avec une conformité de 25 %, la recette effective serait d'environ 6,1 millions USD, avant coûts. **Chaque paramètre de cet exemple est une hypothèse.**
+
+**Exemple illustratif du Cahier nouvelle version (§ 39.3)** — ajout du 27/09/2026. La plateforme affiche en lecture seule, sur l'écran du simulateur de scénarios (`GET /v1/pilotage/scenarios/exemple-illustratif`), le tableau « Exemple illustratif, à remplacer par les données du pilote » (revenus locatifs, impôt foncier, véhicules et circulation, patente et débits de boissons, publicité et antennes), chaque valeur marquée [EXEMPLE] / hypothèse. Chaque ligne est recalculée avec **la même fonction** que le simulateur (potentiel × (conformité cible − conformité actuelle), sans coût marginal) : 85,32 ; 16,8 ; 12,6 ; 6,0 et 6,75 M USD, concordants au million près avec les chiffres arrondis du Cahier (≈ 85, 17, 13, 6 et 7 M USD). L'avertissement méthodologique du Cahier est affiché mot pour mot. L'exemple n'est jamais enregistré comme hypothèse et n'alimente ni les scénarios ni les tableaux de bord. L'exemple antérieur ci-dessus (IRL à 17 %) est conservé ; il diffère de la décision du maître d'ouvrage sur l'IRL (22 % à tous les rangs, § 16.2) et de l'exemple du Cahier nouvelle version (22 % d'un loyer de 60 USD) — écart signalé pour arbitrage.
 
 **Sensibilité.** Chaque scénario est testé sur : taux de conformité (± 50 %), taux de change CDF/USD (le budget 2026 supposait environ 2 900 CDF pour 1 USD, le cours de septembre 2026 est rapporté autour de 2 270 [À VÉRIFIER] — tout scénario libellé en USD doit indiquer son taux), délai d'obtention des protocoles de données (± 6 mois), coût des canaux de paiement.
 
@@ -436,3 +483,67 @@ Chaque commune comprend des quartiers traités et des quartiers de comparaison a
 | 8 | Approuver les quatre communes pilotes et le calendrier (recensement avant février 2027) | Gouverneur | 15 jours |
 | 9 | Retenir le modèle commercial hybride (§ 37.3) et exclure tout prélèvement automatique de recettes au profit d'un tiers ; lancer la procédure de passation appropriée | Gouvernement, Finances | 60 jours |
 | 10 | Arrêter le financement des moyens physiques (terminaux, plaques, guichets, communications) et conditionner la généralisation à des résultats audités | Gouvernement provincial | 45 jours |
+
+
+# Complément — Document maître FR 2 (27/09/2026), chapitres 41 à 48 : ce qui est construit
+
+Les chapitres 40 à 47 ci-dessus sont ceux de la version 3.0 ; ils restent en vigueur (règle n° 1). La nouvelle version
+(FR 2) les renumérote en 41 à 48 et en modifie le contenu. Les deux registres sont harmonisés : chaque risque du FR 2 cite
+les risques de l'ancien registre qu'il recoupe. La matrice de couverture phrase par phrase figure dans
+`couverture-ch41-48.md`.
+
+- **Registre des risques (ch. 41)** — écran « Registre des risques » (`/pilotage/risques`), route
+  `/v1/pilotage/programme/risques`. Le registre reprend les treize risques, leur probabilité, leur impact et leur traitement
+  cités mot pour mot, avec une carte de chaleur. Chaque mesure est reliée au contrôle de la plateforme qui la met en œuvre
+  (fichier et test) ou marquée « externe » : dialogue social, séquestre du code, test d'intrusion, audit indépendant. Le
+  rôle propriétaire et la périodicité de revue (90 jours) sont des valeurs par défaut, à confirmer par le maître
+  d'ouvrage. Chaque risque est revu par son propriétaire ou par la supervision ; une revue en retard est signalée ; tout
+  est journalisé.
+- **Recette — critères d'acceptation (ch. 42, 43, 45)** — écran `/pilotage/recette`. Il présente :
+  - les 15 critères d'acceptation : les 10 du FR 2 et 5 critères « postes de décision » dont la preuve est à relier à
+    la fusion d'un autre lot ;
+  - les 10 récits du carnet, chacun prouvé par un test de bout en bout (`backend/test/carnet-recits.test.ts`) ;
+  - les 9 points de la stratégie de tests.
+
+  Chaque critère renvoie au test qui le prouve (`backend/test/recette-criteres.test.ts` et tests existants). Un test
+  vérifie que chaque fichier et chaque titre cités existent. Huit éléments exigent le monde réel : recette avec des agents
+  réels, test d'intrusion par un tiers, charge sur l'infrastructure cible, prestataires réels, dossiers anonymisés,
+  terminaux d'entrée de gamme, reprise après sinistre réelle, validation des jeux juridiques. Ils sont suivis par statut,
+  avec une preuve (procès-verbal et empreinte), et ne sont jamais simulés. Le script de charge
+  `tools/charge/pic-fin-janvier.mjs` (Node seul) complète le scénario k6 existant.
+- **Plan de livraison par versions (ch. 44)** — écran `/pilotage/versions`. Les versions V0.1 à V3.0 y sont rattachées
+  aux modules qui les livrent. La construction est vérifiée à l'exécution ; la mise en service est décidée par une
+  personne, sur procès-verbal.
+- **Pilote de 180 jours (ch. 46)** — le tableau du pilote gagne :
+  - la raison du choix et les objets prioritaires des quatre communes ;
+  - la séquence en cinq étapes, avec l'étape en cours ;
+  - le texte de chaque critère de succès et les indicateurs du § 40 qui le mesurent, pour les communes pilotes et les
+    communes témoins.
+
+  Le critère « contestations traitées dans le délai légal » est désormais mesuré par l'indicateur `RECOURS_DANS_DELAI`.
+- **Plan des 100 premiers jours (ch. 47)** — écran `/pilotage/cent-jours`. Il reprend les six périodes, leurs actions et
+  leurs responsables. Le jour 1 est fixé par une personne. Chaque action est suivie par une personne, avec une instruction
+  de suivi émise par le circuit existant des instructions. Les plans datés et les comités des ch. 35 à 37 relèvent d'un
+  autre lot.
+- **Décisions requises du Gouvernement provincial (ch. 48)** — écran `/pilotage/decisions-gouvernement`. Le registre
+  reprend les dix décisions mot pour mot, avec pour chacune :
+  - un statut (à prendre, prise, refusée) ;
+  - l'acte correspondant (référence, date et empreinte) ;
+  - un enregistrement par une personne, puis une validation par une autre (circuit `DECISION_GOUVERNEMENT`).
+
+  Pour chaque décision, l'écran affiche ce qu'elle débloque, avec l'état calculé des verrous de la plateforme. Une
+  décision enregistrée ne force jamais un verrou : le point J14 reste « acte requis » tant qu'il n'est pas tranché par son
+  propre circuit.
+
+  La synthèse finale (48.2) est affichée. **La décision n° 10** (« sans pourcentage automatique sur les recettes
+  publiques ») contredit le modèle du § 37A retenu par le maître d'ouvrage. Le comportement du § 37A n'est pas modifié. La
+  contradiction est enregistrée : « Contradiction signalée au maître d'ouvrage — arbitrage attendu ».
+- **Refus de l'OL 13/001** — l'instrument est enregistré ABROGÉ. Toute règle qui le cite comme texte en vigueur est
+  refusée à la publication ; ce refus est vérifié par les tests.
+- **Compléments issus des récits et des critères** :
+  - la déclaration IRL affiche le taux, la retenue et l'arrêté, et accepte une pièce justificative facultative ;
+  - le constat d'un objet non enregistré porte sa catégorie ;
+  - le recours est affecté dès son dépôt à la file d'instruction de l'entité administratrice ;
+  - toute lecture directe d'un dossier journalise un motif (déclaré, sinon la finalité du rôle) ;
+  - les tableaux distinguent explicitement les six états ;
+  - la carte des écarts du Gouverneur est présentée en carte schématique et s'exporte signée.

@@ -1,0 +1,104 @@
+/* Module « acces » — entités, invitations, identité, mandats, arbitrages. Préfixe ac-. */
+
+.ac-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1024px) {
+  .ac-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 24px; }
+  .ac-grid-even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+.ac-stack { display: grid; gap: 16px; min-width: 0; }
+.ac-tabs { margin-bottom: 16px; max-width: 100%; }
+.ac-tabs button { white-space: nowrap; }
+.ac-count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--pale); color: var(--ink); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ac-tabs button[aria-pressed='true'] .ac-count { background: rgba(255, 255, 255, 0.2); color: inherit; }
+
+/* Profil d'accès */
+.ac-me { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom: 24px; }
+.ac-me > div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; min-width: 0; }
+.ac-me dt { font-size: 12px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.ac-me dd { margin: 4px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+
+/* Arborescence des entités */
+.ac-tree { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.ac-tree li { min-width: 0; }
+.ac-node { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: var(--r); border: 1px solid transparent; background: none; width: 100%; text-align: left; color: inherit; cursor: pointer; font: inherit; }
+.ac-node:hover { background: var(--surface-2); border-color: var(--line-soft); }
+.ac-node[aria-pressed='true'] { background: var(--pale); border-color: var(--line); }
+.ac-node-main { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.ac-node-name { font-weight: 600; overflow-wrap: anywhere; }
+.ac-node-sub { font-size: 12.5px; color: var(--ink-3); }
+.ac-indent-1 { padding-left: 18px; }
+.ac-indent-2 { padding-left: 36px; }
+.ac-indent-3 { padding-left: 54px; }
+.ac-kind { flex: none; display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: var(--pale); color: var(--navy); }
+:root[data-theme='dark'] .ac-kind { color: var(--ink); }
+
+/* Étapes d'une fiche */
+.ac-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; counter-reset: s; }
+.ac-steps li { display: grid; justify-items: center; gap: 4px; font-size: 11.5px; color: var(--ink-3); text-align: center; position: relative; min-width: 0; }
+.ac-steps li::before { content: ''; position: absolute; top: 9px; left: -50%; width: 100%; height: 2px; background: var(--line); z-index: 0; }
+.ac-steps li:first-child::before { display: none; }
+.ac-steps li.done::before, .ac-steps li.now::before { background: var(--navy); }
+:root[data-theme='dark'] .ac-steps li.done::before, :root[data-theme='dark'] .ac-steps li.now::before { background: var(--link); }
+.ac-step-dot { position: relative; z-index: 1; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); background: var(--surface); display: grid; place-items: center; color: #fff; }
+.ac-steps li.done .ac-step-dot { background: var(--navy); border-color: var(--navy); }
+.ac-steps li.now .ac-step-dot { border-color: var(--navy); box-shadow: 0 0 0 3px var(--pale); }
+.ac-steps li.done, .ac-steps li.now { color: var(--ink); }
+
+/* Cartes génériques */
+.ac-card { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
+.ac-card-head { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; }
+.ac-card-title { font-weight: 600; overflow-wrap: anywhere; }
+.ac-card-list { display: grid; gap: 12px; }
+.ac-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ac-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--ink-2); }
+.ac-meta span { overflow-wrap: anywhere; }
+.ac-claimants { display: grid; gap: 8px; }
+.ac-claimant { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface-2); flex-wrap: wrap; }
+.ac-versus { font-family: var(--font-serif); font-size: 15px; color: var(--ink-3); text-align: center; }
+.ac-timeline { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--line); display: grid; gap: 10px; }
+.ac-timeline li { position: relative; font-size: 13.5px; }
+.ac-timeline li::before { content: ''; position: absolute; left: -20px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--surface); border: 2px solid var(--navy); }
+.ac-kv { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px 16px; margin: 0; }
+@media (min-width: 640px) { .ac-kv { grid-template-columns: minmax(140px, 1fr) minmax(0, 2fr); } }
+.ac-kv dt { color: var(--ink-3); font-size: 13px; }
+.ac-kv dd { margin: 0; overflow-wrap: anywhere; }
+.ac-checks { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.ac-check { display: flex; gap: 8px; align-items: center; font-size: 14px; min-height: 36px; }
+.ac-guard { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r); background: var(--info-bg); color: var(--info-ink); font-size: 13.5px; }
+.ac-guard svg { flex: none; margin-top: 2px; }
+.ac-guard-warn { background: var(--warning-bg); color: var(--warning-ink); }
+.ac-guard-crit { background: var(--critical-bg); color: var(--critical-ink); }
+
+/* Score de rapprochement */
+.ac-score { display: grid; gap: 4px; min-width: 120px; }
+.ac-score-bar { height: 6px; border-radius: 3px; background: var(--line-soft); overflow: hidden; }
+.ac-score-bar span { display: block; height: 100%; background: var(--navy); }
+:root[data-theme='dark'] .ac-score-bar span { background: var(--link); }
+.ac-pair { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+@media (min-width: 640px) { .ac-pair { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); } }
+.ac-person { border: 1px solid var(--line-soft); border-radius: var(--r); padding: 10px 12px; background: var(--surface-2); min-width: 0; }
+.ac-person p { overflow-wrap: anywhere; }
+
+/* Bac à sable (SMS simulés) */
+.ac-sandbox { border: 1px dashed var(--line); border-radius: var(--r); padding: 12px 14px; background: var(--surface-2); display: grid; gap: 8px; }
+.ac-sandbox-title { font-weight: 600; display: inline-flex; gap: 6px; align-items: center; }
+.ac-sms-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ac-sms { display: grid; gap: 2px; padding: 8px 10px; border-radius: 10px 10px 10px 2px; background: var(--pale); font-size: 13.5px; overflow-wrap: anywhere; }
+.ac-code-input { font-size: 22px; letter-spacing: 0.3em; max-width: 220px; text-align: center; }
+
+/* Niveaux de vérification */
+.ac-ladder { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ac-ladder li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: start; padding: 10px 12px; border-radius: var(--r); border: 1px solid var(--line-soft); background: var(--surface); }
+.ac-ladder li.current { border-color: var(--navy); box-shadow: inset 3px 0 0 var(--navy); }
+.ac-ladder li.reached .ac-lvl { background: var(--navy); color: #fff; }
+.ac-lvl { display: grid; place-items: center; height: 32px; border-radius: 8px; background: var(--pale); font-weight: 700; font-size: 13px; }
+.ac-ladder p { margin: 0; }
+
+/* Compte à rebours de consultation */
+.ac-countdown { font-variant-numeric: tabular-nums; font-weight: 600; }
+.ac-banner { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: var(--r); background: var(--critical-bg); color: var(--critical-ink); flex-wrap: wrap; }
+.ac-banner.perimetre { background: var(--good-bg); color: var(--good-ink); }
+
+.ac-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ac-section-title { font-size: 15px; font-weight: 600; margin: 4px 0 8px; }
+.ac-inline-form { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface-2); }

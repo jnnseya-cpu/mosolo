@@ -1,0 +1,29 @@
+/* Module Opportunités — registre, pipeline, recoupement, maximisation (Cahier v2.9 § 8). */
+.op-link { text-align: left; font-weight: 500; white-space: normal; }
+.op-sheet { min-width: 0; }
+.op-sheet-head { display: grid; gap: 6px; }
+.op-title { font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.op-facts { display: grid; gap: 4px 16px; grid-template-columns: 1fr; }
+.op-facts dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); font-weight: 600; }
+.op-facts dd { margin: 0 0 8px; font-size: 14px; overflow-wrap: anywhere; }
+@media (min-width: 720px) { .op-facts { grid-template-columns: minmax(0, 220px) minmax(0, 1fr); } }
+.op-pipeline { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.op-pipeline li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; align-items: start; }
+.op-step-n { width: 28px; height: 28px; border-radius: 999px; display: inline-grid; place-items: center; font-weight: 600; font-size: 13px; border: 1px solid var(--line); color: var(--ink-2); }
+.op-pipeline li.is-done .op-step-n { background: var(--good); border-color: var(--good); color: #fff; }
+.op-grid { display: grid; gap: 0; margin: 0; }
+.op-grid-row { display: grid; grid-template-columns: 1fr; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.op-grid-row dt { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.op-grid-row dd { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+@media (min-width: 720px) { .op-grid-row { grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 12px; } }
+.op-details { margin-top: 12px; }
+.op-details > summary { cursor: pointer; font-weight: 500; }
+.op-details[open] > * + * { margin-top: 10px; }
+.op-signal { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.op-chips { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.op-chip { display: inline-block; font-size: 12.5px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); }
+.op-dash { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+.op-dash-card { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: grid; gap: 4px; background: var(--surface); min-width: 0; }
+.op-dash-value { font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+.op-filter { max-width: 360px; }
+.op-plate-result { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }

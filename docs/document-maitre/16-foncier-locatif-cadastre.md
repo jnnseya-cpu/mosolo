@@ -101,7 +101,7 @@ Par avenue, quartier et commune : nombre estimé de parcelles, bâtiments et uni
 
 ## 16.8 Plaque fiscale immobilière
 
-Chaque bâtiment reçoit une plaque normalisée portant l'identifiant géofiscal, un QR signé et un code court. Scan par un agent habilité : identifiant, statut d'occupation déclaré, couleur de situation. Scan public : **uniquement** « plaque authentique, bâtiment enregistré, commune, quartier ». Rendre la plaque obligatoire et interdire la mise en location d'un bien non immatriculé exige un acte [ACTE REQUIS].
+Chaque bâtiment reçoit une plaque normalisée portant l'identifiant géofiscal, un QR signé et un code court. Scan par un agent habilité : identifiant, statut d'occupation déclaré, couleur de situation. Scan public : « plaque authentique, bâtiment enregistré, commune, quartier » **et couleur de situation fiscale** (vert régularisé, orange partiel ou échéance proche, rouge en retard après vérification, gris non enregistré), avec sa légende générique — jamais le nom du propriétaire, l'adresse précise, un montant ou le détail des obligations. Une couleur rouge n'entraîne aucune mesure automatique : elle signale un dossier à traiter par une personne habilitée. *Décision de la Ville (26 septembre 2026) : le Cahier des exigences prévaut sur l'arbitrage ARB-76 de la version précédente, qui masquait la couleur au public.* Rendre la plaque obligatoire et interdire la mise en location d'un bien non immatriculé exige un acte [ACTE REQUIS].
 
 ## 16.9 Campagne locative prioritaire
 
@@ -111,6 +111,49 @@ Chaque bâtiment reçoit une plaque normalisée portant l'identifiant géofiscal
 4. Détection des incohérences ; visites ciblées après revue humaine et autorisation de mission.
 5. Liquidation selon la règle certifiée, avec explication.
 6. Mesure des résultats par rapport au groupe de comparaison (chapitre 45).
+
+## 16.10 Liaison des biens et occupations (spécification v1.0 du 28/09/2026)
+
+*Source : `docs/sources/Specification_Liaison_Biens_Occupations_v1.0.md` ; couverture critère par critère :
+`couverture-liaison-biens-occupations.md`. Construit sur le module 7 (§ 16.1) : chaque revendication porte une relation
+du module 7 ; les rôles et états existants restent, LOCATAIRE, SOUS_LOCATAIRE, OCCUPANT et EXPLOITANT s'ajoutent.*
+
+**Enregistrements distincts.** Le compte (la personne ou l'organisation), le bien (parcelle, bâtiment, unité ;
+établissement d'activité) et la relation (revendication datée : rôle, quote-part, dates du / au, état, méthode de
+vérification, pièces avec empreinte SHA-256, historique complet). Le bien porte son propre statut d'enregistrement —
+PROVISIONAL (auto-déclaré, sans effet fiscal), CANONICAL (validé), ARCHIVED_ALIAS (ancien identifiant après une fusion
+revue) — affiché à part de l'état de la relation, avec sa provenance et sa confiance.
+
+**Cycle d'une revendication.** DRAFT → SUBMITTED → MATCHED_PENDING_VERIFICATION → VERIFIED ; NEEDS_EVIDENCE ; DISPUTED →
+UNDER_REVIEW → VERIFIED | REJECTED | SUPERSEDED ; VERIFIED → ENDED. Chaque mutation exige une clé d'idempotence, contrôle
+la version (409 si périmée), vérifie les dates (422) et laisse un événement d'audit avec empreintes avant / après.
+
+**Rapprochement.** Référence officielle dans son espace de noms, puis adresse normalisée avec bâtiment et unité, puis
+proximité GPS (seuil par défaut — à confirmer) avec composantes d'adresse. Un téléphone, un nom ou le GPS seul ne
+proposent jamais rien ; aucun score ne vérifie. Les candidats ne montrent que des libellés neutres (« Unité 2, n° 12,
+avenue … »), jamais une personne ; « Mon adresse n'y figure pas » crée un bien provisoire.
+
+**Ordre indifférent.** Propriétaire d'abord : il déclare parcelle, bâtiment, unités et locataires connus (invitations
+opaques, aucun compte créé). Locataire d'abord : un bien provisoire est créé ; quand le propriétaire déclare le sien, le
+doublon est PROPOSÉ en revue (dossier FUSION_BIENS : deux arbres, cible canonique explicite, motif, réviseur, alias
+conservés, bloqué si des références officielles vérifiées divergent). Une personne déjà inscrite pour une autre raison
+(entreprise, stationnement) revendique son logement depuis son compte, sans second compte.
+
+**Vérification.** Seul un réviseur habilité vérifie (pièce acceptée pour le rôle, constat de terrain GPS + photo par un
+agent affecté dans son territoire et pour une durée limitée, ou intégration autorisée) ; une invitation acceptée n'est
+qu'une preuve d'appui. Contestation ⇒ revue motivée ; un rejet se conteste par un nouveau dossier (appel). Aucune
+décision automatique, aucune IA.
+
+**Périodes.** Un déménagement termine la relation à sa date (jamais supprimée) ; « qui occupait l'unité X à la date D »
+se lit par la vue datée `GET /v1/relations-biens/effectives` (relations VÉRIFIÉES seulement), qui sert les modules en
+aval (IRL, impôt foncier, baux). Un bien auto-déclaré non qualifié n'alimente aucune liquidation définitive.
+
+**Confidentialité.** Avant vérification, aucune donnée de l'autre partie (nom, téléphone, NIF, compte, pièces). Après
+vérification, le propriétaire voit qu'une unité a un occupant vérifié, la période et le loyer du bail qu'il a lui-même
+déclaré (IRL) ; le locataire voit la désignation du propriétaire (attestation). Jamais d'accès au compte, aux autres
+biens, obligations ou paiements de l'autre partie. Paramètres du § 10 (preuves par rôle, espace de noms, vérificateurs,
+fondement fiscal, conservation, recours, mandat terrain, divulgation) : par défaut — à confirmer par le maître
+d'ouvrage ; les revendications restent « non validées juridiquement » jusqu'à leur approbation.
 
 # 17. Cadastre fiscal géospatial
 

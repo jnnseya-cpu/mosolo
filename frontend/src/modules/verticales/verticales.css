@@ -1,0 +1,84 @@
+/* Verticales : portail, espaces, console d'instruction, vérification publique, CALCU. */
+
+.vx-card-mine { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12.5px; color: var(--ink-2); }
+.vx-card-mine > span { display: inline-flex; align-items: center; gap: 4px; }
+.vx-card-mine > span + span::before { content: '·'; color: var(--ink-3); margin-right: 8px; }
+.vx-card-due { color: var(--warning-ink, #8a5a00); font-weight: 600; }
+.vx-card-lead .vx-card-mine, .vx-card-lead .vx-card-due { color: rgba(255, 255, 255, 0.9); }
+
+.vx-demo-rule { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; padding: 1px 8px; border-radius: 4px; font-size: 11.5px; font-weight: 500; color: var(--ink-2); background: color-mix(in srgb, var(--flag-yellow) 22%, var(--surface)); border: 1px dashed color-mix(in srgb, var(--flag-yellow) 70%, var(--line)); }
+
+.vx-doc { display: grid; gap: 4px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: var(--r); background: var(--surface-2); min-width: 0; }
+.vx-doc input[type='file'] { max-width: 100%; }
+
+.vx-case-body { display: grid; gap: 10px; margin-top: 10px; padding: 10px 12px; background: var(--surface-2); border-radius: var(--r); }
+.vx-timeline { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--line); display: grid; gap: 6px; font-size: 13px; }
+.vx-timeline li { position: relative; overflow-wrap: anywhere; }
+.vx-timeline li::before { content: ''; position: absolute; left: -19px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--navy); }
+
+.vx-stall { align-items: flex-start; }
+.vx-grow { flex: 1 1 220px; display: grid; gap: 4px; }
+.vx-inline-form { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+.vx-prereq { margin: 12px 0 0; padding-left: 18px; display: grid; gap: 4px; color: var(--ink-2); }
+
+/* Console d'instruction */
+.vxc-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.vxc-toolbar select { width: auto; min-width: 160px; max-width: 100%; }
+.vxc-kpis { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 16px; }
+@media (min-width: 900px) { .vxc-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.vxc-kpi { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: grid; gap: 2px; min-width: 0; }
+.vxc-kpi strong { font-size: 22px; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.vxc-kpi span { font-size: 12.5px; color: var(--ink-3); }
+.vxc-actions { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
+.vxc-actions h3 { font-size: 14px; font-weight: 600; }
+.vxc-conds { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.vxc-conds li { display: flex; gap: 8px; align-items: flex-start; }
+.vxc-conds .ok { color: var(--good); }
+.vxc-conds .ko { color: var(--critical); }
+.vxc-findings { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--ink-2); display: grid; gap: 2px; }
+.vxc-grid2 { display: grid; gap: 16px; }
+@media (min-width: 1100px) { .vxc-grid2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } }
+.vxc-score { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12.5px; }
+.vxc-score::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--dot, var(--ink-3)); }
+.vxc-score-VERT { --dot: var(--good); }
+.vxc-score-AMBRE { --dot: #d99a00; }
+.vxc-score-ROUGE { --dot: var(--critical); }
+
+/* Vérification publique */
+.vxv-wrap { max-width: 640px; margin: 0 auto; }
+.vxv-plate { display: grid; gap: 4px; justify-items: center; padding: 18px 16px; border-radius: 12px; color: #fff; background: linear-gradient(135deg, var(--navy-deep, #111840) 0%, var(--navy) 100%); position: relative; overflow: hidden; }
+.vxv-plate::after { content: ''; position: absolute; inset: auto 0 0 0; height: 5px; background: linear-gradient(90deg, var(--flag-blue) 0 33%, var(--flag-yellow) 33% 66%, var(--flag-red) 66%); }
+.vxv-plate .mono { font-size: clamp(18px, 5vw, 26px); letter-spacing: 0.06em; font-weight: 600; overflow-wrap: anywhere; text-align: center; }
+.vxv-plate small { color: rgba(255, 255, 255, 0.75); }
+
+/* AVIA — chiffres du dossier source sur deux colonnes (une seule colonne sur téléphone). */
+.vx-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+
+/* Fiches sectorielles (modules 13 à 25) : listes compactes et résultat de scan valide. */
+.list-plain { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+.callout-ok { border-left-color: var(--flag-blue); }
+
+/* Parcours de bout en bout : libellés et routes longs repliés au téléphone (360 px, 27/09/2026). */
+.vx-parcours .list-row { flex-wrap: wrap; }
+.vx-parcours .min0 { flex: 1 1 220px; }
+.vx-parcours .row-title, .vx-parcours .mono, .vx-parcours .small { white-space: normal; overflow-wrap: anywhere; }
+
+/* Modules sectoriels : chemin vers l'acte (29/09/2026) — prochaine étape, liste de contrôle, travaux avant l'acte. */
+.sec-chemin { display: grid; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft); min-width: 0; }
+.sec-next { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); min-width: 0; overflow-wrap: anywhere; }
+.sec-next .badge { margin-left: 4px; vertical-align: middle; }
+.sec-etapes summary { cursor: pointer; }
+.sec-checklist { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 8px; }
+.sec-etape { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.sec-etape .row-between { gap: 8px; flex-wrap: wrap; }
+.sec-travaux { display: grid; gap: 6px; margin-top: 8px; }
+.sec-travaux .row-wrap { gap: 6px; }
+.sec-comment summary { cursor: pointer; }
+.sec-comment ol { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.fiche-focus { outline: 2px solid var(--navy); outline-offset: 2px; border-radius: var(--r); }
+.sec-travaux { min-width: 0; }
+.sec-travaux .row-wrap { min-width: 0; max-width: 100%; }
+.sec-travaux .btn, .sec-chemin .btn { white-space: normal; max-width: 100%; min-width: 0; height: auto; text-align: left; overflow-wrap: anywhere; }
+
+/* Étape du parcours atteinte (30/09/2026) : section brièvement mise en évidence. */
+.vx-surligne { outline: 3px solid var(--flag-yellow, #F7D618); outline-offset: 4px; transition: outline-color .4s; }
