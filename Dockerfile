@@ -43,6 +43,9 @@ RUN echo "Fond de carte (jeton ${MOSOLO_TUILES_JETON})" && bash tools/maps/fond-
 # Étape 2 — exécution : dépendances de production seulement, utilisateur non privilégié
 # ---------------------------------------------------------------------------------------------------------------------
 FROM node:22-bookworm-slim AS execution
+# Avis de sécurité Node.js du 21/10/2026 (exécution de code à distance) : version corrigée exigée — 22.23.4 ou plus
+# récente. Une image de base périmée (cache) fait échouer la construction au lieu de partir en service.
+RUN node -e "const [a,b,c]=process.versions.node.split('.').map(Number);if(!(a>22||(a===22&&(b>23||(b===23&&c>=4))))){console.error('Node.js '+process.versions.node+' vulnérable : 22.23.4 ou plus récent requis (avis du 21/10/2026). Reconstruire avec --pull.');process.exit(1)}"
 WORKDIR /app
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY shared/package.json shared/

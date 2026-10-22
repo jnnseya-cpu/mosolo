@@ -2163,3 +2163,11 @@ paiement réel, versement de commission, publication en magasin d'applications o
 fait ; le chiffre de l'IRL n'est pas repris (retiré de la communication publique). Test `frontend/test/blog.test.tsx` :
 articles complets, adresses uniques, liens vers des pages publiques seulement, absence de l'IRL, rendu de l'index et
 d'un article, adresse inconnue → page introuvable. Rien n'est retiré de l'existant.
+
+## I.66 Mise à jour de sécurité Node.js (22/10/2026)
+
+Avis de sécurité Node.js du 21/10/2026 (failles graves, dont une exécution de code à distance), relayé par Hostinger :
+versions corrigées 22.23.4, 24.22.1, 26.12.1. MOSOLO tourne sur Node.js 22 (`node:22-bookworm-slim`, qui suit la
+dernière 22.x). Ajout dans l'étape d'exécution du `Dockerfile` : la construction échoue si Node.js est antérieur à
+22.23.4 (image de base périmée en cache), au lieu de partir en service. Cloud Run est reconstruit à la mise en ligne
+suivante ; sur le VPS, `./demo.sh` (ou `./deploy.sh` en production) reconstruit avec `--pull`. Rien n'est retiré.
