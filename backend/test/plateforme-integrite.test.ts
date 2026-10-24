@@ -159,13 +159,17 @@ describe('1. Démarrage hors démonstration : plateforme vide, amorçage réel',
 // =================================================================================================================
 describe('2. Ancre externe de la chaîne d’audit', () => {
   async function bootOn(store: MemorySnapshotStore, anchor: MemoryAuditAnchor | FileAuditAnchor, opts: { accept?: boolean; auditKey?: string } = {}) {
+    // Sans données de démonstration (24/10/2026) : une base remplie par une démonstration est désormais refusée hors
+    // démonstration (mode-production.test.ts). Sur une base neuve, un événement d'audit ordinaire amorce la chaîne.
+    const neuve = (await store.loadAll()).length === 0;
     const rt = await PersistenceRuntime.open(store, { anchor, ...(opts.accept !== undefined ? { acceptUnverifiedAudit: opts.accept } : {}) });
     const app = buildApp({
-      clock: clock(), connectorEnv: {}, seed: true,
+      clock: clock(), connectorEnv: {}, seed: false,
       secrets: { ...REAL_SECRETS, auditHmacKey: opts.auditKey ?? AUDIT_KEY },
       plugins: [createSoclePlugin({ persistence: rt, rateLimit: { ...DEFAULT_RATE_LIMITS, enabled: false } })],
     });
     await app.ready();
+    if (neuve) app.ctx.audit.append({ actor: { kind: 'system', id: 'amorcage' }, action: 'test.amorcage', resourceType: 'test' });
     await rt.flush();
     return { rt, app };
   }

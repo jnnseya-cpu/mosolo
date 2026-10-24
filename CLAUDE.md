@@ -182,3 +182,6 @@ données de démonstration.
 - **Blog public (22/10/2026)** : « Le blog MOSOLO » (`/blog`, `/blog/:slug`), un article par fonctionnalité pour
   convaincre (atout distinctif, problème, réponse, atouts, publics) ; uniquement des garanties réellement appliquées,
   réserves « à confirmer » affichées, liens vers des pages publiques seulement ; IRL non cité (annexe I, § I.65).
+- **Audit de lancement (24/10/2026)** : `launch-audit/` (preuves, défauts, vérité, actions humaines) ; verdict NO-GO pour
+  un lancement public réel ; garde-fous de la console des clés, données d'exemple bannies hors démonstration, base de
+  démonstration refusée en production (annexe I, § I.67 ; `docs/production-readiness.md` § 22).

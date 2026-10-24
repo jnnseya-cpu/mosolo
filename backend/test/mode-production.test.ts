@@ -131,3 +131,18 @@ describe('Mode production : aucun chiffre d’exemple au tableau du Gouverneur (
     await app.close();
   });
 });
+
+describe('Mode production : base remplie par une démonstration refusée (audit du 24/10/2026)', () => {
+  it('lignes marquées « démonstration » détectées ; démarrage refusé hors démonstration ; base vierge acceptée', async () => {
+    const { lignesDemonstration, PersistenceRuntime } = await import('../src/persistence/runtime.js');
+    const demo = [{ repo: 'rules', id: 'DEMO-PARK-GOMBE', seq: 1, doc: { code: 'DEMO-PARK-GOMBE' } }, { repo: 'titres', id: 't1', seq: 2, doc: { label: 'DÉMONSTRATION — pass' } }];
+    const reel = [{ repo: 'rules', id: 'R-2026-001', seq: 1, doc: { code: 'IRL-2026' } }];
+    expect(lignesDemonstration(demo as never)).toHaveLength(2);
+    expect(lignesDemonstration(reel as never)).toHaveLength(0);
+    production();
+    const app = buildApp({ clock: clock(), secrets: REAL_SECRETS, connectorEnv: {} });
+    await app.ready();
+    expect(() => new PersistenceRuntime({} as never, demo as never).attach(app.ctx as never)).toThrow(/démonstration/);
+    await app.close();
+  });
+});

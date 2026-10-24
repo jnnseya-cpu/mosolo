@@ -295,8 +295,11 @@ describe('Socle : connexion par téléphone, export minimisé, chaîne d’audit
   it('chaîne d’audit restaurée non vérifiée : démarrage refusé hors démonstration, sauf acceptation tracée dans la chaîne', async () => {
     const store = new MemorySnapshotStore();
     const rt1 = await PersistenceRuntime.open(store);
-    const app1 = buildApp({ clock: clock(), secrets: SECRETS, plugins: [createSoclePlugin({ persistence: rt1, rateLimit: { ...DEFAULT_RATE_LIMITS, enabled: false } })] });
+    // Sans données de démonstration (24/10/2026) : une base remplie par une démonstration est désormais refusée hors
+    // démonstration (test mode-production) ; ce test porte sur la chaîne d'audit non vérifiée, pas sur ces données.
+    const app1 = buildApp({ clock: clock(), secrets: SECRETS, seed: false, plugins: [createSoclePlugin({ persistence: rt1, rateLimit: { ...DEFAULT_RATE_LIMITS, enabled: false } })] });
     await app1.ready();
+    app1.ctx.audit.append({ actor: { kind: 'user', id: 'operateur', roles: ['R26'] }, action: 'test.evenement', resourceType: 'test', resourceId: '1' });
     await app1.close();
     await rt1.flush();
 

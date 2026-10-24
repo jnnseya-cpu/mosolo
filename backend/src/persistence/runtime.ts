@@ -81,6 +81,21 @@ export interface RuntimeOptions {
   retryMaxMs?: number;
 }
 
+/** Marque « démonstration » : identifiant ou code `demo-…` / `DEMO-…`, ou libellé « DÉMONSTRATION … ». */
+const MARQUE_DEMO = /^(demo[-_]|ctype-demo-)/i;
+/**
+ * Lignes d'un instantané marquées « démonstration » (audit du 24/10/2026). Une base remplie par un serveur de
+ * démonstration persistant ne doit jamais être relue par un serveur hors démonstration : règles DEMO-… actives aux
+ * taux fictifs, contribuables, ordres et quittances fictifs.
+ */
+export function lignesDemonstration(rows: readonly SnapshotRow[]): SnapshotRow[] {
+  return rows.filter((r) => {
+    if (r.repo === AUDIT_REPO) return false;
+    const doc = (r.doc ?? {}) as { code?: unknown; label?: unknown };
+    return MARQUE_DEMO.test(r.id) || (typeof doc.code === 'string' && MARQUE_DEMO.test(doc.code)) || (typeof doc.label === 'string' && /^D[ÉE]MONSTRATION\b/i.test(doc.label));
+  });
+}
+
 export class PersistenceRuntime {
   private readonly pending = new Map<string, SnapshotRow>();
   private seqByRepo = new Map<string, number>();
@@ -128,6 +143,13 @@ export class PersistenceRuntime {
 
   attach(ctx: AttachableContext): AttachReport {
     if (this.ctx) throw new Error('Persistance déjà attachée à un contexte.');
+    if (!isDemoMode()) {
+      const demo = lignesDemonstration(this.loaded);
+      if (demo.length) {
+        throw new ConfigurationError(`Base de données contenant ${demo.length} enregistrement(s) de démonstration (par exemple ${demo[0]!.repo}) : `
+          + 'refus de démarrer hors démonstration. Utiliser une base vierge pour la production ; ne jamais réutiliser la base d’une démonstration.');
+      }
+    }
     const discovery = discover(ctx);
     const warnings: string[] = [];
     const byRepo = new Map<string, SnapshotRow[]>();

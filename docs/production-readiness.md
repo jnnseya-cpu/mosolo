@@ -867,3 +867,30 @@ transmettre le mot de passe par un canal sûr ; (2) `DEMO_MIN_INSTANCES=1` penda
 données réinitialisées) ; (3) répétition complète sur le projet Google Cloud la veille (l'exécution réelle de
 `deploy.sh` n'a jamais eu lieu : K-1) ; (4) aucune donnée réelle saisie, mention « données de démonstration non
 contractuelles » rappelée en séance. Si l'une de ces conditions ne peut être tenue : NO-GO pour la séance.
+
+## 22. Audit de lancement « Master Prompt v2 » (24/10/2026)
+
+Dossier de travail : `launch-audit/` (registre des preuves, défauts, audit de vérité, parcours novice, rapports de
+cycle, actions humaines). Deux cycles de corrections (commits `7ae85f1` et suivant). Rien de ce qui existe n'a été
+retiré (règle n° 1) ; les suppressions demandées par le prompt sont proposées au maître d'ouvrage.
+
+**Verdict : NO-GO pour un lancement public réel · démonstration maintenue (accès restreint recommandé, H-10).**
+Score pondéré (barème du prompt, estimation fondée sur les preuves de `launch-audit/evidence-ledger.md`) : **62 / 100**.
+Un score ne lève jamais une porte en échec.
+
+| Porte | Statut | Preuve / reste |
+|---|---|---|
+| 1. Intégrité de la construction | PASS | `npm ci`, typecheck, lint, 1 800+ tests, construction ; catalogue des routes corrigé (1 674) |
+| 2. Vérité et adéquation | FAIL | Paiements, canaux et applications de magasin encore simulés ou absents (le blog le dit) ; **la date « en service complet le 30 octobre 2026 » du courriel et de la présentation n'est pas tenable** ; parcours novice non testé sur appareil réel |
+| 3. Fonctions critiques | PARTIAL | 1 025 visites à 360 px : 0 erreur JavaScript, 0 réponse 5xx ; liens cassés corrigés ; parcours fourrières / centres agréés / pénalités sans écran (D-18) |
+| 4. Sécurité | PARTIAL | 0 P0/P1 ouvert après correction de D-01 ; P2 ouverts : D-03 (arbitrage), D-13 (zod), D-15 (traduction) ; aucun test d'intrusion indépendant (H-07) |
+| 5. Intégrité des données | PARTIAL | Base de démonstration refusée en production (D-08) ; restauration prouvée sur pg-mem et en CI, pas sur l'infrastructure cible (H-05) |
+| 6. Intégrité financière | BLOCKED | Montants calculés côté serveur, webhooks signés et idempotents (tests) ; aucun prestataire ni relevé réel (H-01, H-03), taux de change fictifs (D-16, H-04) |
+| 7. Performance | NOT TESTED | Mesure du 27/09 sur machine partagée ; aucune mesure sur l'infrastructure cible |
+| 8. Fiabilité | PARTIAL | Tests d'injection de pannes existants ; retour arrière non exercé en production (H-05) |
+| 9. Observabilité | BLOCKED | Métriques et alertes internes ; aucune personne d'astreinte (H-08) |
+| 10. Vie privée et conformité | FAIL | Envoi du texte visible à Google lors de la traduction (D-15) ; pages légales non validées (H-11) |
+| 11. Préparation opérationnelle | BLOCKED | Hébergement de production, comptes et astreinte non désignés (H-05, H-08) |
+
+Décision : **« This release is not approved for public launch. »** La boucle s'arrête sur le cas 3 du prompt : chaque
+élément restant demande une action humaine (`launch-audit/human-actions.md`) ou une décision du maître d'ouvrage.

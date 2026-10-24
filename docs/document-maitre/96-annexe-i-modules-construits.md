@@ -2171,3 +2171,17 @@ versions corrigées 22.23.4, 24.22.1, 26.12.1. MOSOLO tourne sur Node.js 22 (`no
 dernière 22.x). Ajout dans l'étape d'exécution du `Dockerfile` : la construction échoue si Node.js est antérieur à
 22.23.4 (image de base périmée en cache), au lieu de partir en service. Cloud Run est reconstruit à la mise en ligne
 suivante ; sur le VPS, `./demo.sh` (ou `./deploy.sh` en production) reconstruit avec `--pull`. Rien n'est retiré.
+
+## I.67 Audit de lancement et corrections (24/10/2026)
+
+Audit complet (hygiène du dépôt, dépendances, sécurité, câblage fonctionnel, isolement des données de démonstration,
+mobile 360 px) et deux cycles de corrections, sans rien retirer. Corrections : console des clés protégée contre le vol
+de clé API (adresse limitée au domaine du prestataire, contrôles de signature non désactivables depuis la console,
+démonstration publique verrouillée dès qu'une clé réelle est dans l'environnement, mot de passe d'accès du kit VPS de
+démonstration) ; seuil de publication de « Où va votre argent » par devise ; budget quotidien de la traduction
+automatique (par défaut 2 000 000 caractères — à confirmer) ; aucun chiffre d'exemple au tableau du Gouverneur hors
+démonstration ; application détectant un serveur hors démonstration (sélecteur masqué, aucun repli d'exemple) ; base
+de démonstration refusée par un serveur de production ; trois liens d'écran du serveur réparés et balayés par un test ;
+catalogue des routes complet (1 674) ; 67 débordements mobiles corrigés ; fastify et fast-uri corrigés, Node.js 22.23.4
+exigé. Verdict : NO-GO pour un lancement public réel (actions humaines : `launch-audit/human-actions.md`) ; rapport :
+`docs/production-readiness.md` § 22.
