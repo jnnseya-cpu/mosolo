@@ -48,6 +48,15 @@ preparer_env() {
   fi
   ecrire MOSOLO_PUBLIC_URL "https://${domaine}"
 
+  # Mot de passe d'accès commun (audit du 24/10/2026) : sans lui, tout visiteur pourrait se présenter sous n'importe quel
+  # rôle de démonstration, y compris super-administrateur. Généré une fois, affiché une fois, conservé dans .env (600).
+  if [[ -z "$(lire MOSOLO_DEMO_ACCESS_PASSWORD)" ]]; then
+    local mdp; mdp="$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 20)"
+    ecrire MOSOLO_DEMO_ACCESS_PASSWORD "$mdp"
+    info "Mot de passe d'accès à la démonstration (à donner aux visiteurs autorisés) : ${mdp}"
+    info "Identifiant : n'importe lequel. Il reste dans .env (MOSOLO_DEMO_ACCESS_PASSWORD)."
+  fi
+
   if [[ -z "$(lire MOSOLO_ACME_EMAIL)" ]]; then
     local email=""
     read -r -p "    Adresse e-mail pour le certificat HTTPS (Let's Encrypt) : " email

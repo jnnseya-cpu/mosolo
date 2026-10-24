@@ -116,3 +116,18 @@ describe('Mode production : démarrage refusé sans base de données ni secrets'
     expect(() => assertMemoryEntryAllowed({})).not.toThrow();
   });
 });
+
+describe('Mode production : aucun chiffre d’exemple au tableau du Gouverneur (audit du 24/10/2026)', () => {
+  it('tuiles, communes, tendance et actions illustratives absentes ; compteurs réels seulement', async () => {
+    production();
+    const app = buildApp({ clock: clock(), secrets: REAL_SECRETS, connectorEnv: {} });
+    await app.ready();
+    const g = app.ctx.dashboards.governor({ kind: 'user', id: 'gouverneur-reel', name: 'Gouverneur', roles: ['R01'], entity: 'GOUVERNORAT' });
+    expect(g.example).toBe(false);
+    expect(g.exampleNotice).toBeNull();
+    expect([g.byCommune, g.byCategory, g.trend, g.scenarios, g.criticalAlerts, g.actions, g.ladder].every((x) => x.length === 0)).toBe(true);
+    expect(g.tiles).toEqual({ criticalAlerts: 0 });
+    expect(g.live.example).toBe(false);
+    await app.close();
+  });
+});

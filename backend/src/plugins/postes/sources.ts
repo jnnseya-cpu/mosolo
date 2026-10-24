@@ -287,7 +287,7 @@ export class Sources {
         eligible: (u: User) => may(u, action) && notIn(u, [p.proposedBy, ...p.validations.map((v) => v.by)]),
         approuver: { method: 'POST' as const, url: `/v1/fourrieres/dossiers/${encodeURIComponent(x.id)}/destination-legale/validation`, body: (motif: string, approve: boolean) => ({ level, approve, motif }) },
         refuser: { method: 'POST' as const, url: `/v1/fourrieres/dossiers/${encodeURIComponent(x.id)}/destination-legale/validation`, body: (motif: string) => ({ level, approve: false, motif }) },
-        ecran: '/fourrieres', ...(x.demo ? { exemple: true } : {}),
+        ecran: '/vehicules/fourrieres', ...(x.demo ? { exemple: true } : {}),
       };
     });
   }

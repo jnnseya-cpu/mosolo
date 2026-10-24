@@ -17,6 +17,10 @@ for dp, _, fs in os.walk(SRC):
         text = open(p, encoding='utf-8').read()
         # Routes déclarées dans une boucle : `for (const [x, base] of [['…', '/v1/…'], …])` et `for (const provider of CONNECTOR_IDS)`.
         loops = {}
+        # Préfixes déclarés dans une constante locale : `const B = '/v1/…'` puis app.get(`${B}/x`) ou app.get(B, …)
+        # (24/10/2026 : 44 routes du moteur de répartition et de l'accès aux montants manquaient au catalogue).
+        for cm in re.finditer(r"const (\w+) = ['`](/v1/[^'`$]*)['`];", text):
+            loops.setdefault(cm.group(1), [cm.group(2)])
         for lm in re.finditer(r"for \(const \[\w+, (\w+)\] of \[(.*?)\] as const\)", text, re.S):
             loops[lm.group(1)] = re.findall(r"'(/v1/[^']+)'", lm.group(2))
         if 'of CONNECTOR_IDS' in text:

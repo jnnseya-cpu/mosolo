@@ -9,7 +9,7 @@ import { ChartTooltip, useChartColors } from '../components/charts';
 import { StatusBadge, type Tone } from '../components/StatusBadge';
 import { ErrorState, ExampleNotice, Loading } from '../components/States';
 import { Icon } from '../components/Icon';
-import { api, asList, describeError, NetworkError } from '../lib/api';
+import { api, asList, describeError, NetworkError, repliExempleAutorise } from '../lib/api';
 import { isDraftLanguage, type UIKey } from '../lib/i18n';
 import type { CommunicationsOverview, Delivery } from '../lib/types';
 import { normalizeComms, normalizeDeliveries } from '../lib/normalize';
@@ -37,7 +37,7 @@ async function loadOverview(): Promise<{ o: CommunicationsOverview; fallback: bo
   try {
     return { o: normalizeComms(await api<unknown>('/v1/communications/overview'), DEMO_COMMS), fallback: false };
   } catch (e) {
-    if (e instanceof NetworkError) return { o: DEMO_COMMS, fallback: true };
+    if (e instanceof NetworkError && repliExempleAutorise()) return { o: DEMO_COMMS, fallback: true };
     throw e;
   }
 }

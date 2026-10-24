@@ -11,7 +11,7 @@ import { AutosaveBar } from '../components/VersionHistory';
 import { ErrorState, ExampleNotice, Loading } from '../components/States';
 import { Icon } from '../components/Icon';
 import { MoneyText } from '../components/MoneyText';
-import { api, asList, describeError, NetworkError } from '../lib/api';
+import { api, asList, describeError, NetworkError, repliExempleAutorise } from '../lib/api';
 import type { UIKey } from '../lib/i18n';
 import { periodicityLabel, revenueCategoryLabel } from '../lib/labels';
 import '../modules/recouvrement/recouvrement.css';
@@ -64,7 +64,7 @@ async function loadRules(): Promise<{ rules: Rule[]; fallback: boolean }> {
   try {
     return { rules: asList<Rule>(await api<unknown>('/v1/legal-rules'), 'rules'), fallback: false };
   } catch (e) {
-    if (e instanceof NetworkError) return { rules: SAMPLE_RULES.map((r) => ({ ...r, sample: true })), fallback: true };
+    if (e instanceof NetworkError && repliExempleAutorise()) return { rules: SAMPLE_RULES.map((r) => ({ ...r, sample: true })), fallback: true };
     throw e;
   }
 }

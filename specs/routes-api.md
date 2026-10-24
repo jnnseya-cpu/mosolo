@@ -1,10 +1,11 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1630 routes** dans 52 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1674 routes** dans 53 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
 | extension acces | 90 |
+| extension acces-montants | 4 |
 | extension agents-recettes | 20 |
 | extension apprentissage | 17 |
 | extension canaux | 46 |
@@ -21,7 +22,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1630 routes** dans 5
 | extension juridique | 11 |
 | extension opportunites | 32 |
 | extension parking | 74 |
-| extension pilotage | 132 |
+| extension pilotage | 172 |
 | extension plateforme | 23 |
 | extension postes | 29 |
 | extension preuves | 15 |
@@ -151,6 +152,15 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1630 routes** dans 5
 | GET | `/v1/acces/validations` |
 | POST | `/v1/acces/validations/:id/decision` |
 | GET | `/v1/acces/validations/mine` |
+
+## Extension acces-montants
+
+| Méthode | Chemin |
+|---|---|
+| GET | `/v1/acces-montants` |
+| POST | `/v1/acces-montants` |
+| POST | `/v1/acces-montants/:id/decision` |
+| POST | `/v1/acces-montants/:id/revocation` |
 
 ## Extension agents-recettes
 
@@ -904,6 +914,46 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1630 routes** dans 5
 | POST | `/v1/pilotage/modele-operationnel/postes` |
 | POST | `/v1/pilotage/modele-operationnel/postes/:id/binome` |
 | POST | `/v1/pilotage/modele-operationnel/postes/:id/jalons/:jalon` |
+| GET | `/v1/pilotage/moteur-repartition/agents` |
+| POST | `/v1/pilotage/moteur-repartition/agents/affectations` |
+| POST | `/v1/pilotage/moteur-repartition/agents/affectations/:id/confirmation` |
+| GET | `/v1/pilotage/moteur-repartition/comptes-reglement` |
+| POST | `/v1/pilotage/moteur-repartition/comptes-reglement` |
+| POST | `/v1/pilotage/moteur-repartition/comptes-reglement/:id/autorisation` |
+| POST | `/v1/pilotage/moteur-repartition/comptes-reglement/:id/verification` |
+| GET | `/v1/pilotage/moteur-repartition/configuration` |
+| GET | `/v1/pilotage/moteur-repartition/couts` |
+| POST | `/v1/pilotage/moteur-repartition/couts` |
+| POST | `/v1/pilotage/moteur-repartition/couts/:id/verification` |
+| GET | `/v1/pilotage/moteur-repartition/demandes` |
+| POST | `/v1/pilotage/moteur-repartition/demandes` |
+| POST | `/v1/pilotage/moteur-repartition/demandes/:id/approbation` |
+| POST | `/v1/pilotage/moteur-repartition/demandes/:id/cloture` |
+| POST | `/v1/pilotage/moteur-repartition/demandes/:id/examen` |
+| POST | `/v1/pilotage/moteur-repartition/demandes/:id/instruction` |
+| POST | `/v1/pilotage/moteur-repartition/demandes/:id/paiement` |
+| POST | `/v1/pilotage/moteur-repartition/demandes/:id/rapprochement` |
+| POST | `/v1/pilotage/moteur-repartition/demandes/:id/soumission` |
+| GET | `/v1/pilotage/moteur-repartition/droits` |
+| GET | `/v1/pilotage/moteur-repartition/expliquer` |
+| GET | `/v1/pilotage/moteur-repartition/export` |
+| GET | `/v1/pilotage/moteur-repartition/litiges` |
+| POST | `/v1/pilotage/moteur-repartition/litiges` |
+| POST | `/v1/pilotage/moteur-repartition/litiges/:id/decision` |
+| GET | `/v1/pilotage/moteur-repartition/proprietes-modules` |
+| GET | `/v1/pilotage/moteur-repartition/regles` |
+| POST | `/v1/pilotage/moteur-repartition/regles` |
+| POST | `/v1/pilotage/moteur-repartition/regles/:id/activation` |
+| POST | `/v1/pilotage/moteur-repartition/regles/:id/approbation` |
+| POST | `/v1/pilotage/moteur-repartition/regles/:id/verification` |
+| POST | `/v1/pilotage/moteur-repartition/synchroniser` |
+| GET | `/v1/pilotage/moteur-repartition/tableau/agent` |
+| GET | `/v1/pilotage/moteur-repartition/tableau/entite` |
+| GET | `/v1/pilotage/moteur-repartition/tableau/executif` |
+| GET | `/v1/pilotage/moteur-repartition/tableau/groupe-nseya` |
+| GET | `/v1/pilotage/moteur-repartition/tableau/sous-traitant` |
+| GET | `/v1/pilotage/moteur-repartition/transactions` |
+| GET | `/v1/pilotage/moteur-repartition/transactions/:id` |
 | GET | `/v1/pilotage/pilote` |
 | POST | `/v1/pilotage/pilote/configuration` |
 | POST | `/v1/pilotage/pilote/revues/:jalon` |

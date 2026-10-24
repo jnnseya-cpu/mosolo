@@ -25,7 +25,8 @@ const rejectSchema = z.object({ motif: z.string().trim().min(3).max(500) }).stri
 const DOCTRINE = [
   'Écriture seule : aucune valeur n’est jamais renvoyée, pas même masquée — seuls le nom, la présence, la source active et la version sont affichés.',
   'Chiffrement au repos AES-256-GCM avec la clé maîtresse MOSOLO_CONFIG_MASTER_KEY (environnement) ; sans elle, la console refuse toute écriture.',
-  'Deux personnes : le super-administrateur (R26) propose, une personne distincte (R26 ou responsable sécurité R28) approuve ; rien ne s’applique avant.',
+  'Approbation : le super-administrateur (R26) applique seul, journalisé (décisions du 01/10/2026) ; l’ancien circuit à deux personnes (R26 propose, une personne distincte R26 ou R28 approuve) reste réactivable par MOSOLO_CLES_DEUX_PERSONNES=true.',
+  'Garde-fous (24/10/2026) : adresse d’API d’un prestataire limitée à son domaine ; contrôles de signature jamais désactivés depuis la console ; en démonstration publique avec des clés réelles dans l’environnement, paiement, adresse publique et IA ne se changent plus depuis la console.',
   'Chaque proposition, décision et essai est journalisé dans la piste d’audit — jamais la valeur.',
   RESOLUTION_RULE,
   'Prise en compte sans redéploiement : les connecteurs de paiement sont reconstruits à chaud ; une configuration invalide ne remplace jamais les connecteurs en service.',

@@ -165,6 +165,42 @@ export function checkFormat(v: IntegrationVariable, value: string, opts: { produ
   return rules[v.format]();
 }
 
+/** Hôtes admis pour les adresses d'API saisies dans la console (l'environnement peut toujours les remplacer). */
+const HOTES_PRESTATAIRES: Record<string, string> = { BITRIPAY_BASE_URL: 'bitripay.com', KODA_BASE_URL: 'kodajnn.com' };
+/** Contrôles de signature et de confirmation : décision du 29/09/2026, jamais désactivables depuis la console. */
+const CONTROLES_EXIGES = new Set(['BITRIPAY_HMAC_REQUIRED', 'BITRIPAY_ED25519_REQUIRED', 'BITRIPAY_RESOLUTION_CHECK']);
+/** Clés réelles dont la présence dans l'environnement verrouille la console d'une démonstration publique. */
+const CLES_REELLES = ['BITRIPAY_API_KEY', 'KODA_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY'];
+const GROUPES_VERROUILLES_EN_DEMO = new Set(['bitripay', 'koda', 'plateforme', 'ia']);
+
+/**
+ * Garde-fous de la console (audit de sécurité du 24/10/2026), en plus du contrôle de format — message sans valeur :
+ *  - adresse d'API d'un prestataire : hôte du prestataire seulement (sinon la clé API partirait vers un tiers) ;
+ *  - contrôles de signature (HMAC, Ed25519) et confirmation de résolution : jamais désactivés depuis la console ;
+ *  - plafond quotidien d'appels à l'IA : nombre entier ;
+ *  - démonstration publique (n'importe qui peut s'y présenter sous n'importe quel rôle) : dès qu'une clé réelle est
+ *    fournie par l'environnement, les variables de paiement, d'adresse publique et d'IA ne se changent plus depuis la
+ *    console — l'environnement du serveur fait foi.
+ */
+export function gardeConsole(v: IntegrationVariable, kind: 'DEFINIR' | 'RETIRER', value: string | undefined, ctx: { demo: boolean; production: boolean; env: (n: string) => string | undefined }): string | null {
+  if (ctx.demo && GROUPES_VERROUILLES_EN_DEMO.has(v.group) && CLES_REELLES.some((n) => ctx.env(n))) {
+    return `${v.name} : démonstration publique avec des clés réelles dans l’environnement — modification depuis la console refusée ; modifier l’environnement du serveur.`;
+  }
+  if (kind !== 'DEFINIR' || value === undefined) return null;
+  const hote = HOTES_PRESTATAIRES[v.name];
+  if (hote) {
+    let h: string;
+    try { h = new URL(value).hostname.toLowerCase(); } catch { return null; } // le contrôle de format signale l'URL invalide
+    const boucle = ['localhost', '127.0.0.1', '[::1]'].includes(h) && !ctx.production;
+    if (!boucle && h !== hote && !h.endsWith(`.${hote}`)) return `${v.name} : seule une adresse du prestataire (${hote}) est admise depuis la console.`;
+  }
+  if (CONTROLES_EXIGES.has(v.name) && /^(false|0|non|no)$/i.test(value.trim())) {
+    return `${v.name} : contrôle exigé (décision du 29/09/2026) — il ne peut pas être désactivé depuis la console.`;
+  }
+  if (v.name === 'MOSOLO_IA_PLAFOND_JOUR' && !/^\d{1,6}$/.test(value.trim())) return `${v.name} : nombre entier attendu (0 = IA externe coupée).`;
+  return null;
+}
+
 /** Lecture de la clé maîtresse (32 octets, hexadécimal ou base64) ; `null` si absente, erreur si mal formée. */
 export function parseMasterKey(raw: string | undefined): Buffer | null {
   const v = raw?.trim();
@@ -315,6 +351,14 @@ export class IntegrationConfigService {
       throw conflict('ENVIRONMENT_ONLY', `${name} ne peut être définie que dans l’environnement (lue au démarrage ou clé interne du socle).`);
     }
     if (!this.masterKey) throw this.noMasterKey();
+    const garde = gardeConsole(meta, input.kind, input.value?.trim(), { demo: this.opts.demo, production: isProduction(this.opts.processEnv ?? process.env), env: (n) => this.baseEnv(n) });
+    if (garde) {
+      this.audit.append({
+        actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'integration.config.refused', resourceType: 'integration_variable', resourceId: name,
+        outcome: 'DENIED', details: { variable: name, reason: 'GARDE_CONSOLE' },
+      });
+      throw forbidden('CONSOLE_GUARD', garde);
+    }
     let blob: EncryptedBlob | null = null;
     if (input.kind === 'DEFINIR') {
       if (typeof input.value !== 'string') throw unprocessable('VALUE_REQUIRED', `${name} : valeur requise.`);

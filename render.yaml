@@ -1,3 +1,6 @@
+# HISTORIQUE — non maintenu (24/10/2026) : la démonstration est servie par Google Cloud Run (infra/gcp/, déploiement
+# automatique .github/workflows/deploy-demo.yml) et un kit VPS existe (infra/vps/). Conservé tel quel (règle n° 1 :
+# rien n'est retiré) et toujours validé par infra/valider.sh ; le Dockerfile fait foi pour la construction.
 # Démonstration hébergée de KINSHASA MOSOLO en un seul service (API + application web).
 # Données de DÉMONSTRATION uniquement, non contractuelles : mode démonstration explicite (bandeau, rôles de démonstration,
 # secrets publics). Ne jamais y saisir de données réelles. Déploiement : https://render.com/deploy?repo=<URL du dépôt>

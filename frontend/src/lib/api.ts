@@ -24,6 +24,14 @@ export function safeSet(key: string, value: string | null): void {
 
 export function getDemoUser(): string | null { return safeGet(USER_KEY); }
 export function setDemoUser(id: string | null): void { safeSet(USER_KEY, id); }
+
+/**
+ * Serveur de démonstration ? (24/10/2026) Vrai par défaut ; mis à faux dès que le serveur refuse la démonstration.
+ * Hors démonstration, une panne réseau affiche une erreur — jamais les données d'exemple embarquées.
+ */
+let serveurDemo = true;
+export function setServeurDemo(v: boolean): void { serveurDemo = v; }
+export const repliExempleAutorise = (): boolean => serveurDemo;
 export function getApiLang(): string { return safeGet(LANG_KEY) ?? 'fr'; }
 export function setApiLang(lang: string): void { safeSet(LANG_KEY, lang); }
 

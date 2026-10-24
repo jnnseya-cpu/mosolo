@@ -123,7 +123,7 @@ export function alertFeed(ctx: AppContext, pil: PilotageService, plan: Planifica
   const exceptions = ctx.treasury.exceptions.all().filter((e) => e.status !== 'RESOLUE' && e.status !== 'CLASSEE');
   if (exceptions.length) items.push({ family: 'ECARTS', severity: 'ELEVEE', code: 'EXCEPTIONS_RAPPROCHEMENT', title: 'Exceptions de rapprochement ouvertes', detail: `${exceptions.length} exception(s) ouverte(s) entre paiements, relevés et obligations.`, count: exceptions.length, link: '/tresor' });
   const agedExceptions = exceptions.filter((e) => now - Date.parse(e.openedAt) > EXCEPTION_SLA_MS);
-  if (agedExceptions.length) items.push({ family: 'RETARDS', severity: 'CRITIQUE', code: 'EXCEPTIONS_HORS_DELAI', title: 'Exceptions hors délai (48 h)', detail: `${agedExceptions.length} exception(s) au-delà du délai de traitement : escalade au comité finances.`, count: agedExceptions.length, link: '/pilotage/salle-controle' });
+  if (agedExceptions.length) items.push({ family: 'RETARDS', severity: 'CRITIQUE', code: 'EXCEPTIONS_HORS_DELAI', title: 'Exceptions hors délai (48 h)', detail: `${agedExceptions.length} exception(s) au-delà du délai de traitement : escalade au comité finances.`, count: agedExceptions.length, link: '/decision/salle-controle' });
   // Écarts : assignation certifiée non atteinte (communes sous le réalisé attendu, sans seuil inventé : liste des écarts positifs).
   const gap = plan ? safe(() => plan.gapMap(user, {})) as { certified?: boolean; rows?: { gap: MoneyJSON }[] } | null : null;
   if (gap?.certified) {

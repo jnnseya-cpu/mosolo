@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { isLanguageCode, isCurrencyCode, intlLocale, type CurrencyCode, type LanguageCode } from '@mosolo/shared';
-import { api, asList, getDemoUser, safeGet, safeSet, setApiLang, setDemoUser } from './lib/api';
+import { api, ApiError, asList, getDemoUser, safeGet, safeSet, setApiLang, setDemoUser, setServeurDemo } from './lib/api';
 import { tr, type UIKey } from './lib/i18n';
 import { EXAMPLE_RATES } from './lib/money';
 import type { DemoUser, ExchangeRates } from './lib/types';
@@ -17,6 +17,8 @@ interface AppState {
   setTheme: (t: ThemePref) => void;
   users: DemoUser[];
   usersError: boolean;
+  /** Serveur hors démonstration (24/10/2026) : pas de sélecteur, pas d'en-tête de démonstration, pas de repli fictif. */
+  demoOff: boolean;
   user: DemoUser | null;
   setUserId: (id: string) => void;
   rates: ExchangeRates | null;
@@ -68,6 +70,7 @@ export function AppProvider({ children, initialLang }: { children: ReactNode; in
   const [sysDark, setSysDark] = useState(systemDark);
   const [users, setUsers] = useState<DemoUser[]>([]);
   const [usersError, setUsersError] = useState(false);
+  const [demoOff, setDemoOff] = useState(false);
   const [userId, setUserIdState] = useState<string | null>(getDemoUser);
   const [rates, setRates] = useState<ExchangeRates | null>(null);
 
@@ -105,7 +108,19 @@ export function AppProvider({ children, initialLang }: { children: ReactNode; in
           setUserIdState(first.id);
         }
       })
-      .catch(() => alive && setUsersError(true));
+      .catch((e: unknown) => {
+        if (!alive) return;
+        setUsersError(true);
+        // Production : la liste de démonstration n'existe pas (404) ou l'en-tête de démonstration est refusé (401
+        // DEMO_AUTH_DISABLED). On oublie l'utilisateur de démonstration mémorisé : sinon chaque requête, même publique,
+        // serait refusée.
+        if (e instanceof ApiError && (e.status === 404 || e.code === 'DEMO_AUTH_DISABLED')) {
+          setDemoUser(null);
+          setUserIdState(null);
+          setDemoOff(true);
+          setServeurDemo(false);
+        }
+      });
     const today = new Date().toISOString().slice(0, 10);
     api<unknown>(`/v1/exchange-rates/${today}`)
       .then((v) => alive && setRates(normalizeRates(v) ?? EXAMPLE_RATES))
@@ -122,7 +137,7 @@ export function AppProvider({ children, initialLang }: { children: ReactNode; in
     const locale = intlLocale(lang);
     return {
       lang, setLang, currency, setCurrency, theme, resolvedTheme, setTheme,
-      users, usersError, user: users.find((u) => u.id === userId) ?? null, setUserId, rates,
+      users, usersError, demoOff, user: users.find((u) => u.id === userId) ?? null, setUserId, rates,
       // Interface en français tant que la traduction n'est pas validée (30/09/2026, avis « AvisLangue ») ; la langue
       // choisie reste celle des messages (SMS, notifications) — les traductions partagées sont conservées pour eux.
       tr: (key, vars) => tr('fr', key, vars),
@@ -138,7 +153,7 @@ export function AppProvider({ children, initialLang }: { children: ReactNode; in
         }
       },
     };
-  }, [lang, setLang, currency, setCurrency, theme, resolvedTheme, setTheme, users, usersError, userId, setUserId, rates]);
+  }, [lang, setLang, currency, setCurrency, theme, resolvedTheme, setTheme, users, usersError, demoOff, userId, setUserId, rates]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

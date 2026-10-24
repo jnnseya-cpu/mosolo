@@ -1,0 +1,27 @@
+# Envoi à Cloud Build par « gcloud run deploy --source . » (déploiement automatique de la démonstration, .github/workflows/
+# deploy-demo.yml). Copie de infra/gcp/.gcloudignore, qui fait foi (24/10/2026) : sans ce fichier, les ~230 Mo de docs/
+# partaient à chaque déploiement. Aucun de ces dossiers n'est lu par la construction de l'image (Dockerfile).
+# Sources envoyées à Cloud Build (gcloud builds submit --ignore-file=infra/gcp/.gcloudignore) : le strict nécessaire.
+# Jamais de secrets, de dépendances installées ni de documents volumineux.
+.git
+.gitignore
+.claude
+node_modules
+**/node_modules
+frontend/dist
+frontend/dev-dist
+docs
+mobile
+coverage
+**/*.log
+.env
+.env.*
+**/*.pem
+**/*.key
+backend/data
+infra/vps/.env
+infra/vps/.etat
+infra/vps/sauvegardes
+infra/vps/amorcage
+infra/gcp/.rendu
+infra/static/.rendu

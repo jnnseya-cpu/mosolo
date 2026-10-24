@@ -1224,3 +1224,14 @@ input[type='file'] { font-size: 13.5px; max-width: 100%; }
 .blog-atouts li svg { flex: none; margin-top: 5px; color: var(--primary); }
 .blog-cta { display: flex; flex-wrap: wrap; gap: 12px; margin: 32px 0 8px; }
 .blog-cta .btn { white-space: normal; max-width: 100%; height: auto; text-align: left; }
+
+/* Écrans étroits (audit du 24/10/2026, 67 débordements horizontaux relevés à 360 px) :
+   - écran d'état (refus d'accès, vide, erreur) : la colonne de la grille ne s'élargit plus au-delà de l'écran ;
+   - boutons : le libellé passe à la ligne au lieu de pousser la page ;
+   - illustration de la page hors ligne bornée à la largeur disponible. */
+.state { grid-template-columns: minmax(0, 1fr); }
+.state > * { max-width: 100%; }
+@media (max-width: 480px) {
+  .btn { white-space: normal; height: auto; text-align: center; }
+}
+.offline-cover { max-width: 100%; height: auto; }

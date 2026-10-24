@@ -8,6 +8,7 @@ import { buildApp } from '../src/app.js';
 import { ManualClock } from '../src/core/clock.js';
 import { DEFAULT_PLUGINS } from '../src/plugins/index.js';
 import { AGENTS_RECETTES } from '../src/plugins/agents-recettes/model.js';
+import type { AgentsRecettesService } from '../src/plugins/agents-recettes/service.js';
 
 async function env() {
   const app = buildApp({ clock: new ManualClock('2026-10-01T09:00:00.000Z'), seed: true, plugins: DEFAULT_PLUGINS, secrets: { auditHmacKey: 'k', providerSecrets: { 'mm-operator-a': 's' }, commsProviderKeys: {} } });
@@ -109,6 +110,17 @@ describe('Agents IA de recettes', () => {
     const e = (await req('GET', '/v1/agents-recettes/equite', 'u-gouverneur')).json();
     expect(e.lignes).toHaveLength(24);
     expect(e.statut).toMatch(/à confirmer/);
+  });
+
+  it('où va votre argent : seuil appliqué aussi par devise (un seul payeur en USD n’est jamais publié)', async () => {
+    const { app } = await env();
+    const svc = app.ctx.ext.agentsRecettes as AgentsRecettesService;
+    const ord = (i: number, currency: string, amount: string) => ({ id: `o${i}`, obligationId: `ob${i}`, commune: 'Gombe', taxpayerId: `t${i}`, amount: { amount, currency }, status: 'RAPPROCHE', reconciledAt: '2026-10-01T00:00:00.000Z' });
+    const orders = [1, 2, 3, 4, 5].map((i) => ord(i, 'CDF', '1000.00')).concat([ord(6, 'USD', '987.00')]);
+    (svc as unknown as { facts: () => unknown }).facts = () => ({ obligations: orders.map((o) => ({ id: o.obligationId, commune: 'Gombe' })), orders });
+    const gombe = svc.ouVaArgent().communes.find((c) => c.commune === 'Gombe')!;
+    expect(gombe.publiable).toBe(true);
+    expect(gombe.recettes.map((m) => m.currency)).toEqual(['CDF']);
   });
 
   it('démonstration : lots [EXEMPLE] validés par deux personnes → découvertes, plaques et écart d’un grand opérateur ; jamais en production', async () => {

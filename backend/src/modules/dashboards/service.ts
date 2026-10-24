@@ -1,5 +1,5 @@
 /** Tableau de bord du Gouverneur (§ 26.2) : agrégats seulement, jamais de nominatif. */
-import type { User } from '../../core/auth.js';
+import { isDemoMode, type User } from '../../core/auth.js';
 import type { Clock } from '../../core/clock.js';
 import type { AuditLog } from '../../core/audit.js';
 import { authorize } from '../../core/policy.js';
@@ -33,6 +33,25 @@ export class DashboardService {
     const liveCounters = this.live();
     const alerts = exampleAlerts();
     this.audit.append({ actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'dashboard.viewed', resourceType: 'dashboard', resourceId: 'governor' });
+    const reel = {
+      live: { ...liveCounters, example: false, note: 'Compteurs réels du socle (agrégats, sans montant nominatif).' },
+      liveByCommune: {
+        example: false,
+        rule: 'Commune du fait générateur (lieu de l’objet ou du service), jamais l’adresse du contribuable (§ 20.3).',
+        note: '« Payé » inclut « rapproché » : ces deux niveaux ne s’additionnent pas. Seul le rapproché est une recette arrivée au compte public.',
+        rows: this.liveByCommune(),
+      },
+    };
+    // Hors démonstration (audit du 24/10/2026) : jamais de chiffres d'exemple — les tuiles illustratives et les actions
+    // de l'IA qui en découlent ne sont pas servies ; seuls les compteurs réels font foi.
+    if (!isDemoMode()) {
+      return {
+        example: false, exampleNotice: null, currency: 'CDF', generatedAt: this.clock.now().toISOString(),
+        tiles: { criticalAlerts: liveCounters.securityAlerts }, ladder: [], byCommune: [], byCategory: [], trend: [], scenarios: [], criticalAlerts: [], actions: [],
+        note: 'Synthèses détaillées : Centre de commandement et poste de décision (données réelles). Aucun chiffre d’exemple hors démonstration.',
+        ...reel,
+      };
+    }
     return {
       example: true,
       exampleNotice: 'EXEMPLE — valeurs illustratives, non opposables.',
@@ -46,13 +65,7 @@ export class DashboardService {
       scenarios: scenarios(),
       criticalAlerts: alerts,
       actions: this.ai.governorActions(),
-      live: { ...liveCounters, example: false, note: 'Compteurs réels du socle (agrégats, sans montant nominatif).' },
-      liveByCommune: {
-        example: false,
-        rule: 'Commune du fait générateur (lieu de l’objet ou du service), jamais l’adresse du contribuable (§ 20.3).',
-        note: '« Payé » inclut « rapproché » : ces deux niveaux ne s’additionnent pas. Seul le rapproché est une recette arrivée au compte public.',
-        rows: this.liveByCommune(),
-      },
+      ...reel,
     };
   }
 }

@@ -12,7 +12,7 @@ import { AIInsightPanel } from '../components/AIInsightPanel';
 import { StatusBadge, type Tone } from '../components/StatusBadge';
 import { ErrorState, ExampleNotice, Loading } from '../components/States';
 import { Icon } from '../components/Icon';
-import { api, ApiError, describeError, NetworkError } from '../lib/api';
+import { api, ApiError, describeError, NetworkError, repliExempleAutorise } from '../lib/api';
 import { compact, convertIndicative, plotValue } from '../lib/money';
 import { normalizeGovernor, type GovView } from '../lib/normalize';
 import type { UIKey } from '../lib/i18n';
@@ -55,7 +55,7 @@ async function loadDashboard(): Promise<{ d: GovView; fallback: boolean }> {
   try {
     return { d: normalizeGovernor(await api<unknown>('/v1/dashboards/governor')), fallback: false };
   } catch (e) {
-    if (e instanceof NetworkError) return { d: normalizeGovernor(DEMO_GOVERNOR_RAW), fallback: true };
+    if (e instanceof NetworkError && repliExempleAutorise()) return { d: normalizeGovernor(DEMO_GOVERNOR_RAW), fallback: true };
     throw e;
   }
 }
@@ -104,7 +104,7 @@ export default function Governor() {
     try {
       return { rec: await api<AIRecommendation>('/v1/ai/insights', { method: 'POST', body: { context: 'governor' } }), example: false };
     } catch (e) {
-      if (e instanceof NetworkError) return { rec: DEMO_ACTIONS[0]!, example: true };
+      if (e instanceof NetworkError && repliExempleAutorise()) return { rec: DEMO_ACTIONS[0]!, example: true };
       throw e;
     }
   }, [user?.id]);

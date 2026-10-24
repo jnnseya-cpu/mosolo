@@ -119,7 +119,9 @@ export function groupByFamily(users: DemoUser[]): { code: string; label: string;
 
 /** Utilisateur de démonstration (en-tête x-demo-user). */
 export function DemoUserSelector({ id = 'user-select' }: { id?: string }) {
-  const { users, usersError, user, setUserId, tr: t, lang } = useApp();
+  const { users, usersError, demoOff, user, setUserId, tr: t, lang } = useApp();
+  // Hors démonstration, aucun sélecteur de rôle fictif n'est proposé.
+  if (demoOff) return null;
   return (
     <div className="ctl">
       <label htmlFor={id} className="ctl-label">{t('header.demoUser')}</label>

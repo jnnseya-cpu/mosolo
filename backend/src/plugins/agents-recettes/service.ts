@@ -482,14 +482,18 @@ export class AgentsRecettesService {
   /** Page publique : recettes rapprochées par commune (≥ 5 contribuables) et réalisations financées sur acte. */
   ouVaArgent() {
     const f = this.facts();
-    const parCommune = new Map<string, { contribuables: Set<string>; montants: Map<CurrencyCode, bigint> }>();
+    // Seuil de protection appliqué par commune ET par devise (audit du 24/10/2026) : sinon le total d'une devise payée par
+    // un seul contribuable de la commune (par exemple en USD) serait publié.
+    const parCommune = new Map<string, { contribuables: Set<string>; montants: Map<CurrencyCode, bigint>; parDevise: Map<CurrencyCode, Set<string>> }>();
     const obCommune = new Map((f?.obligations ?? []).map((o) => [o.id, o.commune]));
     for (const o of f?.orders ?? []) {
       if (!isReconciled(o)) continue;
       const com = obCommune.get(o.obligationId) ?? o.commune;
       if (!(COMMUNES as readonly string[]).includes(com)) continue;
-      const e = parCommune.get(com) ?? { contribuables: new Set(), montants: new Map() };
-      e.contribuables.add(o.taxpayerId); e.montants.set(o.amount.currency as CurrencyCode, (e.montants.get(o.amount.currency as CurrencyCode) ?? 0n) + minor(o.amount));
+      const e = parCommune.get(com) ?? { contribuables: new Set(), montants: new Map(), parDevise: new Map() };
+      e.contribuables.add(o.taxpayerId);
+      const dev = o.amount.currency as CurrencyCode;
+      e.parDevise.set(dev, (e.parDevise.get(dev) ?? new Set()).add(o.taxpayerId)); e.montants.set(o.amount.currency as CurrencyCode, (e.montants.get(o.amount.currency as CurrencyCode) ?? 0n) + minor(o.amount));
       parCommune.set(com, e);
     }
     const projets = (this.planif?.projects.all() ?? []).filter((p) => ['FINANCE', 'EN_COURS', 'ACHEVE'].includes(p.status) && !p.example);
@@ -498,7 +502,7 @@ export class AgentsRecettesService {
       const publiable = !!e && e.contribuables.size >= MIN_CONTRIBUTORS;
       return {
         commune: com, publiable,
-        recettes: publiable ? [...e!.montants.entries()].map(([c, v]) => money(v, c)) : [],
+        recettes: publiable ? [...e!.montants.entries()].filter(([c]) => (e!.parDevise.get(c)?.size ?? 0) >= MIN_CONTRIBUTORS).map(([c, v]) => money(v, c)) : [],
         motif: publiable ? null : `Moins de ${MIN_CONTRIBUTORS} contribuables : non publié (protection des personnes).`,
         realisations: projets.filter((p) => p.communes.includes(com)).map((p) => ({ titre: p.title, statut: p.status, avancement: p.progressPct ?? null, acte: p.funding?.decisionReference ?? null })),
       };

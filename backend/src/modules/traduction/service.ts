@@ -102,9 +102,29 @@ export class TraductionService {
     };
   }
 
+  /**
+   * Budget quotidien de caractères NON encore traduits (audit du 24/10/2026) : la route est publique ; sans plafond, des
+   * textes aléatoires feraient grimper la facture Google sans limite. Une fois le budget atteint, les textes restent en
+   * français (aucune erreur). MOSOLO_TRADUCTION_PLAFOND_JOUR — par défaut 2 000 000, à confirmer par le maître d'ouvrage.
+   */
+  private budget = { jour: '', caracteres: 0 };
+  plafondJour(): number {
+    const v = Number(process.env.MOSOLO_TRADUCTION_PLAFOND_JOUR);
+    return Number.isInteger(v) && v >= 0 ? v : 2_000_000;
+  }
+
   async traduire(textes: string[], cible: LangueTraduite): Promise<string[]> {
     if (!this.traducteur) throw new Error('INDISPONIBLE');
-    const manquants = [...new Set(textes.filter((t) => !this.cache.has(`${cible}|${t}`)))];
+    const jour = new Date().toISOString().slice(0, 10);
+    if (this.budget.jour !== jour) this.budget = { jour, caracteres: 0 };
+    const restant = this.plafondJour() - this.budget.caracteres;
+    const manquants: string[] = [];
+    let n = 0;
+    for (const t of new Set(textes.filter((x) => !this.cache.has(`${cible}|${x}`)))) {
+      if (n + t.length > restant) break; // budget du jour atteint : ces textes restent en français
+      manquants.push(t); n += t.length;
+    }
+    this.budget.caracteres += n;
     for (let i = 0; i < manquants.length; i += 100) {
       const lot = manquants.slice(i, i + 100);
       try {

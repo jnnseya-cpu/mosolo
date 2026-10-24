@@ -113,8 +113,8 @@ export class FiscalService {
         ...this.declarations.list({ taxpayerId: tp }).map((x) => ({ rubrique: 'DEMARCHE' as const, id: x.id, libelle: `Déclaration ${x.kind} ${x.period}`, nature: 'DECLARATION', statut: x.status, objectId: x.objectId, lien: '/fiscal/declarations' })),
         ...this.exemptions.exemptions.find((x) => x.taxpayerId === tp).map((x) => ({ rubrique: 'DEMARCHE' as const, id: x.id, libelle: `Demande d’exonération (${x.kind})`, nature: 'EXONERATION', statut: x.status, ...(x.objectId ? { objectId: x.objectId } : {}), lien: '/fiscal/exonerations' })),
         ...this.clearances.clearances.find((x) => x.taxpayerId === tp).map((x) => ({ rubrique: 'TITRE' as const, id: x.id, libelle: `Quitus fiscal ${x.number}`, nature: 'QUITUS', statut: x.status, echeance: x.validUntil, lien: '/fiscal/quitus' })),
-        ...this.enrolment.roles.find((x) => x.taxpayerId === tp).map((x) => ({ rubrique: 'ROLE' as const, id: x.id, libelle: `Rôle déclaré : ${x.profileLabel}`, nature: x.profile, statut: x.status, date: x.declaredAt, lien: '/fiscal/enrolement' })),
-        ...this.enrolment.nifRequests.find((x) => x.taxpayerId === tp).map((x) => ({ rubrique: 'DEMARCHE' as const, id: x.id, libelle: `Demande de NIF (identifiant provisoire ${x.provisionalId})`, nature: 'NIF', statut: x.status, date: x.requestedAt, lien: '/fiscal/enrolement' })),
+        ...this.enrolment.roles.find((x) => x.taxpayerId === tp).map((x) => ({ rubrique: 'ROLE' as const, id: x.id, libelle: `Rôle déclaré : ${x.profileLabel}`, nature: x.profile, statut: x.status, date: x.declaredAt, lien: '/mon-espace/profils' })),
+        ...this.enrolment.nifRequests.find((x) => x.taxpayerId === tp).map((x) => ({ rubrique: 'DEMARCHE' as const, id: x.id, libelle: `Demande de NIF (identifiant provisoire ${x.provisionalId})`, nature: 'NIF', statut: x.status, date: x.requestedAt, lien: '/mon-espace/profils' })),
       ],
     });
   }
