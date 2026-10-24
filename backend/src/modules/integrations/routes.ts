@@ -51,6 +51,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, ctx: AppContext)
         writable: svc.masterKeyState !== 'ABSENTE',
       },
       resolutionRule: RESOLUTION_RULE,
+      persistance: svc.persistance(),
       groups: INTEGRATION_GROUPS.map((g) => ({
         ...g,
         variables: variables.filter((v) => v.group === g.id),

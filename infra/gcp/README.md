@@ -435,3 +435,9 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:$S
 
 Coût : facturation Cloud Translation à l'usage (les libellés d'interface sont traduits une fois puis mis en cache).
 Désactivation : variable `MOSOLO_TRADUCTION=off`. Hors Cloud Run : variable `GOOGLE_TRANSLATE_API_KEY`.
+
+## Clés saisies dans le compte d'administration et conservées (24/10/2026)
+
+`bash infra/gcp/cles-console.sh` (une fois, dans Cloud Shell) : compartiment privé où la console « Clés et raccordements »
+écrit ses valeurs chiffrées, clé maîtresse stable et mot de passe d'accès dans Secret Manager, raccordement du service
+`mosolo-demo`. Ensuite, toutes les clés se saisissent dans l'écran du super-administrateur. `DRY_RUN=1` pour relire.

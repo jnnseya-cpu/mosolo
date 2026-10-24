@@ -224,6 +224,9 @@ export function createContext(opts: AppOptions = {}) {
       }
     }
   });
+  // Valeurs de la console conservées dans un fichier chiffré (24/10/2026) : rechargées ici, après le rattachement des
+  // connecteurs (reconstruits à la prochaine lecture, l'empreinte ayant changé) et des canaux (effets vivants).
+  integrations.chargerFichier();
   const payments = new PaymentService(clock, audit, comms, alerts, assessment, taxpayers, vault, fx, receipts, ledger, secrets.providerSecrets, connectors, secrets.providerKeyRings ?? {});
   const treasury = new TreasuryService(clock, audit, comms, users, payments, assessment, receipts, vault, ledger, taxpayers);
   const drafts = new DraftService(clock, audit);

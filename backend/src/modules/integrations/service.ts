@@ -18,6 +18,8 @@
  *  - PRISE EN COMPTE SANS REDÉPLOIEMENT : les connecteurs relisent la configuration par le résolveur (empreinte).
  */
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import type { AuditLog } from '../../core/audit.js';
 import { isProduction, type User } from '../../core/auth.js';
 import type { Clock } from '../../core/clock.js';
@@ -182,8 +184,9 @@ const GROUPES_VERROUILLES_EN_DEMO = new Set(['bitripay', 'koda', 'plateforme', '
  *    fournie par l'environnement, les variables de paiement, d'adresse publique et d'IA ne se changent plus depuis la
  *    console — l'environnement du serveur fait foi.
  */
-export function gardeConsole(v: IntegrationVariable, kind: 'DEFINIR' | 'RETIRER', value: string | undefined, ctx: { demo: boolean; production: boolean; env: (n: string) => string | undefined }): string | null {
-  if (ctx.demo && GROUPES_VERROUILLES_EN_DEMO.has(v.group) && CLES_REELLES.some((n) => ctx.env(n))) {
+export function gardeConsole(v: IntegrationVariable, kind: 'DEFINIR' | 'RETIRER', value: string | undefined, ctx: { demo: boolean; production: boolean; env: (n: string) => string | undefined; demoProtegee?: boolean }): string | null {
+  // Démonstration protégée par un mot de passe d'accès (MOSOLO_DEMO_ACCESS_PASSWORD) : elle n'est plus « publique ».
+  if (ctx.demo && !ctx.demoProtegee && GROUPES_VERROUILLES_EN_DEMO.has(v.group) && CLES_REELLES.some((n) => ctx.env(n))) {
     return `${v.name} : démonstration publique avec des clés réelles dans l’environnement — modification depuis la console refusée ; modifier l’environnement du serveur.`;
   }
   if (kind !== 'DEFINIR' || value === undefined) return null;
@@ -223,6 +226,12 @@ export interface IntegrationConfigOptions {
    * super-administrateur applique seul. Les clés d'IA restent toujours en approbation unique.
    */
   deuxPersonnes?: boolean;
+  /**
+   * Fichier où les valeurs de la console sont conservées (24/10/2026, demande du maître d'ouvrage : toutes les clés
+   * saisies dans le compte d'administration). Contenu : blocs CHIFFRÉS seulement (AES-256-GCM), jamais une valeur en
+   * clair ; exige une clé maîtresse stable (MOSOLO_CONFIG_MASTER_KEY). Défaut : variable MOSOLO_CONSOLE_FILE.
+   */
+  fichier?: string;
 }
 
 export class IntegrationConfigService {
@@ -351,7 +360,7 @@ export class IntegrationConfigService {
       throw conflict('ENVIRONMENT_ONLY', `${name} ne peut être définie que dans l’environnement (lue au démarrage ou clé interne du socle).`);
     }
     if (!this.masterKey) throw this.noMasterKey();
-    const garde = gardeConsole(meta, input.kind, input.value?.trim(), { demo: this.opts.demo, production: isProduction(this.opts.processEnv ?? process.env), env: (n) => this.baseEnv(n) });
+    const garde = gardeConsole(meta, input.kind, input.value?.trim(), { demo: this.opts.demo, production: isProduction(this.opts.processEnv ?? process.env), env: (n) => this.baseEnv(n), demoProtegee: (this.opts.processEnv ?? process.env).MOSOLO_DEMO_ACCESS_PASSWORD?.trim().length ? true : false });
     if (garde) {
       this.audit.append({
         actor: { kind: 'user', id: user.id, roles: user.roles }, action: 'integration.config.refused', resourceType: 'integration_variable', resourceId: name,
@@ -424,6 +433,7 @@ export class IntegrationConfigService {
     };
     if (prev) this.values.update(next);
     else this.values.insert(next);
+    this.ecrireFichier();
     const decided = this.proposals.update({ ...p, status: 'APPROUVEE', blob: null, decidedBy: user.id, decidedAt: now, ...(motif ? { decisionMotif: motif } : {}) });
     const activeSource = this.sourceOf(p.variable);
     this.audit.append({
@@ -461,6 +471,61 @@ export class IntegrationConfigService {
   }
 
   /** Inventaire : noms, rôle, source active, présence, version — JAMAIS une valeur (même masquée). */
+  // ------------------------------------------------------------------ conservation durable (fichier chiffré)
+  private persistanceDetail: { active: boolean; detail: string } | null = null;
+
+  private cheminFichier(): string | undefined {
+    const f = this.opts.fichier ?? (this.opts.processEnv ?? process.env).MOSOLO_CONSOLE_FILE?.trim();
+    return f ? f : undefined;
+  }
+
+  /** État de la conservation des valeurs saisies (affiché en tête de la console, sans valeur). */
+  persistance(): { active: boolean; detail: string } {
+    if (this.persistanceDetail) return this.persistanceDetail;
+    const f = this.cheminFichier();
+    if (!this.opts.demo && !f) return { active: true, detail: 'Valeurs conservées par la base de données de la plateforme (chiffrées).' };
+    if (!f) return { active: false, detail: 'Les valeurs saisies ici sont PERDUES à chaque redémarrage du serveur : renseigner MOSOLO_CONSOLE_FILE (fichier sur un volume durable) et MOSOLO_CONFIG_MASTER_KEY.' };
+    if (this.masterKeyState !== 'PRESENTE') return { active: false, detail: 'MOSOLO_CONFIG_MASTER_KEY absente : la clé maîtresse change à chaque démarrage, les valeurs ne peuvent pas être conservées.' };
+    return { active: true, detail: 'Valeurs conservées après redémarrage (fichier chiffré AES-256-GCM, aucune valeur en clair).' };
+  }
+
+  /** Chargement au démarrage des valeurs conservées (après le rattachement des connecteurs, qui se reconstruisent). */
+  chargerFichier(): void {
+    const f = this.cheminFichier();
+    if (!f || this.masterKeyState !== 'PRESENTE' || !existsSync(f)) return;
+    try {
+      const doc = JSON.parse(readFileSync(f, 'utf8')) as { format?: string; keyId?: string; values?: ConsoleValue[] };
+      if (doc.format !== 'mosolo-console/1' || !Array.isArray(doc.values)) throw new Error('format inconnu');
+      if (doc.keyId !== this.keyId) {
+        this.persistanceDetail = { active: false, detail: 'Fichier des clés illisible : il a été chiffré avec une autre clé maîtresse (MOSOLO_CONFIG_MASTER_KEY a changé). Ressaisir les valeurs.' };
+        return;
+      }
+      for (const v of doc.values) {
+        if (!variable(v.id)) continue;
+        if (this.values.get(v.id)) this.values.update(v);
+        else this.values.insert(v);
+      }
+      this.applyLiveEffects();
+    } catch (e) {
+      this.persistanceDetail = { active: false, detail: `Fichier des clés illisible (${e instanceof Error ? e.message : 'erreur'}) : les valeurs n’ont pas été rechargées.` };
+    }
+  }
+
+  /** Écriture atomique (fichier temporaire puis renommage, droits 600). Une erreur est signalée, jamais la valeur. */
+  private ecrireFichier(): void {
+    const f = this.cheminFichier();
+    if (!f || this.masterKeyState !== 'PRESENTE') return;
+    try {
+      mkdirSync(dirname(f), { recursive: true });
+      const tmp = `${f}.tmp`;
+      writeFileSync(tmp, JSON.stringify({ format: 'mosolo-console/1', keyId: this.keyId, values: this.values.all() }), { mode: 0o600 });
+      renameSync(tmp, f);
+      this.persistanceDetail = null;
+    } catch (e) {
+      this.persistanceDetail = { active: false, detail: `Écriture du fichier des clés impossible (${e instanceof Error ? e.message : 'erreur'}) : la valeur est appliquée mais sera perdue au redémarrage.` };
+    }
+  }
+
   inventory(user: User) {
     authorize(user, 'integration.read');
     const consoleVals = this.consoleValues();

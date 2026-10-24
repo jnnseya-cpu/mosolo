@@ -16,6 +16,9 @@ services:
     cap_drop: [ALL]
     read_only: true
     tmpfs: ["/tmp:size=256m"]
+    # Valeurs de la console « Clés et raccordements » (chiffrées), conservées entre redémarrages (24/10/2026).
+    volumes:
+      - console:/var/lib/mosolo
     expose: ["8080"]
     networks: [interne]
     logging:
@@ -48,5 +51,6 @@ networks:
   interne: {}
 
 volumes:
+  console: {}
   caddy_data: {}
   caddy_config: {}

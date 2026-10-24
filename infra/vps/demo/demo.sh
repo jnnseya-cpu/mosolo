@@ -57,6 +57,14 @@ preparer_env() {
     info "Identifiant : n'importe lequel. Il reste dans .env (MOSOLO_DEMO_ACCESS_PASSWORD)."
   fi
 
+  # Clé maîtresse stable de la console des clés (24/10/2026) : sans elle, les clés saisies dans le compte
+  # d'administration seraient illisibles après chaque redémarrage. Générée une fois, jamais affichée.
+  if [[ -z "$(lire MOSOLO_CONFIG_MASTER_KEY)" ]]; then
+    ecrire MOSOLO_CONFIG_MASTER_KEY "$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    info "Clé maîtresse de la console générée (conservée dans .env, jamais affichée)."
+  fi
+  [[ -n "$(lire MOSOLO_CONSOLE_FILE)" ]] || ecrire MOSOLO_CONSOLE_FILE /var/lib/mosolo/console-cles.json
+
   if [[ -z "$(lire MOSOLO_ACME_EMAIL)" ]]; then
     local email=""
     read -r -p "    Adresse e-mail pour le certificat HTTPS (Let's Encrypt) : " email

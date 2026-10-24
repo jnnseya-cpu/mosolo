@@ -185,3 +185,6 @@ données de démonstration.
 - **Audit de lancement (24/10/2026)** : `launch-audit/` (preuves, défauts, vérité, actions humaines) ; verdict NO-GO pour
   un lancement public réel ; garde-fous de la console des clés, données d'exemple bannies hors démonstration, base de
   démonstration refusée en production (annexe I, § I.67 ; `docs/production-readiness.md` § 22).
+- **Clés dans le compte d'administration (24/10/2026)** : toutes les clés se saisissent dans « Clés et raccordements »
+  (super-administrateur) et sont conservées (fichier chiffré `MOSOLO_CONSOLE_FILE` + clé maîtresse stable) ; démonstration
+  protégée par mot de passe d'accès (`infra/gcp/cles-console.sh`, `./demo.sh`) — annexe I, § I.68.

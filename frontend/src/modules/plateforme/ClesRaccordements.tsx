@@ -25,7 +25,7 @@ interface Variable {
 }
 interface Group { id: string; label: string; test: 'APPEL_REEL' | 'CONFIGURATION'; variables: Variable[]; pending: number; missingRequired: string[] }
 interface Keys {
-  generatedAt: string; masterKey: { state: string; label: string; writable: boolean }; resolutionRule: string; groups: Group[];
+  generatedAt: string; masterKey: { state: string; label: string; writable: boolean }; resolutionRule: string; persistance?: { active: boolean; detail: string }; groups: Group[];
   connectors: { configError: string | null; reloads: number; lastReloadAt: string | null }; publicUrl: { value: string | null; valid: boolean; note: string }; doctrine: string[];
 }
 interface Proposal { id: string; variable: string; kind: 'DEFINIR' | 'RETIRER'; status: string; motif: string; proposedBy: string; proposedAt: string; decidedBy: string | null; decidedAt: string | null; decisionMotif: string | null }
@@ -178,6 +178,8 @@ export default function ClesRaccordements() {
         <button type="button" className="btn btn-ghost btn-sm" onClick={reloadAll}><Icon name="refresh" size={16} /> Actualiser</button>
       </PageHead>
       <p className={`notice ${d.masterKey.writable ? 'notice-ok' : 'notice-err'}`} role="status"><Icon name="lock" size={16} /> {d.masterKey.label}</p>
+      {/* Conservation des valeurs saisies (24/10/2026) : vert si elles survivent au redémarrage, sinon avertissement. */}
+      {d.persistance && <p className={`notice ${d.persistance.active ? 'notice-ok' : 'notice-err'}`} role="status"><Icon name={d.persistance.active ? 'shieldCheck' : 'alert'} size={16} /> {d.persistance.detail}</p>}
       <p className="notice" role="note"><Icon name="info" size={16} /> {d.resolutionRule}</p>
       {d.connectors.configError && <p className="notice notice-err" role="alert">Connecteurs de paiement : la dernière configuration n’a pas été appliquée — {d.connectors.configError} Les connecteurs précédents restent en service.</p>}
       {msg && <p className={`notice ${msg.ok ? 'notice-ok' : 'notice-err'}`} role="status">{msg.text}</p>}

@@ -2185,3 +2185,17 @@ de démonstration refusée par un serveur de production ; trois liens d'écran d
 catalogue des routes complet (1 674) ; 67 débordements mobiles corrigés ; fastify et fast-uri corrigés, Node.js 22.23.4
 exigé. Verdict : NO-GO pour un lancement public réel (actions humaines : `launch-audit/human-actions.md`) ; rapport :
 `docs/production-readiness.md` § 22.
+
+## I.68 Toutes les clés saisies dans le compte d'administration, et conservées (24/10/2026)
+
+Demande du maître d'ouvrage : toutes les clés nécessaires (paiement, IA, adresse publique…) se saisissent dans le compte
+d'administration (« Super-administrateur », écran « Clés et raccordements »). Constat : en démonstration, ces valeurs
+vivaient en mémoire sous une clé maîtresse éphémère — perdues à chaque redémarrage (Cloud Run s'endort sans visite).
+Ajout : `MOSOLO_CONSOLE_FILE` — fichier où la console conserve ses valeurs, **chiffrées** (AES-256-GCM, nom de la
+variable lié), rechargé au démarrage (connecteurs de paiement et canaux reconstruits), réécrit après chaque valeur
+appliquée (écriture atomique, droits 600) ; exige `MOSOLO_CONFIG_MASTER_KEY` stable ; une autre clé maîtresse ne relit
+rien et la console le dit. Bandeau en tête de la console : vert « Valeurs conservées après redémarrage » ou rouge avec
+la cause. Mise en place : Google Cloud — `infra/gcp/cles-console.sh` (compartiment privé monté sur le service, clé
+maîtresse et mot de passe d'accès dans Secret Manager) ; VPS — `./demo.sh` (volume, clé maîtresse générée). Le verrou
+de la « démonstration publique » (§ I.67) ne s'applique plus quand un mot de passe d'accès protège la démonstration.
+Test : `backend/test/cles-persistance.test.ts`. Rien n'est retiré.
