@@ -1,0 +1,131 @@
+# =====================================================================================================================
+# KINSHASA MOSOLO — déploiement VPS (Docker Compose) : application (production, jamais --demo), PostgreSQL 16 avec
+# volume, Caddy (HTTPS automatique) et sauvegarde quotidienne par l'outil existant (`npm run db:backup`).
+# Utilisation : voir infra/vps/README.md — `./install.sh` (une fois), `./deploy.sh secrets` (une fois), `./deploy.sh`.
+# Seuls les ports 80 et 443 de Caddy sont publiés ; PostgreSQL et l'application restent sur le réseau interne.
+# =====================================================================================================================
+name: mosolo
+
+x-mosolo: &mosolo
+  image: mosolo:${MOSOLO_IMAGE_TAG:-initiale}
+  env_file: .env
+  # Le mot de passe du rôle de MIGRATION ne parvient jamais à l'application (valeur vide, retirée au démarrage).
+  environment:
+    POSTGRES_PASSWORD: ""
+    MOSOLO_DB_APP_PASSWORD: ""
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  read_only: true
+  tmpfs: ["/tmp:size=256m"]
+  networks: [interne]
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+services:
+  postgres:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER absent de .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD absent de .env (./deploy.sh secrets)}
+      POSTGRES_DB: ${POSTGRES_DB:-mosolo}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - mosolo_pg:/var/lib/postgresql/data
+    shm_size: 256mb
+    networks: [interne]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  # Tâche de migration rejouable (./deploy.sh la lance avant chaque mise à jour) : rôle de MIGRATION (propriétaire),
+  # puis rôle APPLICATIF et droits minimaux (jamais UPDATE / DELETE du journal en ajout seul).
+  migration:
+    <<: *mosolo
+    command: ["migrate"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mosolo}
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck: { disable: true }
+    profiles: [outils]
+
+  app:
+    <<: *mosolo
+    command: ["production"]
+    volumes:
+      # Ancre externe de la chaîne d'audit, copie WORM, publication des racines, identifiants initiaux (hors base).
+      - mosolo_donnees:/var/lib/mosolo
+      # Amorçage facultatif (MOSOLO_BOOTSTRAP_FILE=/amorcage/amorcage.json) : dossier en lecture seule.
+      - ./amorcage:/amorcage:ro
+    expose: ["8080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    stop_grace_period: 30s
+
+  # Sauvegarde quotidienne signée + vérification (outil existant backup-cli), rotation locale ; copier ./sauvegardes
+  # hors du VPS (voir README : restic / rclone / rsync vers un stockage national).
+  sauvegarde:
+    <<: *mosolo
+    command: ["backup-cron"]
+    volumes:
+      - ./sauvegardes:/sauvegardes
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck: { disable: true }
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      MOSOLO_DOMAIN: ${MOSOLO_DOMAIN:?MOSOLO_DOMAIN absent de .env}
+      MOSOLO_ACME_EMAIL: ${MOSOLO_ACME_EMAIL:?MOSOLO_ACME_EMAIL absent de .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app: { condition: service_healthy }
+    networks: [interne]
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  # Outils d'exploitation (profil « outils ») : vérification et RESTAURATION d'une sauvegarde, application arrêtée,
+  # avec le rôle de migration (superutilisateur du conteneur, donc opérateur de restauration — migration 003).
+  #   docker compose --profile outils run --rm outils verify /sauvegardes/<fichier>.json
+  #   docker compose stop app sauvegarde && docker compose --profile outils run --rm outils restore /sauvegardes/<fichier>.json --confirm --operator=<nom>
+  outils:
+    <<: *mosolo
+    restart: "no"
+    command: ["sh", "-c", "echo 'Préciser : verify <fichier> | restore <fichier> --confirm --operator=<nom> | backup-once'"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mosolo}
+    volumes:
+      - mosolo_donnees:/var/lib/mosolo
+      - ./sauvegardes:/sauvegardes
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck: { disable: true }
+    profiles: [outils]
+
+networks:
+  interne: {}
+
+volumes:
+  mosolo_pg: {}
+  mosolo_donnees: {}
+  caddy_data: {}
+  caddy_config: {}

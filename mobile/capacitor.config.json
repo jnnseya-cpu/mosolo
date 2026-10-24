@@ -1,0 +1,28 @@
+{
+  "appId": "cd.kinshasa.mosolo",
+  "appName": "KINSHASA MOSOLO",
+  "webDir": "../frontend/dist",
+  "loggingBehavior": "none",
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "https",
+    "cleartext": false
+  },
+  "android": {
+    "path": "android",
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false,
+    "minWebViewVersion": 60
+  },
+  "ios": {
+    "path": "ios",
+    "contentInset": "automatic",
+    "limitsNavigationsToAppBoundDomains": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "SplashScreen": { "launchShowDuration": 0 },
+    "MosoloIntegrite": { "refuserSiCompromis": ["PAIEMENT", "QR_DYNAMIQUE", "PROLONGATION"] }
+  }
+}

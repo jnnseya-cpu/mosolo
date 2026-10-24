@@ -1,0 +1,110 @@
+# KINSHASA MOSOLO — contrôles NON BLOQUANTS (Cahier § 44 « stratégie de tests ») :
+#  - analyse statique de sécurité (SAST) : CodeQL, JavaScript / TypeScript ;
+#  - nomenclature logicielle (SBOM) au format CycloneDX, publiée comme artefact ;
+#  - test de charge « pic de février » (k6), à la demande ou chaque semaine, contre un serveur de démonstration éphémère.
+# L'audit des dépendances (npm audit) reste dans ci.yml, bloquant. Aucun de ces contrôles ne bloque une fusion :
+# leurs résultats sont examinés par l'équipe sécurité et l'exploitant (continue-on-error).
+name: Sécurité et charge (non bloquant)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      pic_facteur:
+        description: 'Facteur de pic (× le trafic moyen) — hypothèse de test, par défaut 20'
+        required: false
+        default: '20'
+      vu_moyen:
+        description: 'Utilisateurs virtuels du trafic moyen — hypothèse de test'
+        required: false
+        default: '5'
+
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    name: Analyse statique de sécurité (CodeQL)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:javascript-typescript'
+
+  sbom:
+    name: Nomenclature logicielle (SBOM CycloneDX)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Génération du SBOM (dépendances de production)
+        run: npx --yes @cyclonedx/cyclonedx-npm --omit dev --output-format JSON --output-file sbom-mosolo.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom-mosolo.cdx.json
+          retention-days: 90
+
+  charge:
+    name: Test de charge — pic de février (k6)
+    # À la demande ou chaque semaine seulement : jamais sur chaque demande de fusion.
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 30
+    env:
+      # Serveur de DÉMONSTRATION éphémère (données fictives) ; limitation de débit globale désactivée pour mesurer
+      # l'application (la protection anti-énumération des quittances reste active : ses 429 sont attendus).
+      MOSOLO_DEMO_MODE: 'true'
+      MOSOLO_RATE_LIMIT: 'off'
+      PORT: '8090'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Démarrage du serveur de démonstration
+        working-directory: backend
+        run: |
+          nohup npx tsx src/server.ts --demo > /tmp/mosolo-charge.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://localhost:8090/health && break; sleep 1; done
+      - uses: grafana/setup-k6-action@v1
+      - name: Scénario « pic de février »
+        run: >-
+          k6 run --summary-export=/tmp/charge-resume.json
+          -e BASE_URL=http://localhost:8090
+          -e PIC_FACTEUR=${{ github.event.inputs.pic_facteur || '20' }}
+          -e VU_MOYEN=${{ github.event.inputs.vu_moyen || '5' }}
+          -e PALIER=1m
+          tools/charge/pic-fevrier.k6.js
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: charge-pic-fevrier
+          path: |
+            /tmp/charge-resume.json
+            /tmp/mosolo-charge.log
+          retention-days: 30

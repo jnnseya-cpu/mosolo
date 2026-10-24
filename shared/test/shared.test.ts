@@ -2,8 +2,23 @@ import { describe, it, expect } from 'vitest';
 import {
   Money, CurrencyMismatchError, formatMoney, CURRENCIES, PRIMARY_CURRENCY, EVENTS, EVENT_CATEGORIES,
   channelCoverage, resolveChannels, getEvent, isRuleExecutable, SAMPLE_RULES, t, completeness, LANGUAGE_CODES,
-  canTransition, hasIncompatibility,
+  canTransition, hasIncompatibility, AmountPrecisionError, distanceM, haversineM, normalizePlate,
 } from '../src/index.js';
+
+describe('Géodésie et plaques (sources uniques)', () => {
+  it('distance haversine : nulle au même point, ~111,2 km par degré de latitude, arrondie au mètre', () => {
+    const p = { lat: -4.32, lon: 15.31 };
+    const q = { lat: -4.321, lon: 15.312 };
+    expect(distanceM(p, p)).toBe(0);
+    expect(distanceM({ lat: 0, lon: 0 }, { lat: 1, lon: 0 })).toBe(111_195);
+    expect(Number.isInteger(distanceM(p, q))).toBe(true);
+    expect(Math.abs(haversineM(p, q) - distanceM(p, q))).toBeLessThanOrEqual(0.5);
+  });
+  it('clé de plaque : majuscules, lettres et chiffres seuls', () => {
+    expect(normalizePlate(' kn-1234 ab ')).toBe('KN1234AB');
+    expect(normalizePlate('KN1234AB')).toBe('KN1234AB');
+  });
+});
 
 describe('Money', () => {
   it('additionne exactement sans virgule flottante', () => {
@@ -19,6 +34,18 @@ describe('Money', () => {
   it('convertit au taux officiel', () => {
     expect(Money.of('150', 'USD').convert('CDF', '2267.75').toDecimalString()).toBe('340162.50');
     expect(Money.of('1000', 'CDF').convert('XAF', '0.25').toDecimalString()).toBe('250');
+  });
+  it('lecture stricte aux frontières : « 149.995 » n’est jamais arrondi en 150.00', () => {
+    // Attaque rejouée : Money.of arrondit HALF_UP et rendait 149.995 « égal » à 150.00.
+    expect(Money.of('149.995', 'USD').equals(Money.of('150.00', 'USD'))).toBe(true);
+    expect(() => Money.parseStrict({ amount: '149.995', currency: 'USD' })).toThrow(AmountPrecisionError);
+    expect(() => Money.parseStrict({ amount: '150.001', currency: 'CDF' })).toThrow(AmountPrecisionError);
+    expect(Money.parseStrict({ amount: '150.00', currency: 'USD' }).equals(Money.of('150', 'USD'))).toBe(true);
+    expect(Money.parseStrict({ amount: '150.000', currency: 'USD' }).toDecimalString()).toBe('150.00');
+    expect(Money.parseStrict({ amount: '150', currency: 'USD' }).toDecimalString()).toBe('150.00');
+    expect(() => Money.parseStrict({ amount: '-1.00', currency: 'USD' })).toThrow(/invalide/);
+    expect(() => Money.parseStrict({ amount: '1e3', currency: 'USD' })).toThrow(/invalide/);
+    expect(() => Money.parseStrict({ amount: '10', currency: 'XYZ' })).toThrow(/Devise inconnue/);
   });
   it('sérialise en JSON décimal', () => {
     expect(Money.of('1250000', 'CDF').toJSON()).toEqual({ amount: '1250000.00', currency: 'CDF' });
@@ -39,8 +66,8 @@ describe('Devises', () => {
 });
 
 describe('Catalogue des événements', () => {
-  it('contient 239 événements uniques en 23 catégories', () => {
-    expect(EVENTS.length).toBe(239);
+  it('contient 255 événements uniques en 23 catégories', () => {
+    expect(EVENTS.length).toBe(255);
     expect(EVENT_CATEGORIES.length).toBe(23);
     expect(new Set(EVENTS.map((e) => e.code)).size).toBe(EVENTS.length);
   });
@@ -72,6 +99,17 @@ describe('Règles', () => {
     const distinct = same.map((a, i) => ({ ...a, userId: `u${i}` }));
     expect(isRuleExecutable({ ...base, approvals: distinct }, new Date('2027-01-01')).ok).toBe(true);
   });
+  it('les dates d’effet et de fin sont des journées de Kinshasa (UTC+1), pas des minuits UTC', () => {
+    const approvals = ['REDACTEUR', 'VERIFICATEUR_JURIDIQUE', 'VALIDATEUR_FINANCIER', 'AUTORITE_PUBLICATION'].map((role, i) => ({ role: role as never, userId: `u${i}`, at: '2026-01-01' }));
+    const rule = { ...SAMPLE_RULES[0]!, status: 'ACTIVE' as const, sourceVerification: 'OFFICIEL_CERTIFIE' as const, approvals, effectiveFrom: '2026-10-01', effectiveTo: '2026-12-31' };
+    // 30/09 23:30 UTC = 01/10 00:30 à Kinshasa : la règle est en vigueur.
+    expect(isRuleExecutable(rule, new Date('2026-09-30T23:30:00Z')).ok).toBe(true);
+    // 30/09 22:59 UTC = 30/09 23:59 à Kinshasa : pas encore.
+    expect(isRuleExecutable(rule, new Date('2026-09-30T22:59:59Z')).ok).toBe(false);
+    // 31/12 22:59 UTC = 31/12 23:59 à Kinshasa : encore en vigueur ; 31/12 23:00 UTC = 01/01 00:00 : expirée.
+    expect(isRuleExecutable(rule, new Date('2026-12-31T22:59:59Z')).ok).toBe(true);
+    expect(isRuleExecutable(rule, new Date('2026-12-31T23:00:00Z'))).toEqual({ ok: false, reason: 'Règle expirée' });
+  });
 });
 
 describe('Domaine', () => {
@@ -82,6 +120,13 @@ describe('Domaine', () => {
   it('détecte les rôles incompatibles', () => {
     expect(hasIncompatibility(['R26', 'R17'])).toEqual(['R26', 'R17']);
     expect(hasIncompatibility(['R01'])).toBeNull();
+  });
+  it('un agent de terrain (ou tout agent public, ou sous-traitant) ne peut pas être opérateur de point de paiement', () => {
+    expect(hasIncompatibility(['R10', 'R32'])).toEqual(['R10', 'R32']);
+    expect(hasIncompatibility(['R32', 'R35'])).toEqual(['R35', 'R32']);
+    for (let i = 1; i <= 29; i++) expect(hasIncompatibility([`R${String(i).padStart(2, '0')}` as 'R01', 'R32'])).not.toBeNull();
+    expect(hasIncompatibility(['R32', 'R33'])).toBeNull();
+    expect(hasIncompatibility(['R32'])).toBeNull();
   });
 });
 

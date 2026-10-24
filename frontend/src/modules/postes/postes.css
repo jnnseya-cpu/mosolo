@@ -1,0 +1,84 @@
+/* Postes de décision (ch. 27) — téléphone d'abord (360 px), cadre des maquettes. Jetons de la charte uniquement. */
+
+.ps-page { display: grid; gap: 16px; }
+@media (min-width: 1100px) { .ps-page { grid-template-columns: minmax(0, 440px) minmax(0, 1fr); align-items: start; } }
+
+.ps-phone { width: 100%; max-width: 440px; margin: 0 auto; border: 1px solid var(--line); border-radius: 22px; background: var(--surface); overflow: hidden; box-shadow: 0 6px 24px rgba(20, 26, 51, 0.10); }
+@media (max-width: 480px) { .ps-phone { border-radius: 0; border-left: 0; border-right: 0; box-shadow: none; } }
+.ps-statusbar { display: flex; justify-content: space-between; padding: 6px 16px; font-size: 11.5px; font-weight: 600; color: #fff; background: var(--navy); font-variant-numeric: tabular-nums; }
+.ps-phone-head { padding: 12px 16px 8px; border-bottom: 1px solid var(--line-soft); }
+.ps-phone-head h1 { font-size: 19px; margin: 0; line-height: 1.25; overflow-wrap: anywhere; }
+.ps-app { margin: 0; font-size: 11px; letter-spacing: 0.08em; font-weight: 700; color: var(--ink-3); }
+.ps-phone-body { padding: 12px 14px 16px; display: grid; gap: 14px; min-width: 0; }
+
+.ps-menu { display: flex; flex-wrap: wrap; gap: 6px; }
+.ps-menu a { min-height: 36px; display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); font-size: 13px; text-decoration: none; }
+.ps-menu a[aria-current='page'] { background: var(--navy); color: #fff; border-color: var(--navy); }
+
+.ps-bloc { display: grid; gap: 8px; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.ps-bloc .btn { white-space: normal; max-width: 100%; }
+.ps-bloc-title { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; margin: 0; color: var(--ink-3); }
+.ps-bloc-sub { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.ps-entete { display: inline-flex; gap: 4px; font-size: 15px; text-decoration: none; color: var(--ink); }
+
+.ps-grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 380px) { .ps-grille { grid-template-columns: minmax(0, 1fr); } }
+.ps-chiffre { border: 1px solid var(--line-soft); border-radius: var(--r); padding: 10px; display: grid; gap: 3px; min-width: 0; background: var(--surface-2); }
+.ps-chiffre-lien { display: grid; gap: 2px; text-decoration: none; color: inherit; }
+.ps-valeur { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.ps-valeur-grand { font-size: 24px; }
+.ps-valeur small { font-size: 12px; font-weight: 500; color: var(--ink-3); }
+.ps-libelle { font-size: 13px; }
+.ps-meta { display: flex; flex-wrap: wrap; gap: 4px; }
+.ps-small { font-size: 12px; color: var(--ink-3); overflow-wrap: anywhere; }
+.ps-date { font-variant-numeric: tabular-nums; }
+/* § 27.10 règle 4 : une estimation est visuellement distincte d'une donnée constatée. */
+.ps-estimation { background: repeating-linear-gradient(135deg, var(--surface-2), var(--surface-2) 8px, var(--surface) 8px, var(--surface) 16px); font-style: italic; }
+.ps-exemple { border-style: dashed; }
+
+.ps-fiche { border: 1px solid var(--line); border-left: 4px solid var(--flag-blue); border-radius: var(--r); padding: 12px; display: grid; gap: 8px; background: var(--surface); min-width: 0; }
+.ps-fiche.ps-urgente { border-left-color: var(--critical); }
+.ps-fiche-head h3 { font-size: 16px; margin: 2px 0 4px; line-height: 1.3; overflow-wrap: anywhere; }
+.ps-cat { margin: 0; font-size: 11.5px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.ps-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.ps-blocs { margin: 0; display: grid; gap: 6px; }
+.ps-blocs div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; }
+.ps-blocs dt { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); }
+.ps-blocs dd { margin: 0; font-size: 14px; overflow-wrap: anywhere; display: grid; gap: 4px; }
+.ps-figures { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 13px; }
+.ps-reserve { font-size: 13px; color: var(--ink-2); font-style: italic; }
+.ps-pieces summary { cursor: pointer; font-size: 13px; }
+.ps-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.ps-actions .btn { min-height: 40px; white-space: normal; }
+.ps-raison { margin: 0; }
+.ps-form { display: grid; gap: 6px; }
+.ps-form textarea, .ps-form select, .ps-form input { width: 100%; min-width: 0; }
+.ps-deleg { display: grid; gap: 6px; }
+
+.ps-alertes, .ps-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ps-alertes li, .ps-liste li { border-bottom: 1px solid var(--line-soft); padding-bottom: 8px; display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.ps-vignette { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; text-decoration: none; }
+/* Contraste texte blanc ≥ 4,5:1 (WCAG 1.4.3 ; deuxième passe adverse, 27/09/2026) : gris 3,21 → 5,87 ; orange 3,33 → 5,93 ;
+   vert 4,31 → 5,42 ; rouge 4,80 inchangé. Mêmes teintes, plus sombres. */
+.ps-commune { display: inline-grid; place-items: center; min-height: 26px; border-radius: 4px; font-size: 10.5px; font-weight: 600; color: #fff; background: #5f6477; padding: 0 4px; }
+.ps-commune.c-vert { background: #1a7a33; } .ps-commune.c-orange { background: #8a5a00; } .ps-commune.c-rouge { background: #d03b3b; } .ps-commune.c-gris { background: #5f6477; }
+
+.ps-illustration { border: 1px dashed var(--line); border-radius: var(--r); padding: 6px 10px; font-size: 13px; background: var(--surface); }
+.ps-illustration summary { cursor: pointer; font-weight: 600; color: var(--ink-2); }
+.ps-illustration ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+
+.ps-reperes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.ps-reperes li { border-top: 2px solid var(--flag-blue); padding-top: 4px; display: grid; }
+.ps-reperes strong { font-size: 18px; }
+.ps-reperes span { font-size: 11.5px; color: var(--ink-3); }
+.ps-six { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
+.ps-six span { font-size: 11px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+.ps-regles { border: 1px solid var(--line); border-radius: var(--r); padding: 14px; background: var(--surface); display: grid; gap: 8px; align-content: start; }
+.ps-regles h2 { font-size: 15px; margin: 0; }
+.ps-regles ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13.5px; }
+.ps-bandeau { margin: 0; padding: 8px 10px; border-radius: var(--r); background: var(--surface-2); border: 1px solid var(--line-soft); font-size: 13px; }
+.ps-offline { margin: 0; padding: 6px 10px; border-radius: var(--r); background: var(--surface-2); border: 1px solid var(--line); font-size: 12.5px; display: flex; gap: 6px; align-items: center; }
+.ps-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.ps-search input { min-width: 0; min-height: 40px; }
+.ps-liens { font-size: 13px; margin: 0; }
+.ps-vue { display: grid; gap: 14px; }

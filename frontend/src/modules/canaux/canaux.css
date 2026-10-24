@@ -1,0 +1,205 @@
+/* Canaux inclusifs : simulateur USSD/SVI, enrôlement assisté, carte MOSOLO, avis à pictogrammes, points agréés. */
+
+.cx-two { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1000px) { .cx-two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.cx-col { display: grid; gap: 16px; min-width: 0; }
+.cx-mt { margin-top: 16px; }
+
+/* ---------- Pictogrammes : couleur toujours doublée d'une forme ---------- */
+.cx-picto-wrap { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
+.cx-picto { display: inline-grid; place-items: center; flex: none; color: #fff; background: var(--cx-c, var(--navy)); border: 2px solid color-mix(in srgb, var(--cx-c, var(--navy)) 70%, #000); }
+.cx-picto .icon { color: #fff; }
+.cx-shape-cercle, .cx-shape-roue, .cx-shape-horloge { border-radius: 50%; }
+.cx-shape-carre, .cx-shape-rectangle { border-radius: 3px; }
+.cx-shape-maison { clip-path: polygon(50% 0, 100% 38%, 100% 100%, 0 100%, 0 38%); border-radius: 0; }
+.cx-shape-etal { border-radius: 10px 10px 2px 2px; }
+.cx-shape-triangle { clip-path: polygon(50% 2%, 100% 96%, 0 96%); border: 0; }
+.cx-shape-triangle .icon { margin-top: 30%; }
+.cx-shape-bouclier { clip-path: polygon(50% 0, 100% 16%, 92% 68%, 50% 100%, 8% 68%, 0 16%); border: 0; }
+.cx-shape-repere { border-radius: 50% 50% 50% 0; transform: rotate(-45deg); }
+.cx-shape-repere .icon { transform: rotate(45deg); }
+.cx-shape-barre { border-radius: 50%; box-shadow: inset 0 0 0 3px #fff; }
+.cx-shape-etoile { clip-path: polygon(50% 0, 62% 35%, 100% 38%, 70% 60%, 80% 100%, 50% 76%, 20% 100%, 30% 60%, 0 38%, 38% 35%); border: 0; }
+.cx-picto-label { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+
+/* ---------- Simulateur de téléphone basique ---------- */
+.cx-sim { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 960px) { .cx-sim { grid-template-columns: 340px minmax(0, 1fr); } }
+.cx-sim-side { display: grid; gap: 16px; min-width: 0; }
+.cx-phone-col { display: flex; justify-content: center; }
+.cx-phone {
+  width: min(320px, 100%); background: linear-gradient(180deg, #2B2F3A, #1B1E26); border-radius: 36px 36px 44px 44px; padding: 18px 18px 26px;
+  box-shadow: 0 20px 40px rgba(14, 20, 51, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.08); color: #E8EAF0;
+}
+.cx-phone-top { display: flex; justify-content: center; margin-bottom: 12px; }
+.cx-phone-speaker { width: 56px; height: 5px; border-radius: 3px; background: #0D0F14; }
+.cx-lcd {
+  background: #C9D6B8; color: #1C2414; border-radius: 6px; min-height: 236px; padding: 10px 12px; font-family: var(--font-mono); font-size: 13px; line-height: 1.45;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.35); display: flex; flex-direction: column; gap: 6px; overflow: hidden;
+}
+.cx-lcd-bar { display: flex; justify-content: space-between; font-size: 11px; border-bottom: 1px solid rgba(28, 36, 20, 0.35); padding-bottom: 4px; }
+.cx-lcd-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.cx-lcd-opts { margin: 0; padding: 0; list-style: none; font-size: 12px; }
+.cx-lcd-input { margin: auto 0 0; font-weight: 700; }
+.cx-lcd-end { margin: auto 0 0; font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: 0.06em; }
+.cx-caret { display: inline-block; width: 7px; height: 13px; background: #1C2414; margin-left: 2px; vertical-align: -2px; animation: cx-blink 1s steps(2) infinite; }
+@keyframes cx-blink { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .cx-caret { animation: none; } }
+.cx-softkeys { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 16px 0 12px; }
+.cx-keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.cx-key {
+  min-height: 46px; border: 0; border-radius: 14px; background: #3A3F4C; color: #F2F3F7; cursor: pointer; display: grid; place-items: center; line-height: 1.1;
+  box-shadow: 0 2px 0 #121419; transition: transform 80ms var(--ease), background var(--t) var(--ease);
+}
+.cx-key:hover:not(:disabled) { background: #464C5B; }
+.cx-key:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 0 #121419; }
+.cx-key:disabled { opacity: 0.45; cursor: not-allowed; }
+.cx-key:focus-visible { outline: 2px solid var(--flag-yellow); outline-offset: 2px; }
+.cx-key-n { font-size: 18px; font-weight: 600; }
+.cx-key-l { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #AEB3C2; min-height: 10px; }
+.cx-key-call { background: #1E8C3A; }
+.cx-key-call:hover:not(:disabled) { background: #22A043; }
+.cx-key-end { background: #B3161B; }
+.cx-key-end:hover:not(:disabled) { background: #C9191F; }
+.cx-flip { transform: rotate(180deg); }
+.cx-transcript { display: grid; gap: 8px; max-height: 320px; overflow-y: auto; padding: 0; margin: 0; list-style: none; }
+.cx-msg { display: grid; gap: 2px; padding: 8px 12px; border-radius: var(--r); max-width: 92%; font-size: 13.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cx-msg-mosolo { background: var(--pale); justify-self: start; }
+.cx-msg-moi { background: var(--info-bg); justify-self: end; }
+.cx-msg-who { font-size: 11px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; }
+.cx-guarantees li { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; font-size: 13.5px; }
+.cx-guarantees .icon { flex: none; margin-top: 2px; color: var(--navy); }
+:root[data-theme='dark'] .cx-guarantees .icon { color: var(--link); }
+
+/* ---------- Enrôlement assisté ---------- */
+.cx-step { border-top: 1px solid var(--line-soft); padding-top: 16px; gap: 12px; }
+.cx-step-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.cx-step-n { width: 24px; height: 24px; border-radius: 50%; background: var(--navy); color: #fff; display: inline-grid; place-items: center; font-size: 12px; }
+:root[data-theme='dark'] .cx-step-n { background: var(--primary); color: var(--on-primary); }
+.cx-objects { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 640px) { .cx-objects { grid-template-columns: 1fr 1fr; } }
+.cx-object { border: 1px solid var(--line); border-radius: var(--r); padding: 4px 12px 8px; display: grid; gap: 6px; }
+.cx-object.on { border-color: var(--navy); background: var(--surface-2); }
+.cx-object .check { align-items: center; }
+.cx-summary { margin: 0; padding: 12px 16px; border-left: 3px solid var(--flag-blue); background: var(--info-bg); border-radius: 0 var(--r) var(--r) 0; font-size: 14px; line-height: 1.55; }
+.cx-attest { font-weight: 500; }
+.cx-results .list-row { padding: 10px 0; }
+
+/* ---------- Carte MOSOLO (format ID-1, 85,6 × 54 mm) ---------- */
+.cx-print-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1100px) { .cx-print-grid { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); } }
+.cx-print-area { display: grid; gap: 16px; min-width: 0; }
+.cx-card {
+  position: relative; width: min(100%, 428px); aspect-ratio: 85.6 / 54; border-radius: 14px; overflow: hidden; background: #FFFFFF; color: #111;
+  border: 1px solid #D5DAE6; box-shadow: 0 8px 24px rgba(14, 20, 51, 0.14); display: grid; grid-template-rows: auto 5px 1fr auto;
+}
+.cx-card-head { background: #232C6B; color: #fff; display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; }
+.cx-card-brand { font-weight: 700; letter-spacing: 0.08em; font-size: 12px; }
+.cx-card-kind { font-size: 11px; color: #C9CFEA; }
+.cx-card-stripe { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+.cx-card-stripe span:nth-child(1) { background: #1E9BD7; } .cx-card-stripe span:nth-child(2) { background: #F7D618; } .cx-card-stripe span:nth-child(3) { background: #D7141A; }
+.cx-card-body { display: grid; grid-template-columns: 22% 1fr auto; gap: 10px; padding: 10px 14px 4px; align-items: center; min-height: 0; }
+.cx-card-photo { aspect-ratio: 3 / 4; border: 1px dashed #9AA2B8; border-radius: 6px; display: grid; place-items: center; align-content: center; gap: 2px; color: #636978; font-size: 10px; background: #F5F7FB; }
+.cx-card-data { display: grid; gap: 2px; font-size: 11px; min-width: 0; }
+.cx-card-data div { display: grid; }
+.cx-card-data dt { color: #636978; font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; }
+.cx-card-data dd { font-weight: 600; overflow-wrap: anywhere; }
+.cx-card-qr img, .cx-card-qr .qr-box { width: clamp(64px, 18vw, 84px); height: auto; }
+.cx-card-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 14px 10px; flex-wrap: wrap; }
+.cx-card-number { font-size: clamp(14px, 3.6vw, 18px); font-weight: 700; letter-spacing: 0.08em; }
+.cx-card-free { font-size: 9.5px; color: #4A4F5C; }
+.cx-card-stamp { position: absolute; inset: auto 0 40% 0; text-align: center; transform: rotate(-12deg); font-weight: 800; font-size: 26px; letter-spacing: 0.2em; color: #D7141A; border: 3px solid #D7141A; margin: 0 22%; background: rgba(255, 255, 255, 0.85); }
+.cx-card-void .cx-card-body, .cx-card-void .cx-card-foot { opacity: 0.55; }
+
+/* ---------- Avis à pictogrammes ---------- */
+.cx-notice { background: #FFFFFF; color: #111; border: 1px solid #D5DAE6; border-radius: 10px; padding: 16px; display: grid; gap: 14px; max-width: 720px; }
+.cx-notice-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 3px solid #232C6B; padding-bottom: 10px; }
+.cx-notice-head h2 { font-family: var(--font-serif); font-size: 24px; }
+.cx-notice-head .eyebrow { color: #4A4F5C; }
+.cx-notice-holder { display: grid; text-align: right; font-size: 12.5px; gap: 2px; }
+.cx-notice-sec h3 { display: flex; align-items: center; gap: 10px; font-size: 16px; margin-bottom: 8px; }
+.cx-notice-empty { font-size: 14px; color: #4A4F5C; }
+.cx-dues { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.cx-dues li { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 10px; border: 1px solid #E8EBF2; border-radius: 8px; }
+@media (max-width: 479px) { .cx-dues li { grid-template-columns: 1fr; } }
+.cx-due-main { display: grid; gap: 2px; }
+.cx-due-amount .money-main { font-size: 22px; font-weight: 700; }
+.cx-due-date { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; }
+.cx-places { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.cx-places li { display: grid; }
+.cx-notice-actions { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 640px) { .cx-notice-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.cx-notice-action { border: 1px solid #E8EBF2; border-radius: 8px; padding: 10px; display: grid; gap: 6px; font-size: 12.5px; }
+.cx-notice-warn { display: grid; gap: 6px; border-top: 1px solid #E8EBF2; padding-top: 10px; font-size: 13px; }
+.cx-notice-warn p { display: flex; gap: 8px; align-items: center; }
+.cx-reissue { margin-top: 16px; border-top: 1px solid var(--line-soft); padding-top: 12px; }
+
+/* ---------- Points agréés ---------- */
+.cx-map { width: 100%; height: auto; display: block; }
+.cx-map-bg { fill: var(--surface-2); stroke: var(--line); }
+.cx-map-grid { stroke: var(--line-soft); stroke-width: 1; }
+.cx-map-river { fill: none; stroke: var(--flag-blue); stroke-width: 10; opacity: 0.25; stroke-linecap: round; }
+.cx-map-river-label { font-size: 11px; fill: var(--ink-3); }
+.cx-map-label { font-size: 12px; fill: var(--ink-2); font-weight: 600; }
+.cx-map-pt { cursor: pointer; outline: none; }
+.cx-map-pt circle, .cx-map-pt rect { stroke: var(--surface); stroke-width: 2; }
+.cx-map-pt.ok circle, .cx-map-pt.ok rect { fill: var(--palm); }
+.cx-map-pt.off circle, .cx-map-pt.off rect { fill: var(--critical); }
+.cx-map-pt.on circle, .cx-map-pt.on rect, .cx-map-pt:focus-visible circle, .cx-map-pt:focus-visible rect { stroke: var(--flag-yellow); stroke-width: 4; }
+.cx-map-x { stroke: #fff; stroke-width: 2; }
+.cx-point-list { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); margin: 0 0 12px; padding: 0; list-style: none; }
+@media (min-width: 900px) { .cx-point-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cx-point { display: flex; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); cursor: pointer; min-width: 0; }
+.cx-point.on { border-color: var(--navy); box-shadow: inset 0 0 0 1px var(--navy); }
+.cx-point-icon { width: 36px; height: 36px; border-radius: 50%; background: var(--pale); display: grid; place-items: center; flex: none; color: var(--navy); }
+:root[data-theme='dark'] .cx-point-icon { color: var(--link); }
+.cx-point-body { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.cx-verify-out { margin-top: 12px; padding: 10px 12px; border-radius: var(--r); border: 1px solid var(--line); font-size: 14px; }
+.cx-verify-out.good { background: var(--good-bg); color: var(--good-ink); }
+.cx-verify-out.warning { background: var(--warning-bg); color: var(--warning-ink); }
+.cx-verify-out.critical { background: var(--critical-bg); color: var(--critical-ink); }
+
+/* ---------- Console du point agréé ---------- */
+.cx-point-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); margin-bottom: 16px; }
+.cx-point-head > div { display: grid; gap: 2px; }
+.cx-amount-box { margin-top: 16px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); display: grid; gap: 10px; }
+.cx-amount { display: flex; align-items: center; gap: 10px; }
+.cx-amount .icon { color: var(--ink-3); }
+.cx-amount-value .money-main { font-size: clamp(26px, 5vw, 34px); font-weight: 700; letter-spacing: -0.01em; }
+.cx-receipt { position: relative; background: #FFFFFF; color: #111; border: 1px solid #D5DAE6; border-radius: 8px; padding: 16px; display: grid; gap: 12px; max-width: 520px; }
+.cx-receipt .kv dt { color: #636978; }
+.cx-receipt .kv > div { border-bottom-color: #E8EBF2; }
+.cx-receipt-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.cx-receipt-head .cx-card-brand { color: #232C6B; }
+.cx-receipt-head h3 { font-family: var(--font-serif); font-size: 20px; margin-top: 2px; }
+.cx-receipt-amount .money-main { font-size: 18px; font-weight: 700; }
+.cx-shortcode { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border: 2px dashed #232C6B; border-radius: 8px; flex-wrap: wrap; }
+.cx-shortcode strong { font-size: 24px; letter-spacing: 0.24em; }
+.cx-receipt-pictos { display: flex; gap: 12px; flex-wrap: wrap; }
+.cx-receipt-notes { margin: 0; padding-left: 18px; font-size: 12.5px; display: grid; gap: 4px; }
+.cx-dup { position: absolute; top: 12px; right: 50%; transform: translateX(50%) rotate(-8deg); font-weight: 800; letter-spacing: 0.3em; color: #D7141A; border: 2px solid #D7141A; padding: 2px 10px; background: rgba(255, 255, 255, 0.9); }
+.cx-cash-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.cx-exc { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 13.5px; color: var(--critical-ink); }
+.cx-exc li { display: flex; gap: 6px; align-items: flex-start; }
+
+/* ---------- Indicateurs ---------- */
+.cx-kpis .kpi:last-child { grid-column: auto; }
+@media (min-width: 1100px) { .cx-kpis { grid-template-columns: repeat(6, 1fr); } }
+
+/* ---------- Impression : seule la zone imprimable (carte, avis, reçu) ---------- */
+@media print {
+  body:has(.cx-print-area) * { visibility: hidden !important; }
+  body:has(.cx-print-area) .cx-print-area, body:has(.cx-print-area) .cx-print-area * { visibility: visible !important; }
+  body:has(.cx-print-area) .cx-print-area { position: absolute; left: 0; top: 0; width: 100%; }
+  .cx-card, .cx-notice, .cx-receipt { box-shadow: none; break-inside: avoid; }
+  .cx-noprint { display: none !important; }
+}
+.cx-inl > .icon { display: inline-block; vertical-align: -3px; margin-right: 4px; }
+.cx-cell { display: grid; gap: 2px; justify-items: start; }
+td.num .cx-cell { justify-items: end; }
+.cx-kpis .kpi { display: grid; align-content: start; gap: 2px; }
+/* Revue d'un jour de caisse (Trésor) : fiches clôture, versement, constatation au relevé. */
+.cx-dl { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); gap: 6px 12px; margin: 8px 0 0; font-size: 14px; }
+.cx-dl dt { color: var(--ink-2); }
+.cx-dl dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.cx-lines { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }

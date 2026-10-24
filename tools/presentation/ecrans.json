@@ -1,0 +1,123 @@
+[
+  {
+    "id": "01-accueil",
+    "titre": "Accueil",
+    "public": "Tout public",
+    "message": "La plateforme de la Ville de Kinshasa, présentée sobrement : une devise, deux accès, la chaîne des treize maillons.",
+    "points": [
+      "Visuel officiel de la Ville, sans modification",
+      "Accès direct à l'espace contribuable et à la vérification des quittances",
+      "Treize maillons, du recensement à la planification : aucun ne peut être sauté"
+    ]
+  },
+  {
+    "id": "02-inscription",
+    "titre": "Inscription",
+    "public": "Contribuable",
+    "message": "Un compte unique et gratuit, créé en quelques minutes, dans la langue du contribuable.",
+    "points": [
+      "Situation à l'adresse en huit réponses simples",
+      "Déclarer n'est pas prouver : la situation reste « déclarée » jusqu'à vérification",
+      "Saisie enregistrée automatiquement, même hors connexion"
+    ]
+  },
+  {
+    "id": "03-espace-contribuable",
+    "titre": "Espace contribuable",
+    "public": "Contribuable",
+    "message": "Chaque montant est expliqué, payable par téléphone et prouvé par une quittance vérifiable.",
+    "points": [
+      "Règle, version, base légale et formule de chaque obligation",
+      "Paiement par référence unique vers le compte public",
+      "Quittance signée avec code QR ; droit de contestation sur chaque ligne"
+    ]
+  },
+  {
+    "id": "04-verification-quittance",
+    "titre": "Vérification d'une quittance",
+    "public": "Tout public, services, contrôleurs",
+    "message": "N'importe qui vérifie une quittance en quelques secondes : les fausses quittances cessent de fonctionner.",
+    "points": [
+      "Résultat immédiat : authentique, en attente, annulée ou suspecte",
+      "Informations minimales : aucun nom, aucune adresse",
+      "Signature numérique contrôlée par le serveur"
+    ]
+  },
+  {
+    "id": "05-centre-de-commandement",
+    "titre": "Centre de commandement",
+    "public": "Gouverneur, Directeur de cabinet, Ministre des Finances",
+    "message": "Une vue unique et exacte des recettes : ce qui est estimé, dû, payé, arrivé au compte public et rapproché.",
+    "points": [
+      "Échelle de la recette en onze niveaux, jamais additionnés entre eux",
+      "Recettes par commune et par catégorie, alertes critiques",
+      "Recommandations argumentées ; agrégats seulement, aucun dossier individuel"
+    ]
+  },
+  {
+    "id": "06-communications",
+    "titre": "Communications",
+    "public": "Régies, administration de la plateforme",
+    "message": "Un seul moteur envoie tous les messages, dans la bonne langue et sur le bon canal, avec preuve de délivrance.",
+    "points": [
+      "255 événements en 23 catégories ; 135 avis obligatoires",
+      "Courriel, SMS, application, USSD, serveur vocal, courrier",
+      "Aperçu et envoi de test de chaque modèle avant diffusion"
+    ]
+  },
+  {
+    "id": "07-registre-juridique",
+    "titre": "Registre juridique",
+    "public": "Juristes, Ministère des Finances",
+    "message": "Le système applique le droit, il ne le crée pas : aucune règle n'agit sans quatre visas distincts.",
+    "points": [
+      "Rédacteur, vérificateur, validateur financier et autorité de publication",
+      "Taux non certifiés bloqués « À vérifier » : aucun effet financier",
+      "Chaque version conservée ; textes abrogés refusés"
+    ]
+  },
+  {
+    "id": "08-tresor-rapprochement",
+    "titre": "Trésor et rapprochement",
+    "public": "Trésor provincial, comptables publics",
+    "message": "Chaque franc est suivi jusqu'au compte public ; rien ne disparaît, toute correction laisse une trace.",
+    "points": [
+      "Grand livre en partie double, équilibré en permanence",
+      "Toute différence devient une exception traitée et journalisée",
+      "Comptes bénéficiaires : deux validations, vérification hors ligne, 72 heures"
+    ]
+  },
+  {
+    "id": "09-terrain",
+    "titre": "Application terrain",
+    "public": "Agents de terrain, superviseurs",
+    "message": "Le recensement fonctionne sans réseau ; l'agent constate et documente, il n'encaisse jamais.",
+    "points": [
+      "Missions préparées, preuves GPS et photo scellées",
+      "Synchronisation signée dès le retour du réseau",
+      "Aucun montant fixé et aucune espèce reçue par l'agent"
+    ]
+  },
+  {
+    "id": "10-audit",
+    "titre": "Journal d'audit",
+    "public": "Audit interne, Inspection, Cour des comptes",
+    "message": "Chaque action est enregistrée dans une chaîne inaltérable : toute modification est détectée.",
+    "points": [
+      "Qui, quoi, quand, avec quelle approbation",
+      "Vérification de l'intégrité de la chaîne en un clic",
+      "Aucune suppression possible, y compris par l'administrateur"
+    ]
+  },
+  {
+    "id": "11-recommandations-ia",
+    "titre": "Recommandations de l'analyse",
+    "public": "Décideurs habilités",
+    "message": "L'intelligence artificielle propose, l'autorité décide : chaque recommandation est motivée et tracée.",
+    "points": [
+      "Situation, analyse, risque, recommandation, responsable, échéance, confiance",
+      "Meilleure option, alternative et risque de l'inaction",
+      "Aucun effet tant qu'un agent habilité n'a pas accepté"
+    ]
+  }
+]

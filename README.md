@@ -1,0 +1,113 @@
+<img src="docs/assets/couverture-ville-de-kinshasa.webp" alt="Ville de Kinshasa" width="100%">
+
+# KINSHASA MOSOLO
+
+**Système d'exploitation souverain de maximisation des recettes de la Ville Province de Kinshasa**
+
+*Plateforme unique de recensement, de géolocalisation, de gestion, de paiement, de contrôle et de maximisation des recettes de la Ville Province de Kinshasa.*
+
+> « Une ville, un contribuable, une donnée, une quittance. »
+
+`RECENSER → IDENTIFIER → GÉOLOCALISER → QUALIFIER → CALCULER → NOTIFIER → PAYER → RAPPROCHER → QUITTANCER → CONTRÔLER → RECOUVRER → AUDITER → PLANIFIER`
+
+## Contenu du dépôt
+
+| Dossier | Contenu |
+|---|---|
+| [`docs/document-maitre/`](docs/document-maitre/) | **Document maître v3.0** en Markdown (47 chapitres, conclusion stratégique, annexes A à I), diagrammes Mermaid, figures en couleur |
+| `docs/KINSHASA_MOSOLO_Document_Maitre_v3.0.docx` | Version Word aux couleurs de la charte (générée) |
+| `docs/KINSHASA_MOSOLO_Document_Maitre_v3.0.md` | Version Markdown assemblée en un seul fichier (générée) |
+| [`docs/sources/`](docs/sources/) | Documents de travail d'origine (Cahier v2.9, Spécification fonctionnelle, Dossier Gouverneur, Note exécutive) |
+| [`docs/assets/`](docs/assets/) | Visuels officiels, utilisés sans modification : couverture Ville de Kinshasa (`couverture-ville-de-kinshasa.webp`, copie PNG sans perte pour Word), logo de la Ville (`logo-ville-de-kinshasa.webp`, et copie PNG sans perte), logo Groupe Nseya |
+| [`specs/`](specs/) | Contrat d'API, OpenAPI 3.1, catalogue des 631 routes (`routes-api.md`, généré par `tools/gen_routes.py`), catalogue des 255 événements de communication, référentiel des devises et langues, prompt système de la couche d'intelligence |
+| [`shared/`](shared/) | Paquet partagé `@mosolo/shared` : montants exacts, devises (🇨🇩 CDF principale, drapeaux), langues, catalogue d'événements, fiches de règles, états et rôles, format des recommandations IA, géodésie (distance haversine) et clé de comparaison des plaques |
+| [`backend/`](backend/) | API REST (Node.js, TypeScript, Fastify) : identité, objets, registre juridique, liquidation, paiements, coffre des bénéficiaires, rapprochement, grand livre, quittances, journal d'audit chaîné, communications, autosauvegarde, IA ; **17 modules d'extension** (`src/plugins/`) : socle (connexion, jetons, limitation de débit), accès et entités, fiscal, Trésor, recouvrement, titres, RakaPay et pass wewa, stationnement, publicité, verticales (AVIA, NFIU, CALCU…), canaux (USSD, SVI, points de paiement agréés), preuves (QR, WhatsApp, SMS), sanctions et commissions, terrain, intégrité, pilotage, IA ; persistance PostgreSQL optionnelle et identité compatible OIDC |
+| [`frontend/`](frontend/) | Application web progressive (PWA) React : portail contribuable, vérification de quittance, centre de commandement du Gouverneur, console des communications, registre juridique, Trésor, terrain hors ligne, audit, et 73 écrans des modules exposés par 80 routes (`src/modules/registry.tsx`) |
+| [`tools/`](tools/) | Générateurs : catalogue d'événements, graphiques, version Word |
+
+Le `frontend` ne dépend du `backend` que par l'API ; la logique commune vit dans `shared`.
+
+## Démarrer
+
+```bash
+npm install
+npm run typecheck        # contrôle de types des trois paquets
+npm run lint             # ESLint (configuration commune eslint.config.mjs)
+npm test                 # tests des trois paquets (681 : shared 32, backend 548, frontend 101)
+npm run dev:backend      # API sur http://localhost:8080 (mode démonstration explicite : --demo)
+npm run dev:frontend     # PWA sur http://localhost:5173
+```
+
+Régénérer les artefacts documentaires :
+
+```bash
+pip install pypandoc_binary python-docx matplotlib
+python3 tools/gen_evenements.py      # catalogue d'événements (YAML, JSON partagé, annexe G)
+python3 tools/gen_graphiques.py      # figures en couleur
+MMDC=/chemin/vers/mmdc PUPPETEER_CONFIG=pp.json python3 tools/build_docx.py   # version Word
+```
+
+## Démonstration en ligne (un seul service)
+
+L'API peut servir elle-même l'application web construite (`MOSOLO_STATIC_DIR=frontend/dist`) : une seule adresse suffit
+pour parcourir toute la plateforme. **Données de démonstration uniquement, non contractuelles** — ne jamais y saisir de
+données réelles ; le mode démonstration ouvre les rôles de démonstration à tout visiteur.
+
+- **Render** (gratuit) : tableau de bord Render → *New* → *Blueprint* → choisir ce dépôt et la branche à publier ; le
+  fichier [`render.yaml`](render.yaml) construit et démarre tout. Adresse obtenue : `https://<nom>.onrender.com`.
+- **Docker** (tout hébergeur) : `docker build -t mosolo-demo . && docker run -p 8080:8080 mosolo-demo` → http://localhost:8080.
+- **Sans Docker** : `npm ci && VITE_API_URL= npm run build -w frontend && MOSOLO_DEMO_MODE=true MOSOLO_STATIC_DIR=frontend/dist npx tsx backend/src/server.ts --demo`.
+
+## Déploiement
+
+Trois kits dans [`infra/`](infra/), une seule image (`Dockerfile` : tous les modules, API + application web). La
+production ne démarre **jamais** en `--demo` : `NODE_ENV=production`, PostgreSQL et clés réelles obligatoires (démarrage
+refusé sinon, variable manquante nommée). État : **kits prêts et validés hors ligne ; exécution réelle EXTERNE / NON
+TESTÉE** (aucun compte cloud utilisé) — voir [`docs/production-readiness.md`](docs/production-readiness.md), § 19.
+
+| Cible | Commande | Détail |
+|---|---|---|
+| **Google Cloud** (principal) : Cloud Run (1 instance, CPU toujours alloué), Cloud SQL PostgreSQL 16 (IP privée, sauvegardes, PITR), Secret Manager, migrations et sauvegardes en tâches, Cloud Scheduler, domaine | `PROJECT_ID=<projet> REGION=africa-south1 [DOMAIN=…] ./infra/gcp/deploy.sh` | [`infra/gcp/README.md`](infra/gcp/README.md) (coûts estimés, souveraineté, `rollback.sh`, `status.sh`, `restaurer.sh`) |
+| **Démonstration** sur Google Cloud (remplace Render, trop petit pour la construction) | `PROJECT_ID=<projet> DEMO=true ./infra/gcp/deploy.sh` | service séparé `mosolo-demo`, `--demo`, mémoire |
+| **VPS / centre de données national** (préféré par le Cahier) : Docker Compose, PostgreSQL 16, Caddy HTTPS, sauvegarde quotidienne, retour automatique | `sudo ./infra/vps/install.sh` puis `./infra/vps/deploy.sh secrets` et `./infra/vps/deploy.sh` | [`infra/vps/README.md`](infra/vps/README.md) (restauration) |
+| **Vercel / Firebase** : application web seule, `/v1/*` réécrit vers le backend | `./infra/static/preparer.sh vercel\|firebase` | [`infra/static/README.md`](infra/static/README.md) (pourquoi le backend n'y tourne pas) |
+
+Tous les scripts acceptent `DRY_RUN=1` (commandes affichées, rien d'exécuté, aucun secret généré). Validation hors
+ligne : `./infra/valider.sh`. Image : `docker run … mosolo production` (production), `mosolo` sans argument ou `demo`
+(démonstration, comportement historique), `migrate`, `backup-once`, `restore` ; tas Node de construction réglable
+(`--build-arg MOSOLO_BUILD_HEAP_MB=3072`). Migrations rejouables : `DATABASE_URL=… npm run db:migrate -w backend`.
+
+## Tests de charge et contrôles de sécurité (non bloquants)
+
+Cahier § 44 : « tests de charge calés sur les pics de campagne de fin janvier ». Le scénario k6
+[`tools/charge/pic-fevrier.k6.js`](tools/charge/pic-fevrier.k6.js) simule, sur un serveur de **démonstration** (jamais la
+production), les parcours les plus sollicités au pic : vérification publique d'une quittance (les 429 de la protection
+anti-énumération sont attendus), création d'une référence de paiement, session USSD, points agréés et transparence.
+Montée, plateau au pic, descente ; seuils de réussite : moins de 1 % d'erreurs et p95 sous 1,5 s.
+
+```bash
+npm run dev:backend                                   # serveur de démonstration
+k6 run -e BASE_URL=http://localhost:8080 -e VU_MOYEN=5 -e PIC_FACTEUR=20 -e PALIER=1m tools/charge/pic-fevrier.k6.js
+```
+
+Le facteur de pic (`PIC_FACTEUR`, 20 × le trafic moyen) et le trafic moyen (`VU_MOYEN`) sont des **hypothèses de test,
+par défaut — à confirmer** par la base de référence (§ 38.1) et l'exploitant.
+
+Le flux [`.github/workflows/securite-charge.yml`](.github/workflows/securite-charge.yml) exécute, sans bloquer les
+fusions : l'analyse statique de sécurité **CodeQL** (SAST), la **nomenclature logicielle CycloneDX** (SBOM, artefact
+`sbom-cyclonedx`) et, à la demande ou chaque semaine, le **test de charge** k6 (artefact `charge-pic-fevrier`). L'audit
+des dépendances (`npm audit`) reste bloquant dans `ci.yml`. Les tests d'intrusion et DAST restent à conduire par un
+prestataire indépendant sur l'environnement de recette.
+
+## Principes non négociables
+
+1. Le système applique le droit, il ne le crée pas : aucune obligation sans règle **active et certifiée** ; les fiches de règles fournies sont au statut `A_VERIFIER` et ne produisent aucun effet financier.
+2. Fonds publics sur comptes publics : la plateforme ne détient jamais de fonds.
+3. Aucune personne ne peut seule modifier une dette, un paiement, un compte bénéficiaire, une règle ou une trace.
+4. Toute correction est une contre-écriture ; rien ne disparaît.
+5. L'IA recommande ; les agents habilités décident.
+6. Zéro espèce entre les mains des agents.
+
+## Statut
+
+Document de travail et socle logiciel de démonstration, soumis à validation juridique provinciale. En mode démonstration, l'authentification passe par un en-tête et le stockage reste en mémoire ; hors démonstration, la persistance PostgreSQL (`DATABASE_URL`) et la connexion du socle (mot de passe, TOTP, jetons signés) sont disponibles. L'IA reste un générateur déterministe ; voir les README de chaque paquet et l'Annexe E du document maître.
