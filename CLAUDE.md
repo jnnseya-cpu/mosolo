@@ -192,5 +192,5 @@ données de démonstration.
   routes, écrans, menus, modules, contrôles (codes d'erreur), tests, agents d'IA, articles, rôles, décisions, sections du
   document maître, fichiers suivis et données de démonstration ; `npm test` et la CI échouent si un élément disparaît.
   Un retrait ou un renommage ne se fait que sur décision du maître d'ouvrage, avec motif, consigné dans
-  `verrou/retraits.md`. Point de restauration : étiquette `stable-2026-11-08` ; document développeur MOSOLO OS figé
+  `verrou/retraits.md`. Point de restauration : commit `19b3678` (étiquette `stable-2026-11-08`) ; document développeur MOSOLO OS figé
   dans `docs/mosolo-os/` (annexe I, § I.69).

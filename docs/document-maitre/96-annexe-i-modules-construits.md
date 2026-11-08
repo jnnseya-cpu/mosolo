@@ -2211,7 +2211,7 @@ relevé `verrou/inventaire.json` ; le test `backend/test/verrou-donnees-demo.tes
 données de démonstration semées (2 703 enregistrements dans 166 dépôts, horloge fixe) sont toujours là. `npm test` et la
 CI (désormais lancée aussi sur la branche de travail) échouent si un élément disparaît. Le relevé ne fait que croître
 (`npm run verrou:ajouter`) ; un retrait ou un renommage exige `--retirer` avec motif et décision, consignés dans
-`verrou/retraits.md`. Point de restauration : étiquette git `stable-2026-11-08`. Le document développeur « MOSOLO AI
+`verrou/retraits.md`. Point de restauration : commit `19b3678` (étiquette `stable-2026-11-08` à créer sur GitHub, voir `verrou/README.md`). Le document développeur « MOSOLO AI
 Operating System » (Claude Docs) est figé dans `docs/mosolo-os/` avec ses trois schémas. Mode d'emploi :
 `verrou/README.md`.
 
