@@ -16,4 +16,6 @@ silence ». Application mécanique de la règle n° 1 de `CLAUDE.md` (on ajoute,
 - Après un ajout : `npm run verrou:ajouter` (le relevé ne fait que croître, rien n'en sort).
 - Un renommage ou un retrait n'est jamais silencieux : sur décision du maître d'ouvrage seulement,
   `python3 tools/verrou.py --retirer CATEGORIE "ELEMENT" --motif "…" --decision "…"` (consigné dans `retraits.md`).
-- Point de restauration : étiquette git `stable-2026-11-08` (état complet verrouillé à cette date).
+- Point de restauration : commit `19b3678` (état complet verrouillé le 08/11/2026), étiquette locale `stable-2026-11-08`.
+  L'envoi des étiquettes étant refusé depuis l'environnement de travail, créer l'étiquette ou une « release » sur GitHub
+  à partir de ce commit (Releases → Draft a new release → Choose a tag : `stable-2026-11-08`, Target : `19b3678`).
