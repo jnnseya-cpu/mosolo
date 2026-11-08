@@ -2199,3 +2199,19 @@ la cause. Mise en place : Google Cloud — `infra/gcp/cles-console.sh` (comparti
 maîtresse et mot de passe d'accès dans Secret Manager) ; VPS — `./demo.sh` (volume, clé maîtresse générée). Le verrou
 de la « démonstration publique » (§ I.67) ne s'applique plus quand un mot de passe d'accès protège la démonstration.
 Test : `backend/test/cles-persistance.test.ts`. Rien n'est retiré.
+
+## I.69 Verrou de non-régression et point de restauration (08/11/2026)
+
+Demande du maître d'ouvrage : stabiliser et verrouiller tout ce qui a été fait, sans changement ni retrait silencieux.
+Ajout (rien n'est retiré ni modifié dans les fonctions existantes) : `tools/verrou.py` dresse l'inventaire de ce qui
+existe — 1 674 routes d'API, 224 chemins d'écran, 178 entrées de menu, 50 modules du serveur, 1 721 codes de contrôle,
+1 733 tests, 32 agents d'IA, 18 actions interdites à l'IA, 25 articles du blog, 38 rôles, 29 variables de la console
+des clés, les sections du document maître, les décisions de `CLAUDE.md` et tous les fichiers suivis — et le compare au
+relevé `verrou/inventaire.json` ; le test `backend/test/verrou-donnees-demo.test.ts` vérifie que les 449 dépôts et les
+données de démonstration semées (2 703 enregistrements dans 166 dépôts, horloge fixe) sont toujours là. `npm test` et la
+CI (désormais lancée aussi sur la branche de travail) échouent si un élément disparaît. Le relevé ne fait que croître
+(`npm run verrou:ajouter`) ; un retrait ou un renommage exige `--retirer` avec motif et décision, consignés dans
+`verrou/retraits.md`. Point de restauration : étiquette git `stable-2026-11-08`. Le document développeur « MOSOLO AI
+Operating System » (Claude Docs) est figé dans `docs/mosolo-os/` avec ses trois schémas. Mode d'emploi :
+`verrou/README.md`.
+

@@ -4,7 +4,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # Branche de travail incluse (08/11/2026) : chaque envoi est contrôlé, verrou de non-régression compris.
+    branches: [main, claude/beautiful-hawking-3tw7gb]
   pull_request:
   workflow_dispatch:
 
@@ -43,6 +44,10 @@ jobs:
       # Le catalogue des routes est généré depuis le code : il doit être à jour.
       - name: Catalogue des routes à jour
         run: python3 tools/gen_routes.py && git diff --exit-code specs/routes-api.md
+
+      # Règle n° 1 (CLAUDE.md) : rien de ce qui existe ne disparaît en silence (verrou/inventaire.json).
+      - name: Verrou de non-régression
+        run: python3 tools/verrou.py
 
       - name: Contrôle de types — shared
         run: npm run typecheck -w shared

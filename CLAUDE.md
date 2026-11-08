@@ -24,7 +24,7 @@ données de démonstration.
   dans la plateforme ont un nom français principal ; un nom de marque ou un terme anglais n'apparaît qu'en second, entre
   parenthèses (ex. « Stationnement intelligent (ParkSmart) », « Centre de commandement (Command Centre) »).
 - Avant de livrer : `npm run typecheck && npm run lint && npm test && npm run build -w frontend`, et
-  `python3 tools/gen_routes.py` si des routes changent.
+  `python3 tools/gen_routes.py` si des routes changent ; puis `npm run verrou:ajouter` pour verrouiller les ajouts.
 
 ## Décisions du maître d'ouvrage (27/09/2026, suite à la spécification fonctionnelle)
 
@@ -188,3 +188,9 @@ données de démonstration.
 - **Clés dans le compte d'administration (24/10/2026)** : toutes les clés se saisissent dans « Clés et raccordements »
   (super-administrateur) et sont conservées (fichier chiffré `MOSOLO_CONSOLE_FILE` + clé maîtresse stable) ; démonstration
   protégée par mot de passe d'accès (`infra/gcp/cles-console.sh`, `./demo.sh`) — annexe I, § I.68.
+- **Verrou de non-régression (08/11/2026)** : tout ce qui est construit est verrouillé (`verrou/`, `tools/verrou.py`) —
+  routes, écrans, menus, modules, contrôles (codes d'erreur), tests, agents d'IA, articles, rôles, décisions, sections du
+  document maître, fichiers suivis et données de démonstration ; `npm test` et la CI échouent si un élément disparaît.
+  Un retrait ou un renommage ne se fait que sur décision du maître d'ouvrage, avec motif, consigné dans
+  `verrou/retraits.md`. Point de restauration : étiquette `stable-2026-11-08` ; document développeur MOSOLO OS figé
+  dans `docs/mosolo-os/` (annexe I, § I.69).

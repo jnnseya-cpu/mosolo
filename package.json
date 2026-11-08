@@ -5,7 +5,9 @@
   "description": "KINSHASA MOSOLO — système d'exploitation souverain des recettes de la Ville Province de Kinshasa (socle logiciel)",
   "workspaces": ["shared", "backend", "frontend"],
   "scripts": {
-    "test": "npm run test --workspaces --if-present",
+    "test": "python3 tools/verrou.py && npm run test --workspaces --if-present",
+    "verrou": "python3 tools/verrou.py",
+    "verrou:ajouter": "python3 tools/verrou.py --ajouter && MOSOLO_VERROU_AJOUTER=1 npm exec -w backend -- vitest run test/verrou-donnees-demo.test.ts",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
     "build": "npm run build --workspaces --if-present",
