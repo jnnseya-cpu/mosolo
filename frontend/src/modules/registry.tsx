@@ -213,6 +213,8 @@ export const MODULE_ROUTES: ModuleRoute[] = [
   { path: '/pilotage/decisions-gouvernement', element: lazyPage(() => import('./pilotage/Decisions')), nav: { label: 'Décisions du Gouvernement provincial', short: 'Décisions', icon: 'scale', group: 'pilotage', roles: PROGRAMME } },
   // Agents IA de recettes (01/10/2026) : hub de direction, tournée de l'agent de terrain, doléances des usagers.
   { path: '/agents-recettes', element: lazyPage(() => import('./agents-recettes/AgentsRecettes')), nav: { label: 'Agents IA de recettes', short: 'Agents IA', icon: 'analysis', group: 'pilotage', roles: ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R08', 'R13', 'R14', 'R15', 'R16', 'R17', 'R18', 'R20', 'R21', 'R22', 'R23', 'R24', 'R26', 'R27', 'R28'] } },
+  // Veille des tendances (10/11/2026) : intégrée aux « Agents IA de recettes » (agent TENDANCES, « Ouvrir le circuit ») — pas d'entrée de menu à part.
+  { path: '/tendances', element: lazyPage(() => import('./tendances/Tendances')) },
   { path: '/agents-recettes/tournee', element: lazyPage(() => import('./agents-recettes/Tournee')), nav: { label: 'Ma tournée du jour (copilote)', short: 'Tournée', icon: 'pin', group: 'operations', roles: ['R09', 'R10', 'R11'] } },
   { path: '/mes-doleances', element: lazyPage(() => import('./agents-recettes/MesDoleances')), nav: { label: 'Mes doléances', short: 'Doléances', icon: 'message', group: 'public', roles: ['R30', 'R31'] } },
   { path: '/satisfaction', element: lazyPage(() => import('./pilotage/Satisfaction')), nav: { label: 'Donner mon avis', short: 'Avis', icon: 'check', group: 'public', roles: ['R30', 'R31'] } },

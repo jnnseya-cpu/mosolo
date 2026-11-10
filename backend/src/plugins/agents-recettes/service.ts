@@ -280,9 +280,15 @@ export class AgentsRecettesService {
       if (!tp) continue;
       const jour = Number(today.slice(8, 10));
       const moment = e.enRetard ? (jour >= P.jourApresPaie || jour <= 5 ? 'maintenant (période de paie)' : `le ${P.jourApresPaie} du mois (après la paie, ${A_CONFIRMER})`) : 'maintenant (échéance proche)';
+      // Veille des tendances : si un brief approuvé couvre la démarche, le rappel en reprend la mention et l'appel (lus à
+      // chaque calcul, jamais inscrits dans l'agent) ; sans brief, rappel de base.
+      const tendances = this.ctx.ext.tendances as { briefPourTexte?: (t: string, c: 'organic_social' | 'seo' | 'lifecycle') => { brief: { brief_id: string; brief_version: number }; mention: string | null; cta: { libelle: string } | null } | null } | undefined;
+      const libelles = e.ids.map((id) => this.ctx.assessment.obligations.get(id)?.label ?? '').filter(Boolean);
+      const brief = libelles.map((l) => tendances?.briefPourTexte?.(l, 'lifecycle') ?? null).find((x) => x) ?? null;
       out.push({
         titre: `${e.enRetard ? 'Impayé' : 'Échéance proche'} — ${e.ids.length} obligation(s)`,
-        detail: `Langue : ${tp.language} · envoi conseillé : ${moment} · canaux selon les préférences de la personne · lien de paiement et code USSD inclus.`,
+        detail: `Langue : ${tp.language} · envoi conseillé : ${moment} · canaux selon les préférences de la personne · lien de paiement et code USSD inclus.`
+          + (brief ? ` · Message aligné sur le brief approuvé ${brief.brief.brief_id} v${brief.brief.brief_version}${brief.mention ? ` : « ${brief.mention} »` : ''}${brief.cta ? ` — ${brief.cta.libelle}` : ''}.` : ''),
         commune: e.commune, montant: this.principal(e.total), cible: { type: 'CONTRIBUABLE', id: tpId },
         effet: 'Accepter envoie le rappel (préférences et consentements respectés).', lien: '/communications',
       });

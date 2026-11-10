@@ -194,3 +194,13 @@ données de démonstration.
   Un retrait ou un renommage ne se fait que sur décision du maître d'ouvrage, avec motif, consigné dans
   `verrou/retraits.md`. Point de restauration : commit `19b3678` (étiquette `stable-2026-11-08`) ; document développeur MOSOLO OS figé
   dans `docs/mosolo-os/` (annexe I, § I.69).
+- **Veille des tendances (Trend Intelligence, 10/11/2026)** : spécification v2.3 FUSIONNÉE dans MOSOLO (module
+  `tendances`, écran `/tendances`, page propre `/page/:slug`, contrats dans `trend-intelligence/`) : observations →
+  opportunités (calculs § 5) → brief versionné approuvé par une personne → actions SEO et marketing (IA de l'hôte =
+  relais existant, sinon modèle déterministe) → approbation du contenu exact par une personne distincte → file,
+  page propre, reçu, mesure, retour arrière ; aucune clé nouvelle, aucun envoi automatique. **Intégrée à toute la
+  plateforme, pas un produit à part** : agent `TENDANCES` du hub « Agents IA de recettes » (aucune entrée de menu à
+  part), signaux de tous les modules, articles du blog existants comme surfaces, rappels existants alignés sur le brief
+  approuvé. Contradictions signalées
+  (pile Python, inférence locale, plan commercial, rôles) : `trend-intelligence/README.md` (annexe I, § I.70).
+

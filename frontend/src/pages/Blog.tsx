@@ -3,7 +3,9 @@
  * problème résolu, preuve à voir dans la démonstration). Pages publiques, sans connexion ; contenu statique
  * (`blog/articles.ts`), uniquement des garanties réellement appliquées par la plateforme (annexe I, § I.65).
  */
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { api } from '../lib/api';
 import { Icon } from '../components/Icon';
 import { PageHead } from '../components/Shell';
 import { ARTICLES, CATEGORIES, type Article } from './blog/articles';
@@ -41,8 +43,27 @@ export function BlogIndex() {
   );
 }
 
+/** Révision approuvée d'un article par la Veille des tendances (§ I.70) : titre, accroche et appel ; sinon le texte d'origine. */
+interface Revision { slug: string; surface: string; revision: number; titre: string; description: string; accroche: string; ctaLibelle: string; ctaCible: string }
+function evenement(slug: string, evenementType: 'VISITE' | 'CTA', revision?: number) {
+  void api(`/v1/public/tendances/pages/${encodeURIComponent(slug)}/evenements`, { method: 'POST', body: { evenement: evenementType, ...(revision ? { revision } : {}) } }).catch(() => undefined);
+}
+
 export function BlogArticle() {
   const { slug } = useParams();
+  const [rev, setRev] = useState<Revision | null>(null);
+  useEffect(() => {
+    let actif = true;
+    setRev(null);
+    if (!slug || !ARTICLES.some((x) => x.slug === slug)) return;
+    // Sans serveur, sans page liée ou hors ligne : l'article d'origine s'affiche, rien ne bloque la lecture.
+    api<Revision>(`/v1/public/tendances/pages/${encodeURIComponent(slug)}`).then((r) => {
+      if (!actif || r.surface !== 'BLOG') return;
+      setRev(r);
+      evenement(slug, 'VISITE', r.revision);
+    }).catch(() => undefined);
+    return () => { actif = false; };
+  }, [slug]);
   const i = ARTICLES.findIndex((x) => x.slug === slug);
   const a = ARTICLES[i];
   if (!a) return <NotFound />;
@@ -50,7 +71,7 @@ export function BlogArticle() {
   return (
     <article className="page blog blog-article">
       <p className="small"><Link to="/blog">← Le blog MOSOLO</Link></p>
-      <PageHead eyebrow={CATEGORIES[a.categorie]} title={a.titre} lead={a.accroche} />
+      <PageHead eyebrow={CATEGORIES[a.categorie]} title={rev?.titre ?? a.titre} lead={rev?.accroche ?? a.accroche} />
 
       <section className="blog-usp" aria-label="Ce qui la rend unique">
         <p className="caps caps-sm">Ce qui la rend unique</p>
@@ -72,7 +93,7 @@ export function BlogArticle() {
       {a.aConfirmer && <p className="notice" role="note"><Icon name="info" size={16} /> {a.aConfirmer}</p>}
 
       <div className="blog-cta">
-        <Link to={a.lien.to} className="btn btn-primary">{a.lien.label} <Icon name="arrowRight" size={16} /></Link>
+        <Link to={rev?.ctaCible ?? a.lien.to} className="btn btn-primary" onClick={() => { if (rev) evenement(rev.slug, 'CTA', rev.revision); }}>{rev?.ctaLibelle ?? a.lien.label} <Icon name="arrowRight" size={16} /></Link>
         <Link to={`/blog/${suivant.slug}`} className="btn btn-ghost">Article suivant : {suivant.titre}</Link>
       </div>
     </article>

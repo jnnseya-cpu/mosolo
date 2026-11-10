@@ -34,7 +34,8 @@ export type AgentRecetteCode =
   | 'PRIORITE_ARRIERES' | 'REGULARISATION'
   | 'IMPACT_TARIF' | 'PRIX_STATIONNEMENT' | 'PREVISION_RECETTES'
   | 'GARDIEN_LEGALITE' | 'OU_VA_ARGENT' | 'DOLEANCES' | 'HUMEUR'
-  | 'COPILOTE_TERRAIN' | 'EQUITE';
+  | 'COPILOTE_TERRAIN' | 'EQUITE'
+  | 'TENDANCES';
 
 /** NOUVEAU : calculé par ce module ; EXISTANT : circuit déjà en service, résumé et lien ; SOURCE : alimenté par un lot importé. */
 export type Mode = 'NOUVEAU' | 'EXISTANT' | 'SOURCE' | 'SIMULATION';
@@ -68,6 +69,9 @@ export const AGENTS_RECETTES: AgentRecette[] = [
   { code: 'VOCAL_USSD', nom: 'Assistant vocal et USSD', famille: 'PAIEMENT', agentIa: 'COMMUNICATION', mode: 'EXISTANT',
     mission: '« Combien je dois ? Payer maintenant » par téléphone simple : menus USSD et serveur vocal (SVI), consultation après code secret, paiement par référence du circuit commun.',
     donnees: ['Sessions USSD / SVI (numéro masqué)'], jamais: 'Afficher nom ou historique sans code secret.', lien: '/canaux/ussd' },
+  { code: 'TENDANCES', nom: 'Veille des tendances (Trend Intelligence)', famille: 'PAIEMENT', agentIa: 'COMMUNICATION', mode: 'EXISTANT',
+    mission: 'Repérer dans les données de toute la plateforme (paiements de chaque module, doléances, visites des articles du blog et des pages) les démarches dont la demande monte ; en faire un brief approuvé par une personne, que les rappels, les articles du blog et les messages suivent ; mesurer, puis revenir en arrière si besoin.',
+    donnees: ['Agrégats de paiements par démarche et par jour', 'Doléances par catégorie', 'Visites et clics des articles et pages (sans identifiant)'], jamais: 'Publier ou envoyer sans approbation d’une personne distincte ; demander une clé nouvelle ; utiliser une donnée personnelle.', lien: '/tendances' },
   { code: 'ECHEANCIERS', nom: 'Proposition d’échéanciers', famille: 'PAIEMENT', agentIa: 'COPILOTE', mode: 'NOUVEAU',
     mission: 'Proposer un échéancier aux personnes en difficulté (retard ancien), avant toute pénalité ; la décision passe par le circuit des échéanciers du recouvrement.',
     donnees: ['Obligations en retard', 'Échéanciers déjà en vigueur'], jamais: 'Accorder un échéancier : seule une personne habilitée le fait.', lien: '/recouvrement' },

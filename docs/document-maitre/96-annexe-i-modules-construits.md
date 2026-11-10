@@ -2215,3 +2215,32 @@ CI (désormais lancée aussi sur la branche de travail) échouent si un élémen
 Operating System » (Claude Docs) est figé dans `docs/mosolo-os/` avec ses trois schémas. Mode d'emploi :
 `verrou/README.md`.
 
+## I.70 Veille des tendances (Trend Intelligence) (10/11/2026)
+
+Demande du maître d'ouvrage : fusionner la spécification « Trend Intelligence AI » v2.3 (conservée dans
+`docs/sources/trend-intelligence-ai-build-spec-v2.3.md`) dans MOSOLO, code dans ce dépôt. Construit sur les circuits
+existants (règle n° 1) : module `tendances` (`backend/src/plugins/tendances/`), écran « Veille des tendances (Trend
+Intelligence) » (`/tendances`), page propre publique (`/page/:slug`). Chaîne : registre des sources (données propres,
+import CSV ; une source qui exigerait une clé nouvelle est affichée indisponible, jamais demandée) ; observations
+idempotentes ; collecte automatique des agrégats propres (ordres de paiement par libellé, doléances par catégorie,
+visites des pages propres) ; regroupement lexical par sujet du profil ; hausse logarithmique, score d'anomalie robuste,
+score d'opportunité (25/25/20/15/15) et confiance (35/25/20/20, plafond 69 pour une seule famille) ; table de décision ;
+brief « Growth Brief v1 » à objet fermé, versionné, approuvé par une personne distincte de l'auteur (If-Match), actif par
+portée, expirant (7 jours / 24 h) ; brief effectif (204 sans brief) ; agents SEO et marketing qui rédigent à partir du
+MÊME brief, par l'IA de la plateforme (relais Claude → OpenAI → Gemini, plafonds § I.56) ou par modèle déterministe
+signalé ; sortie du modèle à clés fermées, chiffres et mentions contrôlés ; approbation liée à l'empreinte exacte, à la
+révision visée et au profil ; file d'exécution qui refait toutes les gardes (gel, brief, politique, révision) ;
+comparer-et-écrire sur la page propre avec reçu ; rapprochement après panne ; retour arrière ; mesure agrégée
+(visites, clics) observationnelle ; quota mensuel (50 — à confirmer) ; gel d'urgence. Données de démonstration non
+contractuelles : installation « KINSHASA MOSOLO — portail public », sujets vignette automobile (éligible) et stationnement
+(surveillance), page `/page/vignette-automobile`. Seuils de la spécification repris « par défaut — à confirmer ». Non
+construit et signalé (`trend-intelligence/README.md`) : service Python autonome, SDK, Helm, inférence locale embarquée
+(porte § 20 non franchie), plan commercial et facturation, lecteur de flux publics, sécurité au niveau des lignes SQL,
+effacement après restauration. **Intégration à toute la plateforme** (demande du 10/11/2026 : « pas une plateforme à
+part ») : agent `TENDANCES` ajouté au hub « Agents IA de recettes » (famille Paiement, lien vers le circuit) au lieu
+d'une entrée de menu séparée ; articles EXISTANTS du blog liés comme surfaces (titre, accroche et appel de la révision
+approuvée, retour à l'original au retour arrière ; démonstration : « Stationnement intelligent (ParkSmart) ») ; l'agent
+« Rappels personnalisés » reprend la mention et l'appel du brief approuvé à chaque calcul (canal du circuit existant
+`lifecycle`) ; signaux tirés des paiements de tous les modules. Tests : `backend/test/tendances.test.ts` (18). Rien
+n'est retiré.
+

@@ -50,6 +50,7 @@ import { equipementsPlugin } from './equipements/plugin.js';
 import { grandsRedevablesPlugin } from './verticales/grands-redevables-plugin.js';
 import { integriteEnquetesPlugin } from './integrite/enquetes/plugin.js';
 import { agentsRecettesPlugin } from './agents-recettes/plugin.js';
+import { tendancesPlugin } from './tendances/plugin.js';
 
 /**
  * Ordre : `acces` en tête (garde des revendications, mandats), puis `fiscal` (il branche les exonérations sur la liquidation), `titres` avant `rakapay`,
@@ -128,4 +129,6 @@ export const DEFAULT_PLUGINS: MosoloPlugin<unknown>[] = [
   indicateursModules2740Plugin,
   // Agents IA de recettes (01/10/2026) : après pilotage, planification, titres et recouvrement (services lus).
   agentsRecettesPlugin as MosoloPlugin<unknown>,
+  // Veille des tendances (Trend Intelligence, 10/11/2026) : après les agents de recettes (doléances lues en agrégats).
+  tendancesPlugin as MosoloPlugin<unknown>,
 ];

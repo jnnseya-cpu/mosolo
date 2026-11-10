@@ -1,6 +1,6 @@
 # Catalogue des routes de l'API KINSHASA MOSOLO
 
-Généré depuis le code source (`tools/gen_routes.py`) : **1674 routes** dans 53 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
+Généré depuis le code source (`tools/gen_routes.py`) : **1700 routes** dans 54 modules. Chaque route applique le point de décision des politiques (RBAC + ABAC) ; les erreurs suivent la RFC 9457. Le contrat détaillé des routes du socle figure dans `specs/openapi.yaml` et `specs/contrat-api.md` ; les règles d'accès de chaque module d'extension sont déclarées dans son fichier `policy.ts`.
 
 | Module | Routes |
 |---|---|
@@ -32,6 +32,7 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1674 routes** dans 5
 | extension referentiel | 12 |
 | extension sanctions | 12 |
 | extension socle | 24 |
+| extension tendances | 26 |
 | extension terrain | 64 |
 | extension titres | 26 |
 | extension tresor | 43 |
@@ -1350,6 +1351,37 @@ Généré depuis le code source (`tools/gen_routes.py`) : **1674 routes** dans 5
 | POST | `/v1/socle/exports/requests/:id/package` |
 | POST | `/v1/socle/exports/requests/:id/withdraw` |
 | GET | `/v1/socle/status` |
+
+## Extension tendances
+
+| Méthode | Chemin |
+|---|---|
+| GET | `/v1/public/tendances/pages/:slug` |
+| POST | `/v1/public/tendances/pages/:slug/evenements` |
+| GET | `/v1/tendances` |
+| GET | `/v1/tendances/installations/:inst/actions` |
+| GET | `/v1/tendances/installations/:inst/actions/:id` |
+| POST | `/v1/tendances/installations/:inst/actions/:id/approbation` |
+| POST | `/v1/tendances/installations/:inst/actions/:id/export` |
+| GET | `/v1/tendances/installations/:inst/actions/:id/mesure` |
+| POST | `/v1/tendances/installations/:inst/actions/:id/retour` |
+| GET | `/v1/tendances/installations/:inst/brief-effectif` |
+| GET | `/v1/tendances/installations/:inst/briefs` |
+| POST | `/v1/tendances/installations/:inst/briefs/:id/approbation` |
+| POST | `/v1/tendances/installations/:inst/briefs/:id/generation` |
+| POST | `/v1/tendances/installations/:inst/briefs/:id/revocation` |
+| POST | `/v1/tendances/installations/:inst/calcul` |
+| POST | `/v1/tendances/installations/:inst/collecte` |
+| POST | `/v1/tendances/installations/:inst/gel` |
+| POST | `/v1/tendances/installations/:inst/observations/lot` |
+| GET | `/v1/tendances/installations/:inst/opportunites` |
+| POST | `/v1/tendances/installations/:inst/opportunites/:id/brief` |
+| GET | `/v1/tendances/installations/:inst/pages` |
+| POST | `/v1/tendances/installations/:inst/pages` |
+| POST | `/v1/tendances/installations/:inst/pages/:id/approbation` |
+| GET | `/v1/tendances/installations/:inst/profil` |
+| PUT | `/v1/tendances/installations/:inst/profil` |
+| POST | `/v1/tendances/travaux` |
 
 ## Extension terrain
 

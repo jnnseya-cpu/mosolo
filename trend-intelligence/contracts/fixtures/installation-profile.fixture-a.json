@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "platform_slug": "fixture_platform_a",
+  "mode": "draft_only",
+  "default_market": "CA",
+  "default_locale": "en-CA",
+  "allowed_channels": [
+    "seo",
+    "organic_social"
+  ],
+  "allowed_asset_ids": [
+    "asset_onboarding_page"
+  ],
+  "approved_claim_ids": [
+    "claim_onboarding_01"
+  ],
+  "allowed_cta_ids": [
+    "cta_view_onboarding_guide"
+  ],
+  "outcome": {
+    "conversion": "qualified_trial_started",
+    "denominator": "eligible_session"
+  },
+  "timezone": "America/Toronto"
+}
