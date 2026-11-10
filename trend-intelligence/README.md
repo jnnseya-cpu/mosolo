@@ -6,6 +6,14 @@ MOSOLO, code **dans ce dépôt**. Conformément à la règle n° 1 (`CLAUDE.md`)
 circuits existants (moteur de politiques, journal d'audit chaîné, idempotence, relais d'IA, pages publiques), pas en
 parallèle. Rien d'existant n'est retiré.
 
+## Invisible et automatique dans des bornes (décision du 10/11/2026)
+
+Rien n'est visible des usagers : aucune entrée de menu, agent masqué du catalogue affiché, aucune mention publique.
+Un cycle en arrière-plan collecte et calcule chaque heure ; après l'opt-in unique du directeur de cabinet, il applique
+seul les modifications réversibles des articles et pages (score et confiance ≥ 85, mentions approuvées, une par page et
+par période de repos) et les retire seul si le brief expire ou si la mesure se dégrade. Jamais d'envoi, de dépense ni
+de sanction automatiques. `MOSOLO_TENDANCES_AUTO=off` coupe le cycle.
+
 ## Intégrée à toute la plateforme (décision du 10/11/2026 : « pas une plateforme à part »)
 
 - **Aucune entrée de menu à part** : la Veille des tendances est l'agent `TENDANCES` du hub existant « Agents IA de

@@ -48,6 +48,8 @@ export interface Proposition {
   lien?: string;
   statut: StatutProposition;
   decision?: { by: string; at: string; motif: string; resultat?: string };
+  /** Veille des tendances : brief approuvé actif au calcul (métadonnée interne, jamais affichée ; sert à la mesure). */
+  alignement?: { briefId: string; version: number };
 }
 
 export interface LigneSource { ref: string; lat?: number; lon?: number; commune?: string; plaque?: string; categorie?: string; operateur?: string; observe?: number; libelle?: string }
@@ -105,7 +107,7 @@ export class AgentsRecettesService {
   private get planif() { return this.ctx.ext.planification as PlanificationService | undefined; }
   private facts(): Facts | null { return this.pil?.facts() ?? null; }
   private agent(code: string) {
-    const a = AGENTS_RECETTES.find((x) => x.code === code);
+    const a = AGENTS_RECETTES.find((x) => x.code === code && !x.masque);
     if (!a) throw notFound('AGENT_INCONNU', `Agent inconnu : ${code}`);
     return a;
   }
@@ -124,7 +126,7 @@ export class AgentsRecettesService {
         'L’IA propose, une personne décide ; données agrégées ; contrôle d’équité mensuel.',
       ],
       familles: Object.entries(FAMILLES).map(([code, f]) => ({ code, ...f })).sort((a, b) => a.ordre - b.ordre),
-      agents: AGENTS_RECETTES.map((a) => {
+      agents: AGENTS_RECETTES.filter((a) => !a.masque).map((a) => {
         const ps = parAgent(a.code);
         return { ...a, propositions: { aDecider: ps.filter((p) => p.statut === 'PROPOSEE').length, acceptees: ps.filter((p) => p.statut === 'ACCEPTEE').length, ecartees: ps.filter((p) => p.statut === 'ECARTEE').length } };
       }),
@@ -287,8 +289,8 @@ export class AgentsRecettesService {
       const brief = libelles.map((l) => tendances?.briefPourTexte?.(l, 'lifecycle') ?? null).find((x) => x) ?? null;
       out.push({
         titre: `${e.enRetard ? 'Impayé' : 'Échéance proche'} — ${e.ids.length} obligation(s)`,
-        detail: `Langue : ${tp.language} · envoi conseillé : ${moment} · canaux selon les préférences de la personne · lien de paiement et code USSD inclus.`
-          + (brief ? ` · Message aligné sur le brief approuvé ${brief.brief.brief_id} v${brief.brief.brief_version}${brief.mention ? ` : « ${brief.mention} »` : ''}${brief.cta ? ` — ${brief.cta.libelle}` : ''}.` : ''),
+        detail: `Langue : ${tp.language} · envoi conseillé : ${moment} · canaux selon les préférences de la personne · lien de paiement et code USSD inclus.`,
+        ...(brief ? { alignement: { briefId: brief.brief.brief_id, version: brief.brief.brief_version } } : {}),
         commune: e.commune, montant: this.principal(e.total), cible: { type: 'CONTRIBUABLE', id: tpId },
         effet: 'Accepter envoie le rappel (préférences et consentements respectés).', lien: '/communications',
       });

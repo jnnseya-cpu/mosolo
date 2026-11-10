@@ -2244,3 +2244,18 @@ approuvée, retour à l'original au retour arrière ; démonstration : « Statio
 `lifecycle`) ; signaux tirés des paiements de tous les modules. Tests : `backend/test/tendances.test.ts` (18). Rien
 n'est retiré.
 
+**Complément du 10/11/2026 — fonctionnement invisible et automatique dans des bornes.** Demande du maître d'ouvrage :
+« rien ne doit être visible des usagers, cela doit fonctionner de manière invisible ». Choix retenu : automatique dans
+des bornes, après un opt-in unique du directeur de cabinet (route `…/automatique`, motif journalisé, R02 seul).
+L'agent `TENDANCES` reste dans le code mais est masqué du catalogue affiché et de toute recherche par son nom ; aucune
+entrée de menu ; les rappels portent l'alignement sur le brief en métadonnée interne seulement ; articles et pages
+changent comme une mise à jour éditoriale ordinaire. Cycle en arrière-plan (horaire ; `MOSOLO_TENDANCES_AUTO=off` le
+coupe) : collecte et calcul toujours ; avec l'opt-in et hors gel, brief et approbations par la « politique automatique »
+(au nom de l'opt-in) pour les seules modifications réversibles de pages et d'articles (titre, description, accroche,
+libellé d'appel), score et confiance ≥ 85 sans veto, une modification par page et par période de repos (7 jours — à
+confirmer) ; deux modifications sœurs d'un même brief sur des champs disjoints s'appliquent l'une après l'autre, toute
+autre modification de la page (éditeur) reste un conflit ; retour automatique au brief expiré ou révoqué et à la mesure
+dégradée ; brouillons destinés aux réseaux sociaux jamais approuvés automatiquement. Démonstration : opt-in fictif,
+signalé non contractuel. Tests : 21. Rien n'est retiré (l'écran `/tendances` reste accessible par son adresse aux rôles
+habilités, sans lien).
+

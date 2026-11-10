@@ -11,7 +11,7 @@ import { parse } from '../../core/http.js';
 import { definePolicy, GRANTS } from '../../core/policy.js';
 import { definePlugin } from '../types.js';
 import { CANAUX } from './contrat.js';
-import { APPROBATEURS, DEPOSANTS, EXPLOITANTS, GELEURS, LECTEURS, PROPOSANTS } from './model.js';
+import { APPROBATEURS, AUTOMATISEURS, DEPOSANTS, EXPLOITANTS, GELEURS, LECTEURS, PROPOSANTS } from './model.js';
 import { TendancesService } from './service.js';
 
 const { always } = GRANTS;
@@ -20,6 +20,7 @@ definePolicy('tendances:read', g(LECTEURS));
 definePolicy('tendances:propose', g(PROPOSANTS));
 definePolicy('tendances:approve', g(APPROBATEURS));
 definePolicy('tendances:freeze', g(GELEURS));
+definePolicy('tendances:automate', g(AUTOMATISEURS));
 definePolicy('tendances:work', g(EXPLOITANTS));
 definePolicy('tendances:ingest', g(DEPOSANTS));
 
@@ -58,11 +59,26 @@ const effectifSchema = z.object({ marche: z.string().regex(/^[A-Z]{2}$/), locale
 const entier = (v: unknown) => { const s = Array.isArray(v) ? v[0] : v; const n = typeof s === 'string' ? Number(s.replace(/"/g, '')) : NaN; return Number.isInteger(n) ? n : undefined; };
 
 type P = { Params: { inst: string; id: string } };
+
+/** Cycle automatique : actif par défaut hors tests ; `MOSOLO_TENDANCES_AUTO=off` le coupe, `on` le force. */
+export function cycleAutomatiqueActif(env: NodeJS.ProcessEnv): boolean {
+  const v = (env.MOSOLO_TENDANCES_AUTO ?? '').trim().toLowerCase();
+  if (v === 'off') return false;
+  if (v === 'on') return true;
+  return !env.VITEST;
+}
 export const tendancesPlugin = definePlugin<TendancesService>({
   name: 'tendances',
   create: (ctx) => new TendancesService(ctx),
   seed: (_ctx, svc) => svc.seedDemo(),
   routes: (app, ctx, svc) => {
+    // Fonctionnement en arrière-plan (invisible) : cycle horaire, premier passage peu après le démarrage.
+    if (cycleAutomatiqueActif(process.env)) {
+      svc.startScheduler();
+      const premier = setTimeout(() => { void svc.cycleAutomatique().catch(() => undefined); }, 5_000);
+      premier.unref?.();
+      app.addHook('onClose', async () => { clearTimeout(premier); svc.stopScheduler(); });
+    }
     app.get('/v1/tendances', async (req) => svc.etat(requireUser(req)));
     app.put<{ Params: { inst: string } }>('/v1/tendances/installations/:inst/profil', async (req, reply) => {
       const garde = { siRevision: entier(req.headers['if-match']), siAucun: req.headers['if-none-match'] === '*' };
@@ -95,6 +111,7 @@ export const tendancesPlugin = definePlugin<TendancesService>({
     app.post<P>('/v1/tendances/installations/:inst/actions/:id/retour', async (req) => svc.retablir(requireUser(req), req.params.inst, req.params.id, parse(motifSchema, req.body).motif));
     app.post<P>('/v1/tendances/installations/:inst/actions/:id/export', async (req) => svc.exporter(requireUser(req), req.params.inst, req.params.id, parse(exportSchema, req.body).destination));
     app.get<P>('/v1/tendances/installations/:inst/actions/:id/mesure', async (req) => svc.mesure(requireUser(req), req.params.inst, req.params.id));
+    app.post<{ Params: { inst: string } }>('/v1/tendances/installations/:inst/automatique', async (req) => { const b = parse(gelSchema, req.body); return svc.automatiser(requireUser(req), req.params.inst, b.actif, b.motif); });
     app.post<{ Params: { inst: string } }>('/v1/tendances/installations/:inst/gel', async (req) => { const b = parse(gelSchema, req.body); return svc.geler(requireUser(req), req.params.inst, b.actif, b.motif); });
     app.get<{ Params: { inst: string } }>('/v1/tendances/installations/:inst/pages', async (req) => svc.listePages(requireUser(req), req.params.inst));
     app.post<{ Params: { inst: string } }>('/v1/tendances/installations/:inst/pages', async (req, reply) => reply.code(201).send(svc.creerPage(requireUser(req), req.params.inst, parse(pageSchema, req.body))));

@@ -13,6 +13,7 @@ import { DAY_MS, HOUR_MS, kinshasaDay } from '../../core/clock.js';
 import { canonicalJson, sha256Hex } from '../../core/crypto.js';
 import { ApiError, conflict, notFound, unprocessable } from '../../core/errors.js';
 import { assertDistinctPerson, authorize } from '../../core/policy.js';
+import { runScheduledJob } from '../../core/jobs.js';
 import { IdGenerator, InMemoryAppendOnlyRepository, InMemoryRepository } from '../../core/repository.js';
 import { FournisseursIA } from '../../modules/ia-fournisseurs/service.js';
 import { CANAUX_HOTE, CANAUX_V1, CHAMPS_AUTORISES, growthBriefV1, sortieModele, type Canal, type GrowthBrief, type SortieModele, type TypeAction } from './contrat.js';
@@ -71,6 +72,9 @@ export class TendancesService {
     this.ctx.audit.append({ actor, action: `tendances.${action}`, resourceType: `tendances.${type}`, resourceId: id, details });
   }
   private systeme(): Acteur { return { id: 'tendances-executeur', kind: 'system' }; }
+  /** Acteur de la politique automatique : il agit au nom de l'opt-in journalisé, jamais de son propre chef. */
+  private politique(i: Installation): Acteur { return { id: `politique-automatique:${i.automatisation?.by ?? 'aucune'}`, kind: 'system' }; }
+  private estPersonne(a: User | Acteur): a is User { return 'roles' in a; }
 
   // ——————————————————————————————————— installations, profils, portée ———————————————————————————————————
 
@@ -95,7 +99,7 @@ export class TendancesService {
     if ('roles' in user) authorize(user, 'tendances:propose');
     if (this.installations.get(d.id)) throw conflict('INSTALLATION_EXISTANTE', 'Installation déjà créée.');
     if (this.installations.findOne((i) => i.slug === d.slug && i.environnement === d.environnement)) throw conflict('INSTALLATION_EXISTANTE', 'Même plateforme et même environnement déjà installés.');
-    const i: Installation = { id: d.id, slug: d.slug, libelle: d.libelle, environnement: d.environnement, gel: null, optInAutomatique: false, quotaMensuel: d.quotaMensuel ?? P.quotaMensuelDefaut, acces: d.acces ?? [], creeLe: this.now(), creePar: user.id };
+    const i: Installation = { id: d.id, slug: d.slug, libelle: d.libelle, environnement: d.environnement, gel: null, optInAutomatique: false, automatisation: null, quotaMensuel: d.quotaMensuel ?? P.quotaMensuelDefaut, acces: d.acces ?? [], creeLe: this.now(), creePar: user.id };
     this.installations.insert(i);
     this.audit(user, 'installation.creee', 'installation', i.id, { slug: i.slug, environnement: i.environnement });
     return i;
@@ -251,7 +255,7 @@ export class TendancesService {
       const conf = confiance(cc, independantes, P.plafondUneFamille);
       const decision = decider(score, conf, [...vetos, ...blocages], { archiveScore: P.archiveScore, archiveConfiance: P.archiveConfiance, brief: P.brief, automatique: P.automatique }, installation.optInAutomatique);
       const preuves = obs.filter((o) => o.sujet === sujetId && Date.parse(o.debut) >= finMs - fen).map((o) => o.id).slice(0, 64);
-      const empreinteEntrees = sha256Hex(canonicalJson({ familles, composantes, cc, profil: profil?.revision ?? 0 }));
+      const empreinteEntrees = sha256Hex(canonicalJson({ familles, composantes, cc, profil: profil?.revision ?? 0, automatique: installation.optInAutomatique }));
       const id = sha256Hex(`${inst}|${sujetId}|${jour}|${VERSION_CALCUL}|${empreinteEntrees}`).slice(0, 24);
       if (this.opportunites.get(id)) { resultats.push(this.opportunites.get(id)!); continue; }
       // Instantané figé ; le précédent du même sujet est remplacé (sans effacement).
@@ -277,9 +281,9 @@ export class TendancesService {
 
   // ——————————————————————————————————— brief de croissance (§ 6) ———————————————————————————————————
 
-  creerBrief(user: User, inst: string, opportuniteId: string) {
-    authorize(user, 'tendances:propose');
-    const installation = this.installation(user, inst);
+  creerBrief(user: User | Acteur, inst: string, opportuniteId: string) {
+    if (this.estPersonne(user)) authorize(user, 'tendances:propose');
+    const installation = this.installation(this.estPersonne(user) ? user : null, inst);
     const op = this.dans(this.opportunites.get(opportuniteId), inst, 'OPPORTUNITE_INCONNUE');
     if (op.remplacePar) throw conflict('OPPORTUNITE_REMPLACEE', 'Un calcul plus récent existe pour ce sujet.');
     if (op.statut !== 'ELIGIBLE') throw unprocessable('PREUVES_INSUFFISANTES', `Opportunité non éligible (${op.decision}) : ${[...op.vetos, ...op.blocages].join(' ; ') || 'score ou confiance sous le seuil'}.`);
@@ -312,14 +316,15 @@ export class TendancesService {
   private cleScope(marche: string, locale: string, sujet: string) { return `${marche}|${locale}|${sujet}`; }
 
   /** Approbation d'une version exacte (If-Match) : remplace atomiquement le brief actif de la même portée. */
-  approuverBrief(user: User, inst: string, id: string, siVersion: number | undefined) {
-    authorize(user, 'tendances:approve');
-    this.installation(user, inst);
+  approuverBrief(user: User | Acteur, inst: string, id: string, siVersion: number | undefined) {
+    if (this.estPersonne(user)) authorize(user, 'tendances:approve');
+    const inst0 = this.installation(this.estPersonne(user) ? user : null, inst);
+    if (!this.estPersonne(user) && !inst0.optInAutomatique) throw conflict('AUTOMATIQUE_NON_ACTIVE', 'Approbation automatique sans opt-in : refusée.');
     const b = this.dans(this.briefs.get(id), inst, 'BRIEF_INCONNU');
     if (siVersion === undefined) throw new ApiError(428, 'PRECONDITION_REQUISE', 'Approbation : en-tête If-Match (version du brief) requis.');
     if (siVersion !== b.version) throw conflict('VERSION_BRIEF_PERIMEE', `Version attendue ${siVersion}, version présentée ${b.version}.`);
     if (b.statut !== 'BROUILLON') throw conflict('BRIEF_DEJA_TRAITE', `Brief ${b.statut.toLowerCase()}.`);
-    assertDistinctPerson(user.id, [b.creePar], 'L’auteur du brief ne peut pas l’approuver.');
+    if (this.estPersonne(user)) assertDistinctPerson(user.id, [b.creePar], 'L’auteur du brief ne peut pas l’approuver.');
     const profil = this.profilActif(inst);
     if (!profil || profil.revision !== b.profilRevision) throw conflict('POLITIQUE_MODIFIEE', 'Le profil a changé depuis la rédaction : recréer le brief.');
     if (Date.parse(b.contenu.expires_at) <= this.ms()) throw conflict('BRIEF_EXPIRE', 'Brief expiré avant approbation.');
@@ -399,9 +404,9 @@ export class TendancesService {
 
   // ——————————————————————————————————— génération des actions (§ 7, § 17) ———————————————————————————————————
 
-  async generer(user: User, inst: string, briefRef: string) {
-    authorize(user, 'tendances:propose');
-    const installation = this.installation(user, inst);
+  async generer(user: User | Acteur, inst: string, briefRef: string) {
+    if (this.estPersonne(user)) authorize(user, 'tendances:propose');
+    const installation = this.installation(this.estPersonne(user) ? user : null, inst);
     if (installation.gel) throw conflict('INSTALLATION_GELEE', 'Installation gelée : aucune nouvelle génération.');
     const b = this.dans(this.briefs.get(briefRef), inst, 'BRIEF_INCONNU');
     const valide = this.briefValide(inst, { marche: b.contenu.market, locale: b.contenu.locale, sujet: b.contenu.topic_id });
@@ -522,15 +527,17 @@ export class TendancesService {
   }
 
   /** Approbation liée à l'empreinte exacte, à la révision visée et à la politique ; auteur et approbateur distincts. */
-  approuverAction(user: User, inst: string, id: string) {
-    authorize(user, 'tendances:approve');
-    this.installation(user, inst);
+  approuverAction(user: User | Acteur, inst: string, id: string) {
+    if (this.estPersonne(user)) authorize(user, 'tendances:approve');
+    const inst0 = this.installation(this.estPersonne(user) ? user : null, inst);
+    if (!this.estPersonne(user) && !inst0.optInAutomatique) throw conflict('AUTOMATIQUE_NON_ACTIVE', 'Approbation automatique sans opt-in : refusée.');
     const a = this.dans(this.actions.get(id), inst, 'ACTION_INCONNUE');
     if (a.statut !== 'PROPOSEE') throw conflict('ACTION_DEJA_TRAITEE', `Action ${a.statut.toLowerCase()}.`);
-    assertDistinctPerson(user.id, [a.auteur], 'L’auteur d’une action ne peut pas l’approuver.');
+    if (this.estPersonne(user)) assertDistinctPerson(user.id, [a.auteur], 'L’auteur d’une action ne peut pas l’approuver.');
+    else if (!a.cibleId) throw conflict('HORS_BORNES', 'La politique automatique n’approuve que des modifications réversibles de pages propres.');
     const b = this.briefValide(inst, this.scopeAction(a));
     if (!b || b.version !== a.briefVersion || b.briefId !== a.briefId) throw conflict('BRIEF_EXPIRE', 'Le brief de cette action n’est plus actif ou a expiré.');
-    const ok: Action = { ...a, statut: a.cibleId ? 'EN_FILE' : 'APPROUVEE', approbation: { by: user.id, at: this.now(), empreinte: this.empreinte(a), revision: a.revisionAttendue, politique: a.profilRevision } };
+    const ok: Action = { ...a, statut: a.cibleId ? 'EN_FILE' : 'APPROUVEE', approbation: { by: user.id, at: this.now(), empreinte: this.empreinte(a), revision: a.revisionAttendue, politique: a.profilRevision }, ...(this.estPersonne(user) ? {} : { automatique: true as const }) };
     this.actions.update(ok);
     if (ok.statut === 'EN_FILE') this.travaux.append({ id: this.ids.next('TRV'), installationId: inst, actionId: a.id, nature: 'EXECUTER', at: this.now() });
     this.audit(user, 'action.approuvee', 'action', a.id, { empreinte: ok.approbation!.empreinte, file: ok.statut === 'EN_FILE' });
@@ -583,12 +590,29 @@ export class TendancesService {
     if (!a.approbation || a.approbation.empreinte !== this.empreinte(a)) return this.echec(a, 'ECHEC', 'APPROBATION_INVALIDE', 'Le contenu ne correspond plus à ce qui a été approuvé.');
     for (const k of Object.keys(a.champs)) if (!CHAMPS_AUTORISES[a.type].includes(k)) return this.echec(a, 'ECHEC', 'CHAMP_NON_AUTORISE', `Champ non autorisé : ${k}`);
     const cible = this.adaptateur.lire(a.cibleId!);
-    if (cible.revision !== a.revisionAttendue) return this.echec(a, 'CONFLIT', 'TARGET_REVISION_CONFLICT', 'La page a changé après l’approbation : nouvelle approbation nécessaire.');
+    if (cible.revision !== a.revisionAttendue && !this.seulementFreres(a, a.revisionAttendue!, cible.revision)) return this.echec(a, 'CONFLIT', 'TARGET_REVISION_CONFLICT', 'La page a changé après l’approbation : nouvelle approbation nécessaire.');
     const precedent = Object.fromEntries(Object.keys(a.champs).map((k) => [k, (cible.champs as unknown as Record<string, string>)[k] ?? '']));
     this.actions.update({ ...a, precedent, statut: 'RECONCILIATION' });
-    const r = this.adaptateur.appliquer(a.cibleId!, a.revisionAttendue!, a.champs, a.cleIdempotence);
+    const r = this.adaptateur.appliquer(a.cibleId!, cible.revision, a.champs, a.cleIdempotence);
     if (this.panneApresEcriture) return { statut: 'RECONCILIATION', code: 'PANNE_SIMULEE' };
     return this.marquerAppliquee(a.id, a.cleIdempotence, r.revision);
+  }
+
+  /**
+   * Révisions intermédiaires toutes produites par des actions SŒURS (même brief, même version) sur des champs disjoints :
+   * l'action peut s'appliquer ou se rétablir par-dessus. Toute autre modification (éditeur, autre brief) ⇒ conflit.
+   */
+  private seulementFreres(a: Action, depuis: number, jusqua: number): boolean {
+    const mes = new Set(Object.keys(a.champs));
+    for (let rev = depuis + 1; rev <= jusqua; rev++) {
+      const r = this.revisionsPages.get(`${a.cibleId}#${rev}`);
+      if (!r?.cleAction) return false;
+      const cle = r.cleAction.replace(/-retour$/, '');
+      const soeur = this.actions.findOne((x) => x.cleIdempotence === cle && x.installationId === a.installationId);
+      if (!soeur || soeur.id === a.id || soeur.briefId !== a.briefId || soeur.briefVersion !== a.briefVersion) return false;
+      if (Object.keys(soeur.champs).some((k) => mes.has(k))) return false;
+    }
+    return true;
   }
 
   private marquerAppliquee(id: string, cle: string, revision: number) {
@@ -607,14 +631,14 @@ export class TendancesService {
   }
 
   /** Retour arrière : action compensatoire autorisée, seulement si la page n'a pas changé depuis (sinon conflit). Permis pendant un gel. */
-  retablir(user: User, inst: string, id: string, motif: string) {
-    authorize(user, 'tendances:approve');
-    this.installation(user, inst);
+  retablir(user: User | Acteur, inst: string, id: string, motif: string) {
+    if (this.estPersonne(user)) authorize(user, 'tendances:approve');
+    this.installation(this.estPersonne(user) ? user : null, inst);
     const a = this.dans(this.actions.get(id), inst, 'ACTION_INCONNUE');
     if (a.statut !== 'APPLIQUEE' || !a.precedent || a.revisionAppliquee === undefined) throw conflict('RETOUR_IMPOSSIBLE', 'Seule une action appliquée se rétablit.');
     const actuelle = this.adaptateur.lire(a.cibleId!);
-    if (actuelle.revision !== a.revisionAppliquee) throw conflict('TARGET_REVISION_CONFLICT', 'La page a été modifiée depuis : résolution manuelle (le travail de l’éditeur est protégé).');
-    const r = this.adaptateur.restaurer(a.cibleId!, a.revisionAppliquee, a.precedent, `${a.cleIdempotence}-retour`);
+    if (actuelle.revision !== a.revisionAppliquee && !this.seulementFreres(a, a.revisionAppliquee, actuelle.revision)) throw conflict('TARGET_REVISION_CONFLICT', 'La page a été modifiée depuis : résolution manuelle (le travail de l’éditeur est protégé).');
+    const r = this.adaptateur.restaurer(a.cibleId!, actuelle.revision, a.precedent, `${a.cleIdempotence}-retour`);
     const ok: Action = { ...a, statut: 'RETABLIE', retour: { by: user.id, at: this.now(), motif, revision: r.revision } };
     this.actions.update(ok);
     this.audit(user, 'action.retablie', 'action', a.id, { motif, revision: r.revision });
@@ -719,9 +743,9 @@ export class TendancesService {
   }
 
   /** Rapport d'expérience : avant (révision précédente) / après (révision appliquée) ; observationnel, seuils à confirmer. */
-  mesure(user: User, inst: string, id: string) {
-    authorize(user, 'tendances:read');
-    this.installation(user, inst);
+  mesure(user: User | Acteur, inst: string, id: string) {
+    if (this.estPersonne(user)) authorize(user, 'tendances:read');
+    this.installation(this.estPersonne(user) ? user : null, inst);
     const a = this.dans(this.actions.get(id), inst, 'ACTION_INCONNUE');
     if (!a.cibleId || a.revisionAppliquee === undefined) return { action: a.id, statut: 'NON_APPLICABLE', note: 'Mesure disponible après application sur une page propre.' };
     const somme = (rev: number, ev: 'VISITE' | 'CTA') => this.mesures.find((m) => m.assetId === a.cibleId && m.revision === rev && m.evenement === ev).reduce((s, m) => s + m.nombre, 0);
@@ -740,6 +764,73 @@ export class TendancesService {
     };
   }
 
+  // ——————————————————————————————————— fonctionnement automatique et invisible ———————————————————————————————————
+
+  /** Opt-in (ou suspension) du fonctionnement automatique : décision journalisée du directeur de cabinet. */
+  automatiser(user: User, inst: string, actif: boolean, motif: string) {
+    authorize(user, 'tendances:automate');
+    const i = this.installation(user, inst);
+    const n: Installation = { ...i, optInAutomatique: actif, automatisation: actif ? { by: user.id, at: this.now(), motif } : null };
+    this.installations.update(n);
+    this.audit(user, actif ? 'automatique.active' : 'automatique.suspendu', 'installation', inst, { motif, bornes: { score: P.automatique, confiance: P.automatique, reposPageJours: P.reposPageJours, champs: ['titre', 'description', 'accroche', 'ctaLibelle'] } });
+    return n;
+  }
+
+  /**
+   * Cycle en arrière-plan (planificateur) : collecte et calcul toujours ; puis, seulement avec l'opt-in et hors gel :
+   * retours automatiques (brief expiré ou révoqué, mesure dégradée), puis nouvelles modifications bornées. Aucune trace
+   * visible pour les usagers : les articles et pages changent comme s'ils avaient été mis à jour par l'éditeur.
+   */
+  async cycleAutomatique(inst?: string) {
+    const bilan: { installation: string; appliquees: string[]; retablies: string[]; ignorees: string[] }[] = [];
+    for (const i of this.installations.all().filter((x) => !inst || x.id === inst)) {
+      const sys = this.systeme();
+      const b = { installation: i.id, appliquees: [] as string[], retablies: [] as string[], ignorees: [] as string[] };
+      bilan.push(b);
+      if (this.profilActif(i.id)) { this.collecter(sys, i.id); this.calculer(sys, i.id); }
+      const courante = this.installations.get(i.id)!;
+      if (!courante.optInAutomatique || courante.gel) continue;
+      const pol = this.politique(courante);
+      // 1. Retours automatiques : chaque modification automatique reste liée à ses preuves.
+      for (const a of this.actions.find((x) => x.installationId === i.id && !!x.automatique && x.statut === 'APPLIQUEE').sort((x, y) => (y.revisionAppliquee ?? 0) - (x.revisionAppliquee ?? 0))) {
+        const valide = this.briefValide(i.id, this.scopeAction(a));
+        const m = this.mesure(pol, i.id, a.id) as { recommandation?: string };
+        const motif = !valide || valide.version !== a.briefVersion ? 'Brief expiré, révoqué ou remplacé : retour automatique au contenu précédent'
+          : m.recommandation === 'RETOUR_ARRIERE_RECOMMANDE' ? 'Mesure dégradée : retour automatique au contenu précédent' : null;
+        if (!motif) continue;
+        try { this.retablir(pol, i.id, a.id, motif); b.retablies.push(a.id); } catch (e) { b.ignorees.push(`${a.id} : ${e instanceof ApiError ? e.code : 'erreur'}`); }
+      }
+      // 2. Nouvelles modifications, dans les bornes de l'opt-in seulement.
+      const depuis = this.ms() - P.reposPageJours * DAY_MS;
+      for (const op of this.opportunites.find((o) => o.installationId === i.id && !o.remplacePar && o.decision === 'AUTOMATIQUE_ELIGIBLE' && o.statut === 'ELIGIBLE')) {
+        try {
+          const brief = this.creerBrief(sys, i.id, op.id);
+          this.approuverBrief(pol, i.id, brief.id, brief.version);
+          const gen = await this.generer(sys, i.id, brief.id);
+          for (const a of gen.items.filter((x) => x.cibleId && x.statut === 'PROPOSEE')) {
+            const recent = this.actions.findOne((x) => x.cibleId === a.cibleId && !!x.automatique && !!x.recu && Date.parse(x.recu.at) > depuis);
+            if (recent && recent.briefId !== a.briefId) { b.ignorees.push(`${a.id} : REPOS_PAGE`); continue; }
+            const r = this.approuverAction(pol, i.id, a.id);
+            (r.action.statut === 'APPLIQUEE' ? b.appliquees : b.ignorees).push(r.action.statut === 'APPLIQUEE' ? a.id : `${a.id} : ${r.action.erreur?.code ?? r.action.statut}`);
+          }
+        } catch (e) { b.ignorees.push(`${op.sujet} : ${e instanceof ApiError ? e.code : 'erreur'}`); }
+      }
+      this.audit(pol, 'cycle.automatique', 'installation', i.id, { appliquees: b.appliquees.length, retablies: b.retablies.length, ignorees: b.ignorees });
+    }
+    return bilan;
+  }
+
+  private timer: ReturnType<typeof setInterval> | undefined;
+  startScheduler(ms = P.cycleMinutes * 60_000) {
+    this.stopScheduler();
+    this.timer = setInterval(() => { runScheduledJob(this.ctx, 'tendances.cycle-automatique', () => {
+      // Cycle asynchrone : un échec est journalisé et alerté par le même circuit, jamais avalé en silence.
+      void this.cycleAutomatique().catch((e: unknown) => runScheduledJob(this.ctx, 'tendances.cycle-automatique', () => { throw e; }));
+    }); }, ms);
+    this.timer.unref?.();
+  }
+  stopScheduler() { if (this.timer) clearInterval(this.timer); this.timer = undefined; }
+
   // ——————————————————————————————————— état général ———————————————————————————————————
 
   etat(user: User) {
@@ -757,6 +848,7 @@ export class TendancesService {
         const p = this.profilActif(i.id);
         return { ...i, profil: p ? { revision: p.revision, marche: p.marche, locale: p.locale, sujets: p.sujets.length } : null, sources: this.sources.find((s) => s.installationId === i.id).map((s) => ({ ...s, accesLibelle: ACCES_SOURCE[s.acces], observations: this.observations.find((o) => o.sourceId === s.id).length })), quota: { mois: this.now().slice(0, 7), utilises: this.usages.find((u) => u.installationId === i.id && u.mois === this.now().slice(0, 7) && u.statut === 'REGLE').length, plafond: i.quotaMensuel } };
       }),
+      fonctionnement: 'Invisible pour les usagers : aucune entrée de menu, aucune mention publique ; articles, pages et rappels se mettent à jour comme d’habitude.',
       ia: { route: iaEtat.actif ? 'IA_HOTE' : 'DETERMINISTE', detail: iaEtat.actif ? 'Relais Claude → OpenAI → Gemini de la plateforme (clés existantes, plafonds compris).' : 'Aucune clé d’IA : modèle déterministe (sortie marquée « dégradée »).', localeEmbarquee: 'Inférence locale embarquée : non livrée dans cette version (à décider).' },
       parametres: { valeurs: P, statut: A_CONFIRMER },
     };
@@ -851,5 +943,8 @@ export class TendancesService {
     serie('src-paiements', 'Publicite enseigne', (sem, j) => 6 + ((sem + j) % 3));
     this.deposer(sys, inst, lignes, true);
     this.calculer(sys, inst);
+    // Opt-in de DÉMONSTRATION (fictif, non contractuel) : en service, seul le directeur de cabinet l'active.
+    const i = this.installations.get(inst)!;
+    this.installations.update({ ...i, optInAutomatique: true, automatisation: { by: 'u-dircab', at: this.now(), motif: 'Démonstration — opt-in fictif, non contractuel', demo: true } });
   }
 }

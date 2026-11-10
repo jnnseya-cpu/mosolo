@@ -315,25 +315,70 @@ describe('Veille des tendances — intégrée à toute la plateforme (pas un pro
     expect((await e.req('GET', '/v1/public/tendances/pages/stationnement-intelligent')).json().titre).toBe('Stationnement intelligent (ParkSmart)');
   });
 
-  it('les rappels de l’agent existant « Rappels personnalisés » reprennent la mention du brief approuvé — et l’oublient dès qu’il est révoqué', async () => {
+  it('les rappels de l’agent existant « Rappels personnalisés » sont alignés sur le brief approuvé — en métadonnée interne, sans rien d’affiché', async () => {
     const e = await env();
     const { brief } = await jusquAuxActions(e);
     // Échéance de la vignette de démonstration ramenée dans la fenêtre des rappels (7 jours) pour ce scénario.
     const vignette = e.app.ctx.assessment.obligations.all().find((o) => /vignette/i.test(o.label))!;
     e.app.ctx.assessment.obligations.update({ ...vignette, dueDate: '2026-11-13' });
     const lot = (await e.req('POST', '/v1/agents-recettes/RAPPELS/lancer', 'u-ministre-finances')).json();
-    const alignes = lot.items.filter((p: { detail: string }) => p.detail.includes(`brief approuvé ${brief.briefId}`));
+    const alignes = lot.items.filter((p: { alignement?: { briefId: string } }) => p.alignement?.briefId === brief.briefId);
     expect(alignes.length).toBeGreaterThan(0);
-    expect(alignes[0].detail).toMatch(/compte public/);
+    expect(lot.items.some((p: { detail: string; titre: string }) => /brief|tendance/i.test(`${p.detail} ${p.titre}`))).toBe(false);
     await e.req('POST', `/v1/tendances/installations/${INST}/briefs/${brief.id}/revocation`, APPROBATEUR, { motif: 'Fin de la campagne vignette' });
     const lot2 = (await e.req('POST', '/v1/agents-recettes/RAPPELS/lancer', 'u-ministre-finances')).json();
-    expect(lot2.items.some((p: { detail: string }) => p.detail.includes('brief approuvé'))).toBe(false);
+    expect(lot2.items.some((p: { alignement?: unknown }) => p.alignement)).toBe(false);
   });
 
-  it('l’agent « Veille des tendances » figure dans le catalogue des Agents IA de recettes, avec son circuit', async () => {
+  it('invisible : l’agent « Veille des tendances » n’apparaît pas dans le catalogue des Agents IA de recettes (code conservé, aucun accès par son nom)', async () => {
     const e = await env();
     const cat = (await e.req('GET', '/v1/agents-recettes', 'u-gouverneur')).json();
-    const t = cat.agents.find((a: { code: string }) => a.code === 'TENDANCES');
-    expect(t).toMatchObject({ famille: 'PAIEMENT', mode: 'EXISTANT', lien: '/tendances' });
+    expect(cat.agents.some((a: { code: string }) => a.code === 'TENDANCES')).toBe(false);
+    expect((await e.req('GET', '/v1/agents-recettes/TENDANCES', 'u-gouverneur')).statusCode).toBe(404);
+  });
+});
+
+describe('Veille des tendances — fonctionnement automatique et invisible (opt-in du directeur de cabinet)', () => {
+  it('opt-in réservé au directeur de cabinet, motivé et journalisé ; sans opt-in : collecte et calcul seulement, aucune modification', async () => {
+    const e = await env();
+    expect((await e.req('POST', `/v1/tendances/installations/${INST}/automatique`, PROPOSANT, { actif: false, motif: 'Suspension demandée par la régie' })).statusCode).toBe(403);
+    const off = (await e.req('POST', `/v1/tendances/installations/${INST}/automatique`, APPROBATEUR, { actif: false, motif: 'Suspension pour revue du cabinet' })).json();
+    expect(off.optInAutomatique).toBe(false);
+    const avant = (await e.req('GET', '/v1/public/tendances/pages/vignette-automobile')).json().titre;
+    const bilan = await e.svc.cycleAutomatique(INST);
+    expect(bilan[0]!.appliquees).toEqual([]);
+    expect((await e.req('GET', '/v1/public/tendances/pages/vignette-automobile')).json().titre).toBe(avant);
+    expect(e.svc.briefs.count()).toBe(0);
+  });
+
+  it('avec l’opt-in : la vignette (score et confiance ≥ 85) est mise à jour en arrière-plan ; le stationnement (confiance < 85) ne l’est pas ; au brief expiré, retour automatique', async () => {
+    const e = await env();
+    expect(e.svc.installations.get(INST)!.automatisation?.demo).toBe(true); // opt-in de démonstration, signalé
+    const bilan = await e.svc.cycleAutomatique(INST);
+    expect(bilan[0]!.appliquees.length).toBe(2); // SEO (titre, description) et marketing (accroche, appel)
+    const page = (await e.req('GET', '/v1/public/tendances/pages/vignette-automobile')).json();
+    expect(page.revision).toBe(3);
+    expect(page.titre).not.toBe('Vignette automobile — Kinshasa');
+    const auto = e.svc.actions.find((a) => !!a.automatique);
+    expect(auto.every((a) => a.approbation!.by.startsWith('politique-automatique:u-dircab'))).toBe(true);
+    expect(auto.every((a) => a.type === 'seo_metadata_patch' || a.type === 'owned_content_patch')).toBe(true);
+    expect((await e.req('GET', '/v1/public/tendances/pages/stationnement-intelligent')).json().revision).toBe(1);
+    // Rejouer le cycle ne crée aucun doublon.
+    expect((await e.svc.cycleAutomatique(INST))[0]!.appliquees).toEqual([]);
+    // Brief expiré : chaque modification automatique revient au contenu précédent, sans intervention.
+    e.clock.advance(8 * DAY_MS);
+    const b2 = await e.svc.cycleAutomatique(INST);
+    expect(b2[0]!.retablies.length).toBe(2);
+    expect((await e.req('GET', '/v1/public/tendances/pages/vignette-automobile')).json().titre).toBe('Vignette automobile — Kinshasa');
+  });
+
+  it('gel : le cycle automatique ne modifie rien ; la politique automatique n’approuve jamais un brouillon à envoyer', async () => {
+    const e = await env();
+    await e.req('POST', `/v1/tendances/installations/${INST}/gel`, 'u-rssi', { actif: true, motif: 'Incident sur le portail public' });
+    expect((await e.svc.cycleAutomatique(INST))[0]!.appliquees).toEqual([]);
+    await e.req('POST', `/v1/tendances/installations/${INST}/gel`, 'u-rssi', { actif: false, motif: 'Incident clos, reprise normale' });
+    await e.svc.cycleAutomatique(INST);
+    const social = e.svc.actions.find((a) => a.type === 'organic_social_draft');
+    expect(social.every((a) => a.statut === 'PROPOSEE' && !a.automatique)).toBe(true);
   });
 });

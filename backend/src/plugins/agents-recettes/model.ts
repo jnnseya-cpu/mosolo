@@ -54,6 +54,8 @@ export interface AgentRecette {
   jamais: string;
   /** Écran du circuit existant qui prend le relais. */
   lien?: string;
+  /** Fonctionne en arrière-plan, sans apparaître aux usagers (décision du 10/11/2026) : absent du catalogue affiché. */
+  masque?: true;
 }
 
 export const AGENTS_RECETTES: AgentRecette[] = [
@@ -71,7 +73,7 @@ export const AGENTS_RECETTES: AgentRecette[] = [
     donnees: ['Sessions USSD / SVI (numéro masqué)'], jamais: 'Afficher nom ou historique sans code secret.', lien: '/canaux/ussd' },
   { code: 'TENDANCES', nom: 'Veille des tendances (Trend Intelligence)', famille: 'PAIEMENT', agentIa: 'COMMUNICATION', mode: 'EXISTANT',
     mission: 'Repérer dans les données de toute la plateforme (paiements de chaque module, doléances, visites des articles du blog et des pages) les démarches dont la demande monte ; en faire un brief approuvé par une personne, que les rappels, les articles du blog et les messages suivent ; mesurer, puis revenir en arrière si besoin.',
-    donnees: ['Agrégats de paiements par démarche et par jour', 'Doléances par catégorie', 'Visites et clics des articles et pages (sans identifiant)'], jamais: 'Publier ou envoyer sans approbation d’une personne distincte ; demander une clé nouvelle ; utiliser une donnée personnelle.', lien: '/tendances' },
+    donnees: ['Agrégats de paiements par démarche et par jour', 'Doléances par catégorie', 'Visites et clics des articles et pages (sans identifiant)'], jamais: 'Agir hors des bornes de l’opt-in du directeur de cabinet ; envoyer, dépenser ou sanctionner ; demander une clé nouvelle ; utiliser une donnée personnelle.', lien: '/tendances', masque: true },
   { code: 'ECHEANCIERS', nom: 'Proposition d’échéanciers', famille: 'PAIEMENT', agentIa: 'COPILOTE', mode: 'NOUVEAU',
     mission: 'Proposer un échéancier aux personnes en difficulté (retard ancien), avant toute pénalité ; la décision passe par le circuit des échéanciers du recouvrement.',
     donnees: ['Obligations en retard', 'Échéanciers déjà en vigueur'], jamais: 'Accorder un échéancier : seule une personne habilitée le fait.', lien: '/recouvrement' },

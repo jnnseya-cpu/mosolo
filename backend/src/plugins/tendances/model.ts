@@ -16,6 +16,7 @@ export const PARAMETRES = {
   archiveScore: 60, archiveConfiance: 55, brief: 75, automatique: 85, plafondUneFamille: 69,
   validitePersistantH: 168, validiteSoudainH: 24, cacheEffectifS: 60,
   quotaMensuelDefaut: 50, echantillonMin: 30, seuilRetourPct: 80, petitesCohortes: 5,
+  reposPageJours: 7, cycleMinutes: 60,
 };
 
 export type AccesSource = 'PREMIERE_PARTIE' | 'IMPORT_FICHIER' | 'PUBLIC_SANS_CLE' | 'HOTE';
@@ -29,7 +30,13 @@ export const ACCES_SOURCE: Record<AccesSource, string> = {
 export interface Installation {
   id: string; slug: string; libelle: string; environnement: 'DEMONSTRATION' | 'PRODUCTION';
   gel: { by: string; at: string; motif: string } | null;
-  optInAutomatique: false;
+  /**
+   * Fonctionnement automatique et invisible (décision du 10/11/2026) : activé une fois, sur décision journalisée du
+   * directeur de cabinet ; borné (score et confiance ≥ 85, aucun veto, champs réversibles seulement, mentions approuvées,
+   * une modification par page et par période de repos) ; retour automatique si la mesure se dégrade ou si le brief expire.
+   */
+  optInAutomatique: boolean;
+  automatisation: { by: string; at: string; motif: string; demo?: true } | null;
   quotaMensuel: number;
   /** Rôles qui ont accès à cette installation (vide : tous les rôles habilités du module). */
   acces: RoleCode[];
@@ -122,6 +129,8 @@ export interface Action {
   retour?: { by: string; at: string; motif: string; revision: number };
   erreur?: { code: string; message: string; at: string };
   export?: { by: string; at: string; destination: string };
+  /** Appliquée par la politique automatique (opt-in du directeur de cabinet), jamais par l'agent lui-même. */
+  automatique?: true;
 }
 
 export interface ChampsPage { titre: string; description: string; accroche: string; ctaLibelle: string; bloc: string; ctaCible: string }
@@ -144,6 +153,8 @@ export const LECTEURS: RoleCode[] = ['R01', 'R02', 'R03', 'R05', 'R06', 'R07', '
 export const PROPOSANTS: RoleCode[] = ['R06', 'R07', 'R08', 'R29'];
 /** Approuver (brief, action, première page, retour arrière) : cabinet — communication publique (à confirmer). */
 export const APPROBATEURS: RoleCode[] = ['R02', 'R03'];
+/** Activer ou suspendre le fonctionnement automatique : directeur de cabinet (décision du 10/11/2026). */
+export const AUTOMATISEURS: RoleCode[] = ['R02'];
 /** Gel d'urgence d'une installation. */
 export const GELEURS: RoleCode[] = ['R02', 'R26', 'R28'];
 /** Travaux (file d'exécution, rapprochement) : exploitation. */

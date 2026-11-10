@@ -203,4 +203,13 @@ données de démonstration.
   part), signaux de tous les modules, articles du blog existants comme surfaces, rappels existants alignés sur le brief
   approuvé. Contradictions signalées
   (pile Python, inférence locale, plan commercial, rôles) : `trend-intelligence/README.md` (annexe I, § I.70).
+- **Veille des tendances invisible et automatique dans des bornes (10/11/2026)** : rien n'est visible des usagers
+  (aucune entrée de menu, agent `TENDANCES` masqué du catalogue affiché, aucune mention sur les articles, pages ou
+  rappels — l'alignement des rappels est une métadonnée interne). Un cycle en arrière-plan (horaire,
+  `MOSOLO_TENDANCES_AUTO`) collecte et calcule ; avec l'**opt-in unique, motivé et journalisé du directeur de cabinet
+  (R02)**, il applique seul des modifications réversibles des articles et pages (titre, description, accroche, libellé
+  d'appel) quand score et confiance ≥ 85 sans veto, mentions approuvées seulement, une par page et par période de repos ;
+  retour automatique si le brief expire ou si la mesure se dégrade ; gel respecté. Jamais d'envoi, de dépense ni de
+  sanction automatiques. Harmonisation de « l'IA propose, une personne décide » : la personne décide la politique et ses
+  bornes (comme « exécution automatique après acte ») ; démonstration : opt-in fictif signalé (annexe I, § I.70).
 

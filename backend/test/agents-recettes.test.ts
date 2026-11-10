@@ -23,11 +23,14 @@ describe('Agents IA de recettes', () => {
   it('catalogue : 19 agents en 7 familles, doctrine, paramètres « à confirmer » ; chaque agent calculable se lance sans erreur', async () => {
     const { req } = await env();
     const cat = (await req('GET', '/v1/agents-recettes', 'u-gouverneur')).json();
-    expect(cat.agents).toHaveLength(AGENTS_RECETTES.length);
+    // Agents affichés : tous sauf ceux qui fonctionnent en arrière-plan (« masque », décision du 10/11/2026).
+    const visibles = AGENTS_RECETTES.filter((a) => !a.masque);
+    expect(visibles).toHaveLength(19);
+    expect(cat.agents).toHaveLength(visibles.length);
     expect(cat.familles).toHaveLength(7);
     expect(cat.parametres.statut).toMatch(/à confirmer/);
     expect(cat.doctrine.join(' ')).toMatch(/Aucune nouvelle charge sans acte signé/);
-    for (const a of AGENTS_RECETTES) {
+    for (const a of visibles) {
       const r = await req('POST', `/v1/agents-recettes/${a.code}/lancer`, 'u-ministre-finances');
       if (a.mode === 'EXISTANT' || a.mode === 'SIMULATION') expect(r.statusCode, a.code).toBe(400);
       else expect(r.statusCode, `${a.code}: ${r.body}`).toBe(201);
