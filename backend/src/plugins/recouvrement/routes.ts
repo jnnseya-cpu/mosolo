@@ -31,7 +31,7 @@ const schemas = {
     legalOpinionRef: z.string().trim().min(3).max(200), interruptionActRef: z.string().trim().min(3).max(200).optional(),
   }).strict(),
   takeoverDecision: z.object({ decision: z.enum(['VALIDEE', 'REJETEE']), motivation: motive }).strict(),
-  penalty: z.object({ obligationId: z.string().min(1), penaltyRuleId: z.string().min(1), inputs: z.record(z.string().regex(/^-?\d{1,18}(\.\d{1,18})?$/)).default({}), motivation: motive }).strict(),
+  penalty: z.object({ obligationId: z.string().min(1), penaltyRuleId: z.string().min(1), inputs: z.record(z.string(), z.string().regex(/^-?\d{1,18}(\.\d{1,18})?$/)).default({}), motivation: motive }).strict(),
   remission: z.object({ obligationId: z.string().min(1), basisRuleId: z.string().min(1), requestedAmount: moneySchema, motivation: motive }).strict(),
   remissionDecision: z.object({ granted: z.boolean(), motivation: motive, grantedAmount: moneySchema.optional() }).strict(),
   remissionInstruction: z.object({ favorable: z.boolean(), analysis: motive }).strict(),

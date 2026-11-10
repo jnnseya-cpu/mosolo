@@ -45,7 +45,7 @@ export function registerFichesRoutes(app: FastifyInstance, vx: VerticalesService
   app.post<{ Params: { module: string } }>('/v1/verticales/fiches/:module/objets', async (req, reply) => {
     const body = parse(z.object({
       taxpayerId: z.string().max(64).optional(), commune, quartier: z.string().trim().min(2).max(80), lat, lon,
-      attributes: z.record(z.string().max(120)), withPlate: z.boolean().optional(),
+      attributes: z.record(z.string(), z.string().max(120)), withPlate: z.boolean().optional(),
     }).strict(), req.body);
     return reply.code(201).send(f.registerObject(requireUser(req), { module: req.params.module, ...body }));
   });
@@ -207,7 +207,7 @@ export function registerFichesRoutes(app: FastifyInstance, vx: VerticalesService
     return reply.code(201).send(pl.registerLiable(requireUser(req), body));
   });
   app.post('/v1/verticales/plastique/etude', async (req, reply) => {
-    const body = parse(z.object({ taxpayerId: z.string().max(64).optional(), period: z.string().max(7), lines: z.record(z.string().max(20)), source: z.string().trim().min(2).max(200), fileSha256: sha256.optional() }).strict(), req.body);
+    const body = parse(z.object({ taxpayerId: z.string().max(64).optional(), period: z.string().max(7), lines: z.record(z.string(), z.string().max(20)), source: z.string().trim().min(2).max(200), fileSha256: sha256.optional() }).strict(), req.body);
     return reply.code(201).send(pl.addStudyData(requireUser(req), body));
   });
   app.post('/v1/verticales/plastique/simulations', async (req, reply) => {
@@ -215,7 +215,7 @@ export function registerFichesRoutes(app: FastifyInstance, vx: VerticalesService
     return reply.code(201).send(pl.simulate(requireUser(req), body));
   });
   app.post('/v1/verticales/plastique/declarations', async (req, reply) => {
-    const body = parse(z.object({ taxpayerId: z.string().max(64).optional(), objectId: z.string().max(64), period: z.string().max(7), lines: z.record(z.string().max(20)) }).strict(), req.body);
+    const body = parse(z.object({ taxpayerId: z.string().max(64).optional(), objectId: z.string().max(64), period: z.string().max(7), lines: z.record(z.string(), z.string().max(20)) }).strict(), req.body);
     return reply.code(201).send(pl.declare(requireUser(req), body));
   });
   app.post<{ Params: { id: string } }>('/v1/verticales/plastique/declarations/:id/reversement', async (req, reply) => reply.code(201).send(pl.liquidate(requireUser(req), req.params.id)));

@@ -5,7 +5,7 @@ import { requireUser } from '../../core/auth.js';
 import { parse } from '../../core/http.js';
 import { authorize } from '../../core/policy.js';
 
-const draftSchema = z.object({ data: z.record(z.unknown()) }).strict();
+const draftSchema = z.object({ data: z.record(z.string(), z.unknown()) }).strict();
 
 export function registerDraftRoutes(app: FastifyInstance, ctx: AppContext): void {
   app.put<{ Params: { key: string } }>('/v1/drafts/:key', async (req) => {

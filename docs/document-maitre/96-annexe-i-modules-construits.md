@@ -2259,3 +2259,14 @@ dégradée ; brouillons destinés aux réseaux sociaux jamais approuvés automat
 signalé non contractuel. Tests : 21. Rien n'est retiré (l'écran `/tendances` reste accessible par son adresse aux rôles
 habilités, sans lien).
 
+## I.71 Migration de zod 3 vers zod 4 (11/11/2026)
+
+Feu vert du maître d'ouvrage (action humaine H-14) : la bibliothèque de validation des requêtes passe de zod 3.25 à
+zod 4.6.7, ce qui corrige la vulnérabilité élevée GHSA-mrhx-c7xc-m3w5 (épuisement mémoire sur collections
+surdimensionnées, défaut D-13) — seule étape encore en échec de l'intégration continue. Vraie API v4, pas le mode de
+compatibilité v3 (qui aurait seulement fait taire l'audit). Changements mécaniques, sans changer aucune règle : 20
+`z.record` reçoivent explicitement leur type de clé ; deux valeurs par défaut d'objets passent à `.prefault({})` pour
+garder exactement le comportement v3 (champs internes complétés) ; le message « photographie requise » de `z.literal`
+est conservé. Format des erreurs inchangé (RFC 9457, `VALIDATION_ERROR`, liste des champs). Tous les tests verts ;
+`npm audit --omit=dev --audit-level=high` : 0 vulnérabilité. Rien n'est retiré.
+

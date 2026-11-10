@@ -13,7 +13,7 @@ const objectSchema = z.object({
   localityRank: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   lat: z.number().min(-5.2).max(-3.9),
   lon: z.number().min(15.0).max(16.6),
-  attributes: z.record(z.unknown()).default({}),
+  attributes: z.record(z.string(), z.unknown()).default({}),
   parentObjectId: z.string().optional(),
   avenue: z.string().trim().min(1).max(120).optional(),
 }).strict();

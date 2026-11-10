@@ -41,7 +41,7 @@ const declarationSchema = z.object({
   objectId: z.string(),
   kind: z.enum(DECLARATION_KINDS),
   period: z.string().regex(/^\d{4}$/),
-  inputs: z.record(decimal).default({}),
+  inputs: z.record(z.string(), decimal).default({}),
   attest: z.boolean(),
   // Pièce justificative FACULTATIVE (Document maître FR 2, ch. 43) : empreinte, nom et type ; jamais exigée.
   piece: z.object({
@@ -179,7 +179,7 @@ export function registerFiscalRoutes(app: FastifyInstance, ctx: AppContext, svc:
   // Correction du rang ou d'attributs de base (surface…) : proposition puis approbation par une seconde personne.
   app.post<{ Params: { id: string } }>('/v1/fiscal/objects/:id/corrections', async (req, reply) => {
     const body = parse(z.object({
-      localityRank: rankSchema.optional(), attributes: z.record(decimal).optional(), reason: z.string().trim().min(10).max(1000),
+      localityRank: rankSchema.optional(), attributes: z.record(z.string(), decimal).optional(), reason: z.string().trim().min(10).max(1000),
       evidence: z.array(correctionEvidenceSchema).max(10).optional(),
     }).strict(), req.body);
     return reply.code(201).send(svc.properties.proposeCorrection(requireUser(req), req.params.id, {
@@ -311,7 +311,7 @@ export function registerFiscalRoutes(app: FastifyInstance, ctx: AppContext, svc:
   });
 
   app.post<{ Params: { id: string } }>('/v1/fiscal/declarations/:id/corrections', async (req, reply) => {
-    const body = parse(z.object({ inputs: z.record(decimal), reason: z.string().trim().min(3).max(1000), attest: z.boolean() }).strict(), req.body);
+    const body = parse(z.object({ inputs: z.record(z.string(), decimal), reason: z.string().trim().min(3).max(1000), attest: z.boolean() }).strict(), req.body);
     return reply.code(201).send(svc.declarations.correct(requireUser(req), req.params.id, body));
   });
 

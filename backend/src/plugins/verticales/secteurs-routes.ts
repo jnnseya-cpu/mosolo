@@ -9,7 +9,7 @@ import type { VerticalesService } from './service.js';
 const sha256 = z.string().regex(/^[0-9a-f]{64}$/, 'empreinte SHA-256 hexadécimale attendue');
 const reason = z.string().trim().min(5).max(2000);
 const period = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'période AAAA-MM attendue');
-const qty = z.record(z.string().max(20)).default({});
+const qty = z.record(z.string(), z.string().max(20)).default({});
 const kinds = Object.keys(DECLARATION_KINDS) as [DeclarationKind, ...DeclarationKind[]];
 const gps = z.object({ lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180), accuracyM: z.number().min(0).max(100_000).optional() }).strict();
 

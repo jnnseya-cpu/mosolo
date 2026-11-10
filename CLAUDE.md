@@ -212,4 +212,6 @@ données de démonstration.
   retour automatique si le brief expire ou si la mesure se dégrade ; gel respecté. Jamais d'envoi, de dépense ni de
   sanction automatiques. Harmonisation de « l'IA propose, une personne décide » : la personne décide la politique et ses
   bornes (comme « exécution automatique après acte ») ; démonstration : opt-in fictif signalé (annexe I, § I.70).
+- **zod 4 (11/11/2026)** : feu vert du maître d'ouvrage (H-14) ; validation des requêtes migrée en zod 4.6.7 (vraie
+  API v4), vulnérabilité D-13 corrigée, audit des dépendances à 0 ; comportement et messages inchangés (annexe I, § I.71).
 

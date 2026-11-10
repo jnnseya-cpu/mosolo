@@ -5,14 +5,14 @@
   "agents_ia": 33,
   "articles_blog": 25,
   "codes_controle": 1748,
-  "decisions_claude_md": 47,
+  "decisions_claude_md": 48,
   "ecrans": 226,
   "fichiers": 1990,
   "menus": 178,
   "modules_serveur": 51,
   "roles": 38,
   "routes_api": 1701,
-  "sections_document_maitre": 688,
+  "sections_document_maitre": 689,
   "tests": 1755,
   "variables_console": 29
  },
@@ -1896,7 +1896,8 @@
    "Saisie des clés (02/10/2026)",
    "Veille des tendances (Trend Intelligence, 10/11/2026)",
    "Veille des tendances invisible et automatique dans des bornes (10/11/2026)",
-   "Verrou de non-régression (08/11/2026)"
+   "Verrou de non-régression (08/11/2026)",
+   "zod 4 (11/11/2026)"
   ],
   "ecrans": [
    "*",
@@ -6637,6 +6638,7 @@
    "96-annexe-i-modules-construits.md :: I.69 Verrou de non-régression et point de restauration (08/11/2026)",
    "96-annexe-i-modules-construits.md :: I.7 Stationnement (ParkSmart) et publicité (KIN PUB CONTROL)",
    "96-annexe-i-modules-construits.md :: I.70 Veille des tendances (Trend Intelligence) (10/11/2026)",
+   "96-annexe-i-modules-construits.md :: I.71 Migration de zod 3 vers zod 4 (11/11/2026)",
    "96-annexe-i-modules-construits.md :: I.8 Verticales branchées sur l’API, AVIA, NFIU, CALCU",
    "96-annexe-i-modules-construits.md :: I.9 Canaux : USSD, SVI, enrôlement assisté, points de paiement agréés",
    "96-annexe-i-modules-construits.md :: Module Intégrité — ligne de signalement, anti-fraude, incidents, protection des données",

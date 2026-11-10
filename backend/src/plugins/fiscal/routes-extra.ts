@@ -61,7 +61,7 @@ export function registerFiscalExtraRoutes(app: FastifyInstance, _ctx: AppContext
   // ——— § 16.3 Élargissement d'assiette 2026 ———
   app.get('/v1/fiscal/assiette-2026', async () => ({ cases: svc.assiette2026.catalogue(), notice: 'Règles au statut À VÉRIFIER : aucune n’est active ; aucune liquidation.' }));
   app.post('/v1/fiscal/assiette-2026/declarations', async (req, reply) => {
-    const b = parse(z.object({ case: z.enum(ASSIETTE_2026_CASES), taxpayerId: z.string().optional(), objectId: z.string().optional(), period: z.string().regex(/^\d{4}$/), values: z.record(z.string().max(200)), attest: z.boolean() }).strict(), req.body);
+    const b = parse(z.object({ case: z.enum(ASSIETTE_2026_CASES), taxpayerId: z.string().optional(), objectId: z.string().optional(), period: z.string().regex(/^\d{4}$/), values: z.record(z.string(), z.string().max(200)), attest: z.boolean() }).strict(), req.body);
     const { taxpayerId, objectId, ...rest } = b;
     return reply.code(201).send(svc.assiette2026.declare(requireUser(req), { ...rest, ...(taxpayerId ? { taxpayerId } : {}), ...(objectId ? { objectId } : {}) }));
   });
@@ -115,7 +115,7 @@ export function registerFiscalExtraRoutes(app: FastifyInstance, _ctx: AppContext
     return svc.imports.view(svc.imports.get(req.params.id));
   });
   app.post('/v1/fiscal/imports', async (req, reply) => {
-    const b = parse(z.object({ source: z.enum(Object.keys(IMPORT_SOURCES) as [keyof typeof IMPORT_SOURCES, ...(keyof typeof IMPORT_SOURCES)[]]), format: z.enum(['CSV', 'JSON']), content: z.union([z.string().max(900_000), z.array(z.record(z.unknown())).max(10_000)]) }).strict(), req.body);
+    const b = parse(z.object({ source: z.enum(Object.keys(IMPORT_SOURCES) as [keyof typeof IMPORT_SOURCES, ...(keyof typeof IMPORT_SOURCES)[]]), format: z.enum(['CSV', 'JSON']), content: z.union([z.string().max(900_000), z.array(z.record(z.string(), z.unknown())).max(10_000)]) }).strict(), req.body);
     return reply.code(201).send(svc.imports.view(svc.imports.upload(requireUser(req), b as Parameters<typeof svc.imports.upload>[1])));
   });
   app.post<P>('/v1/fiscal/imports/:id/commit', async (req) => svc.imports.view(svc.imports.commit(requireUser(req), req.params.id)));
@@ -130,7 +130,7 @@ export function registerFiscalExtraRoutes(app: FastifyInstance, _ctx: AppContext
   // ——— § 9.3 Enrôlement par profil, espaces, NIF, récupération ———
   app.get('/v1/public/enrolement/profils', async () => ({ profiles: svc.enrolment.profiles(), notice: 'Déclarer un rôle n’établit ni la propriété ni une dette : cela ouvre une instruction.' }));
   app.post('/v1/enrolement/roles', async (req, reply) => {
-    const b = parse(z.object({ taxpayerId: z.string().optional(), profile: z.string().min(2).max(40), answers: z.record(z.string().max(200)).default({}) }).strict(), req.body);
+    const b = parse(z.object({ taxpayerId: z.string().optional(), profile: z.string().min(2).max(40), answers: z.record(z.string(), z.string().max(200)).default({}) }).strict(), req.body);
     return reply.code(201).send(svc.enrolment.declare(requireUser(req), { profile: b.profile, answers: b.answers, ...(b.taxpayerId ? { taxpayerId: b.taxpayerId } : {}) }));
   });
   app.get<{ Querystring: { taxpayerId?: string } }>('/v1/enrolement/roles', async (req) => {

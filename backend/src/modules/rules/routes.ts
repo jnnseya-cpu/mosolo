@@ -31,7 +31,7 @@ const ruleSchema = z.object({
   withholdingAgent: z.string().optional(),
   baseDefinition: z.string().min(1),
   formula: z.string().min(1).max(1000),
-  rateTable: z.record(decimalString),
+  rateTable: z.record(z.string(), decimalString),
   currency: currencySchema,
   rounding: z.enum(['HALF_UP', 'HALF_EVEN', 'DOWN', 'UP']),
   periodicity: z.enum(['ANNUELLE', 'MENSUELLE', 'PONCTUELLE']),

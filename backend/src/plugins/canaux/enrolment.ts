@@ -54,7 +54,7 @@ export const enrolmentRecordSchema = z.object({
     givenAt: z.string().datetime({ offset: true }).optional(),
     voiceRecordingSha256: hex64.optional(),
     witness: z.object({ name: z.string().trim().min(2).max(120), relation: z.string().trim().min(2).max(60), idRef: z.string().max(60).optional() }).optional(),
-  }).default({}),
+  }).prefault({}),
   noPaymentAttested: z.boolean(),
 });
 export type EnrolmentRecord = z.infer<typeof enrolmentRecordSchema>;

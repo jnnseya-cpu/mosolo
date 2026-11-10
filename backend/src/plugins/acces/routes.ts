@@ -78,7 +78,7 @@ const acceptSchema = z.object({
   phone,
   code: code6,
   identityDocument: idDocument,
-  photoTaken: z.literal(true, { errorMap: () => ({ message: 'photographie requise' }) }),
+  photoTaken: z.literal(true, { message: 'photographie requise' }),
   mfaMethod: z.enum(['PASSKEY', 'TOTP', 'SMS']),
   deviceId: z.string().min(3).max(60).optional(),
 }).strict();
@@ -86,7 +86,7 @@ const acceptSchema = z.object({
 // Aucun champ de secret, de niveau ni de périmètre : l'opérateur ne peut ni les définir ni les modifier (§ 12A.7).
 const assistedSchema = z.object({
   identityDocument: idDocument,
-  photoTaken: z.literal(true, { errorMap: () => ({ message: 'photographie requise' }) }),
+  photoTaken: z.literal(true, { message: 'photographie requise' }),
   otpCode: code6.optional(),
   witness: z.object({ fullName: z.string().trim().min(3).max(120), idNumber: z.string().max(40).optional() }).strict().optional(),
   gps: z.object({ lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180) }).strict(),
@@ -273,7 +273,7 @@ export function registerAccesRoutes(app: FastifyInstance, ctx: AppContext, svc: 
     authorize(user, 'assessment.liquidate');
     const body = parse(z.object({
       ruleId: z.string().min(2), objectId: z.string().min(3), factCode: z.enum(TAXABLE_FACTS), period: z.string().regex(/^\d{4}(-\d{2})?$/),
-      inputs: z.record(z.string()).default({}), basis: z.string().trim().min(5).max(300),
+      inputs: z.record(z.string(), z.string()).default({}), basis: z.string().trim().min(5).max(300),
     }).strict(), req.body);
     return reply.code(201).send(svc.guardedLiquidation(user, body));
   });

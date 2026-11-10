@@ -23,7 +23,7 @@ const signal = z.object({
   revenueKind: z.enum(REVENUE_KINDS).optional(),
 }).strict();
 const step = z.object({
-  summary: text(10, 4000), data: z.record(z.unknown()).optional(),
+  summary: text(10, 4000), data: z.record(z.string(), z.unknown()).optional(),
   scenarios: z.object({ prudent: moneySchema.nullable(), attendu: moneySchema.nullable(), ambitieux: moneySchema.nullable(), hypothesisIds: z.array(text(1, 40)).max(20) }).strict().optional(),
 }).strict();
 const decision = z.object({

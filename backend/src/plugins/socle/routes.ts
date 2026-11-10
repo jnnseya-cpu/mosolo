@@ -180,7 +180,7 @@ export function registerSocleRoutes(app: FastifyInstance, ctx: AppContext, svc: 
   app.post('/v1/auth/passkeys/registration/verify', async (req, reply) => {
     const u = requireUser(req);
     requireAcr(u, ACR.MFA);
-    const b = parse(z.object({ challengeId: z.string().min(8).max(80), response: z.record(z.unknown()), label: z.string().trim().max(60).optional() }).strict(), req.body);
+    const b = parse(z.object({ challengeId: z.string().min(8).max(80), response: z.record(z.string(), z.unknown()), label: z.string().trim().max(60).optional() }).strict(), req.body);
     return reply.code(201).send(await svc.passkeys.register(u, { challengeId: b.challengeId, response: b.response as never, ...(b.label ? { label: b.label } : {}) }, req));
   });
   app.post('/v1/auth/passkeys/authentication/options', async (req) => {
@@ -188,7 +188,7 @@ export function registerSocleRoutes(app: FastifyInstance, ctx: AppContext, svc: 
     return svc.passkeys.authenticationOptions(b.login);
   });
   app.post('/v1/auth/passkeys/authentication/verify', async (req) => {
-    const b = parse(z.object({ challengeId: z.string().min(8).max(80), response: z.record(z.unknown()) }).strict(), req.body);
+    const b = parse(z.object({ challengeId: z.string().min(8).max(80), response: z.record(z.string(), z.unknown()) }).strict(), req.body);
     const { user, credential } = await svc.passkeys.authenticate({ challengeId: b.challengeId, response: b.response as never }, req);
     return idp.loginWithPasskey(user, credential.id, req);
   });

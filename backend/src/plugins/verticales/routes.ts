@@ -21,7 +21,7 @@ const caseSchema = z.object({
   type: z.string().min(1).max(64),
   taxpayerId: z.string().optional(),
   objectId: z.string().optional(),
-  details: z.record(z.string().max(2000)).default({}),
+  details: z.record(z.string(), z.string().max(2000)).default({}),
   documents: z.array(docSchema).max(20).default([]),
 }).strict();
 
@@ -107,7 +107,7 @@ export function registerVerticalRoutes(app: FastifyInstance, ctx: AppContext, sv
 
   // ---------------------------------------------------------------- liquidation par un agent (règle ACTIVE seulement)
   app.post<{ Params: { slug: string; objectId: string } }>('/v1/verticales/:slug/objects/:objectId/liquidate', async (req, reply) => {
-    const body = parse(z.object({ inputs: z.record(decimalString).default({}) }).strict(), req.body ?? {});
+    const body = parse(z.object({ inputs: z.record(z.string(), decimalString).default({}) }).strict(), req.body ?? {});
     return reply.code(201).send(svc.liquidateObject(requireUser(req), req.params.slug, req.params.objectId, body.inputs));
   });
 
@@ -274,7 +274,7 @@ export function registerVerticalRoutes(app: FastifyInstance, ctx: AppContext, sv
     const body = parse(z.object({
       reference: z.string().trim().min(3).max(120), title: z.string().trim().min(3).max(300), signedOn: isoDateString, documentSha256: sha256,
       measuresEnabled: z.array(measureCode).max(4).default([]),
-      parameters: z.object({ penaltyPerTicketUsd: z.string().regex(/^\d{1,15}(\.\d{1,2})?$/).nullable().default(null), integrationDelayDays: z.number().int().min(0).max(3650).nullable().default(null) }).strict().default({}),
+      parameters: z.object({ penaltyPerTicketUsd: z.string().regex(/^\d{1,15}(\.\d{1,2})?$/).nullable().default(null), integrationDelayDays: z.number().int().min(0).max(3650).nullable().default(null) }).strict().prefault({}),
     }).strict(), req.body);
     return reply.code(201).send(svc.aviaCadre.recordAct(requireUser(req), body));
   });
