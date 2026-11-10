@@ -28,17 +28,17 @@ Le catalogue est une **donnée de référence versionnée** (`specs/evenements-c
 
 | Indicateur du catalogue (version 1) | Valeur |
 |---|---|
-| Événements | **239** |
+| Événements | **255** |
 | Catégories | **23** |
-| Avis obligatoires (non désinscriptibles) | **126** |
-| Événements diffusés par défaut en courriel | 192 |
-| … dans l'application | 232 |
-| … par SMS | 111 |
-| … par notification push | 42 |
+| Avis obligatoires (non désinscriptibles) | **135** |
+| Événements diffusés par défaut en courriel | 206 |
+| … dans l'application | 248 |
+| … par SMS | 117 |
+| … par notification push | 43 |
 | … dans la boîte USSD | 31 |
 | … par SVI vocal | 11 |
-| … par courrier imprimé | 23 |
-| … éligibles à WhatsApp sur consentement | 62 |
+| … par courrier imprimé | 26 |
+| … éligibles à WhatsApp sur consentement | 64 |
 
 ![Couverture des canaux](figures/fig-evenements-canaux.png)
 

@@ -1,0 +1,83 @@
+/* Module Intégrité — ligne de signalement, enquêtes, contrôles mystère, incidents, données, revue des accès. */
+.ig-page { min-width: 0; }
+.ig-stack { display: grid; gap: 16px; min-width: 0; }
+.ig-block { display: block; }
+.ig-inline { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ig-h3 { font-size: 13.5px; font-weight: 600; color: var(--ink-2); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.ig-tabs { margin-top: 8px; }
+.ig-tab-count { display: inline-flex; min-width: 20px; justify-content: center; font-size: 11.5px; font-weight: 600; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, currentColor 14%, transparent); font-variant-numeric: tabular-nums; }
+.ig-promise { margin-top: 0; }
+.ig-choice { align-items: flex-start; }
+.ig-choice input { margin-top: 3px; }
+.ig-legal { display: flex; gap: 6px; align-items: flex-start; }
+.ig-rowlink { text-align: left; font-weight: 500; }
+.ig-late { color: var(--critical-ink); font-size: 12.5px; display: inline-flex; align-items: center; gap: 4px; }
+.ig-danger { color: var(--critical-ink); }
+.ig-note { margin-top: 8px; }
+.ig-kpis { margin-top: 8px; }
+.ig-kpi-text { font-size: 15px; font-weight: 600; letter-spacing: 0; white-space: normal; }
+.ig-tag { display: inline-block; margin-left: 8px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--ink-2); vertical-align: middle; }
+
+/* Reçu de signalement */
+.ig-receipt { display: grid; gap: 12px; max-width: 640px; }
+.ig-receipt-head { display: flex; gap: 12px; align-items: flex-start; }
+.ig-receipt-head > .icon { color: var(--good); flex: none; }
+.ig-code { font-family: var(--font-mono); font-size: clamp(24px, 6vw, 34px); letter-spacing: 0.08em; font-weight: 600; padding: 12px 16px; border: 1px dashed var(--line); border-radius: var(--r); background: var(--surface-2); text-align: center; overflow-wrap: anywhere; }
+
+/* Suivi */
+.ig-track-row input { font-size: 17px; letter-spacing: 0.06em; }
+.ig-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 8px 0 16px; padding: 0; list-style: none; counter-reset: none; }
+.ig-steps li { display: grid; justify-items: center; gap: 6px; text-align: center; font-size: 12.5px; color: var(--ink-3); position: relative; }
+.ig-steps li::before { content: ''; position: absolute; top: 12px; left: calc(-50% + 14px); right: calc(50% + 14px); height: 1px; background: var(--line); }
+.ig-steps li:first-child::before { display: none; }
+.ig-steps li.done { color: var(--ink); }
+.ig-steps li.done::before { background: var(--good); }
+.ig-step-dot { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); display: inline-grid; place-items: center; font-size: 11px; font-weight: 600; }
+.ig-steps li.done .ig-step-dot { background: var(--good-bg); border-color: var(--good); color: var(--good); }
+
+.ig-thread { display: grid; gap: 8px; list-style: none; padding: 0; margin: 0; }
+.ig-thread li { padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface-2); max-width: 92%; }
+.ig-thread li.me, .ig-thread li.them { justify-self: end; background: var(--pale); }
+.ig-thread p { margin-top: 2px; overflow-wrap: anywhere; }
+.ig-complement { margin-top: 16px; }
+.ig-quote { padding: 10px 14px; border-left: 3px solid var(--line); background: var(--surface-2); border-radius: 0 var(--r) var(--r) 0; overflow-wrap: anywhere; }
+.ig-sms-bubble { padding: 10px 14px; border-radius: 14px 14px 14px 4px; background: var(--pale); border: 1px solid var(--line-soft); }
+.ig-sms-bubble p { margin-top: 4px; overflow-wrap: anywhere; }
+
+/* Pièces */
+.ig-evidence { display: grid; gap: 6px; justify-items: start; }
+.ig-file { position: relative; overflow: hidden; cursor: pointer; }
+.ig-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.ig-evidence-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; width: 100%; }
+.ig-evidence-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
+.ig-evidence-list li:not(:has(button)) { grid-template-columns: auto minmax(0, 1fr) auto; }
+
+.ig-history { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.ig-history li { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding-bottom: 6px; border-bottom: 1px solid var(--line-soft); overflow-wrap: anywhere; }
+.ig-conclusions { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r); }
+.ig-details summary { cursor: pointer; font-size: 13.5px; color: var(--ink-2); padding: 6px 0; }
+.ig-details[open] summary { margin-bottom: 8px; }
+.ig-json { font-family: var(--font-mono); font-size: 12px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r); padding: 12px; overflow: auto; max-height: 60vh; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ig-filter { margin-bottom: 12px; max-width: 520px; }
+.ig-launch { margin-bottom: 16px; }
+.ig-cands { margin-bottom: 16px; }
+
+/* Contrôles mystère */
+.ig-summary-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 8px; }
+@media (min-width: 900px) { .ig-summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.ig-summary { display: grid; gap: 4px; }
+.ig-big { font-size: clamp(22px, 3vw, 30px); font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+
+/* Registre des traitements */
+.ig-registry { display: grid; gap: 16px; }
+@media (min-width: 1100px) { .ig-registry { grid-template-columns: 1fr 1fr; } }
+
+/* Revue des accès */
+.ig-review-act { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ig-review-act input { flex: 1 1 180px; min-width: 0; min-height: 36px; }
+
+@media (max-width: 479px) {
+  .ig-steps li { font-size: 11px; }
+  .ig-thread li { max-width: 100%; }
+}
+.ig-page .panel > .panel-title, .ig-page .panel-head + .form { margin-bottom: 12px; }

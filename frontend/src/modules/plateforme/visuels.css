@@ -1,0 +1,8 @@
+/* Visuels communs (trousse de visualisation) des écrans intégrité, accès, IA, socle, plateforme, documents,
+   communication et preuves — espacements seulement ; couleurs et marques : components/viz (charte). */
+.vz-bloc { margin: 12px 0 18px; display: grid; gap: 14px; min-width: 0; }
+.vz-bloc > * { min-width: 0; }
+.viz-indicateurs { min-width: 0; }
+.viz-jauges { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
+.viz-details > summary { cursor: pointer; margin: 4px 0; }
+.vz-circuit-count { margin-left: 6px; font-variant-numeric: tabular-nums; }

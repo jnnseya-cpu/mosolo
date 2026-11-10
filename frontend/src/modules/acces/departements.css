@@ -1,0 +1,50 @@
+/* Départements, modules et variables ; types de comptes (27/09/2026). Préfixe dp-. Téléphone d'abord (360 px). */
+
+.dp-page { min-width: 0; }
+.dp-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 12px; }
+.dp-filters .field { margin: 0; min-width: 0; flex: 1 1 200px; }
+.dp-search input, .dp-filters select { width: 100%; }
+.dp-check { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; min-height: 40px; }
+
+/* Référentiel des types de comptes */
+.dp-types { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .dp-types { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.dp-type { min-width: 0; }
+.dp-count { display: inline-grid; place-items: center; min-width: 36px; height: 36px; padding: 0 8px; border-radius: 18px; background: var(--pale); color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; flex: none; }
+.dp-dl { display: grid; gap: 8px; margin: 12px 0 0; }
+.dp-dl > div { display: grid; gap: 2px; min-width: 0; }
+.dp-dl dt { font-size: 12px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; display: inline-flex; gap: 6px; align-items: center; }
+.dp-dl dd { margin: 0; overflow-wrap: anywhere; font-size: 14px; }
+.dp-dl .chips { margin-top: 2px; }
+.dp-st { display: inline-flex; gap: 4px; align-items: center; font-variant-numeric: tabular-nums; }
+
+/* Modules d'une entité */
+.dp-modules { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 560px; overflow-y: auto; }
+.dp-module { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 4px; border-bottom: 1px solid var(--line-soft); min-width: 0; }
+.dp-module-title { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.dp-module .ac-meta { margin: 2px 0 0; }
+.dp-switch { position: relative; flex: none; width: 48px; height: 28px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; padding: 0; }
+.dp-switch .dp-switch-knob { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); transition: transform 0.15s ease; }
+.dp-switch.on { background: var(--navy); border-color: var(--navy); }
+.dp-switch.on .dp-switch-knob { transform: translateX(20px); }
+.dp-switch:disabled { opacity: 0.45; cursor: not-allowed; }
+.dp-switch:focus-visible { outline: 3px solid var(--focus, #1E9BD7); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .dp-switch .dp-switch-knob { transition: none; } }
+
+/* Variables */
+.dp-vars { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.dp-vars .btn { margin-top: 8px; }
+.dp-value { font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dp-value small { font-weight: 500; font-size: 12px; color: var(--ink-3); }
+
+/* Comptes et historique */
+.dp-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.dp-table th, .dp-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+.dp-table thead th { font-size: 12px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.dp-table td { font-variant-numeric: tabular-nums; }
+.dp-history { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.dp-steps { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--ink-2); }
+.dp-steps li { overflow-wrap: anywhere; }
+
+/* Téléphone : l'arborescence défile dans son cadre pour laisser voir l'entité choisie. */
+@media (max-width: 1023px) { .dp-page .ac-tree { max-height: 320px; overflow-y: auto; } }

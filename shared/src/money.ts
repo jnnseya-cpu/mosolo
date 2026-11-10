@@ -18,6 +18,14 @@ export class CurrencyMismatchError extends Error {
   }
 }
 
+/** Montant portant plus de décimales que la devise n'en admet : refusé, jamais arrondi (frontières monétaires). */
+export class AmountPrecisionError extends Error {
+  constructor(amount: string, currency: CurrencyCode, decimals: number) {
+    super(`Montant ${amount} ${currency} : au plus ${decimals} décimale(s) admise(s), aucun arrondi n'est appliqué`);
+    this.name = 'AmountPrecisionError';
+  }
+}
+
 export type RoundingMode = 'HALF_UP' | 'HALF_EVEN' | 'DOWN' | 'UP';
 
 function decimalsOf(c: CurrencyCode): number {
@@ -93,6 +101,23 @@ export class Money {
 
   static fromJSON(j: MoneyJSON): Money {
     return Money.of(j.amount, j.currency);
+  }
+
+  /**
+   * Lecture STRICTE d'un montant reçu à une frontière monétaire (rappel ou webhook prestataire, relevé bancaire) :
+   * aucun arrondi. Chaîne décimale positive ou nulle, devise connue, et jamais plus de décimales significatives que
+   * la devise n'en admet (« 149.995 » USD est refusé, il n'est pas lu 150.00). Des zéros finals (« 150.000 ») sont
+   * exacts et acceptés. Lève `AmountPrecisionError` (précision) ou `Error` (format, devise).
+   */
+  static parseStrict(j: { amount: string; currency: string }): Money {
+    if (typeof j?.currency !== 'string' || !(j.currency in CURRENCIES)) throw new Error(`Devise inconnue : ${String(j?.currency)}`);
+    const currency = j.currency as CurrencyCode;
+    const s = typeof j.amount === 'string' ? j.amount.trim() : '';
+    if (!/^\d+(\.\d+)?$/.test(s)) throw new Error(`Montant décimal invalide : "${String(j.amount)}"`);
+    const frac = s.split('.')[1] ?? '';
+    const dec = decimalsOf(currency);
+    if (frac.length > dec && /[1-9]/.test(frac.slice(dec))) throw new AmountPrecisionError(s, currency, dec);
+    return new Money(parseScaled(s, dec, 'DOWN'), currency);
   }
 
   toJSON(): MoneyJSON {

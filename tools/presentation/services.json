@@ -1,0 +1,227 @@
+[
+  {
+    "id": "12-services",
+    "route": "/services",
+    "titre": "Services de la Ville",
+    "public": "Tout contribuable",
+    "message": "Seize services sectoriels, un seul compte, un seul registre des règles, un seul circuit de paiement vers le compte public.",
+    "points": [
+      "Aucune verticale n’a son propre compte ni son propre circuit de paiement",
+      "Statut juridique affiché pour chaque service : confirmé, à vérifier, acte requis",
+      "Un service « acte requis » n’exige aucun paiement"
+    ]
+  },
+  {
+    "id": "13-rakapay-pass",
+    "route": "/services/rakapay",
+    "titre": "RakaPay — pass wewa",
+    "public": "Conducteurs de moto-taxi, coopératives",
+    "message": "Le pass des moto-taxis fait partie de RakaPay : acheté par téléphone, vert immédiatement, contrôlé par QR.",
+    "points": [
+      "Un wewa en vert n’a rien à payer et ne peut être sanctionné",
+      "Tarif fixé uniquement par l’acte (J28) ; aucune espèce sur la route",
+      "Paiement individuel ou groupé par la coopérative"
+    ]
+  },
+  {
+    "id": "14-rakapay-tickets",
+    "route": "/services/rakapay",
+    "titre": "RakaPay — tickets urbains",
+    "public": "Usagers des transports",
+    "message": "Un seul moteur de tickets pour tous les usages payants de la ville : bus, stationnement, événements, pass wewa.",
+    "points": [
+      "Aucun ticket vendu avant l’acte qui fixe son tarif",
+      "Contrôle par QR hors connexion",
+      "Le contrôleur constate, il n’encaisse jamais"
+    ]
+  },
+  {
+    "id": "15-rakapay-historique",
+    "route": "/services/rakapay",
+    "titre": "RakaPay — historique",
+    "public": "Conducteurs, usagers",
+    "message": "Chaque paiement laisse une quittance vérifiable : provisoire à la confirmation, définitive au rapprochement.",
+    "points": [
+      "Quittance QR vérifiable par tous",
+      "Définitive seulement après rapprochement au compte public",
+      "Historique utilisable auprès de partenaires, sur consentement"
+    ]
+  },
+  {
+    "id": "16-rakapay-reference",
+    "route": "/services/rakapay",
+    "titre": "RakaPay — paiement",
+    "public": "Conducteurs de moto-taxi",
+    "message": "Une référence unique, payable par USSD ou Mobile Money, vers le compte public des recettes provinciales.",
+    "points": [
+      "Aucune capture d’écran ni SMS ne vaut quittance",
+      "Statut vert dès la confirmation signée de l’opérateur",
+      "Montant affiché [EXEMPLE] jusqu’à l’acte"
+    ]
+  },
+  {
+    "id": "17-propriete",
+    "route": "/services/propriete",
+    "titre": "MOSOLO Property",
+    "public": "Propriétaires, occupants, mandataires",
+    "message": "Vos biens, leur situation vérifiée et l’impôt foncier expliqué ligne par ligne.",
+    "points": [
+      "Base légale confirmée · modules 7 · 8 · 9 · 79",
+      "Distinguer propriété déclarée, observée, vérifiée et contestée : déclarer n’est pas prouver."
+    ]
+  },
+  {
+    "id": "18-locatif",
+    "route": "/services/locatif",
+    "titre": "MOSOLO Rental",
+    "public": "Bailleurs, locataires, gestionnaires",
+    "message": "Baux enregistrés, loyers prouvés, impôt sur les revenus locatifs calculé sur preuve.",
+    "points": [
+      "Base légale confirmée · modules 9",
+      "Distinguer le taux de l’impôt et le taux de la retenue ; aucune liquidation sans preuve du bail."
+    ]
+  },
+  {
+    "id": "19-entreprises",
+    "route": "/services/entreprises",
+    "titre": "MOSOLO Business",
+    "public": "Commerçants, entreprises, professions libérales",
+    "message": "Un dossier unique par activité : déclarations, autorisations et paiements au même endroit.",
+    "points": [
+      "Base légale à vérifier · modules 10 · 17 · 56",
+      "L’existence d’une activité ne vaut pas assujettissement : chaque obligation cite sa règle."
+    ]
+  },
+  {
+    "id": "20-mobilite",
+    "route": "/services/mobilite",
+    "titre": "MOSOLO Mobility",
+    "public": "Propriétaires de véhicules, transporteurs",
+    "message": "Vos véhicules et leurs droits provinciaux, sans double paiement avec le pouvoir central.",
+    "points": [
+      "Base légale à vérifier · modules 11 · 12 · 13 · 25",
+      "Coordination avec le pouvoir central (immatriculation) : aucun droit n’est dupliqué."
+    ]
+  },
+  {
+    "id": "21-stationnement",
+    "route": "/services/stationnement",
+    "titre": "MOSOLO Parking",
+    "public": "Automobilistes, gestionnaires de parkings",
+    "message": "Stationner, payer au temps passé par téléphone, recevoir une preuve immédiate.",
+    "points": [
+      "Acte requis avant tout paiement · modules 14 · 75",
+      "Acte de zonage et barème requis : aucun ticket vendu avant publication."
+    ]
+  },
+  {
+    "id": "22-publicite",
+    "route": "/services/publicite",
+    "titre": "MOSOLO Advertising",
+    "public": "Annonceurs, régies publicitaires, commerçants",
+    "message": "Vos dispositifs publicitaires géolocalisés, autorisés et payés en ligne.",
+    "points": [
+      "Base légale confirmée · modules 15 · 77",
+      "Constat humain obligatoire : aucune sanction automatique à partir d’une photo."
+    ]
+  },
+  {
+    "id": "23-telecom",
+    "route": "/services/telecom",
+    "titre": "MOSOLO Telecom",
+    "public": "Opérateurs de télécommunications, propriétaires de sites",
+    "message": "Un inventaire partagé des sites et un dialogue tracé avec les opérateurs.",
+    "points": [
+      "Base légale à vérifier · modules 16",
+      "Contentieux possible sur l’assiette : dialogue avec les opérateurs avant toute émission."
+    ]
+  },
+  {
+    "id": "24-marches",
+    "route": "/services/marches",
+    "titre": "MOSOLO Markets & Public Domain",
+    "public": "Vendeurs des marchés, occupants du domaine public",
+    "message": "Votre étal payé par téléphone, sans espèces : fin des perceptions multiples.",
+    "points": [
+      "Base légale confirmée · modules 20",
+      "Collecte historiquement en espèces : priorité anti-fraude, aucun agent n’encaisse."
+    ]
+  },
+  {
+    "id": "25-environnement",
+    "route": "/services/environnement",
+    "titre": "MOSOLO Environment",
+    "public": "Ménages, entreprises, producteurs d’emballages",
+    "message": "Collecte des déchets et contributions environnementales suivies de bout en bout.",
+    "points": [
+      "Acte requis avant tout paiement · modules 18 · 19",
+      "Contribution plastique non activable sans acte : aucun montant n’est affiché."
+    ]
+  },
+  {
+    "id": "26-ports",
+    "route": "/services/ports",
+    "titre": "MOSOLO Ports",
+    "public": "Armateurs, transporteurs fluviaux, opérateurs portuaires",
+    "message": "Mouvements et droits portuaires provinciaux déclarés et suivis au même endroit.",
+    "points": [
+      "Base légale à vérifier · modules 13 · 24",
+      "Cadrage sectoriel préalable : aucune perception avant accord des autorités compétentes."
+    ]
+  },
+  {
+    "id": "27-evenements",
+    "route": "/services/evenements",
+    "titre": "MOSOLO Events",
+    "public": "Organisateurs de spectacles et d’événements",
+    "message": "Autorisation en ligne, certificat QR affiché, déclaration de billetterie simplifiée.",
+    "points": [
+      "Base légale à vérifier · modules 21",
+      "Assiette déclarative sur billetterie : rapprochement déclaration ↔ contrôle."
+    ]
+  },
+  {
+    "id": "28-construction",
+    "route": "/services/construction",
+    "titre": "MOSOLO Construction",
+    "public": "Maîtres d’ouvrage, entreprises du bâtiment",
+    "message": "Votre chantier suivi du dépôt au quitus, chaque droit expliqué.",
+    "points": [
+      "Base légale confirmée · modules 22 · 82",
+      "Quitus et droits liés aux chantiers : l’un ne se substitue pas à l’autre."
+    ]
+  },
+  {
+    "id": "29-actifs",
+    "route": "/services/actifs",
+    "titre": "MOSOLO Assets",
+    "public": "Candidats à la valorisation des actifs provinciaux",
+    "message": "Les actifs provinciaux proposés par mise en concurrence publique et traçable.",
+    "points": [
+      "Base légale à vérifier · modules 61 · 92",
+      "Valorisation par mise en concurrence uniquement : aucune attribution de gré à gré."
+    ]
+  },
+  {
+    "id": "30-recouvrement",
+    "route": "/services/recouvrement",
+    "titre": "MOSOLO Recovery",
+    "public": "Contribuables ayant un arriéré",
+    "message": "Régulariser simplement : échéancier, remise prévue par la loi, recours garanti.",
+    "points": [
+      "Base légale confirmée · modules 32 · 33 · 36 · 83 · 90",
+      "Proportionnalité et recours : aucune mesure sans décision humaine motivée."
+    ]
+  },
+  {
+    "id": "31-avia",
+    "route": "/services/avia",
+    "titre": "MOSOLO AVIA",
+    "public": "Compagnies aériennes, exploitants d’aérodromes",
+    "message": "Déclarations de mouvements et redevances provinciales, validées avant toute facturation.",
+    "points": [
+      "Acte requis avant tout paiement · modules 62 · 78",
+      "Validation juridique et coordination multi-acteurs préalables : aucune facturation automatique."
+    ]
+  }
+]

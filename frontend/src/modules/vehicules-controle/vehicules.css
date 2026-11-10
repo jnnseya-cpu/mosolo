@@ -1,0 +1,16 @@
+/* Chaîne véhicule (RFCK) — tuiles d'indicateurs et vue hiérarchique du scan unique. */
+.vc-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin: 0 0 1rem; }
+.vc-tile { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.75rem 0.9rem; border: 1px solid var(--line, #d8dce8); border-radius: 10px; background: var(--surface, #fff); }
+.vc-tile-value { font-size: 1.45rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.vc-tile-label { font-size: 0.85rem; }
+.vc-lines { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem; }
+.vc-line { border: 1px solid var(--line, #d8dce8); border-radius: 10px; padding: 0.75rem 0.9rem; background: var(--surface, #fff); }
+.vc-line h3 { margin: 0 0 0.35rem; font-size: 0.95rem; }
+.vc-line p { margin: 0.25rem 0 0; }
+.vc-banner { border-left: 4px solid #E0A526; padding: 0.6rem 0.8rem; margin: 0 0 0.9rem; background: rgba(224, 165, 38, 0.1); border-radius: 6px; }
+.vc-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.vc-steps li { border: 1px solid var(--line, #d8dce8); border-radius: 8px; padding: 0.55rem 0.75rem; }
+.vc-points { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.35rem 1rem; margin: 0.5rem 0; }
+.vc-form { display: grid; gap: 0.6rem; max-width: 640px; }
+.vc-form label { display: grid; gap: 0.2rem; }
+.vc-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }

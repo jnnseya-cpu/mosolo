@@ -1,0 +1,426 @@
+/**
+ * Registre des exonérations et remises (module 57, § 12.6) :
+ *   demande (contribuable ou agent) → instruction par un agent de régie (base légale OBLIGATOIRE, instrument
+ *   du registre juridique en vigueur) → visa juridique (juriste) → décision (chef de service ou directeur).
+ * Double validation par deux personnes distinctes entre elles et distinctes de l'initiateur ; effet daté,
+ * jamais rétroactif sans décision expresse ; jamais décidée par l'IA (APPROVE_EXEMPTION est un interdit
+ * constitutionnel). Une exonération approuvée s'applique à la liquidation et figure dans l'explication ;
+ * une remise approuvée rectifie l'obligation visée par contre-écriture (jamais par modification directe).
+ */
+import { isRuleExecutable, Money, type MoneyJSON, type RevenueCategory, type RuleSheet } from '@mosolo/shared';
+import type { Principal, User } from '../../core/auth.js';
+import { badRequest, conflict, notFound, unprocessable } from '../../core/errors.js';
+import { assertAiMay, assertDistinctPerson, assertNotRelated, authorize } from '../../core/policy.js';
+import { IdGenerator, InMemoryRepository } from '../../core/repository.js';
+import { declaredReductionTerms, recordReductionGranted, remissionHeadroom } from '../../modules/assessment/reductions.js';
+import type { AssessmentAdjuster, AssessmentAdjustment } from '../../modules/assessment/service.js';
+import { PAYABLE_STATUSES } from '../../modules/assessment/service.js';
+import { taxpayerRecipient, userRecipient } from '../../modules/identity/recipients.js';
+import { actorOf, pctToBasis, type FiscalDeps } from './common.js';
+
+export type ExemptionKind = 'EXONERATION' | 'REMISE';
+export type ExemptionStatus = 'DEMANDEE' | 'INSTRUITE' | 'VISA_JURIDIQUE' | 'APPROUVEE' | 'REFUSEE' | 'REVOQUEE';
+
+export interface LegalBasis { instrumentId: string; article: string; title: string; instrumentStatus: string; demo: boolean }
+
+export interface ExemptionStep {
+  step: 'INSTRUCTION' | 'VISA_JURIDIQUE' | 'DECISION' | 'REVOCATION';
+  userId: string;
+  roles: string[];
+  decision: 'FAVORABLE' | 'DEFAVORABLE';
+  reason: string;
+  at: string;
+}
+
+export interface Exemption {
+  id: string;
+  kind: ExemptionKind;
+  taxpayerId: string;
+  objectId?: string;
+  /** Portée d'une exonération : code de règle ou catégorie de recette. */
+  ruleCode?: string;
+  revenueCategory?: RevenueCategory;
+  /** Remise : obligation visée et montant remis. */
+  obligationId?: string;
+  amount?: MoneyJSON;
+  /** Exonération : pourcentage exonéré (100 = totale). */
+  rate?: string;
+  grounds: string;
+  proofs: { type: string; reference: string }[];
+  legalBasis?: LegalBasis;
+  validFrom: string;
+  validTo?: string;
+  status: ExemptionStatus;
+  requestedBy: string;
+  requestedAt: string;
+  steps: ExemptionStep[];
+  retroactivity?: { decisionReference: string; reason: string };
+  rectifiedObligationId?: string;
+}
+
+/** Rappel d'échéance (jours avant la fin de validité) et périodicité de révision sans échéance — PAR DÉFAUT, à confirmer. */
+export const EXEMPTION_REMINDER_DAYS = 30;
+export const EXEMPTION_REVIEW_MONTHS = 12;
+export interface ExemptionReminder { id: string; exemptionId: string; kind: 'ECHEANCE_PROCHE' | 'EXPIREE' | 'REVISION_DUE'; dueDate: string; at: string; notified: string[] }
+
+export class ExemptionService {
+  readonly exemptions = new InMemoryRepository<Exemption>();
+  readonly reminders = new InMemoryRepository<ExemptionReminder>();
+  private readonly ids = new IdGenerator();
+
+  constructor(private readonly d: FiscalDeps) {}
+
+  get(id: string): Exemption {
+    const x = this.exemptions.get(id);
+    if (!x) throw notFound('EXEMPTION_NOT_FOUND', `Exonération inconnue : ${id}`);
+    return x;
+  }
+
+  /** Statut effectif (une exonération approuvée dont la durée est échue est EXPIRÉE — échéance automatique). */
+  effectiveStatus(x: Exemption): ExemptionStatus | 'EXPIREE' {
+    if (x.status === 'APPROUVEE' && x.validTo && x.validTo < this.d.today()) return 'EXPIREE';
+    return x.status;
+  }
+
+  /** Base légale : instrument du registre juridique, EN VIGUEUR, avec article cité. */
+  private legalBasis(input: { instrumentId: string; article: string }): LegalBasis {
+    const inst = this.d.ctx.rules.instrument(input.instrumentId);
+    if (!inst) throw unprocessable('LEGAL_BASIS_UNKNOWN', `Instrument ${input.instrumentId} absent du registre juridique : aucune exonération sans base légale.`);
+    if (inst.status !== 'EN_VIGUEUR') throw unprocessable('LEGAL_BASIS_NOT_IN_FORCE', `Instrument ${inst.id} au statut ${inst.status} : il ne peut fonder une exonération.`);
+    if (!input.article.trim()) throw badRequest('ARTICLE_REQUIRED', 'L’article fondant l’exonération doit être cité.');
+    return { instrumentId: inst.id, article: input.article.trim(), title: inst.title, instrumentStatus: inst.status, demo: inst.demo === true };
+  }
+
+  /**
+   * Fiches de règle concernées (version exécutable de préférence, sinon la plus récente) : par code de règle, ou
+   * toutes les règles exécutables d'une catégorie de recette.
+   */
+  private scopeRules(x: { ruleCode?: string | undefined; revenueCategory?: RevenueCategory | undefined; obligationId?: string | undefined }): RuleSheet[] {
+    const now = this.d.ctx.clock.now();
+    const all = this.d.ctx.rules.list();
+    const code = x.ruleCode ?? (x.obligationId ? this.d.ctx.assessment.get(x.obligationId).ruleCode : undefined);
+    if (code) {
+      const versions = all.filter((r) => r.code === code).sort((a, b) => b.version - a.version);
+      const pick = versions.find((r) => isRuleExecutable(r, now).ok) ?? versions[0];
+      if (!pick) throw unprocessable('EXEMPTION_RULE_UNKNOWN', `Aucune fiche de règle ${code} au registre : aucune exonération possible.`);
+      return [pick];
+    }
+    const inCategory = all.filter((r) => r.revenueCategory === x.revenueCategory && isRuleExecutable(r, now).ok);
+    if (!inCategory.length) throw unprocessable('EXEMPTION_RULE_UNKNOWN', `Aucune règle exécutable de la catégorie ${x.revenueCategory} : aucune exonération possible.`);
+    return inCategory;
+  }
+
+  /**
+   * Le taux (exonération) ou le montant (remise) ne sont jamais fixés par le demandeur au-delà de ce que la fiche de
+   * règle certifiée DÉCLARE (taux maximal, plafond, cumul sur la chaîne de remplacement) ; aucun taux inventé.
+   */
+  private checkDeclared(x: { kind: ExemptionKind; rate?: string | undefined; amount?: MoneyJSON | undefined; ruleCode?: string | undefined; revenueCategory?: RevenueCategory | undefined; obligationId?: string | undefined; objectId?: string | undefined }): void {
+    const rules = this.scopeRules(x);
+    if (x.kind === 'EXONERATION') {
+      const requested = pctToBasis(x.rate!, 'taux d’exonération');
+      for (const rule of rules) {
+        const terms = declaredReductionTerms(rule, 'EXONERATION', x.objectId ? this.d.ctx.objects.objects.get(x.objectId)?.localityRank : undefined);
+        if (!terms.maxRate) throw unprocessable('EXEMPTION_RATE_NOT_DECLARED', `La règle ${rule.code} v${rule.version} ne déclare aucun taux d’exonération (taux_exoneration_max) : aucun taux n’est inventé, acte requis.`);
+        if (requested > pctToBasis(terms.maxRate)) {
+          throw unprocessable('EXEMPTION_RATE_EXCEEDS_DECLARED', `Taux demandé ${x.rate} % supérieur au taux maximal déclaré par la règle ${rule.code} (${terms.maxRate} %).`, { declared: terms.maxRate });
+        }
+      }
+      return;
+    }
+    const ob = this.d.ctx.assessment.get(x.obligationId!);
+    const rule = rules[0]!;
+    const h = remissionHeadroom((id) => this.d.ctx.assessment.obligations.get(id), ob.id, rule, this.d.ctx.objects.objects.get(ob.objectId)?.localityRank);
+    if (!h.terms.maxRate) throw unprocessable('REMISE_RATE_NOT_DECLARED', `La règle ${rule.code} v${rule.version} ne déclare aucun taux de remise (taux_remise_max) : aucune remise possible, acte requis.`);
+    if (Money.fromJSON(x.amount!).compare(h.available) > 0) {
+      throw unprocessable('REMISE_EXCEEDS_DECLARED_CAP', `Remise ${x.amount!.amount} ${x.amount!.currency} supérieure à la remise encore disponible selon la règle ${rule.code} (${h.terms.maxRate} % de ${h.original.toDecimalString()}, déjà remis ${h.already.toDecimalString()}) : ${h.available.toDecimalString()}.`, { available: h.available.toJSON() });
+    }
+  }
+
+  /** L'instrument cité doit fonder la ou les règles visées (jamais « n'importe quelle » base légale). */
+  private checkBasisOfRule(x: { legalBasis?: LegalBasis | undefined; ruleCode?: string | undefined; revenueCategory?: RevenueCategory | undefined; obligationId?: string | undefined }): void {
+    if (!x.legalBasis) return;
+    const rules = this.scopeRules(x);
+    if (!rules.some((r) => r.legalInstrumentIds.includes(x.legalBasis!.instrumentId))) {
+      throw unprocessable('LEGAL_BASIS_NOT_RULE_BASIS', `L’instrument ${x.legalBasis.instrumentId} ne fonde pas la règle visée (${rules.map((r) => r.code).join(', ')}) : il ne peut fonder cette exonération.`);
+    }
+  }
+
+  request(user: User, input: {
+    taxpayerId?: string; kind: ExemptionKind; objectId?: string; ruleCode?: string; revenueCategory?: RevenueCategory;
+    obligationId?: string; amount?: MoneyJSON; rate?: string; grounds: string; proofs: { type: string; reference: string }[];
+    legalBasis?: { instrumentId: string; article: string }; validFrom: string; validTo?: string;
+  }): Exemption {
+    let taxpayerId = input.taxpayerId ?? (user.roles.includes('R30') ? user.taxpayerId : undefined);
+    if (input.kind === 'REMISE') {
+      if (!input.obligationId || !input.amount) throw badRequest('REMISE_FIELDS_REQUIRED', 'Une remise vise une obligation et un montant.');
+      const ob = this.d.ctx.assessment.get(input.obligationId);
+      taxpayerId = taxpayerId ?? ob.taxpayerId;
+      if (ob.taxpayerId !== taxpayerId) throw unprocessable('OBLIGATION_TAXPAYER_MISMATCH', 'L’obligation visée n’appartient pas à ce contribuable.');
+      if (!PAYABLE_STATUSES.includes(ob.status)) throw unprocessable('OBLIGATION_NOT_REMITTABLE', `Obligation au statut ${ob.status} : remise impossible.`);
+      const amt = Money.fromJSON(input.amount);
+      if (amt.currency !== ob.amount.currency) throw badRequest('CURRENCY_MISMATCH', `Montant attendu en ${ob.amount.currency}.`);
+      if (amt.isZero() || amt.compare(Money.fromJSON(ob.amount)) > 0) throw unprocessable('REMISE_EXCEEDS_OBLIGATION', 'La remise doit être positive et au plus égale au montant de l’obligation.');
+      if (amt.compare(Money.fromJSON(ob.amount)) === 0) throw unprocessable('REMISE_TO_ZERO_FORBIDDEN', 'Une remise ne peut effacer toute la créance : l’effacement total relève de l’admission en non-valeur.');
+    } else {
+      if (!input.rate) throw badRequest('RATE_REQUIRED', 'Pourcentage exonéré requis (100 = exonération totale).');
+      pctToBasis(input.rate, 'taux d’exonération');
+      if (!input.ruleCode && !input.revenueCategory) throw badRequest('SCOPE_REQUIRED', 'Portée requise : code de règle ou catégorie de recette.');
+      if (!input.validTo) throw badRequest('DURATION_REQUIRED', 'Une exonération a toujours une durée (date de fin).');
+      if (input.validTo < input.validFrom) throw badRequest('INVALID_PERIOD', 'La date de fin précède la date de début.');
+    }
+    if (!taxpayerId) throw badRequest('TAXPAYER_REQUIRED', 'Contribuable bénéficiaire requis.');
+    const tp = this.d.ctx.taxpayers.get(taxpayerId);
+    const communes = input.objectId ? [this.d.ctx.objects.get(input.objectId).commune] : [];
+    if (input.objectId && this.d.ctx.objects.get(input.objectId).taxpayerId !== taxpayerId) throw unprocessable('OBJECT_TAXPAYER_MISMATCH', 'L’objet visé n’est pas rattaché à ce contribuable.');
+    authorize(user, 'fiscal:exemption.request', { taxpayerId, communes });
+    if (input.proofs.length === 0) throw unprocessable('PROOF_REQUIRED', 'Au moins une pièce justificative est requise.');
+    const legalBasis = input.legalBasis ? this.legalBasis(input.legalBasis) : undefined;
+    this.checkDeclared(input);
+    this.checkBasisOfRule({ ruleCode: input.ruleCode, revenueCategory: input.revenueCategory, obligationId: input.obligationId, legalBasis });
+    const x = this.exemptions.insert({
+      id: this.ids.next(input.kind === 'REMISE' ? 'REM' : 'EXO'),
+      kind: input.kind, taxpayerId,
+      ...(input.objectId ? { objectId: input.objectId } : {}),
+      ...(input.ruleCode ? { ruleCode: input.ruleCode } : {}),
+      ...(input.revenueCategory ? { revenueCategory: input.revenueCategory } : {}),
+      ...(input.obligationId ? { obligationId: input.obligationId } : {}),
+      ...(input.amount ? { amount: Money.fromJSON(input.amount).toJSON() } : {}),
+      ...(input.rate ? { rate: input.rate } : {}),
+      grounds: input.grounds, proofs: input.proofs,
+      ...(legalBasis ? { legalBasis } : {}),
+      validFrom: input.validFrom, ...(input.validTo ? { validTo: input.validTo } : {}),
+      status: 'DEMANDEE', requestedBy: user.id, requestedAt: this.d.nowIso(), steps: [],
+    });
+    this.d.ctx.audit.append({ actor: actorOf(user), action: 'exemption.requested', resourceType: 'exemption', resourceId: x.id, details: { kind: x.kind, taxpayerId, legalBasis: legalBasis?.instrumentId ?? null } });
+    this.d.ctx.comms.publish('exemption.requested', [taxpayerRecipient(tp)], { reference: x.id }, { entity: 'DGIPK' });
+    return x;
+  }
+
+  private participants(x: Exemption): string[] {
+    return [x.requestedBy, ...x.steps.map((s) => s.userId)];
+  }
+
+  private step(user: User, x: Exemption, step: ExemptionStep['step'], decision: ExemptionStep['decision'], reason: string): ExemptionStep {
+    if (!reason.trim()) throw badRequest('REASON_REQUIRED', 'Motif obligatoire.');
+    return { step, userId: user.id, roles: user.roles, decision, reason: reason.trim(), at: this.d.nowIso() };
+  }
+
+  /** Instruction (agent de régie) : pièces vérifiées, base légale fixée — obligatoire. */
+  instruct(user: User, id: string, input: { legalBasis?: { instrumentId: string; article: string }; decision: 'FAVORABLE' | 'DEFAVORABLE'; reason: string }): Exemption {
+    const x = this.get(id);
+    authorize(user, 'fiscal:exemption.instruct');
+    if (x.status !== 'DEMANDEE') throw conflict('INVALID_EXEMPTION_STATE', `Demande au statut ${x.status}.`);
+    // Initiateur ≠ instructeur ; aucun lien avec le bénéficiaire.
+    assertDistinctPerson(user.id, [x.requestedBy], 'Quatre yeux : l’instruction est faite par une personne distincte de l’initiateur de la demande.');
+    assertNotRelated(user, x.taxpayerId, 'Conflit d’intérêts : l’instructeur est lié au contribuable bénéficiaire.');
+    const basis = input.legalBasis ? this.legalBasis(input.legalBasis) : x.legalBasis;
+    if (input.decision === 'FAVORABLE') {
+      this.checkBasisOfRule({ ...x, legalBasis: basis });
+      this.checkDeclared(x);
+    }
+    if (input.decision === 'FAVORABLE' && !basis) throw unprocessable('LEGAL_BASIS_REQUIRED', 'Aucune exonération sans base légale : citez l’instrument du registre et l’article.');
+    const s = this.step(user, x, 'INSTRUCTION', input.decision, input.reason);
+    const updated = this.exemptions.update({ ...x, ...(basis ? { legalBasis: basis } : {}), status: input.decision === 'FAVORABLE' ? 'INSTRUITE' : 'REFUSEE', steps: [...x.steps, s] });
+    this.d.ctx.audit.append({ actor: actorOf(user), action: 'exemption.instructed', resourceType: 'exemption', resourceId: id, details: { decision: input.decision, legalBasis: basis?.instrumentId ?? null } });
+    if (updated.status === 'REFUSEE') this.notifyRefused(updated);
+    return updated;
+  }
+
+  /** Visa juridique : un juriste vérifie le fondement ; personne distincte de l'initiateur et de l'instructeur. */
+  legalVisa(user: User, id: string, input: { decision: 'FAVORABLE' | 'DEFAVORABLE'; reason: string }): Exemption {
+    const x = this.get(id);
+    authorize(user, 'fiscal:exemption.legal-visa');
+    if (x.status !== 'INSTRUITE') throw conflict('INVALID_EXEMPTION_STATE', `Demande au statut ${x.status} : le visa juridique suit l’instruction.`);
+    assertDistinctPerson(user.id, this.participants(x), 'Quatre yeux : le visa juridique est donné par une personne distincte de l’initiateur et de l’instructeur.');
+    assertNotRelated(user, x.taxpayerId, 'Conflit d’intérêts : le juriste est lié au contribuable bénéficiaire.');
+    const s = this.step(user, x, 'VISA_JURIDIQUE', input.decision, input.reason);
+    const updated = this.exemptions.update({ ...x, status: input.decision === 'FAVORABLE' ? 'VISA_JURIDIQUE' : 'REFUSEE', steps: [...x.steps, s] });
+    this.d.ctx.audit.append({ actor: actorOf(user), action: 'exemption.legal_visa', resourceType: 'exemption', resourceId: id, details: { decision: input.decision } });
+    if (updated.status === 'REFUSEE') this.notifyRefused(updated);
+    return updated;
+  }
+
+  /**
+   * Décision (chef de service / directeur), seconde validation. Jamais par l'IA. Effet daté : une date d'effet
+   * antérieure à la décision exige une décision expresse de rétroactivité (référence + motif).
+   */
+  decide(principal: Principal, id: string, input: { decision: 'APPROUVEE' | 'REFUSEE'; reason: string; retroactivity?: { decisionReference: string; reason: string } }): Exemption {
+    assertAiMay(principal, 'APPROVE_EXEMPTION');
+    const user = principal as User;
+    const x = this.get(id);
+    authorize(user, 'fiscal:exemption.decide');
+    if (x.status !== 'VISA_JURIDIQUE') throw conflict('INVALID_EXEMPTION_STATE', `Demande au statut ${x.status} : la décision suit le visa juridique.`);
+    assertDistinctPerson(user.id, this.participants(x), 'Quatre yeux : la décision est prise par une personne distincte de l’initiateur, de l’instructeur et du juriste.');
+    assertNotRelated(user, x.taxpayerId, 'Conflit d’intérêts : le décideur est lié au contribuable bénéficiaire.');
+    const today = this.d.today();
+    const s = this.step(user, x, 'DECISION', input.decision === 'APPROUVEE' ? 'FAVORABLE' : 'DEFAVORABLE', input.reason);
+    if (input.decision === 'REFUSEE') {
+      const r = this.exemptions.update({ ...x, status: 'REFUSEE', steps: [...x.steps, s] });
+      this.d.ctx.audit.append({ actor: actorOf(user), action: 'exemption.refused', resourceType: 'exemption', resourceId: id, details: { reason: input.reason } });
+      this.notifyRefused(r);
+      return r;
+    }
+    if (!x.legalBasis) throw unprocessable('LEGAL_BASIS_REQUIRED', 'Aucune exonération sans base légale.');
+    // Contrôles rejoués à la décision : la règle (ou la chaîne de l'obligation) a pu changer depuis l'instruction.
+    this.checkBasisOfRule(x);
+    if (x.kind === 'EXONERATION' || (x.obligationId && PAYABLE_STATUSES.includes(this.d.ctx.assessment.get(x.obligationId).status))) this.checkDeclared(x);
+    if (x.validFrom < today && !input.retroactivity) {
+      throw unprocessable('RETROACTIVITY_REQUIRES_DECISION', `Date d’effet ${x.validFrom} antérieure à la décision : une décision expresse de rétroactivité (référence et motif) est requise.`);
+    }
+    // Remise : l'obligation doit être encore payable et la rectification réussir AVANT que la décision soit enregistrée
+    // (jamais une remise « APPROUVEE » sans obligation rectifiée).
+    let rectifiedObligationId: string | undefined;
+    if (x.kind === 'REMISE' && x.obligationId && x.amount) {
+      const ob = this.d.ctx.assessment.get(x.obligationId);
+      if (!PAYABLE_STATUSES.includes(ob.status) || ob.supersededBy) throw unprocessable('OBLIGATION_NOT_REMITTABLE', `Obligation au statut ${ob.status} : remise impossible.`);
+      const remaining = Money.fromJSON(ob.amount).subtract(Money.fromJSON(x.amount));
+      if (remaining.isNegative() || remaining.isZero()) throw unprocessable('REMISE_TO_ZERO_FORBIDDEN', 'Une remise ne peut effacer toute la créance : l’effacement total relève de l’admission en non-valeur.');
+      rectifiedObligationId = this.d.ctx.assessment.rectify(ob.id, remaining.toJSON(), {
+        appealId: x.id, reason: `Remise ${x.id} — ${x.legalBasis.title}, ${x.legalBasis.article}`, decidedBy: user, decisionType: 'REMISE',
+      }).id;
+      recordReductionGranted(this.d.ctx.audit, actorOf(user), {
+        path: 'REMISE_REGISTRE', obligationId: ob.id, fromAmount: ob.amount, toAmount: remaining.toJSON(), deciderId: user.id, taxpayerId: ob.taxpayerId,
+        resultingObligationId: rectifiedObligationId, sourceId: x.id, approvers: [...this.participants(x), user.id], basis: `${x.legalBasis.instrumentId} ${x.legalBasis.article}`,
+      });
+    }
+    const approved = this.exemptions.update({
+      ...x, status: 'APPROUVEE', steps: [...x.steps, s], ...(input.retroactivity ? { retroactivity: input.retroactivity } : {}),
+      ...(rectifiedObligationId ? { rectifiedObligationId } : {}),
+    });
+    this.d.ctx.audit.append({
+      actor: actorOf(user), action: 'exemption.granted', resourceType: 'exemption', resourceId: id,
+      details: { kind: x.kind, legalBasis: x.legalBasis.instrumentId, article: x.legalBasis.article, validFrom: x.validFrom, validTo: x.validTo ?? null, approvers: this.participants(approved), retroactive: !!input.retroactivity },
+    });
+    this.d.ctx.comms.publish('exemption.granted', [taxpayerRecipient(this.d.ctx.taxpayers.get(x.taxpayerId))], { reference: x.id, date: x.validTo ?? x.validFrom }, { entity: 'DGIPK' });
+    return approved;
+  }
+
+  /** Révocation motivée (effet à compter de la décision, jamais sur les liquidations passées). */
+  revoke(user: User, id: string, reason: string): Exemption {
+    const x = this.get(id);
+    authorize(user, 'fiscal:exemption.revoke');
+    if (x.status !== 'APPROUVEE') throw conflict('INVALID_EXEMPTION_STATE', `Exonération au statut ${x.status}.`);
+    const s = this.step(user, x, 'REVOCATION', 'DEFAVORABLE', reason);
+    const today = this.d.today();
+    const r = this.exemptions.update({ ...x, status: 'REVOQUEE', steps: [...x.steps, s], validTo: x.validTo && x.validTo < today ? x.validTo : today });
+    this.d.ctx.audit.append({ actor: actorOf(user), action: 'exemption.revoked', resourceType: 'exemption', resourceId: id, details: { reason } });
+    return r;
+  }
+
+  private notifyRefused(x: Exemption): void {
+    this.d.ctx.comms.publish('exemption.refused', [taxpayerRecipient(this.d.ctx.taxpayers.get(x.taxpayerId))], { reference: x.id }, { entity: 'DGIPK' });
+  }
+
+  /** Branchement sur le moteur de liquidation : exonérations approuvées, en vigueur à la date du calcul. */
+  adjuster(): AssessmentAdjuster {
+    return ({ taxpayerId, objectId, rule, at, gross }) => {
+      const day = at.toISOString().slice(0, 10);
+      const applicable = this.exemptions.find((x) =>
+        x.kind === 'EXONERATION' && x.status === 'APPROUVEE' && x.taxpayerId === taxpayerId && !!x.legalBasis &&
+        (!x.objectId || x.objectId === objectId) &&
+        ((x.ruleCode && x.ruleCode === rule.code) || (!x.ruleCode && x.revenueCategory === rule.revenueCategory)) &&
+        x.validFrom <= day && (!x.validTo || x.validTo >= day));
+      // Taux jamais supérieur à celui que DÉCLARE la version de règle appliquée (une nouvelle version peut le réduire).
+      const terms = declaredReductionTerms(this.d.ctx.rules.get(rule.id), 'EXONERATION', this.d.ctx.objects.objects.get(objectId)?.localityRank);
+      if (!terms.maxRate) return [];
+      let remaining = pctToBasis(terms.maxRate);
+      const out: AssessmentAdjustment[] = [];
+      for (const x of applicable) {
+        const b = Math.min(pctToBasis(x.rate!), remaining);
+        if (b <= 0) break;
+        remaining -= b;
+        const rate = `${Math.floor(b / 100)}.${String(b % 100).padStart(2, '0')}`;
+        out.push({
+          kind: 'EXONERATION', sourceId: x.id, label: `Exonération ${x.id} (${x.rate} %)`,
+          legalBasis: { instrumentId: x.legalBasis!.instrumentId, title: x.legalBasis!.title, article: x.legalBasis!.article },
+          rate, reduction: gross.percent(rate).toJSON(), validFrom: x.validFrom, validTo: x.validTo ?? '',
+          decidedBy: x.steps.filter((s) => s.step !== 'INSTRUCTION').map((s) => s.userId),
+        });
+      }
+      return out;
+    };
+  }
+
+  /**
+   * Alerte de concentration (M57-S1) : un décideur ou une commune concentrant la majorité des exonérations
+   * accordées. Proposition d'examen pour l'audit — aucune mesure automatique.
+   */
+  concentrationAlerts(): { dimension: 'DECIDEUR' | 'COMMUNE' | 'AGENT'; key: string; count: number; total: number; message: string }[] {
+    const granted = this.exemptions.find((x) => x.status === 'APPROUVEE' || x.status === 'REVOQUEE');
+    const total = granted.length;
+    const out: { dimension: 'DECIDEUR' | 'COMMUNE' | 'AGENT'; key: string; count: number; total: number; message: string }[] = [];
+    if (total < 3) return out;
+    const tally = (dim: 'DECIDEUR' | 'COMMUNE' | 'AGENT', keyOf: (x: Exemption) => string | undefined) => {
+      const m = new Map<string, number>();
+      for (const x of granted) { const k = keyOf(x); if (k) m.set(k, (m.get(k) ?? 0) + 1); }
+      for (const [k, n] of m) if (n >= 3 && n * 2 > total) out.push({ dimension: dim, key: k, count: n, total, message: `${n} exonérations sur ${total} concentrées (${dim === 'DECIDEUR' ? 'même décideur' : dim === 'AGENT' ? 'même agent instructeur' : 'même commune'}) : examen proposé à l’audit.` });
+    };
+    tally('DECIDEUR', (x) => x.steps.find((s) => s.step === 'DECISION')?.userId);
+    tally('COMMUNE', (x) => (x.objectId ? this.d.ctx.objects.objects.get(x.objectId)?.commune : undefined));
+    // Concentration sur un AGENT (module 57) : l'agent qui a instruit les demandes accordées.
+    tally('AGENT', (x) => x.steps.find((s) => s.step === 'INSTRUCTION')?.userId);
+    return out;
+  }
+
+  /** Date de révision : échéance de validité, sinon révision périodique depuis la date d'effet (par défaut 12 mois). */
+  reviewDate(x: Exemption): string {
+    if (x.validTo) return x.validTo;
+    const d = new Date(`${x.validFrom}T00:00:00Z`);
+    const today = this.d.today();
+    while (d.toISOString().slice(0, 10) <= today) d.setUTCMonth(d.getUTCMonth() + EXEMPTION_REVIEW_MONTHS);
+    return d.toISOString().slice(0, 10);
+  }
+
+  /**
+   * Échéance et révision AUTOMATIQUES (module 57) : rappel au contribuable et aux services d'assiette avant l'échéance,
+   * constat de l'expiration, et révision due des exonérations sans échéance — une fois par exonération et par
+   * échéance (idempotent). Aucun effet sur les droits : la révision est décidée par une personne (révocation motivée).
+   */
+  runReminders(): ExemptionReminder[] {
+    const today = this.d.today();
+    const soon = new Date(Date.parse(`${today}T00:00:00Z`) + EXEMPTION_REMINDER_DAYS * 86_400_000).toISOString().slice(0, 10);
+    const agents = ['R06', 'R07', 'R11'].flatMap((r) => this.d.ctx.users.withRole(r as 'R06')).filter((u) => u.entity === 'DGIPK');
+    const out: ExemptionReminder[] = [];
+    const push = (x: Exemption, kind: ExemptionReminder['kind'], dueDate: string) => {
+      const id = `RAP-${x.id}-${kind}-${dueDate}`;
+      if (this.reminders.get(id)) return;
+      const notified: string[] = [];
+      const tp = this.d.ctx.taxpayers.taxpayers.get(x.taxpayerId);
+      if (tp && kind !== 'REVISION_DUE') { this.d.ctx.comms.publish('exemption.expiring', [taxpayerRecipient(tp)], { reference: x.id, date: dueDate }, { entity: 'DGIPK' }); notified.push(x.taxpayerId); }
+      if (agents.length) { this.d.ctx.comms.publish('approval.reminder', agents.map(userRecipient), { objet: `exonération ${x.id} — ${kind === 'REVISION_DUE' ? 'révision due' : kind === 'EXPIREE' ? 'échue le' : 'échéance le'} ${dueDate}` }, { entity: 'DGIPK' }); notified.push(...agents.map((u) => u.id)); }
+      const r = this.reminders.insert({ id, exemptionId: x.id, kind, dueDate, at: this.d.ctx.clock.now().toISOString(), notified });
+      this.d.ctx.audit.append({ actor: { kind: 'system', id: 'exonerations:echeancier' }, action: 'exemption.reminder', resourceType: 'exemption', resourceId: x.id, details: { kind, dueDate, automaticEffect: 'AUCUN' } });
+      out.push(r);
+    };
+    for (const x of this.exemptions.find((e) => e.status === 'APPROUVEE')) {
+      if (x.validTo) {
+        if (x.validTo < today) push(x, 'EXPIREE', x.validTo);
+        else if (x.validTo <= soon) push(x, 'ECHEANCE_PROCHE', x.validTo);
+      } else {
+        const review = this.reviewDate(x);
+        if (review <= soon) push(x, 'REVISION_DUE', review);
+      }
+    }
+    return out;
+  }
+
+  /** Indicateurs du module 57 : exonérations actives ; montants (remises et réductions appliquées) ; anomalies. */
+  indicators() {
+    const active = this.exemptions.all().filter((x) => this.effectiveStatus(x) === 'APPROUVEE');
+    const ids = new Set(this.exemptions.all().filter((x) => x.status === 'APPROUVEE' || x.status === 'REVOQUEE').map((x) => x.id));
+    const totals = new Map<string, Money>();
+    const add = (m: MoneyJSON) => totals.set(m.currency, (totals.get(m.currency) ?? Money.zero(m.currency)).add(Money.fromJSON(m)));
+    for (const x of this.exemptions.all()) if (x.kind === 'REMISE' && ids.has(x.id) && x.amount) add(x.amount);
+    for (const o of this.d.ctx.assessment.obligations.all()) for (const a of o.explanation.adjustments ?? []) if (ids.has(a.sourceId)) add(a.reduction);
+    const alerts = this.concentrationAlerts();
+    return [
+      { code: 'EXONERATIONS_ACTIVES', label: 'Exonérations et remises actives', measured: true, value: String(active.length), unit: 'décisions', detail: { exonerations: active.filter((x) => x.kind === 'EXONERATION').length, remises: active.filter((x) => x.kind === 'REMISE').length } },
+      { code: 'MONTANTS', label: 'Montants exonérés ou remis (appliqués)', measured: true, value: [...totals.values()].map((m) => `${m.toDecimalString()} ${m.currency}`).join(' · ') || '0', unit: '', amounts: [...totals.values()].map((m) => m.toJSON()) },
+      { code: 'ANOMALIES', label: 'Anomalies (concentrations sur un décideur, un agent ou une zone)', measured: true, value: String(alerts.length), unit: 'alertes' },
+    ];
+  }
+
+  list(filter: { taxpayerId?: string; status?: string }): Exemption[] {
+    return this.exemptions.find((x) => (!filter.taxpayerId || x.taxpayerId === filter.taxpayerId) && (!filter.status || x.status === filter.status));
+  }
+}

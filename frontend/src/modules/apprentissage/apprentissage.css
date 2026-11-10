@@ -1,0 +1,16 @@
+/* Apprentissage (§ 24) : aide contextuelle, espace d'apprentissage, certifications. */
+.ap-aide { position: relative; display: inline-flex; vertical-align: middle; }
+.ap-aide-btn { gap: 2px; }
+.ap-aide-q { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.ap-aide-pop { position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; width: min(360px, calc(100vw - 32px)); box-shadow: 0 8px 24px rgb(0 0 0 / 0.18); display: grid; gap: 8px; }
+.ap-etat { display: grid; gap: 4px; margin: 8px 0; }
+.ap-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+.ap-quiz { display: grid; gap: 12px; }
+.ap-quiz fieldset { border: 1px solid var(--line); border-radius: var(--r); padding: 8px 12px; min-width: 0; }
+.ap-quiz label { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; }
+.ap-priv { display: grid; gap: 8px; }
+.ap-rows { display: grid; gap: 8px; }
+.ap-q-row { display: grid; gap: 8px; grid-template-columns: 1fr; border-top: 1px solid var(--line-soft); padding-top: 8px; }
+@media (min-width: 768px) { .ap-q-row { grid-template-columns: 2fr 2fr 1fr auto; align-items: end; } }
+.ap-checks { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.ap-checks label { display: inline-flex; gap: 6px; align-items: center; }

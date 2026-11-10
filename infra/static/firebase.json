@@ -1,0 +1,46 @@
+{
+  "hosting": {
+    "public": "public",
+    "cleanUrls": false,
+    "trailingSlash": false,
+    "ignore": ["firebase.json", "**/.*"],
+    "rewrites": [
+      { "source": "/v1/**", "run": { "serviceId": "SERVICE-CLOUD-RUN", "region": "REGION-CLOUD-RUN" } },
+      { "source": "/l", "run": { "serviceId": "SERVICE-CLOUD-RUN", "region": "REGION-CLOUD-RUN" } },
+      { "source": "/l/**", "run": { "serviceId": "SERVICE-CLOUD-RUN", "region": "REGION-CLOUD-RUN" } },
+      { "source": "/.well-known/**", "run": { "serviceId": "SERVICE-CLOUD-RUN", "region": "REGION-CLOUD-RUN" } },
+      { "source": "/health", "run": { "serviceId": "SERVICE-CLOUD-RUN", "region": "REGION-CLOUD-RUN" } },
+      { "source": "**", "destination": "/index.html" }
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache" },
+          { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' blob: data:; worker-src 'self' blob:; media-src 'self' blob:; frame-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" },
+          { "key": "X-Content-Type-Options", "value": "nosniff" },
+          { "key": "X-Frame-Options", "value": "DENY" },
+          { "key": "Referrer-Policy", "value": "no-referrer" },
+          { "key": "Strict-Transport-Security", "value": "max-age=31536000" },
+          { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+          { "key": "Permissions-Policy", "value": "camera=(self), geolocation=(self), microphone=(), payment=(), usb=()" }
+        ]
+      },
+      {
+        "source": "/sw.js",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+          { "key": "Service-Worker-Allowed", "value": "/" }
+        ]
+      },
+      {
+        "source": "/index.html",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+      },
+      {
+        "source": "/manifest.webmanifest",
+        "headers": [{ "key": "Content-Type", "value": "application/manifest+json" }]
+      }
+    ]
+  }
+}

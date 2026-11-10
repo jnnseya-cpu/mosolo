@@ -1,6 +1,6 @@
 # Annexe G — Catalogue des événements de communication
 
-Catalogue généré à partir de `specs/evenements-communication.yaml` (outil `tools/gen_evenements.py`). **239 événements** répartis en **23 catégories**, dont **126 avis obligatoires** qui s'appliquent même lorsque le destinataire s'est désinscrit des communications facultatives.
+Catalogue généré à partir de `specs/evenements-communication.yaml` (outil `tools/gen_evenements.py`). **255 événements** répartis en **23 catégories**, dont **135 avis obligatoires** qui s'appliquent même lorsque le destinataire s'est désinscrit des communications facultatives.
 
 Légende des canaux : E courriel · A dans l'application · S SMS · P notification push · U boîte USSD · V serveur vocal (SVI) · C courrier imprimé · W WhatsApp (sur consentement préalable, contenu non sensible uniquement). Public : C contribuable · G agent public ou interne · X partenaire externe. **M** = obligatoire.
 
@@ -8,17 +8,17 @@ Légende des canaux : E courriel · A dans l'application · S SMS · P notificat
 
 | Indicateur | Valeur |
 |---|---|
-| Événements au catalogue | 239 |
+| Événements au catalogue | 255 |
 | Catégories | 23 |
-| Avis obligatoires | 126 |
-| Événements diffusés par défaut sur « email » | 192 |
-| Événements diffusés par défaut sur « in-app » | 232 |
-| Événements diffusés par défaut sur « sms » | 111 |
-| Événements diffusés par défaut sur « push » | 42 |
-| Événements diffusés par défaut sur « whatsapp » | 62 |
+| Avis obligatoires | 135 |
+| Événements diffusés par défaut sur « email » | 206 |
+| Événements diffusés par défaut sur « in-app » | 248 |
+| Événements diffusés par défaut sur « sms » | 117 |
+| Événements diffusés par défaut sur « push » | 43 |
+| Événements diffusés par défaut sur « whatsapp » | 64 |
 | Événements diffusés par défaut sur « ussd » | 31 |
 | Événements diffusés par défaut sur « svi » | 11 |
-| Événements diffusés par défaut sur « courrier » | 23 |
+| Événements diffusés par défaut sur « courrier » | 26 |
 
 | Catégorie | Événements | Obligatoires |
 |---|---|---|
@@ -29,22 +29,22 @@ Légende des canaux : E courriel · A dans l'application · S SMS · P notificat
 | Foncier et locatif | 9 | 4 |
 | Déclarations et liquidation | 19 | 10 |
 | Paiements | 14 | 8 |
-| Quittances et quitus | 9 | 6 |
-| Titres, autorisations et droits d'accès | 11 | 4 |
-| Recouvrement et arriérés | 8 | 6 |
+| Quittances et quitus | 12 | 8 |
+| Titres, autorisations et droits d'accès | 14 | 7 |
+| Recouvrement et arriérés | 9 | 6 |
 | Missions et contrôle terrain | 9 | 4 |
 | Réclamations et recours | 6 | 5 |
 | Approbations et workflows (maker-checker) | 12 | 6 |
-| Registre juridique et règles | 10 | 4 |
-| Trésor, règlement et rapprochement | 9 | 4 |
-| Anti-fraude et audit | 11 | 11 |
+| Registre juridique et règles | 11 | 5 |
+| Trésor, règlement et rapprochement | 11 | 4 |
+| Anti-fraude et audit | 13 | 12 |
 | Agents d'intelligence artificielle | 9 | 3 |
 | Pilotage et tableaux de bord | 8 | 1 |
 | Invitations et accès des agents publics | 14 | 5 |
 | Apprentissage et certification | 7 | 2 |
 | Plateforme et continuité | 8 | 4 |
-| Données personnelles et consentement | 7 | 5 |
-| Partenaires, contrats et points de paiement | 9 | 6 |
+| Données personnelles et consentement | 8 | 6 |
+| Partenaires, contrats et points de paiement | 12 | 7 |
 
 ## G.2 Identité et compte
 
@@ -186,6 +186,9 @@ Légende des canaux : E courriel · A dans l'application · S SMS · P notificat
 | `clearance.expiring` | Quitus bientôt expiré | Votre quitus expire le {{date}} | warning | EA+W |  | C |
 | `clearance.revoked` | Quitus suspendu | Votre quitus est suspendu — motif | warning | EASC | M | C |
 | `clearance.verified_by_service` | Quitus vérifié par un service | Votre quitus a été vérifié par {{service}} | info | A+W |  | C |
+| `receipt.reversed` | Quittance contrepassée | Votre quittance {{reference}} n'est plus valable — paiement contrepassé | warning | EASC | M | C |
+| `receipt.refunded` | Quittance remboursée | Remboursement effectué — quittance {{reference}} clôturée | info | EAS | M | C |
+| `receipt.duplicate_issued` | Duplicata délivré | Duplicata de la quittance {{reference}} délivré | info | EA+W |  | C |
 
 ## G.10 Titres, autorisations et droits d'accès
 
@@ -202,6 +205,9 @@ Légende des canaux : E courriel · A dans l'application · S SMS · P notificat
 | `ticket.expiring` | Ticket bientôt expiré | Votre ticket expire dans {{minutes}} min | warning | SP+W |  | C |
 | `ticket.extended` | Ticket prolongé | Ticket prolongé jusqu'à {{heure}} | success | SP+W |  | C |
 | `parking.violation.recorded` | Constat de stationnement | Constat {{reference}} — paiement ou contestation | warning | EASU | M | C |
+| `credential.suspended` | Titre suspendu | Votre titre {{reference}} est suspendu — motif et recours | warning | EASC | M | C |
+| `credential.revoked` | Titre révoqué | Votre titre {{reference}} est révoqué — motif et recours | warning | EASC | M | C |
+| `control.finding.opened` | Constat établi | Constat {{reference}} établi — aucune somme n’est due à ce stade | warning | EAS | M | C |
 
 ## G.11 Recouvrement et arriérés
 
@@ -215,6 +221,7 @@ Légende des canaux : E courriel · A dans l'application · S SMS · P notificat
 | `recovery.enforcement.lifted` | Mesure levée | Mesure {{reference}} levée | success | EASC | M | C |
 | `recovery.regularisation_campaign` | Campagne de régularisation | Régularisez votre situation avant le {{date}} | info | EASPUV+W |  | C |
 | `recovery.arrears_statement` | Relevé d'arriérés | Votre relevé d'arriérés | info | EAU+W |  | C |
+| `recovery.notice.read` | Avis consulté | Accusé de lecture de l'avis {{reference}} | info | A |  | G |
 
 ## G.12 Missions et contrôle terrain
 
@@ -272,6 +279,7 @@ Légende des canaux : E courriel · A dans l'application · S SMS · P notificat
 | `rule.conflict.detected` | Conflit de règles | Double revendication d'un fait générateur | critical | EA | M | G |
 | `legal.instrument.abrogated` | Texte abrogé | Le texte {{texte}} est abrogé — règles impactées | critical | EA | M | G |
 | `legal.change.public_notice` | Information réglementaire | Changement de règle vous concernant | info | EASU+W |  | C |
+| `rule.abrogated` | Règle abrogée | La règle {{reference}} est abrogée à compter du {{date}} | warning | EA | M | G |
 
 ## G.16 Trésor, règlement et rapprochement
 
@@ -286,6 +294,8 @@ Légende des canaux : E courriel · A dans l'application · S SMS · P notificat
 | `ledger.imbalance` | Déséquilibre du grand livre | Déséquilibre détecté | critical | EAS | M | G |
 | `fx.rate.published` | Taux de change officiel intégré | Taux officiel du {{date}} intégré | info | A |  | G |
 | `fx.rate.missing` | Taux de change manquant | Taux officiel du {{date}} absent | critical | EAS | M | G |
+| `ledger.month_closed` | Clôture mensuelle | Clôture mensuelle signée du grand livre | info | EA |  | G |
+| `suspense.opened` | Suspens ouvert | Suspens {{reference}} ouvert — justification requise | warning | EA |  | G |
 
 ## G.17 Anti-fraude et audit
 
@@ -302,6 +312,8 @@ Légende des canaux : E courriel · A dans l'application · S SMS · P notificat
 | `audit.policy_violation` | Violation de politique | Violation de politique détectée | critical | EAS | M | G |
 | `audit.access_review.due` | Revue d'accès due | Revue trimestrielle des accès à réaliser | warning | EA | M | G |
 | `whistleblower.report.received` | Signalement reçu | Votre signalement {{reference}} est enregistré | info | SUV | M | C |
+| `incident.declared` | Incident de sécurité déclaré | Incident {{reference}} déclaré — gravité {{gravite}} | critical | EAP | M | G |
+| `whistleblower.report.updated` | Signalement mis à jour | Votre signalement a évolué — consultez-le avec votre code de suivi | info | SA+W |  | C |
 
 ## G.18 Agents d'intelligence artificielle
 
@@ -385,6 +397,7 @@ Légende des canaux : E courriel · A dans l'application · S SMS · P notificat
 | `privacy.rectification.done` | Rectification effectuée | Vos données ont été rectifiées | success | EA | M | C |
 | `privacy.data_shared_with_partner` | Partage de données | Vos données ont été communiquées à {{destinataire}} ({{base_legale}}) | info | EA | M | C |
 | `privacy.breach_notification` | Violation de données | Information sur un incident de données | critical | EASC | M | C |
+| `privacy.rectification.received` | Demande de rectification reçue | Votre demande de rectification est enregistrée | info | EA | M | C |
 
 ## G.24 Partenaires, contrats et points de paiement
 
@@ -399,3 +412,6 @@ Légende des canaux : E courriel · A dans l'application · S SMS · P notificat
 | `contract.expiring` | Contrat bientôt échu | Contrat {{contrat}} échu le {{date}} | warning | EA |  | G |
 | `subcontractor.agent.accredited` | Agent accrédité | Agent {{agent}} accrédité | success | EA |  | X |
 | `subcontractor.agent.revoked` | Accréditation révoquée | Accréditation de {{agent}} révoquée | warning | EA | M | X |
+| `subcontractor.accredited` | Sous-traitant accrédité | Accréditation de {{nom}} décidée | info | EA |  | G |
+| `subcontractor.suspended` | Sous-traitant suspendu | Accréditation de {{nom}} suspendue — motif et recours | warning | EA | M | G |
+| `payment_point.exception.opened` | Exception de point de paiement | Écart de caisse ou versement en retard — {{reference}} | warning | EA |  | G |

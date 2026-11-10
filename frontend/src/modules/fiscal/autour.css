@@ -1,0 +1,23 @@
+/* « Autour de moi » */
+.adm-radius { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.adm-radius .chip { cursor: pointer; font-size: 13px; padding: 4px 10px; }
+.adm-radius .chip.is-on { background: var(--brand, #232C6B); color: #fff; border-color: transparent; }
+.adm-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; }
+.adm-count { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-size: 14px; }
+.adm-count strong { font-size: 18px; }
+.adm-count.is-on { outline: 2px solid var(--ink); }
+.adm-dot { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: #fff; }
+.adm-where { flex-basis: 100%; }
+.adm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.adm-item-btn { width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: start; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: inherit; font: inherit; cursor: pointer; }
+.adm-item.is-sel .adm-item-btn { border-color: var(--ink); box-shadow: 0 0 0 2px var(--ink) inset; }
+.adm-main { display: grid; gap: 2px; min-width: 0; }
+.adm-dist { font-weight: 700; white-space: nowrap; }
+.adm-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #fff; white-space: nowrap; }
+.adm-badge.adm-green { background: #0a7f0a; }
+.adm-badge.adm-amber { background: #fab219; color: #1b1d24; }
+.adm-badge.adm-red { background: #c62f2f; }
+.adm-badge.adm-grey { background: #6b7180; }
+.adm-badge.adm-blue { background: #1576a8; }
+@media (max-width: 520px) { .adm-item-btn { grid-template-columns: 1fr auto; } .adm-badge { grid-column: 1 / -1; justify-self: start; } }
+.adm-pay { margin-top: 6px; }

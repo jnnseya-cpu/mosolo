@@ -1,0 +1,26 @@
+{
+  "name": "@mosolo/mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KINSHASA MOSOLO — application citoyenne Android et iOS (module 4) : la PWA MOSOLO enveloppée par Capacitor. Hors des espaces de travail npm : installée à la demande sur un poste disposant des SDK Android et iOS.",
+  "type": "module",
+  "scripts": {
+    "web": "npm run build --prefix ../frontend",
+    "ajouter:android": "cap add android && node scripts/installer-natif.mjs android",
+    "ajouter:ios": "cap add ios && node scripts/installer-natif.mjs ios",
+    "synchroniser": "npm run web && cap sync",
+    "ouvrir:android": "cap open android",
+    "ouvrir:ios": "cap open ios",
+    "construire:android": "npm run synchroniser && cd android && ./gradlew bundleRelease",
+    "construire:ios": "npm run synchroniser && xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Release -archivePath build/MOSOLO.xcarchive archive",
+    "verifier": "node scripts/verifier-config.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/ios": "^6.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  }
+}

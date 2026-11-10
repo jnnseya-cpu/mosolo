@@ -131,6 +131,9 @@ CATS = [
  ("clearance.expiring","Quitus bientôt expiré","Votre quitus expire le {{date}}","warning","EA",False,"C"),
  ("clearance.revoked","Quitus suspendu","Votre quitus est suspendu — motif","warning","EASC",True,"C"),
  ("clearance.verified_by_service","Quitus vérifié par un service","Votre quitus a été vérifié par {{service}}","info","A",False,"C"),
+ ("receipt.reversed","Quittance contrepassée","Votre quittance {{reference}} n'est plus valable — paiement contrepassé","warning","EASC",True,"C"),
+ ("receipt.refunded","Quittance remboursée","Remboursement effectué — quittance {{reference}} clôturée","info","EAS",True,"C"),
+ ("receipt.duplicate_issued","Duplicata délivré","Duplicata de la quittance {{reference}} délivré","info","EA",False,"C"),
 ]),
 ("titres", "Titres, autorisations et droits d'accès", [
  ("permit.application.received","Demande d'autorisation reçue","Demande {{titre}} reçue","info","EA",False,"C"),
@@ -144,6 +147,9 @@ CATS = [
  ("ticket.expiring","Ticket bientôt expiré","Votre ticket expire dans {{minutes}} min","warning","SP",False,"C"),
  ("ticket.extended","Ticket prolongé","Ticket prolongé jusqu'à {{heure}}","success","SP",False,"C"),
  ("parking.violation.recorded","Constat de stationnement","Constat {{reference}} — paiement ou contestation","warning","EASU",True,"C"),
+ ("credential.suspended","Titre suspendu","Votre titre {{reference}} est suspendu — motif et recours","warning","EASC",True,"C"),
+ ("credential.revoked","Titre révoqué","Votre titre {{reference}} est révoqué — motif et recours","warning","EASC",True,"C"),
+ ("control.finding.opened","Constat établi","Constat {{reference}} établi — aucune somme n’est due à ce stade","warning","EAS",True,"C"),
 ]),
 ("recouvrement", "Recouvrement et arriérés", [
  ("recovery.reminder.1","Première relance","Rappel amiable : {{reference}} impayé","warning","EASUV",True,"C"),
@@ -154,6 +160,7 @@ CATS = [
  ("recovery.enforcement.lifted","Mesure levée","Mesure {{reference}} levée","success","EASC",True,"C"),
  ("recovery.regularisation_campaign","Campagne de régularisation","Régularisez votre situation avant le {{date}}","info","EASPUV",False,"C"),
  ("recovery.arrears_statement","Relevé d'arriérés","Votre relevé d'arriérés","info","EAU",False,"C"),
+ ("recovery.notice.read","Avis consulté","Accusé de lecture de l'avis {{reference}}","info","A",False,"G"),
 ]),
 ("terrain", "Missions et contrôle terrain", [
  ("mission.assigned","Mission assignée","Mission {{mission}} assignée","info","AP",False,"G"),
@@ -199,6 +206,7 @@ CATS = [
  ("rule.conflict.detected","Conflit de règles","Double revendication d'un fait générateur","critical","EA",True,"G"),
  ("legal.instrument.abrogated","Texte abrogé","Le texte {{texte}} est abrogé — règles impactées","critical","EA",True,"G"),
  ("legal.change.public_notice","Information réglementaire","Changement de règle vous concernant","info","EASU",False,"C"),
+ ("rule.abrogated","Règle abrogée","La règle {{reference}} est abrogée à compter du {{date}}","warning","EA",True,"G"),
 ]),
 ("tresor", "Trésor, règlement et rapprochement", [
  ("settlement.received","Règlement reçu","Relevé {{banque}} du {{date}} intégré","info","A",False,"G"),
@@ -210,6 +218,8 @@ CATS = [
  ("ledger.imbalance","Déséquilibre du grand livre","Déséquilibre détecté","critical","EAS",True,"G"),
  ("fx.rate.published","Taux de change officiel intégré","Taux officiel du {{date}} intégré","info","A",False,"G"),
  ("fx.rate.missing","Taux de change manquant","Taux officiel du {{date}} absent","critical","EAS",True,"G"),
+ ("ledger.month_closed","Clôture mensuelle","Clôture mensuelle signée du grand livre","info","EA",False,"G"),
+ ("suspense.opened","Suspens ouvert","Suspens {{reference}} ouvert — justification requise","warning","EA",False,"G"),
 ]),
 ("fraude", "Anti-fraude et audit", [
  ("fraud.alert.raised","Alerte de fraude","Alerte {{reference}} — score {{score}}","critical","EAP",True,"G"),
@@ -223,6 +233,8 @@ CATS = [
  ("audit.policy_violation","Violation de politique","Violation de politique détectée","critical","EAS",True,"G"),
  ("audit.access_review.due","Revue d'accès due","Revue trimestrielle des accès à réaliser","warning","EA",True,"G"),
  ("whistleblower.report.received","Signalement reçu","Votre signalement {{reference}} est enregistré","info","SUV",True,"C"),
+ ("incident.declared","Incident de sécurité déclaré","Incident {{reference}} déclaré — gravité {{gravite}}","critical","EAP",True,"G"),
+ ("whistleblower.report.updated","Signalement mis à jour","Votre signalement a évolué — consultez-le avec votre code de suivi","info","SA",False,"C"),
 ]),
 ("ia", "Agents d'intelligence artificielle", [
  ("ai.insight_generated","Analyse produite","Nouvelle analyse de {{agent}}","info","AP",False,"G"),
@@ -288,6 +300,7 @@ CATS = [
  ("privacy.rectification.done","Rectification effectuée","Vos données ont été rectifiées","success","EA",True,"C"),
  ("privacy.data_shared_with_partner","Partage de données","Vos données ont été communiquées à {{destinataire}} ({{base_legale}})","info","EA",True,"C"),
  ("privacy.breach_notification","Violation de données","Information sur un incident de données","critical","EASC",True,"C"),
+ ("privacy.rectification.received","Demande de rectification reçue","Votre demande de rectification est enregistrée","info","EA",True,"C"),
 ]),
 ("partenaires", "Partenaires, contrats et points de paiement", [
  ("partner.api_key.expiring","Clé d'API bientôt expirée","Clé d'API {{partenaire}} expire le {{date}}","warning","EA",True,"X"),
@@ -299,6 +312,9 @@ CATS = [
  ("contract.expiring","Contrat bientôt échu","Contrat {{contrat}} échu le {{date}}","warning","EA",False,"G"),
  ("subcontractor.agent.accredited","Agent accrédité","Agent {{agent}} accrédité","success","EA",False,"X"),
  ("subcontractor.agent.revoked","Accréditation révoquée","Accréditation de {{agent}} révoquée","warning","EA",True,"X"),
+ ("subcontractor.accredited","Sous-traitant accrédité","Accréditation de {{nom}} décidée","info","EA",False,"G"),
+ ("subcontractor.suspended","Sous-traitant suspendu","Accréditation de {{nom}} suspendue — motif et recours","warning","EA",True,"G"),
+ ("payment_point.exception.opened","Exception de point de paiement","Écart de caisse ou versement en retard — {{reference}}","warning","EA",False,"G"),
 ]),
 ]
 

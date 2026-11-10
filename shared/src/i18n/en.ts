@@ -3,7 +3,7 @@ import type { MessageKey } from './fr.js';
 export const en: Partial<Record<MessageKey, string>> = {
   'app.motto': 'One city, one taxpayer, one record, one receipt.',
   'app.tagline': 'Every taxpayer identified, every activity located, every obligation lawfully calculated, every payment verifiable and every public franc traceable.',
-  'nav.home': 'Home', 'nav.taxpayer': 'My account', 'nav.verify': 'Verify a receipt', 'nav.governor': 'Command centre',
+  'nav.home': 'Home', 'nav.taxpayer': 'My account', 'nav.verify': 'Verify a receipt', 'nav.governor': 'Governor dashboard (Command centre)',
   'nav.communications': 'Communications', 'nav.rules': 'Legal register', 'nav.treasury': 'Treasury & reconciliation',
   'common.language': 'Language', 'common.currency': 'Display currency', 'common.save': 'Save', 'common.submit': 'Submit',
   'common.cancel': 'Cancel', 'common.loading': 'Loading…', 'common.error': 'Something went wrong.',

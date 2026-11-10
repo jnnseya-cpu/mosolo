@@ -51,15 +51,19 @@ export function canTransition(from: PaymentStatus, to: PaymentStatus): boolean {
 }
 
 /** Statut d'une quittance (§ 19) */
-export type ReceiptStatus = 'PROVISOIRE' | 'DEFINITIVE' | 'ANNULEE' | 'REMPLACEE' | 'SUSPECTE';
+export type ReceiptStatus = 'PROVISOIRE' | 'DEFINITIVE' | 'ANNULEE' | 'REMPLACEE' | 'SUSPECTE' | 'CONTREPASSEE' | 'REMBOURSEE';
 
 /** Résultat de vérification publique (§ 19.2) */
-export type PublicReceiptCheck = 'VALID' | 'PENDING' | 'CANCELLED' | 'REPLACED' | 'FRAUD_SUSPECTED' | 'UNKNOWN';
+export type PublicReceiptCheck = 'VALID' | 'PENDING' | 'CANCELLED' | 'REPLACED' | 'FRAUD_SUSPECTED' | 'REVERSED' | 'REFUNDED' | 'UNKNOWN';
 
-/** Échelle unifiée de la recette (§ 26.1) */
+/**
+ * Échelle unifiée de la recette (§ 26.1, Cahier v2 : onze états) : potentiel estimé, assiette vérifiée, liquidé,
+ * exigible, en retard, paiement initié, confirmé, réglé en compte public, rapproché, comptabilisé, disponible.
+ * Les niveaux ne s'additionnent jamais entre eux. Le montant contesté est un indicateur séparé, hors échelle.
+ */
 export const REVENUE_LADDER = [
-  'potential', 'verified_base', 'assessed', 'due', 'overdue', 'disputed',
-  'initiated', 'confirmed', 'settled', 'reconciled', 'available',
+  'potential', 'verified_base', 'assessed', 'due', 'overdue',
+  'initiated', 'confirmed', 'settled', 'reconciled', 'recorded', 'available',
 ] as const;
 export type RevenueLadderLevel = (typeof REVENUE_LADDER)[number];
 
@@ -68,7 +72,7 @@ export type MapStatusColor = 'green' | 'amber' | 'red' | 'grey' | 'blue';
 
 /** Rôles (§ 12.3) — codes stables */
 export const ROLES = {
-  R01: 'Gouverneur', R02: 'Directeur de cabinet', R03: 'Secrétaire général', R04: 'Ministre provincial',
+  R01: 'Gouverneur', R02: 'Directeur de cabinet', R03: 'Secrétaire exécutif du Gouvernement provincial', R04: 'Ministre provincial',
   R05: 'Ministre provincial des Finances', R06: 'Directeur général de régie', R07: 'Chef de service de régie',
   R08: "Administrateur d'entité", R09: 'Superviseur terrain', R10: 'Agent de terrain', R11: 'Contrôleur',
   R12: 'Agent de guichet', R13: 'Juriste rédacteur', R14: 'Juriste vérificateur', R15: 'Validateur financier',
@@ -79,17 +83,56 @@ export const ROLES = {
   R29: 'Gestionnaire des modèles IA', R30: 'Contribuable', R31: 'Mandataire', R32: 'Point de paiement agréé',
   R33: 'Partenaire bancaire / monnaie mobile', R34: 'Partenaire de données', R35: 'Sous-traitant terrain',
   R36: 'Observateur société civile', R37: 'Service vérificateur du quitus',
+  // Décision du maître d'ouvrage du 29/09/2026 (spécification v1.0 du moteur de répartition, § 4) : rôle dédié de Groupe
+  // Nseya (GROUPE_NSEYA_SUPER_ADMIN) — lecture complète, export et descente à la transaction ; aucune mutation de l'historique.
+  R38: 'Groupe Nseya — super-administrateur (lecture complète) (GROUPE_NSEYA_SUPER_ADMIN)',
 } as const;
 export type RoleCode = keyof typeof ROLES;
+
+/**
+ * Anciens libellés conservés comme alias (règle n° 1 : rien n'est retiré). R03 s'affiche désormais « Secrétaire exécutif
+ * du Gouvernement provincial » (Cahier nouvelle version, ch. 27, 27/09/2026) ; « Secrétaire général » reste reconnu.
+ */
+export const ROLE_ALIASES: Partial<Record<RoleCode, string[]>> = { R03: ['Secrétaire général'] };
 
 /** Paires de rôles incompatibles (§ 12.5) */
 export const INCOMPATIBLE_ROLES: [RoleCode, RoleCode][] = [
   ['R13', 'R14'], ['R13', 'R15'], ['R13', 'R16'], ['R14', 'R16'],
   ['R10', 'R17'], ['R19', 'R17'], ['R26', 'R17'], ['R26', 'R19'], ['R26', 'R13'], ['R26', 'R06'],
   ['R22', 'R17'], ['R22', 'R10'], ['R22', 'R06'], ['R29', 'R06'],
+  // Un agent public (R01 à R29) ou un sous-traitant terrain (R35) ne manie jamais d'espèces : le rôle d'opérateur de
+  // point de paiement agréé (R32, encaissement) lui est incompatible.
+  ...Array.from({ length: 29 }, (_, i) => [`R${String(i + 1).padStart(2, '0')}` as RoleCode, 'R32'] as [RoleCode, RoleCode]),
+  ['R35', 'R32'],
+  // Groupe Nseya (R38) : jamais d'encaissement. Décision du maître d'ouvrage du 29/09/2026 : Groupe Nseya est AUSSI le
+  // super-administrateur de la plateforme (R26 + R38 sur un même compte) — l'ancienne incompatibilité R38/R26 est levée ;
+  // les circuits à deux ou quatre personnes distinctes restent exigés (vérifier, approuver, activer, régler).
+  ['R38', 'R32'],
 ];
 
 export function hasIncompatibility(roles: RoleCode[]): [RoleCode, RoleCode] | null {
   const set = new Set(roles);
   return INCOMPATIBLE_ROLES.find(([a, b]) => set.has(a) && set.has(b)) ?? null;
 }
+
+/**
+ * Rattachement territorial d'une recette (§ 20.3). Règle : la commune du FAIT GÉNÉRATEUR — lieu de l'objet taxé
+ * (parcelle, unité locative, étal, dispositif, établissement, chantier) ou lieu où le service est consommé
+ * (zone de stationnement, station de départ d'un ticket). Jamais l'adresse du contribuable ni le lieu du paiement.
+ * Figé à la liquidation ; une correction de localisation passe par rectification tracée, jamais par réécriture.
+ */
+export const ATTRIBUTION_BASES = ['LIEU_OBJET', 'ZONE_SERVICE', 'STATION_DEPART', 'NON_LOCALISE'] as const;
+export type AttributionBasis = (typeof ATTRIBUTION_BASES)[number];
+
+export interface TerritorialAttribution {
+  /** null si le lieu n'est pas établi : la recette est alors « non attribuée », jamais devinée. */
+  commune: string | null;
+  quartier?: string;
+  basis: AttributionBasis;
+  /** Objet, zone ou station d'où provient le rattachement. */
+  sourceId?: string;
+  attributedAt: string;
+}
+
+/** Libellé de regroupement d'une recette sans lieu établi. */
+export const UNATTRIBUTED_COMMUNE = 'NON_ATTRIBUE';

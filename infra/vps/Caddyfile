@@ -1,0 +1,18 @@
+# KINSHASA MOSOLO — Caddy : HTTPS automatique (Let's Encrypt) pour MOSOLO_DOMAIN, redirection HTTP → HTTPS,
+# HTTP/3. Les en-têtes de sécurité (CSP, HSTS, COOP…) sont posés par l'application elle-même.
+{
+	email {$MOSOLO_ACME_EMAIL}
+}
+
+{$MOSOLO_DOMAIN} {
+	encode zstd gzip
+	# Un seul mandataire : l'application lit l'adresse du client dans X-Forwarded-For (MOSOLO_TRUST_PROXY=1).
+	reverse_proxy app:8080 {
+		health_uri /health
+		health_interval 30s
+	}
+	log {
+		output stdout
+		format json
+	}
+}
